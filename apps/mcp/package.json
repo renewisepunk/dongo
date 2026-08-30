@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check": "wrangler types --config wrangler.jsonc src/worker-configuration.d.ts && tsc -p tsconfig.json --noEmit"
+    "check": "wrangler types --config wrangler.jsonc src/worker-configuration.d.ts && tsc -p tsconfig.json --noEmit",
+    "deploy": "wrangler deploy --config wrangler.jsonc",
+    "dry-run": "wrangler deploy --config wrangler.jsonc --dry-run"
   },
   "dependencies": {
     "@dongo/mcp": "0.1.0",
