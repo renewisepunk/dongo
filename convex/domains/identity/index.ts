@@ -14,7 +14,7 @@ export const bootstrapCurrentUser = mutation({
       .unique();
     const now = Date.now();
     const name = requireString(
-      identity.name ?? identity.email ?? "Dongo user",
+      identity.name?.trim() || identity.email?.trim() || "Dongo user",
       "name",
       240,
     );
