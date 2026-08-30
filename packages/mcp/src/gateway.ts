@@ -242,7 +242,7 @@ export function createDongoMcpGateway(
         }
 
         const url = new URL(request.url);
-        if (url.pathname === "/healthz") {
+        if (url.pathname === "/healthz" || url.pathname === "/api/mcp/healthz") {
           return withRequestHeaders(
             request.method === "GET"
               ? jsonResponse({ status: "ok" }, 200)
@@ -252,7 +252,7 @@ export function createDongoMcpGateway(
             requestId,
           );
         }
-        if (url.pathname === "/readyz") {
+        if (url.pathname === "/readyz" || url.pathname === "/api/mcp/readyz") {
           if (request.method !== "GET") {
             return withRequestHeaders(
               jsonResponse({ error: "method_not_allowed" }, 405, {

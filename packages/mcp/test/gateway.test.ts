@@ -24,8 +24,8 @@ function gatewayFor(fixture: ReturnType<typeof gatewayFixture>) {
 
 test("health and readiness are distinct", async () => {
   const gateway = gatewayFor(gatewayFixture({ ready: false }));
-  const health = await gateway.fetch(unauthenticatedRequest("/healthz"));
-  const ready = await gateway.fetch(unauthenticatedRequest("/readyz"));
+  const health = await gateway.fetch(unauthenticatedRequest("/api/mcp/healthz"));
+  const ready = await gateway.fetch(unauthenticatedRequest("/api/mcp/readyz"));
   assert.equal(health.status, 200);
   assert.equal(ready.status, 503);
 });
@@ -94,11 +94,11 @@ test("default worker is live but cannot serve protected MCP", async () => {
     allowedOrigins: [PUBLIC_ORIGIN.hostname],
   });
   assert.equal(
-    (await worker.fetch(unauthenticatedRequest("/healthz"))).status,
+    (await worker.fetch(unauthenticatedRequest("/api/mcp/healthz"))).status,
     200,
   );
   assert.equal(
-    (await worker.fetch(unauthenticatedRequest("/readyz"))).status,
+    (await worker.fetch(unauthenticatedRequest("/api/mcp/readyz"))).status,
     503,
   );
   assert.equal(

@@ -43,7 +43,7 @@ export function createUnavailableDongoMcpWorker(
       }
 
       const url = new URL(request.url);
-      if (url.pathname === "/healthz") {
+      if (url.pathname === "/healthz" || url.pathname === "/api/mcp/healthz") {
         return request.method === "GET"
           ? Response.json(
               { status: "ok", serving: false },
@@ -54,7 +54,7 @@ export function createUnavailableDongoMcpWorker(
               { status: 405, headers: { allow: "GET" } },
             );
       }
-      if (url.pathname === "/readyz") {
+      if (url.pathname === "/readyz" || url.pathname === "/api/mcp/readyz") {
         return unavailable("not_ready");
       }
 
