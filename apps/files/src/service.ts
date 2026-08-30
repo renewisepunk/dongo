@@ -90,6 +90,18 @@ function json(
   });
 }
 
+function safeDiagnosticMessage(error: unknown): string {
+  const source =
+    error instanceof Error && error.cause instanceof Error
+      ? error.cause
+      : error;
+  if (!(source instanceof Error)) return "Non-error failure";
+  return source.message
+    .replace(/https?:\/\/[^\s"']+/giu, "<url>")
+    .replace(/[A-Za-z0-9_-]{32,}/gu, "<opaque>")
+    .slice(0, 240);
+}
+
 function secureResponse(
   response: Response,
   request: Request,
@@ -663,14 +675,25 @@ export function createFilesWorker(options: FilesWorkerOptions): {
               options.allowedBrowserOrigin,
             );
           }
-          const stored = await options.store.put(verified.storageKey, request.body, {
-            attachmentId: uploadId,
-            size: contentLength,
-            contentType,
-            ...(verified.checksumSha256 === undefined
-              ? {}
-              : { checksumSha256: verified.checksumSha256 }),
-          });
+          let stored: StoredUpload;
+          try {
+            stored = await options.store.put(verified.storageKey, request.body, {
+              attachmentId: uploadId,
+              size: contentLength,
+              contentType,
+              ...(verified.checksumSha256 === undefined
+                ? {}
+                : { checksumSha256: verified.checksumSha256 }),
+            });
+          } catch (error) {
+            console.error(JSON.stringify({
+              event: "attachment_upload_store_failed",
+              requestId,
+              attachmentId: uploadId,
+              errorName: error instanceof Error ? error.name : "UnknownError",
+            }));
+            throw error;
+          }
           try {
             if (stored.size !== contentLength) {
               throw new Error("R2 accepted an upload with unexpected metadata");
@@ -690,6 +713,13 @@ export function createFilesWorker(options: FilesWorkerOptions): {
                 : { observedChecksumSha256: verified.checksumSha256 }),
             });
           } catch (error) {
+            console.error(JSON.stringify({
+              event: "attachment_upload_finalize_failed",
+              requestId,
+              attachmentId: uploadId,
+              errorName: error instanceof Error ? error.name : "UnknownError",
+              errorMessage: safeDiagnosticMessage(error),
+            }));
             try {
               await options.store.delete(verified.storageKey);
             } catch (cleanupError) {

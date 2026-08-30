@@ -70,7 +70,8 @@ describe("generic API token introspection", () => {
       resourceClientId: "dongo-api-resource-dev",
       resourceClientSecret: SECRET,
       nowSeconds: () => NOW_SECONDS,
-      fetch: async (input, init) => {
+      fetch: async function (this: void, input, init) {
+        expect(this).toBeUndefined();
         observed.push(new Request(input, init));
         return Response.json(validIntrospection);
       },
@@ -143,7 +144,8 @@ describe("Convex signed executor", () => {
       secret: SECRET,
       nowMs: () => NOW_MS,
       nonce: () => NONCE,
-      fetch: async (input, init) => {
+      fetch: async function (this: void, input, init) {
+        expect(this).toBeUndefined();
         observed = new Request(input, init);
         return Response.json({
           ok: true,
@@ -175,6 +177,7 @@ describe("Convex signed executor", () => {
     expect(request.url).toBe(
       "https://wandering-camel-662.convex.site/internal/agent/v1/execute",
     );
+    expect(request.redirect).toBe("manual");
     expect(request.headers.has("authorization")).toBe(false);
     const body = await request.clone().text();
     expect(body).not.toContain("opaque-access-token");

@@ -201,6 +201,7 @@ async function callOAuthGateway(
       "x-dongo-signature": signature,
     },
     body,
+    redirect: "manual",
     signal: AbortSignal.timeout(10_000),
   });
   const result = (await response.json().catch(() => undefined)) as

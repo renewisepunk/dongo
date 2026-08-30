@@ -244,7 +244,8 @@ export class ApiConvexOperationExecutor implements ApiOperationExecutor {
       false,
       ["sign"],
     );
-    this.#fetch = options.fetch ?? fetch;
+    const fetcher = options.fetch ?? fetch;
+    this.#fetch = (input, init) => fetcher(input, init);
     this.#nowMs = options.nowMs ?? Date.now;
     this.#nonce = options.nonce ?? (() => crypto.randomUUID());
   }
@@ -346,7 +347,7 @@ export class ApiConvexOperationExecutor implements ApiOperationExecutor {
         },
         body: bytes,
         cache: "no-store",
-        redirect: "error",
+        redirect: "manual",
         signal: controller.signal,
       });
       const text = await readBoundedText(response, this.#maxResponseBytes);

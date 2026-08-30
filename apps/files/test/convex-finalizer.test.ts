@@ -15,7 +15,8 @@ describe("ConvexAttachmentFinalizer", () => {
       secret: SECRET,
       now: () => NOW,
       nonce: () => NONCE,
-      fetch: async (input, init) => {
+      fetch: async function (this: void, input, init) {
+        assert.equal(this, undefined);
         observed = new Request(input, init);
         return Response.json({
           ok: true,
@@ -38,6 +39,7 @@ describe("ConvexAttachmentFinalizer", () => {
     assert.ok(observed);
     assert.equal(observed.url, "https://example.convex.site/internal/attachments/v1/finalize");
     assert.equal(observed.method, "POST");
+    assert.equal(observed.redirect, "manual");
     const body = await observed.clone().text();
     assert.deepEqual(JSON.parse(body), {
       version: 1,

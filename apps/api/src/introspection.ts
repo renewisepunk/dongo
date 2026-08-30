@@ -200,7 +200,8 @@ export class ApiIntrospectionTokenVerifier implements ApiTokenVerifier {
       throw new Error("resourceClientSecret must contain at least 32 bytes");
     }
     this.#authorization = basicAuthorization(clientId, secret);
-    this.#fetch = options.fetch ?? fetch;
+    const fetcher = options.fetch ?? fetch;
+    this.#fetch = (input, init) => fetcher(input, init);
     this.#nowSeconds = options.nowSeconds ?? (() => Math.floor(Date.now() / 1_000));
   }
 

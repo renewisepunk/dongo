@@ -85,6 +85,17 @@ function validSuccess(value: unknown, requestId: string, attachmentId: string): 
   return data.attachmentId === attachmentId && data.status === "available";
 }
 
+function phaseError(
+  phase: "Sign" | "Fetch" | "Read",
+  cause: unknown,
+): Error {
+  const error = new Error(`Attachment finalize ${phase.toLowerCase()} failed`, {
+    cause,
+  });
+  error.name = `AttachmentFinalize${phase}Error`;
+  return error;
+}
+
 /**
  * Signs a one-time internal finalize request. This secret is never exposed to
  * browsers and is intentionally separate from the attachment URL secret.
@@ -99,7 +110,8 @@ export class ConvexAttachmentFinalizer implements AttachmentFinalizer {
 
   constructor(options: ConvexAttachmentFinalizerOptions) {
     this.#endpoint = new URL(PATHNAME, validateOrigin(options.convexSiteUrl));
-    this.#fetch = options.fetch ?? fetch;
+    const fetcher = options.fetch ?? fetch;
+    this.#fetch = (input, init) => fetcher(input, init);
     this.#now = options.now ?? Date.now;
     this.#nonce = options.nonce ?? (() => crypto.randomUUID());
     this.#timeoutMs = options.timeoutMs ?? 20_000;
@@ -142,35 +154,50 @@ export class ConvexAttachmentFinalizer implements AttachmentFinalizer {
     const bodyBytes = encoder.encode(body);
     const bodyHash = hex(await crypto.subtle.digest("SHA-256", bodyBytes));
     const canonical = `${timestamp}\n${nonce}\n${METHOD}\n${PATHNAME}\n${bodyHash}`;
-    const signature = base64Url(
-      await crypto.subtle.sign(
-        "HMAC",
-        await this.#hmacKey,
-        encoder.encode(canonical),
-      ),
-    );
+    let signature: string;
+    try {
+      signature = base64Url(
+        await crypto.subtle.sign(
+          "HMAC",
+          await this.#hmacKey,
+          encoder.encode(canonical),
+        ),
+      );
+    } catch (error) {
+      throw phaseError("Sign", error);
+    }
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(new Error("Attachment finalize timed out")),
       this.#timeoutMs,
     );
     try {
-      const response = await this.#fetch(this.#endpoint, {
-        method: METHOD,
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-          "x-dongo-key-id": "v1",
-          "x-dongo-timestamp": timestamp,
-          "x-dongo-nonce": nonce,
-          "x-dongo-signature": signature,
-        },
-        body: bodyBytes,
-        cache: "no-store",
-        redirect: "error",
-        signal: controller.signal,
-      });
-      const text = await boundedText(response);
+      let response: Response;
+      try {
+        response = await this.#fetch(this.#endpoint, {
+          method: METHOD,
+          headers: {
+            accept: "application/json",
+            "content-type": "application/json",
+            "x-dongo-key-id": "v1",
+            "x-dongo-timestamp": timestamp,
+            "x-dongo-nonce": nonce,
+            "x-dongo-signature": signature,
+          },
+          body: bodyBytes,
+          cache: "no-store",
+          redirect: "manual",
+          signal: controller.signal,
+        });
+      } catch (error) {
+        throw phaseError("Fetch", error);
+      }
+      let text: string;
+      try {
+        text = await boundedText(response);
+      } catch (error) {
+        throw phaseError("Read", error);
+      }
       let value: unknown;
       try {
         value = JSON.parse(text);
