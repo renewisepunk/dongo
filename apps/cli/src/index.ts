@@ -1,12 +1,22 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 import { runCli } from "./cli.ts";
 
 export { runCli } from "./cli.ts";
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+export function isEntrypoint(moduleUrl: string, entryPath: string | undefined): boolean {
+  if (!entryPath) return false;
+  try {
+    return moduleUrl === pathToFileURL(realpathSync(entryPath)).href;
+  } catch {
+    return moduleUrl === pathToFileURL(entryPath).href;
+  }
+}
+
+if (isEntrypoint(import.meta.url, process.argv[1])) {
   const controller = new AbortController();
   const cancel = () => controller.abort();
   process.once("SIGINT", cancel);

@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
+import { resolve } from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 
 import { CliCoreError } from "@dongo/cli-core";
 import { DongoClientError } from "@dongo/client";
-import { runCli } from "../src/index.ts";
+import { isEntrypoint, runCli } from "../src/index.ts";
+
+test("the installed workspace symlink resolves to the CLI entrypoint", () => {
+  const source = resolve("src/index.ts");
+  const installedBinary = resolve("../../node_modules/.bin/dongo");
+  assert.equal(isEntrypoint(pathToFileURL(source).href, installedBinary), true);
+});
 
 function capture() {
   let stdout = "";
