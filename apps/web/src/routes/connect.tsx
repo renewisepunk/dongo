@@ -30,6 +30,7 @@ function preferredProjectId(): string | undefined {
 export default function ConnectRoute() {
   const [host, setHost] = createSignal<Host>("Codex");
   const [copied, setCopied] = createSignal(false);
+  const [copyError, setCopyError] = createSignal("");
   const [project, setProject] = createSignal<ProjectInfo>();
   const [installations, setInstallations] = createSignal<ProjectInstallation[]>([]);
   const [loading, setLoading] = createSignal(true);
@@ -37,6 +38,7 @@ export default function ConnectRoute() {
   let connection: ProjectDataConnection | undefined;
   let unsubscribe: (() => void) | undefined;
   let hostTabs: HTMLDivElement | undefined;
+  let copyTimer: number | undefined;
   let disposed = false;
 
   const activeInstallation = createMemo(() => installations().find(
@@ -74,6 +76,7 @@ export default function ConnectRoute() {
 
   onCleanup(() => {
     disposed = true;
+    if (copyTimer !== undefined) window.clearTimeout(copyTimer);
     unsubscribe?.();
     void connection?.close();
   });
@@ -86,9 +89,19 @@ export default function ConnectRoute() {
   });
 
   const copyInstruction = async () => {
-    await navigator.clipboard.writeText(instruction());
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    setCopyError("");
+    try {
+      await navigator.clipboard.writeText(instruction());
+      setCopied(true);
+      if (copyTimer !== undefined) window.clearTimeout(copyTimer);
+      copyTimer = window.setTimeout(() => {
+        setCopied(false);
+        copyTimer = undefined;
+      }, 1600);
+    } catch {
+      setCopied(false);
+      setCopyError("Clipboard access was unavailable. Select and copy the instruction manually.");
+    }
   };
 
   const moveHostTab = (event: KeyboardEvent, current: Host) => {
@@ -151,6 +164,7 @@ export default function ConnectRoute() {
           </div>
           <div class="instruction__body">{instruction()}</div>
         </div>
+        <Show when={copyError()}><div class="error" role="alert">{copyError()}</div></Show>
 
         <div class="authorization-card">
           <div class="instruction__label">browser authorization</div>
