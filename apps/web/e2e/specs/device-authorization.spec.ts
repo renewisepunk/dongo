@@ -45,7 +45,7 @@ test("supports manual comparison-code entry and formatting", async ({ page }) =>
   await expect(page.getByRole("heading", { name: "Authorize Dongo CLI" })).toBeVisible();
 });
 
-test("fails closed for completed, invalid, and unavailable requests", async ({ page }) => {
+test("fails closed for completed and invalid requests", async ({ page }) => {
   await page.goto("/device?user_code=USED-0001");
   await expect(page.getByRole("heading", { name: "This request can’t be authorized" })).toBeVisible();
   await expect(page.getByText("This authorization request has already been completed.")).toBeVisible();
@@ -54,12 +54,37 @@ test("fails closed for completed, invalid, and unavailable requests", async ({ p
   await expect(page.getByRole("heading", { name: "This request can’t be authorized" })).toBeVisible();
   await expect(page.getByText("This authorization request could not be loaded.")).toBeVisible();
   await expect(page.getByText("fixture request detail must stay hidden")).toBeHidden();
+});
 
+test("creates the first project and returns to the exact pending terminal request", async ({ page }) => {
   await page.goto("/device?user_code=NOPR-OJ00");
-  await expect(page.getByRole("alert")).toHaveText(
-    "You do not have an active project that can authorize this terminal.",
-  );
+  await expect(page.getByText("No project yet", { exact: true })).toBeVisible();
+  await expect(page.getByText("Create your first project to continue this terminal authorization.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
+
+  const createProject = page.getByRole("link", { name: "Create project" });
+  await expect(createProject).toHaveAttribute(
+    "href",
+    "/onboarding?returnTo=%2Fdevice%3Fuser_code%3DNOPR-OJ00",
+  );
+  await createProject.click();
+  await page.getByLabel("Project name").fill("Dongo");
+  await page.getByLabel("Repository URL").fill("github.com/renewisepunk/dongo");
+  await page.getByRole("button", { name: "Create project" }).click();
+
+  await expect(page).toHaveURL(/\/device\?user_code=NOPR-OJ00$/);
+  await expect(page.getByLabel("project")).toHaveValue("fixture-created");
+  await expect(page.getByRole("button", { name: "Approve" })).toBeEnabled();
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(page.getByText("Approved — return to your terminal", { exact: true })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-fixture-device-project",
+    JSON.stringify({ publicRef: "fixture-created", returnTo: "/device?user_code=NOPR-OJ00" }),
+  );
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-fixture-device-decision",
+    JSON.stringify({ userCode: "NOPROJ00", accept: true }),
+  );
 });
 
 test("returns an unauthenticated terminal request to sign-in with its code", async ({ page }) => {

@@ -136,24 +136,49 @@ const deviceDependencies = {
   },
   async listAuthorizableProjects() {
     const code = new URLSearchParams(window.location.search).get("user_code")?.replace(/-/g, "");
-    return code === "NOPROJ00"
-      ? []
-      : [
-          {
-            publicRef: "fixture-project",
-            name: "Dongo",
-            slug: "dongo",
-            organizationName: "Fixture Studio",
-            organizationSlug: "fixture-studio",
-          },
-          {
-            publicRef: "companion-project",
-            name: "Companion",
-            slug: "companion",
-            organizationName: "Fixture Studio",
-            organizationSlug: "fixture-studio",
-          },
-        ];
+    if (code === "NOPROJ00") {
+      const storedProject = sessionStorage.getItem("dongo:project");
+      if (!storedProject) return [];
+      try {
+        const project = JSON.parse(storedProject) as {
+          name?: unknown;
+          slug?: unknown;
+          publicRef?: unknown;
+          organizationSlug?: unknown;
+        };
+        if (
+          typeof project.name !== "string"
+          || typeof project.slug !== "string"
+          || typeof project.publicRef !== "string"
+          || typeof project.organizationSlug !== "string"
+        ) return [];
+        return [{
+          publicRef: project.publicRef,
+          name: project.name,
+          slug: project.slug,
+          organizationName: "Fixture Owner",
+          organizationSlug: project.organizationSlug,
+        }];
+      } catch {
+        return [];
+      }
+    }
+    return [
+      {
+        publicRef: "fixture-project",
+        name: "Dongo",
+        slug: "dongo",
+        organizationName: "Fixture Studio",
+        organizationSlug: "fixture-studio",
+      },
+      {
+        publicRef: "companion-project",
+        name: "Companion",
+        slug: "companion",
+        organizationName: "Fixture Studio",
+        organizationSlug: "fixture-studio",
+      },
+    ];
   },
   async selectAuthorizationProject(publicRef: string, returnTo: string) {
     document.documentElement.dataset.fixtureDeviceProject = JSON.stringify({ publicRef, returnTo });

@@ -1,4 +1,4 @@
-import { useLocation, useNavigate, useSearchParams } from "@solidjs/router";
+import { A, useLocation, useNavigate, useSearchParams } from "@solidjs/router";
 import { createMemo, createSignal, For, onMount, Show } from "solid-js";
 
 import { AuthFrame } from "../../components/AuthFrame";
@@ -58,6 +58,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
   const chooseProject = props.dependencies?.selectAuthorizationProject ?? selectAuthorizationProject;
   const saveDecision = props.dependencies?.decideDeviceRequest ?? decideDeviceRequest;
   const currentReturnTo = () => `${location.pathname}${location.search}`;
+  const onboardingHref = () => `/onboarding?returnTo=${encodeURIComponent(currentReturnTo())}`;
   const selectedProject = createMemo(() => projects().find((project) => project.publicRef === projectRef()));
 
   const load = async () => {
@@ -157,10 +158,15 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
             <div class="consent-summary__row"><span class="consent-summary__key">client</span><span class="consent-summary__value">{loaded().clientId === "dongo-cli" ? "Dongo CLI · official client" : loaded().clientId}</span></div>
             <div class="consent-summary__row"><span class="consent-summary__key">account</span><span class="consent-summary__value">{account()}</span></div>
             <div class="consent-summary__row">
-              <label class="consent-summary__key" for="device-project">project</label>
-              <select class="input consent-summary__select" id="device-project" value={projectRef()} onChange={(event) => setProjectRef(event.currentTarget.value)}>
-                <For each={projects()}>{(project) => <option value={project.publicRef}>{project.organizationName} / {project.name}</option>}</For>
-              </select>
+              <Show
+                when={projects().length > 0}
+                fallback={<><span class="consent-summary__key">project</span><span class="consent-summary__value">No project yet</span></>}
+              >
+                <label class="consent-summary__key" for="device-project">project</label>
+                <select class="input consent-summary__select" id="device-project" value={projectRef()} onChange={(event) => setProjectRef(event.currentTarget.value)}>
+                  <For each={projects()}>{(project) => <option value={project.publicRef}>{project.organizationName} / {project.name}</option>}</For>
+                </select>
+              </Show>
             </div>
             <div class="consent-summary__row"><span class="consent-summary__key">resource</span><span class="consent-summary__value mono">{loaded().resources.join(", ") || "Dongo agent API"}</span></div>
             <div class="consent-summary__row"><span class="consent-summary__key">status</span><span class="consent-summary__value">{loaded().status}</span></div>
@@ -169,7 +175,12 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
             <div class="field-label">Requested access</div>
             <ul class="scope-list"><For each={loaded().scopes}>{(scope) => <li>{scopeCopy[scope] || scope}</li>}</For></ul>
           </div>
-          <Show when={projects().length === 0}><div class="error" role="alert">You do not have an active project that can authorize this terminal.</div></Show>
+          <Show when={projects().length === 0}>
+            <div class="auth-stack" role="status">
+              <p class="auth-lede">Create your first project to continue this terminal authorization.</p>
+              <A class="button button--primary button--full" href={onboardingHref()}>Create project</A>
+            </div>
+          </Show>
           <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
           <p class="note" id="device-warning">Approve only if this code matches a terminal in your possession. Do not approve a code sent in a message.</p>
           <div class="consent-actions">
