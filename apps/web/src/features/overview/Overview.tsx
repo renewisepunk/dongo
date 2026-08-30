@@ -23,9 +23,39 @@ import { searchHighlightSegments } from "../../lib/search-highlight";
 import type { AttachmentSummary, Intake, WorkItem } from "./model";
 import "./overview.css";
 
+export type OverviewConnection = Pick<
+  ProjectDataConnection,
+  | "projectName"
+  | "availableProjects"
+  | "subscribeOverview"
+  | "subscribeWorkDetail"
+  | "subscribeWorkById"
+  | "subscribeIntakeDetail"
+  | "searchProject"
+  | "createIntake"
+  | "uploadAttachment"
+  | "discardAttachment"
+  | "downloadAttachment"
+  | "reorderWork"
+  | "markAttentionSeen"
+  | "respondToAttention"
+  | "resolveAttention"
+  | "addComment"
+  | "close"
+>;
+
+export type OverviewSession = {
+  user: {
+    name?: string | null;
+    email?: string | null;
+  };
+} | null;
+
 type OverviewProps = {
   orgSlug: string;
   projectSlug: string;
+  connect?: (orgSlug: string, projectSlug: string) => Promise<OverviewConnection>;
+  loadSession?: () => Promise<OverviewSession>;
 };
 
 type DraftAttachment = {
@@ -71,6 +101,35 @@ function trapModalFocus(
   }
 }
 
+function restoreFocusAfterRender(
+  preferred: HTMLElement | undefined,
+  fallback: HTMLElement | undefined | (() => HTMLElement | undefined),
+) {
+  queueMicrotask(() => {
+    const resolvedFallback = typeof fallback === "function" ? fallback() : fallback;
+    const canRestorePreferred = preferred?.isConnected &&
+      preferred !== document.body &&
+      preferred !== document.documentElement;
+    const target = canRestorePreferred ? preferred : resolvedFallback;
+    target?.focus({ preventScroll: true });
+  });
+}
+
+type OverviewRouteState = {
+  work?: string;
+  intake?: string;
+  search?: string;
+};
+
+function sameOverviewRoute(
+  left: OverviewRouteState,
+  right: OverviewRouteState,
+): boolean {
+  return left.work === right.work &&
+    left.intake === right.intake &&
+    left.search === right.search;
+}
+
 export function Overview(props: OverviewProps) {
   const navigate = useNavigate();
   const [routeParams, setRouteParams] = useSearchParams<{
@@ -106,7 +165,7 @@ export function Overview(props: OverviewProps) {
   const [viewerInitials, setViewerInitials] = createSignal("ME");
   const [projectMenuOpen, setProjectMenuOpen] = createSignal(false);
   const [profileMenuOpen, setProfileMenuOpen] = createSignal(false);
-  let connection: ProjectDataConnection | undefined;
+  let connection: OverviewConnection | undefined;
   let unsubscribeOverview: (() => void) | undefined;
   let unsubscribeWork: (() => void) | undefined;
   let unsubscribeIntake: (() => void) | undefined;
@@ -119,10 +178,25 @@ export function Overview(props: OverviewProps) {
   let searchInput: HTMLInputElement | undefined;
   let searchReturnFocus: HTMLElement | undefined;
   let detailReturnFocus: HTMLElement | undefined;
+  let detailReturnToSearch = false;
   const uploadControllers = new Map<string, AbortController>();
   const pendingUploads = new Map<string, Promise<void>>();
   let disposed = false;
   let searchGeneration = 0;
+  let pendingRouteState: OverviewRouteState | undefined;
+
+  const currentRouteState = (): OverviewRouteState => ({
+    work: routeParams.work?.trim() || undefined,
+    intake: routeParams.intake?.trim() || undefined,
+    search: routeParams.search === "1" ? "1" : undefined,
+  });
+
+  const applyRouteUpdate = (update: OverviewRouteState) => {
+    const current = currentRouteState();
+    const next = { ...(pendingRouteState ?? current), ...update };
+    pendingRouteState = sameOverviewRoute(current, next) ? undefined : next;
+    setRouteParams(next);
+  };
 
   const needs = createMemo(() => work().filter((item) => item.state === "needs"));
   const working = createMemo(() => work().filter((item) => item.state === "working"));
@@ -222,25 +296,20 @@ export function Overview(props: OverviewProps) {
     if (!searchOpen() && document.activeElement instanceof HTMLElement) {
       searchReturnFocus = document.activeElement;
     }
+    if (updateRoute) applyRouteUpdate({ search: "1" });
     setProjectMenuOpen(false);
     setProfileMenuOpen(false);
     setSearchOpen(true);
-    if (updateRoute) setRouteParams({ search: "1" });
     queueMicrotask(() => searchInput?.focus());
   };
 
   const closeSearch = (updateRoute = true, restoreFocus = true) => {
     const returnFocus = searchReturnFocus;
     searchReturnFocus = undefined;
+    if (updateRoute) applyRouteUpdate({ search: undefined });
     setSearchOpen(false);
     setQuery("");
-    if (updateRoute) setRouteParams({ search: undefined });
-    if (restoreFocus) {
-      queueMicrotask(() => {
-        if (returnFocus?.isConnected) returnFocus.focus();
-        else searchButton?.focus();
-      });
-    }
+    if (restoreFocus) restoreFocusAfterRender(returnFocus, searchButton);
   };
 
   const switchProject = (project: ProjectInfo) => {
@@ -304,7 +373,13 @@ export function Overview(props: OverviewProps) {
 
   const closeDetail = (updateRoute = true) => {
     const returnFocus = detailReturnFocus;
+    const returnWorkId = selectedWorkId();
+    const returnToSearch = detailReturnToSearch;
     detailReturnFocus = undefined;
+    detailReturnToSearch = false;
+    if (updateRoute) {
+      applyRouteUpdate({ work: undefined, intake: undefined });
+    }
     unsubscribeWork?.();
     unsubscribeWork = undefined;
     unsubscribeIntake?.();
@@ -313,12 +388,14 @@ export function Overview(props: OverviewProps) {
     setSelectedIntakeDetail(undefined);
     setSelectedWorkId(undefined);
     setSelectedIntakeId(undefined);
-    if (updateRoute) {
-      setRouteParams({ work: undefined, intake: undefined });
-    }
-    queueMicrotask(() => {
-      if (returnFocus?.isConnected) returnFocus.focus();
-      else searchButton?.focus();
+    restoreFocusAfterRender(returnToSearch ? undefined : returnFocus, () => {
+      if (returnToSearch) return searchButton;
+      if (returnWorkId) {
+        const replacement = [...document.querySelectorAll<HTMLElement>("[data-work-id]")]
+          .find((element) => element.dataset.workId === returnWorkId);
+        if (replacement) return replacement;
+      }
+      return searchButton;
     });
   };
 
@@ -327,12 +404,16 @@ export function Overview(props: OverviewProps) {
     updateRoute = true,
     returnFocus?: HTMLElement,
   ) => {
+    if (updateRoute) applyRouteUpdate({ work: id, intake: undefined });
     if (!selectedWorkId() && !selectedIntakeId()) {
-      detailReturnFocus = returnFocus ?? (
+      const resolvedReturnFocus = returnFocus ?? (
         document.activeElement instanceof HTMLElement
           ? document.activeElement
           : undefined
       );
+      detailReturnFocus = resolvedReturnFocus;
+      detailReturnToSearch = resolvedReturnFocus === searchButton ||
+        resolvedReturnFocus?.classList.contains("search-button") === true;
     }
     unsubscribeWork?.();
     unsubscribeWork = undefined;
@@ -342,7 +423,6 @@ export function Overview(props: OverviewProps) {
     setSelectedIntakeDetail(undefined);
     setSelectedIntakeId(undefined);
     setSelectedWorkId(id);
-    if (updateRoute) setRouteParams({ work: id, intake: undefined });
     const item = work().find((candidate) => candidate.id === id);
     if (!connection) return;
     if (item?.unseen && item.attention) {
@@ -374,12 +454,16 @@ export function Overview(props: OverviewProps) {
     updateRoute = true,
     returnFocus?: HTMLElement,
   ) => {
+    if (updateRoute) applyRouteUpdate({ work: undefined, intake: id });
     if (!selectedWorkId() && !selectedIntakeId()) {
-      detailReturnFocus = returnFocus ?? (
+      const resolvedReturnFocus = returnFocus ?? (
         document.activeElement instanceof HTMLElement
           ? document.activeElement
           : undefined
       );
+      detailReturnFocus = resolvedReturnFocus;
+      detailReturnToSearch = resolvedReturnFocus === searchButton ||
+        resolvedReturnFocus?.classList.contains("search-button") === true;
     }
     unsubscribeWork?.();
     unsubscribeWork = undefined;
@@ -389,7 +473,6 @@ export function Overview(props: OverviewProps) {
     setSelectedIntakeDetail(undefined);
     setSelectedWorkId(undefined);
     setSelectedIntakeId(id);
-    if (updateRoute) setRouteParams({ work: undefined, intake: id });
     if (!connection || id.startsWith("optimistic:")) return;
     unsubscribeIntake = connection.subscribeIntakeDetail(
       id,
@@ -406,6 +489,11 @@ export function Overview(props: OverviewProps) {
     const workId = routeParams.work?.trim();
     const intakeId = routeParams.intake?.trim();
     const shouldSearch = routeParams.search === "1";
+    const current = currentRouteState();
+    if (pendingRouteState) {
+      if (!sameOverviewRoute(current, pendingRouteState)) return;
+      pendingRouteState = undefined;
+    }
     if (shouldSearch && !searchOpen()) openSearch(false);
     if (!shouldSearch && searchOpen()) closeSearch(false);
     if (workId) {
@@ -695,8 +783,10 @@ export function Overview(props: OverviewProps) {
     void (async () => {
       try {
         const [connected, session] = await Promise.all([
-          ProjectDataConnection.connect(props.orgSlug, props.projectSlug),
-          humanSession(),
+          props.connect
+            ? props.connect(props.orgSlug, props.projectSlug)
+            : ProjectDataConnection.connect(props.orgSlug, props.projectSlug),
+          props.loadSession ? props.loadSession() : humanSession(),
         ]);
         if (disposed) {
           await connected.close();
@@ -1071,7 +1161,7 @@ export function Overview(props: OverviewProps) {
                 <span>needs you</span><span class="section-heading__count">{needs().length}</span>
               </div>
               <For each={needs()}>{(item) => (
-                <button class="work-row work-row--attention" type="button" onClick={() => openWork(item.id)}>
+                <button class="work-row work-row--attention" data-work-id={item.id} type="button" onClick={() => openWork(item.id)}>
                   <span class="work-row__head">
                     <span class="work-row__title">{item.title}</span>
                     <Show when={item.unseen}><span class="unseen-dot" aria-label="Unseen" /></Show>
@@ -1093,7 +1183,7 @@ export function Overview(props: OverviewProps) {
                 <span>working</span><span class="section-heading__count">{working().length}</span>
               </div>
               <For each={working()}>{(item) => (
-                <button class="work-row" type="button" onClick={() => openWork(item.id)}>
+                <button class="work-row" data-work-id={item.id} type="button" onClick={() => openWork(item.id)}>
                   <span class="work-row__head">
                     <span class="work-row__title">{item.title}</span>
                     <span class="work-row__identifier mono">{item.identifier}</span>
@@ -1118,7 +1208,7 @@ export function Overview(props: OverviewProps) {
                     <button class="reorder-button" type="button" disabled={index() === 0} aria-label={`Move ${item.title} up`} onClick={() => void moveReady(item.id, -1)}>▲</button>
                     <button class="reorder-button" type="button" disabled={index() === ready().length - 1} aria-label={`Move ${item.title} down`} onClick={() => void moveReady(item.id, 1)}>▼</button>
                   </div>
-                  <button class="ready-row__open" type="button" onClick={() => openWork(item.id)}>
+                  <button class="ready-row__open" data-work-id={item.id} type="button" onClick={() => openWork(item.id)}>
                     <span class="ready-row__position">{String(index() + 1).padStart(2, "0")}</span>
                     <span class="work-row__title">{item.title}</span>
                     <span class="work-row__identifier mono">{item.identifier}</span>
@@ -1159,7 +1249,7 @@ export function Overview(props: OverviewProps) {
                 <span>recently done</span><span class="section-heading__aside"><button class="view-all" type="button" onClick={() => navigate(`/app/${props.orgSlug}/${props.projectSlug}/done`)}>view all →</button></span>
               </div>
               <For each={done()}>{(item) => (
-                <button class="work-row work-row--done" type="button" onClick={() => openWork(item.id)}>
+                <button class="work-row work-row--done" data-work-id={item.id} type="button" onClick={() => openWork(item.id)}>
                   <span style={{ color: "var(--green)" }} class="mono">✓</span>
                   <span class="work-row__title work-row__title--done">{item.title}</span>
                   <span class="work-row__identifier mono">{item.completedAt}</span>
