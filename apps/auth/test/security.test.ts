@@ -1,8 +1,9 @@
 import { SignJWT } from "jose";
 import Database from "better-sqlite3";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   allowedMetadataHostname,
+  createMetadataFetcher,
   safeReturnTo,
   signInternalRequest,
   verifyInternalRequest,
@@ -26,6 +27,10 @@ import { createAuthorizationServer } from "../src/auth";
 import type { AuthWorkerEnv } from "../src/env";
 
 describe("authorization boundary security", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("constructs the OAuth server with encrypted clients and opaque tokens", async () => {
     const database = new Database(":memory:");
     const env = {
@@ -62,6 +67,45 @@ describe("authorization boundary security", () => {
     expect(allowedMetadataHostname("clients.openai.com", ["openai.com"])).toBe(true);
     expect(allowedMetadataHostname("openai.com.attacker.test", ["openai.com"])).toBe(false);
     expect(allowedMetadataHostname("127.0.0.1", ["openai.com"])).toBe(false);
+  });
+
+  it("fetches an allowlisted CIMD document with bounded manual redirects", async () => {
+    const upstream = vi.fn(async (request: Request, _init?: RequestInit) =>
+      Response.json({
+        client_id: request.url,
+        client_name: "Claude Code",
+        redirect_uris: ["http://localhost/callback"],
+      }, {
+        headers: { "cache-control": "public, max-age=300" },
+      }));
+    vi.stubGlobal("fetch", upstream);
+    const fetchMetadata = createMetadataFetcher(["claude.ai"]);
+    const response = await fetchMetadata(
+      "https://claude.ai/oauth/claude-code-client-metadata",
+      { headers: { accept: "application/json" } },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      client_name: "Claude Code",
+    });
+    expect(upstream).toHaveBeenCalledOnce();
+    expect(upstream.mock.calls[0]?.[0].redirect).toBe("follow");
+    expect(upstream.mock.calls[0]?.[0].headers.get("accept")).toBe(
+      "application/json",
+    );
+    expect(upstream.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
+  });
+
+  it("rejects CIMD redirects instead of following them", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://claude.ai/elsewhere" },
+      })));
+    const fetchMetadata = createMetadataFetcher(["claude.ai"]);
+    await expect(
+      fetchMetadata("https://claude.ai/oauth/claude-code-client-metadata"),
+    ).rejects.toThrow("redirects are not allowed");
   });
 
   it("verifies short-lived issuer and audience-bound human assertions", async () => {

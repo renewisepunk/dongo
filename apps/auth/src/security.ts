@@ -144,13 +144,25 @@ export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
     if (request.method !== "GET" && request.method !== "HEAD") {
       throw new Error("Client metadata fetch permits only GET and HEAD");
     }
-    const response = await fetch(request, {
-      redirect: "manual",
-      signal: AbortSignal.any([
-        request.signal,
-        AbortSignal.timeout(METADATA_TIMEOUT_MS),
-      ]),
-    });
+    // Workerd accepts AbortController-backed fetch signals, but composite
+    // AbortSignal helpers have varied across edge-runtime releases. Forward
+    // the caller's cancellation explicitly and keep our own bounded timeout so
+    // a client-controlled metadata origin can never hold the request open.
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    const timeout = setTimeout(abort, METADATA_TIMEOUT_MS);
+    if (request.signal.aborted) abort();
+    else request.signal.addEventListener("abort", abort, { once: true });
+    let response: Response;
+    try {
+      response = await fetch(request, {
+        redirect: "manual",
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+      request.signal.removeEventListener("abort", abort);
+    }
     if (response.status >= 300 && response.status < 400) {
       throw new Error("Client metadata redirects are not allowed");
     }
