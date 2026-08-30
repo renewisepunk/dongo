@@ -17,7 +17,9 @@
     "deploy:landing": "wrangler deploy",
     "dev": "npm run dev --workspace @dongo/web",
     "dev:landing": "wrangler dev",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npm run test:workspaces && npm run test:convex",
+    "test:workspaces": "npm run test --workspaces --if-present",
+    "test:convex": "vitest run convex/testing",
     "types": "wrangler types",
     "convex:codegen": "convex codegen",
     "convex:dev": "convex dev",
@@ -34,6 +36,7 @@
     "@types/node": "^26.4.0",
     "convex-test": "0.0.56",
     "typescript": "7.0.2",
+    "vitest": "4.1.11",
     "wrangler": "4.127.1"
   }
 }
