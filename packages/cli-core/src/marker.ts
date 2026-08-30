@@ -27,7 +27,7 @@ export function markerPath(repositoryRoot: string): string {
 async function assertNotSymlink(target: string): Promise<void> {
   try {
     if ((await lstat(target)).isSymbolicLink()) {
-      throw new CliCoreError({ code: "unsafe_path", message: `Refusing to use symlinked Dongo path: ${target}` });
+      throw new CliCoreError({ code: "unsafe_path", message: `Refusing to use symlinked dongo path: ${target}` });
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;

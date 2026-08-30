@@ -75,7 +75,7 @@ function metadataOptions(
     oauthMetadata: options.authorizationServerMetadata,
     resourceServerUrl,
     scopesSupported: ALL_SCOPES,
-    resourceName: `Dongo project ${resourceServerUrl.pathname.split("/")[2] ?? ""}`,
+    resourceName: `dongo project ${resourceServerUrl.pathname.split("/")[2] ?? ""}`,
     ...(options.serviceDocumentationUrl === undefined
       ? {}
       : { serviceDocumentationUrl: options.serviceDocumentationUrl }),
@@ -130,7 +130,7 @@ async function boundedRequest(
     }
     total += value.byteLength;
     if (total > maxBytes) {
-      await reader.cancel("Dongo MCP request exceeded the body-size limit");
+      await reader.cancel("dongo MCP request exceeded the body-size limit");
       return jsonResponse(
         { error: "request_too_large", maxBytes },
         413,
@@ -159,13 +159,13 @@ function validatePublicConfiguration(options: DongoMcpGatewayOptions): void {
     options.publicOrigin.username !== "" ||
     options.publicOrigin.password !== ""
   ) {
-    throw new Error("Dongo MCP publicOrigin must be an HTTPS origin URL");
+    throw new Error("dongo MCP publicOrigin must be an HTTPS origin URL");
   }
   if (options.allowedHostnames.includes(options.publicOrigin.hostname) === false) {
     throw new Error("allowedHostnames must include the public origin hostname");
   }
   if (options.catalog.length === 0) {
-    throw new Error("Dongo MCP requires a canonical tool catalog");
+    throw new Error("dongo MCP requires a canonical tool catalog");
   }
   const operations = options.catalog.map((descriptor) => descriptor.operation);
   if (
@@ -173,20 +173,20 @@ function validatePublicConfiguration(options: DongoMcpGatewayOptions): void {
     new Set(operations).size !== DONGO_OPERATION_NAMES.length ||
     DONGO_OPERATION_NAMES.some((operation) => operations.includes(operation) === false)
   ) {
-    throw new Error("Dongo MCP catalog must cover every canonical operation once");
+    throw new Error("dongo MCP catalog must cover every canonical operation once");
   }
   if (
     options.catalog.some(
       (descriptor) => mcpToolNames.includes(descriptor.toolName) === false,
     )
   ) {
-    throw new Error("Dongo MCP catalog contains a non-canonical tool name");
+    throw new Error("dongo MCP catalog contains a non-canonical tool name");
   }
   if (
     options.serviceDocumentationUrl !== undefined &&
     options.serviceDocumentationUrl.protocol !== "https:"
   ) {
-    throw new Error("Dongo MCP service documentation URL must use HTTPS");
+    throw new Error("dongo MCP service documentation URL must use HTTPS");
   }
 }
 
@@ -196,7 +196,7 @@ function resolveLimits(
   const limits = { ...DEFAULT_DONGO_MCP_LIMITS, ...partial };
   for (const [name, value] of Object.entries(limits)) {
     if (Number.isSafeInteger(value) === false || value <= 0) {
-      throw new Error(`Invalid Dongo MCP limit ${name}`);
+      throw new Error(`Invalid dongo MCP limit ${name}`);
     }
   }
   return Object.freeze(limits);
@@ -402,7 +402,7 @@ export function createDongoMcpGateway(
             bearerAuthChallengeResponse(
               new OAuthError(
                 OAuthErrorCode.InsufficientScope,
-                "The access token does not grant this Dongo tool",
+                "The access token does not grant this dongo tool",
               ),
               {
                 requiredScopes: [...descriptor.requiredScopes],

@@ -98,7 +98,7 @@ describe("live project overview mapping", () => {
       state: "working" as const,
     };
     const snapshot: OverviewSnapshot = {
-      project: { _id: "project-1", name: "Dongo", publicRef: "dongo-ref" },
+      project: { _id: "project-1", name: "dongo", publicRef: "dongo-ref" },
       generatedAt: now,
       needsYou: [{
         work: attentionWork,

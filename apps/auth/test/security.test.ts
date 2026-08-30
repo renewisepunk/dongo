@@ -189,7 +189,7 @@ describe("authorization boundary security", () => {
       providerGrantId: "dongo-device:abc123",
       subject: "oauth-user-1",
       clientId: "dongo-cli",
-      label: "Dongo CLI",
+      label: "dongo CLI",
       resource: "https://dev.dongo.so/api/agent/v1",
       scopes: ["dongo:work:read", "offline_access"],
       kind: "cli",

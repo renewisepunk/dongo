@@ -10,6 +10,7 @@ import {
   followOAuthResult,
   getOAuthClientSummary,
   listAuthorizableProjects,
+  loopbackOAuthCallback,
   selectAuthorizationProject,
   type AuthorizableProject,
   type OAuthClientSummary,
@@ -47,8 +48,9 @@ export default function OAuthConsentRoute(props: OAuthConsentRouteProps = {}) {
   const [projects, setProjects] = createSignal<AuthorizableProject[]>([]);
   const [projectRef, setProjectRef] = createSignal("");
   const [account, setAccount] = createSignal("");
-  const [state, setState] = createSignal<"loading" | "review" | "submitting" | "error">("loading");
+  const [state, setState] = createSignal<"loading" | "review" | "submitting" | "approved" | "error">("loading");
   const [error, setError] = createSignal("");
+  const [localCallback, setLocalCallback] = createSignal("");
   const loadHumanSession = props.dependencies?.humanSession ?? humanSession;
   const bridgeSession = props.dependencies?.bridgeAuthorizationSession ?? bridgeAuthorizationSession;
   const loadClient = props.dependencies?.getOAuthClientSummary ?? getOAuthClientSummary;
@@ -103,7 +105,14 @@ export default function OAuthConsentRoute(props: OAuthConsentRouteProps = {}) {
     setError("");
     try {
       if (accept) await chooseProject(projectRef(), returnTo());
-      followOAuth(await saveConsent(location.search, accept));
+      const result = await saveConsent(location.search, accept);
+      const callback = accept ? loopbackOAuthCallback(result) : undefined;
+      if (callback) {
+        setLocalCallback(callback);
+        setState("approved");
+        return;
+      }
+      followOAuth(result);
     } catch (cause) {
       setError(cause instanceof AuthorizationFlowError ? cause.message : "The authorization decision could not be saved.");
       setState("review");
@@ -112,7 +121,28 @@ export default function OAuthConsentRoute(props: OAuthConsentRouteProps = {}) {
 
   return (
     <AuthFrame>
-      <Show when={state() !== "loading" && state() !== "submitting"} fallback={<div class="callback" role="status"><span class="spinner" aria-hidden="true" /><span>{state() === "submitting" ? "Saving your decision…" : "Checking the OAuth request…"}</span></div>}>
+      <Show when={state() === "approved"}>
+        <iframe
+          aria-hidden="true"
+          hidden
+          referrerpolicy="no-referrer"
+          sandbox=""
+          src={localCallback()}
+          title="OAuth loopback callback"
+        />
+        <div class="auth-stack">
+          <div class="approved-state" role="status">
+            <div class="approved-state__title">
+              <span style={{ color: "var(--green)" }}>✓</span>
+              <span>Approved — return to your terminal</span>
+            </div>
+            <p class="auth-lede">dongo is approved. Your terminal is finishing secure storage and its connection check; only the terminal will report Connected.</p>
+            <p class="auth-lede">You can safely close this window.</p>
+          </div>
+          <p class="security-note">This page never displays access or refresh tokens.</p>
+        </div>
+      </Show>
+      <Show when={state() !== "approved" && state() !== "loading" && state() !== "submitting"} fallback={state() === "approved" ? null : <div class="callback" role="status"><span class="spinner" aria-hidden="true" /><span>{state() === "submitting" ? "Saving your decision…" : "Checking the OAuth request…"}</span></div>}>
         <Show when={state() === "review" && client()} fallback={
           <div class="auth-stack">
             <div class="title-group"><h1 class="auth-title">This request can’t be authorized</h1><p class="auth-lede">{error()}</p></div>
@@ -123,8 +153,8 @@ export default function OAuthConsentRoute(props: OAuthConsentRouteProps = {}) {
           <div class="auth-stack">
             <div class="title-group">
               <div class="eyebrow eyebrow--amber">MCP authorization</div>
-              <h1 class="auth-title">Allow {loadedClient().name} to use Dongo?</h1>
-              <p class="auth-lede">This creates a separate installation for one Dongo project.</p>
+              <h1 class="auth-title">Allow {loadedClient().name} to use dongo?</h1>
+              <p class="auth-lede">This creates a separate installation for one dongo project.</p>
             </div>
             <div class="consent-summary">
               <div class="consent-summary__row"><span class="consent-summary__key">client</span><span class="consent-summary__value">{loadedClient().name}</span></div>
@@ -135,12 +165,12 @@ export default function OAuthConsentRoute(props: OAuthConsentRouteProps = {}) {
                   <For each={projects()}>{(project) => <option value={project.publicRef}>{project.organizationName} / {project.name}</option>}</For>
                 </select>
               </div>
-              <div class="consent-summary__row"><span class="consent-summary__key">resource</span><span class="consent-summary__value mono">{resources().join(", ") || "Dongo project MCP resource"}</span></div>
+              <div class="consent-summary__row"><span class="consent-summary__key">resource</span><span class="consent-summary__value mono">{resources().join(", ") || "dongo project MCP resource"}</span></div>
             </div>
             <ul class="scope-list"><For each={scopes()}>{(scope) => <li>{scopeCopy[scope] || scope}</li>}</For></ul>
             <Show when={projects().length === 0}><div class="error" role="alert">You do not have an active project available for this request.</div></Show>
             <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
-            <p class="note">{loadedClient().name} cannot use a CLI token, access another project, or choose its own Dongo actor identity.</p>
+            <p class="note">{loadedClient().name} cannot use a CLI token, access another project, or choose its own dongo actor identity.</p>
             <div class="consent-actions">
               <button class="button" type="button" onClick={() => void decide(false)}>Deny</button>
               <button class="button button--primary" type="button" disabled={!selectedProject()} onClick={() => void decide(true)}>Allow access</button>

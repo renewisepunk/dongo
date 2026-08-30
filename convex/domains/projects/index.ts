@@ -99,7 +99,7 @@ export const createPersonalOrganization = mutation({
     await ctx.db.insert("actors", {
       organizationId,
       type: "system",
-      name: "Dongo",
+      name: "dongo",
       createdAt: now,
     });
     await appendEvent(ctx, {
@@ -423,7 +423,7 @@ export const addMember = mutation({
       .withIndex("by_email", (query) => query.eq("email", email))
       .take(2);
     if (profiles.length !== 1) {
-      fail("not_found", "No unique Dongo account exists for that email");
+      fail("not_found", "No unique dongo account exists for that email");
     }
     const profile = profiles[0]!;
     const organizationId = principal.project!.organizationId;

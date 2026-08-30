@@ -6,7 +6,7 @@ Status: accepted implementation input. This document does not replace or modify 
 
 The user-authored handoff at [`user-journey-desktop-and-mobile/README.md`](user-journey-desktop-and-mobile/README.md) is mandatory for web implementation. Its primary design source is:
 
-- [`project/Dongo Journey.dc.html`](user-journey-desktop-and-mobile/project/Dongo%20Journey.dc.html)
+- [`project/Dongo Journey.dc.html`](user-journey-desktop-and-mobile/project/dongo%20Journey.dc.html)
 - the imported design runtime, [`project/support.js`](user-journey-desktop-and-mobile/project/support.js), is prototype infrastructure and is not shipped in the product;
 - [`project/uploads/04-user-journey.md`](user-journey-desktop-and-mobile/project/uploads/04-user-journey.md) supplies the complete screen/state inventory beyond the interactive prototype.
 
@@ -16,7 +16,7 @@ The HTML is a behavioral and visual reference, not an application dependency. Re
 
 - Switzer is the primary UI typeface; the system fallback remains usable while it loads. Operational labels, identifiers, timestamps, shortcuts, and code use `ui-monospace, Menlo, monospace`.
 - Core canvas is `#08080a`; elevated surfaces use `#0a0a0d` through `#15151a`; primary text is `#ececee`; subdued text follows the prototype's `#b9b9c1`, `#93939c`, `#7d7d87`, `#6c6c76`, `#5a5a63`, and `#4e4e57` hierarchy.
-- Amber is `oklch(0.84 0.19 78)` and communicates Dongo identity, focus, current activity, and human Attention. Green is `oklch(0.82 0.20 150)` and communicates successful connection/completion.
+- Amber is `oklch(0.84 0.19 78)` and communicates dongo identity, focus, current activity, and human Attention. Green is `oklch(0.82 0.20 150)` and communicates successful connection/completion.
 - Geometry is square and compact: one-pixel borders, no decorative rounding, restrained shadows, dense 12–18 px type, and no ornamental gradients.
 - Motion is limited to the blinking terminal cursor/activity dot, small spinners, and short 180–280 ms entry transitions. Respect reduced-motion preferences.
 - Focus is always visible. Icon-only controls require accessible names. Minimum interactive height is 36 px for compact controls and 44–48 px for primary/mobile actions.
@@ -50,7 +50,7 @@ The prototype predates the accepted OAuth plan and displays a pairing code. Keep
 
 ### CLI
 
-1. The instruction asks the host to install Dongo or run `dongo connect`.
+1. The instruction asks the host to install dongo or run `dongo connect`.
 2. The CLI detects the current repository and prepares a first-project proposal (name, safe repository URL when available, Manual/Autonomous mode), then requests an OAuth Device Authorization Grant and opens `verification_uri_complete` with that visible non-secret proposal.
 3. The CLI selects an existing project from its explicit reference, the repository marker, repository URL, unique name/slug, or sole-project context. The browser route shows that fixed, non-editable binding alongside the requesting client, account, requested scopes, exact resource, short comparison code, and Approve/Deny actions. Ambiguity disables approval instead of presenting a project picker.
 4. If no project exists, the primary action is “Create & approve.” It creates the proposed first project through the authenticated human identity, binds its stable public reference to the pending grant, and then approves. A missing or invalid proposal leaves approval disabled and offers the web fallback.

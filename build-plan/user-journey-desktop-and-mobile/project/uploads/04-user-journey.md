@@ -1,10 +1,10 @@
-# Dongo V1 user journey — screen by screen
+# dongo V1 user journey — screen by screen
 
 Status: product/UX description for planning. This document does not replace or modify the PRD.
 
 ## 1. Scope
 
-This document describes what a human user sees and does from first sign-in through the complete Dongo loop:
+This document describes what a human user sees and does from first sign-in through the complete dongo loop:
 
 ```text
 sign in
@@ -42,7 +42,7 @@ The shell is deliberately small and has no permanent project-management sidebar.
 
 Visible elements:
 
-- Dongo wordmark, which returns to the current project Overview.
+- dongo wordmark, which returns to the current project Overview.
 - Current organization and project selector showing the project name.
 - Search button with its keyboard shortcut hint.
 - Connection state only when relevant: Reconnecting, Offline, or Unable to sync.
@@ -62,7 +62,7 @@ The organization/project selector opens a compact popover containing:
 Visible elements:
 
 - back control when a sheet/subscreen is open;
-- Dongo wordmark or current screen title;
+- dongo wordmark or current screen title;
 - compact project selector;
 - search icon;
 - profile/avatar control.
@@ -84,17 +84,17 @@ Visible elements:
 
 ### Screen 1 — Sign in
 
-Purpose: let a human enter Dongo without creating a password.
+Purpose: let a human enter dongo without creating a password.
 
 Visible elements:
 
-- Dongo wordmark.
+- dongo wordmark.
 - Short product statement: “See what your coding agents are doing, give them work, and answer when they need you.”
 - Continue with Google button with Google mark.
 - Divider labeled “or.”
 - Email address field.
 - Continue with email button.
-- Small note that Dongo uses a one-time code and does not require a password.
+- Small note that dongo uses a one-time code and does not require a password.
 - Inline error region below the relevant control.
 
 Primary actions:
@@ -143,7 +143,7 @@ Purpose: provide a stable state while Google or email authentication is finalize
 
 Visible elements:
 
-- Dongo wordmark.
+- dongo wordmark.
 - Compact progress indicator.
 - Text: “Signing you in…”
 
@@ -164,7 +164,7 @@ The default planning behavior creates a personal organization automatically. Its
 
 Visible elements:
 
-- Dongo wordmark.
+- dongo wordmark.
 - Progress label: “Set up your workspace.”
 - Heading: “Create your first project.”
 - Explanation: “A project maps to one repository or codebase.”
@@ -196,7 +196,7 @@ Visible elements:
 
 - Success heading: “Project created.”
 - Project name and identifier.
-- Short instruction: “Open your repository with your coding agent and tell it to install Dongo.”
+- Short instruction: “Open your repository with your coding agent and tell it to install dongo.”
 - Host selector:
   - Codex;
   - Claude Code;
@@ -529,18 +529,18 @@ When Attention is created:
 
 Native push shows:
 
-- Dongo app name/icon.
+- dongo app name/icon.
 - Neutral title such as “Claude needs a decision.”
 - Project name when allowed by notification settings.
 - No private request body or work content in the payload.
 
 Important-attention email shows:
 
-- Dongo sender identity.
+- dongo sender identity.
 - Subject indicating unresolved human attention.
 - Project and WorkItem title.
 - Request type and concise safe summary.
-- Open in Dongo button linking to Screen 14.
+- Open in dongo button linking to Screen 14.
 - No status-change digest or unrelated activity.
 
 ## 9. Completion journey
@@ -741,7 +741,7 @@ Native apps intentionally omit billing, organization settings, project creation,
 
 Visible elements mirror web Sign in:
 
-- Dongo identity and short promise.
+- dongo identity and short promise.
 - Continue with Google.
 - Email field and Continue with email.
 - Native one-time-code entry state.
@@ -870,8 +870,8 @@ Visible elements:
 The V1 journey is complete when the following feels continuous:
 
 1. René signs in with Google or an email code.
-2. Dongo creates a personal organization and René creates the Dongo project.
-3. René opens the connection screen and tells Codex or Claude Code to install Dongo.
+2. dongo creates a personal organization and René creates the dongo project.
+3. René opens the connection screen and tells Codex or Claude Code to install dongo.
 4. The local installer pairs through a one-time code and the screen confirms the connection.
 5. René enters Overview and types “checkout gets stuck here,” attaches a screen recording, and submits.
 6. The Intake appears immediately under Inbox as Waiting for local agent.
@@ -881,7 +881,7 @@ The V1 journey is complete when the following feels continuous:
 10. The agent discovers a migration decision and requests Attention.
 11. The item moves to Needs You, and René receives push when a native client is installed.
 12. René opens the item, sees the request in context, answers, and the response is recorded in the conversation.
-13. Dongo states that the local agent will see the response on its next pull.
+13. dongo states that the local agent will see the response on its next pull.
 14. The agent continues, finishes, and attaches its commit/PR/preview artifacts.
 15. Overview moves the item into Recently Done.
 16. René opens it and sees the goal, outcome, artifacts, conversation, source Intake, and completion details.

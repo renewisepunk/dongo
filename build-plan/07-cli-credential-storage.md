@@ -2,12 +2,12 @@
 
 Status: accepted for V1 implementation  
 Decision date: 2026-08-30  
-Scope: interactive Dongo CLI credentials only; MCP hosts own their credential storage  
+Scope: interactive dongo CLI credentials only; MCP hosts own their credential storage
 Supersedes: the earlier assumption that the npm CLI should use macOS Keychain/Linux Secret Service by default
 
 ## 1. Decision
 
-The V1 npm-distributed Dongo CLI stores its project-scoped OAuth credential in a Dongo-owned, user-scoped credential file outside every repository.
+The V1 npm-distributed dongo CLI stores its project-scoped OAuth credential in a dongo-owned, user-scoped credential file outside every repository.
 
 On POSIX systems:
 
@@ -21,15 +21,15 @@ On POSIX systems:
 
 Normal use must not invoke Keychain, Secret Service, a password manager, an installer, Swift, PowerShell, or an external credential helper. It must never produce an OS credential prompt. The human journey remains browser approval followed by terminal `Connected`.
 
-`DONGO_TOKEN` remains an explicit, externally managed, non-interactive CI/service override. It is never the interactive login path and is never copied into Dongo's local credential file.
+`DONGO_TOKEN` remains an explicit, externally managed, non-interactive CI/service override. It is never the interactive login path and is never copied into dongo's local credential file.
 
-Keychain support may return only through a separately shipped, stable, signed Dongo helper whose identity and upgrade behavior pass platform security review. It must be explicit opt-in until it proves prompt-free on clean machines. The npm process must not simulate a Dongo identity by trusting a generic system binary.
+Keychain support may return only through a separately shipped, stable, signed dongo helper whose identity and upgrade behavior pass platform security review. It must be explicit opt-in until it proves prompt-free on clean machines. The npm process must not simulate a dongo identity by trusting a generic system binary.
 
 ## 2. Why this is the best V1 tradeoff
 
 There is no universal CLI credential-storage convention:
 
-| CLI | Current documented behavior | Relevant lesson for Dongo |
+| CLI | Current documented behavior | Relevant lesson for dongo |
 | --- | --- | --- |
 | Claude Code | Uses macOS Keychain on macOS, a `0600` JSON file on Linux, and a file inheriting the user-profile ACL on Windows. | Even one leading agent CLI uses platform-specific storage. An owner-only file is a normal, disclosed design—not an exceptional fallback. |
 | GitHub CLI | Prefers the system credential store and can fall back to plaintext; `--insecure-storage` forces the file path. | A mature native CLI can use a keyring but must disclose its actual store and retain a headless path. |
@@ -61,13 +61,13 @@ Primary sources:
 
 | Alternative | At-rest protection | Prompt/dependency risk | Headless behavior | Decision |
 | --- | --- | --- | --- | --- |
-| Generic `security`/Swift/Secret Service helper by default | Potentially stronger when the caller is trusted | High for this npm client; the helper identity is not Dongo and may prompt or require installation | Fragile across SSH, containers, locked stores, and desktop-less Linux | Rejected |
+| Generic `security`/Swift/Secret Service helper by default | Potentially stronger when the caller is trusted | High for this npm client; the helper identity is not dongo and may prompt or require installation | Fragile across SSH, containers, locked stores, and desktop-less Linux | Rejected |
 | Encrypt the file with a key stored beside it | No meaningful improvement against filesystem disclosure | Low | Predictable | Rejected as security theater |
 | Encrypt the file with a key in Keychain | Stronger at rest if retrieval is trustworthy | Reintroduces the same prompt/caller problem | Same keyring availability problem | Rejected for V1 |
 | Store only the refresh token in an environment variable | Depends on the shell/launcher | No OS prompt, but leaks through inheritance/misconfiguration and creates ongoing setup work | Useful only when an external secret manager owns it | CI/service override only |
 | Keep credentials only in memory | Strong after process exit | No prompt | Every command requires browser login | Rejected as unusable |
-| Owner-only Dongo user file plus rotating, revocable OAuth | Honest local-user boundary; not malware-proof | No helper or installer | Predictable on macOS, Linux, SSH, and containers | **Selected for V1** |
-| Signed Dongo native helper | Potentially strongest transparent platform storage | Low only after signing/upgrade/clean-host gates pass | Requires a maintained per-platform distribution | Future option |
+| Owner-only dongo user file plus rotating, revocable OAuth | Honest local-user boundary; not malware-proof | No helper or installer | Predictable on macOS, Linux, SSH, and containers | **Selected for V1** |
+| Signed dongo native helper | Potentially strongest transparent platform storage | Low only after signing/upgrade/clean-host gates pass | Requires a maintained per-platform distribution | Future option |
 
 The selected design wins because it is the only V1 option that is transparent about its boundary, works consistently for agents and headless terminals, creates no trust-damaging prompt, and can be implemented without pretending that an npm process is a native trusted application. Its weaker same-user-malware boundary is explicit and is reduced through short lifetimes, rotation, exact binding, replay detection, and remote revocation.
 
@@ -75,15 +75,15 @@ The selected design wins because it is the only V1 option that is transparent ab
 
 Keychain itself is not the problem. The caller identity is.
 
-Apple Keychain items use ACLs that decide which applications may retrieve an item. If the calling app is not trusted, macOS may prompt the human to Deny, Allow Once, or Always Allow. Apple also documents special treatment for unsigned or invalid applications. An npm CLI executes inside a changing Node/npm process and does not have a stable Dongo Developer ID identity.
+Apple Keychain items use ACLs that decide which applications may retrieve an item. If the calling app is not trusted, macOS may prompt the human to Deny, Allow Once, or Always Allow. Apple also documents special treatment for unsigned or invalid applications. An npm CLI executes inside a changing Node/npm process and does not have a stable dongo Developer ID identity.
 
-The attempted implementation invoked generic Apple tools. Trusting `/usr/bin/security` or `/usr/bin/swift` does not establish a Dongo security boundary: another process running as the same user can invoke the same generic binary with the discoverable service/account identifiers. It can also generate exactly the sort of unexpected Keychain prompt that users correctly associate with credential theft.
+The attempted implementation invoked generic Apple tools. Trusting `/usr/bin/security` or `/usr/bin/swift` does not establish a dongo security boundary: another process running as the same user can invoke the same generic binary with the discoverable service/account identifiers. It can also generate exactly the sort of unexpected Keychain prompt that users correctly associate with credential theft.
 
 Therefore:
 
 - an unexpected Keychain dialog is a release blocker, not onboarding copy to explain;
-- users must never be told to type a Keychain password, click Always Allow, repair an ACL, install a helper, or open Keychain Access for ordinary Dongo use;
-- Dongo will not call a generic system binary to impersonate a first-party credential helper;
+- users must never be told to type a Keychain password, click Always Allow, repair an ACL, install a helper, or open Keychain Access for ordinary dongo use;
+- dongo will not call a generic system binary to impersonate a first-party credential helper;
 - encryption with a key stored beside the encrypted file is rejected as security theater;
 - encryption with a key in Keychain has the same unsigned-caller/prompt problem and is rejected for the npm client.
 
@@ -103,7 +103,7 @@ The refresh token is the highest-value local asset because it can mint new acces
 - accidental commit of a credential with the repository;
 - exposure through command arguments, environment inheritance, terminal output, logs, crash text, browser URLs, or support bundles;
 - another local OS user casually reading the credential;
-- symlink/path substitution that redirects reads or writes outside Dongo's credential directory or into a repository;
+- symlink/path substitution that redirects reads or writes outside dongo's credential directory or into a repository;
 - partial/corrupt writes during process termination;
 - concurrent refresh commands losing a rotated refresh token;
 - a credential from one repository, product origin, environment, API audience, or installation being reused for another;
@@ -116,8 +116,8 @@ The refresh token is the highest-value local asset because it can mint new acces
 - malware or another process already running as the same OS user;
 - root/administrator access;
 - an unlocked, unattended machine;
-- memory inspection of a running Dongo process;
-- compromise of the installed Dongo/npm/Node supply chain;
+- memory inspection of a running dongo process;
+- compromise of the installed dongo/npm/Node supply chain;
 - unencrypted machine backups or disk images made by the user/administrator;
 - a hostile kernel, filesystem, or endpoint-management product.
 
@@ -152,7 +152,7 @@ Moving/copying a repository to a different absolute root intentionally requires 
 
 The implementation must:
 
-1. create the Dongo configuration and credential directories with `0700`;
+1. create the dongo configuration and credential directories with `0700`;
 2. resolve the prospective configuration path against its nearest existing ancestor, reject a repository-local result, then `lstat` and reject a symlink or non-directory at the credential-directory boundary;
 3. verify ownership with the current effective user ID;
 4. force `0700` after creation in case the process umask or pre-existing mode differs;
@@ -161,18 +161,18 @@ The implementation must:
 7. write a random same-directory temporary file with exclusive creation and `0600`;
 8. flush and close the temporary file, then atomically rename over the prior complete version and flush the credential directory where the filesystem supports directory sync;
 9. verify the final file remains a regular owner-only file;
-10. remove only Dongo's exact credential file after successful server revocation.
+10. remove only dongo's exact credential file after successful server revocation.
 
-Temporary files must never be treated as credentials. Recovery may delete only stale Dongo-named temporary files in the exact credential directory.
+Temporary files must never be treated as credentials. Recovery may delete only stale dongo-named temporary files in the exact credential directory.
 
 ### 6.2 Windows
 
-Node documents that POSIX owner/group/other mode distinctions are not implemented on Windows. Dongo must not claim that `0600` provides the same guarantee there.
+Node documents that POSIX owner/group/other mode distinctions are not implemented on Windows. dongo must not claim that `0600` provides the same guarantee there.
 
 Windows persistent interactive login remains release-blocked until one of these is implemented and tested on a clean Windows host:
 
 - an owner-only ACL created and then independently verified for `%LOCALAPPDATA%\Dongo\credentials`; or
-- a stable, signed Dongo Credential Manager helper.
+- a stable, signed dongo Credential Manager helper.
 
 WSL follows the POSIX contract only when the credential directory is on the Linux filesystem, not a broadly mounted Windows path. `DONGO_TOKEN` remains available for externally managed non-interactive environments, but is not a substitute for an interactive Windows design.
 
@@ -192,7 +192,7 @@ Local permissions are only one layer. The authorization server and resource serv
 - no scope expansion without fresh browser consent;
 - rate limiting and safe audit metadata without tokens or work content.
 
-[RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html) requires public clients that receive refresh tokens to use sender-constrained refresh tokens or refresh-token rotation. Dongo V1 uses rotation and replay detection. DPoP/sender-constrained tokens remain a future hardening option; they help only if the private key receives better protection than the token itself.
+[RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html) requires public clients that receive refresh tokens to use sender-constrained refresh tokens or refresh-token rotation. dongo V1 uses rotation and replay detection. DPoP/sender-constrained tokens remain a future hardening option; they help only if the private key receives better protection than the token itself.
 
 ## 8. User experience contract
 
@@ -214,7 +214,7 @@ Normal output must not say:
 
 `dongo auth status` may report `local-user-file`, the config root, and the non-secret repository marker, but never the credential filename or token. Documentation must plainly say that the file is not encrypted and is protected by the OS user boundary and strict permissions.
 
-If permissions, ownership, file type, schema, issuer, resource, or marker binding is wrong, Dongo fails closed with a stable remediation message. It never relaxes permissions, follows a symlink, changes backends, or starts a new device flow merely because one command could not read the credential.
+If permissions, ownership, file type, schema, issuer, resource, or marker binding is wrong, dongo fails closed with a stable remediation message. It never relaxes permissions, follows a symlink, changes backends, or starts a new device flow merely because one command could not read the credential.
 
 ## 9. Lifecycle
 
@@ -251,7 +251,7 @@ The pinned OAuth provider version currently concatenates its configured prefix
 with `formatRefreshToken.encrypt(...)` synchronously. An async formatter is
 therefore unsafe: JavaScript coerces the unresolved Promise into the literal
 string `[object Promise]`, creating a credential that succeeds once and fails
-at the first refresh. Dongo avoids that upstream boundary by generating the
+at the first refresh. dongo avoids that upstream boundary by generating the
 encrypted database token in the provider's awaited `generateRefreshToken`
 hook and keeping the formatting hook synchronous and identity-only. A
 regression test asserts the actual prefix + formatter sequence never contains
@@ -279,8 +279,8 @@ The Keychain implementation was used only during development and must not become
 - New builds never probe, read, update, delete, or prompt for the old Keychain item.
 - There is no automatic Keychain-to-file migration because reading the old entry can itself trigger the suspicious prompt being removed.
 - The user denies any lingering prompt and runs one fresh `dongo connect`; the new grant is written directly to the user credential file.
-- Old server grants are revoked from Dongo installation settings or expire within the bounded refresh lifetime.
-- Removing the exact development Keychain item is a separate, explicit maintenance action requiring user approval; it is never required for Dongo to function.
+- Old server grants are revoked from dongo installation settings or expire within the bounded refresh lifetime.
+- Removing the exact development Keychain item is a separate, explicit maintenance action requiring user approval; it is never required for dongo to function.
 - Published release notes state that no public release ever depended on the experimental Keychain entry.
 
 ## 11. Acceptance and release gates
@@ -323,7 +323,7 @@ The Keychain implementation was used only during development and must not become
 A future native helper is optional, not assumed. Before it can become available it must have:
 
 - Developer ID/code signing and a stable designated requirement on macOS;
-- a fixed Dongo-owned executable identity, not Node, Swift, `security`, shell, or another generic interpreter;
+- a fixed dongo-owned executable identity, not Node, Swift, `security`, shell, or another generic interpreter;
 - versioned stdin/stdout credential-helper protocol with secrets never in argv/env;
 - signed update and rollback path;
 - clean-install, upgrade, downgrade, path-change, multiple-repository, locked-screen, SSH, and uninstall tests;

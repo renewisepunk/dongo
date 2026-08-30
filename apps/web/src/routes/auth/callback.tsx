@@ -52,7 +52,7 @@ export default function AuthCallbackRoute(props: AuthCallbackRouteProps = {}) {
       const firstProject = (await loadProjects())[0];
       navigate(firstProject ? `/app/${firstProject.organizationSlug}/${firstProject.slug}` : "/onboarding", { replace: true });
     } catch {
-      setError("Your sign-in finished, but Dongo could not establish the browser session.");
+      setError("Your sign-in finished, but dongo could not establish the browser session.");
     }
   });
 

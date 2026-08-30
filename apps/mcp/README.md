@@ -1,4 +1,4 @@
-# Dongo MCP Worker
+# dongo MCP Worker
 
 Cloudflare Worker entry point for `@dongo/mcp`. It composes the canonical runtime contracts, RFC 7662 Better Auth introspection, the signed Convex internal gateway, and a Cloudflare Rate Limiting binding. Missing or invalid configuration keeps `/healthz` live while `/readyz` and project MCP endpoints fail closed.
 

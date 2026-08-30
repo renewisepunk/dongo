@@ -55,7 +55,7 @@ Acceptance:
 
 ### I-03 — OAuth grants, installations, and service credentials
 
-- Register the official Dongo CLI as a public native client with Device Authorization and refresh-token grants; it has no client secret.
+- Register the official dongo CLI as a public native client with Device Authorization and refresh-token grants; it has no client secret.
 - In the candidate Better Auth composition, configure `mcp()` as the OAuth Provider and add `oauthDeviceAuthorization()` for the CLI. Do not register a second `oauthProvider()` plugin in the same instance.
 - Resolve each approved CLI or MCP grant to one project-scoped installation and stable agent Actor.
 - Implement pending/approved/denied/expired/revoked authorization state, grant metadata listing, last-use tracking, refresh-family revocation, and audit Events.
@@ -70,7 +70,7 @@ Acceptance:
 - A device approval cannot be replayed, switched to another project, or approved by an unauthorized member.
 - A grant or service credential cannot access another project, even in the same organization.
 - Revocation or project archival blocks renewal and the next protected request.
-- OAuth provider records and Dongo installation bindings cannot disagree silently; reconciliation fails closed.
+- OAuth provider records and dongo installation bindings cannot disagree silently; reconciliation fails closed.
 
 ### I-04 — Auth, approval, consent, and installation UI
 

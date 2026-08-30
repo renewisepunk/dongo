@@ -8,7 +8,7 @@ import { CliCoreError, CoreService, MemorySecretStore, writeProjectMarker } from
 import type { ProjectMarker } from "../src/index.ts";
 
 const session = {
-  project: { id: "project_1", name: "Dongo", publicRef: "pub_dongo", executionMode: "manual" as const },
+  project: { id: "project_1", name: "dongo", publicRef: "pub_dongo", executionMode: "manual" as const },
   installation: { id: "install_1", actorId: "actor_1", scopes: ["dongo:work:read", "dongo:work:write"] },
   serverTime: "2026-08-30T10:00:00.000Z",
 };
@@ -74,7 +74,7 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
 
   const connected = await service.connect({
     origin: "http://localhost:8787",
-    projectName: "Dongo CLI",
+    projectName: "dongo CLI",
     repositoryUrl: "git@github.com:renewisepunk/dongo.git",
     executionMode: "autonomous",
   });
@@ -82,7 +82,7 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
   assert.equal(opened.length, 1);
   assert.equal(
     opened[0],
-    "http://localhost:8787/device?user_code=ABCD-EFGH&project_name=Dongo+CLI&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo&execution_mode=autonomous",
+    "http://localhost:8787/device?user_code=ABCD-EFGH&project_name=dongo+CLI&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo&execution_mode=autonomous",
   );
   const marker = await readFile(path.join(repositoryRoot, ".agent-work", "project.json"), "utf8");
   assert.doesNotMatch(marker, /access-secret|refresh-secret|device-secret|ABCD-EFGH/);

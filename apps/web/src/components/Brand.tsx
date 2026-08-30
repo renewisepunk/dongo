@@ -7,7 +7,7 @@ type BrandProps = {
 
 export function Brand(props: BrandProps) {
   return (
-    <A class="brand" href={props.href ?? "/"} aria-label="Dongo home">
+    <A class="brand" href={props.href ?? "/"} aria-label="dongo home">
       <span class="brand__chevron" style={{ "font-size": props.compact ? "18px" : undefined }}>
         ❯
       </span>

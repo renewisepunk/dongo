@@ -227,7 +227,7 @@ async function validatedInput(
   if (!parsed.success) {
     throw new ApiBoundaryError(
       "validation",
-      `The ${operation} request does not match the Dongo v1 contract`,
+      `The ${operation} request does not match the dongo v1 contract`,
       400,
       false,
       {
@@ -287,7 +287,7 @@ export function createDongoApiGateway(
     resource.hash !== "" ||
     resource.pathname !== API_PREFIX.slice(0, -1)
   ) {
-    throw new Error("resource must be the exact Dongo API v1 HTTPS URL");
+    throw new Error("resource must be the exact dongo API v1 HTTPS URL");
   }
   const allowedHostnames = new Set(
     options.allowedHostnames.map((hostname) => hostname.toLowerCase()),
@@ -417,7 +417,7 @@ export function createDongoApiGateway(
           return errorResponse(
             new ApiBoundaryError(
               "rate_limited",
-              "Too many Dongo API requests",
+              "Too many dongo API requests",
               429,
               true,
             ),
@@ -464,8 +464,8 @@ export function createDongoApiGateway(
             : new ApiBoundaryError(
                 timedOut ? "temporarily_unavailable" : "internal",
                 timedOut
-                  ? "The Dongo API request timed out"
-                  : "The Dongo API could not complete the request",
+                  ? "The dongo API request timed out"
+                  : "The dongo API could not complete the request",
                 timedOut ? 503 : 500,
                 timedOut,
               );
@@ -502,7 +502,7 @@ export function createUnavailableDongoApiWorker(resourceValue: string): DongoApi
       return errorResponse(
         new ApiBoundaryError(
           "temporarily_unavailable",
-          "The Dongo API is not configured",
+          "The dongo API is not configured",
           503,
           true,
         ),

@@ -77,7 +77,7 @@ export function dongoHumanBridge(env: AuthWorkerEnv): BetterAuthPlugin {
           });
           if (emailMatch && emailMatch.id !== claims.profileId) {
             throw new APIError("CONFLICT", {
-              message: "This email is linked to another Dongo identity",
+              message: "This email is linked to another dongo identity",
             });
           }
 
@@ -143,7 +143,7 @@ export function dongoHumanBridge(env: AuthWorkerEnv): BetterAuthPlugin {
             !claims.projectRef
           ) {
             throw new APIError("FORBIDDEN", {
-              message: "Project selection does not match this Dongo session",
+              message: "Project selection does not match this dongo session",
             });
           }
           await ctx.context.internalAdapter.updateUser(claims.profileId, {

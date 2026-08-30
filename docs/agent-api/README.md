@@ -1,4 +1,4 @@
-# Dongo agent API artifacts
+# dongo agent API artifacts
 
 `v1/openapi.json` and `v1/agent-api.schema.json` are generated from the
 transport-neutral operation registry in `@dongo/contracts`. They are the

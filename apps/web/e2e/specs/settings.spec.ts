@@ -10,7 +10,7 @@ test("saves credential-free project settings with keyboard execution-mode select
     "Enter a credential-free HTTP or HTTPS repository URL.",
   );
 
-  await page.getByLabel("Project name").fill("Dongo Workspace");
+  await page.getByLabel("Project name").fill("dongo Workspace");
   await repository.fill("github.com/renewisepunk/dongo");
   const manual = page.getByRole("radio", { name: /Manual/ });
   await manual.focus();
@@ -20,7 +20,7 @@ test("saves credential-free project settings with keyboard execution-mode select
   await expect(page.getByRole("status")).toHaveText("Project settings saved.");
   const update = await page.locator("html").getAttribute("data-fixture-project-update");
   expect(JSON.parse(update ?? "null")).toEqual({
-    name: "Dongo Workspace",
+    name: "dongo Workspace",
     repositoryUrl: "https://github.com/renewisepunk/dongo",
     executionMode: "autonomous",
   });
@@ -30,7 +30,7 @@ test("revokes installations and creates a one-time scoped CI credential", async 
   await page.goto("/app/fixture-studio/dongo/settings?tab=Agent%20access");
   await expect(page.getByRole("heading", { name: "Agent access" })).toBeVisible();
   await expect(page.getByText("https://dev.dongo.so/p/fixture-project/mcp", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Dongo CLI/)).toBeVisible();
+  await expect(page.getByText(/dongo CLI/)).toBeVisible();
   await expect(page.getByText(/Claude Code/)).toBeVisible();
 
   await page.getByRole("button", { name: "Revoke" }).click();
@@ -101,8 +101,8 @@ test("enforces member read-only administration and shows plan limits", async ({ 
 
 test("archives and restores a project only after explicit confirmation", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo/settings");
-  await page.getByRole("button", { name: "Archive Dongo" }).click();
-  await expect(page.getByText("Archive Dongo and revoke agent access?", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Archive dongo" }).click();
+  await expect(page.getByText("Archive dongo and revoke agent access?", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Yes, archive" }).click();
   await expect(page).toHaveURL(/\/onboarding$/);
   await expect(page.locator("html")).toHaveAttribute("data-fixture-archived-project", "true");

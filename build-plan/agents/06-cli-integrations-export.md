@@ -50,7 +50,7 @@ Acceptance:
 
 - Find the Git root and `.agent-work/project.json` from nested directories.
 - Validate environment, issuer, API resource, project reference, and API origin. Resolve the project from `--project-ref`, the valid repository marker, repository URL, unique name/slug, or sole-project context; require the agent to provide an exact public reference when ambiguous. The browser confirms but never selects the CLI project.
-- Store the bounded access/rotating refresh credential in the Dongo-owned user configuration directory outside the repository. On POSIX enforce `0700` directory and `0600` regular file, current ownership, no symlinks, no-follow reads, atomic replacement, and exact environment/profile binding. Spawn no Keychain/Secret Service/helper process. Follow `build-plan/07-cli-credential-storage.md`; native Windows persistence stays blocked until its owner-only ACL gate passes.
+- Store the bounded access/rotating refresh credential in the dongo-owned user configuration directory outside the repository. On POSIX enforce `0700` directory and `0600` regular file, current ownership, no symlinks, no-follow reads, atomic replacement, and exact environment/profile binding. Spawn no Keychain/Secret Service/helper process. Follow `build-plan/07-cli-credential-storage.md`; native Windows persistence stays blocked until its owner-only ACL gate passes.
 - Prevent symlink/path escape and serialize refresh so concurrent commands cannot race token rotation.
 
 Acceptance:
@@ -124,7 +124,7 @@ Acceptance:
 
 - Codex configuration leads to `codex mcp login`; Claude configuration leads to `claude mcp login` or `/mcp`.
 - No command copies the CLI token into an MCP host.
-- Reinstall is idempotent; conservative uninstall removes only Dongo-owned content whose managed identity still matches.
+- Reinstall is idempotent; conservative uninstall removes only dongo-owned content whose managed identity still matches.
 - Existing host configuration survives install, upgrade, and uninstall.
 - Host capability/version failures produce exact manual recovery instructions.
 

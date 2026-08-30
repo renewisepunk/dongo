@@ -1,10 +1,10 @@
-# Dongo V1 user journey — screen by screen
+# dongo V1 user journey — screen by screen
 
 Status: product/UX description for planning. This document does not replace or modify the PRD.
 
 ## 1. Scope
 
-This document describes what a human user sees and does from first sign-in through the complete Dongo loop:
+This document describes what a human user sees and does from first sign-in through the complete dongo loop:
 
 ```text
 sign in
@@ -43,7 +43,7 @@ The shell is deliberately small and has no permanent project-management sidebar.
 
 Visible elements:
 
-- Dongo wordmark, which returns to the current project Overview.
+- dongo wordmark, which returns to the current project Overview.
 - Current organization and project selector showing the project name.
 - Search button with its keyboard shortcut hint.
 - Connection state only when relevant: Reconnecting, Offline, or Unable to sync.
@@ -63,7 +63,7 @@ The organization/project selector opens a compact popover containing:
 Visible elements:
 
 - back control when a sheet/subscreen is open;
-- Dongo wordmark or current screen title;
+- dongo wordmark or current screen title;
 - compact project selector;
 - search icon;
 - profile/avatar control.
@@ -85,17 +85,17 @@ Visible elements:
 
 ### Screen 1 — Sign in
 
-Purpose: let a human enter Dongo without creating a password.
+Purpose: let a human enter dongo without creating a password.
 
 Visible elements:
 
-- Dongo wordmark.
+- dongo wordmark.
 - Short product statement: “See what your coding agents are doing, give them work, and answer when they need you.”
 - Continue with Google button with Google mark.
 - Divider labeled “or.”
 - Email address field.
 - Continue with email button.
-- Small note that Dongo uses a one-time code and does not require a password.
+- Small note that dongo uses a one-time code and does not require a password.
 - Inline error region below the relevant control.
 
 Primary actions:
@@ -145,7 +145,7 @@ Purpose: provide a stable state while Google or email authentication is finalize
 
 Visible elements:
 
-- Dongo wordmark.
+- dongo wordmark.
 - Compact progress indicator.
 - Text: “Signing you in…”
 
@@ -168,7 +168,7 @@ This is the web-started fallback, not a mandatory gate before an agent can authe
 
 Visible elements:
 
-- Dongo wordmark.
+- dongo wordmark.
 - Progress label: “Set up your workspace.”
 - Heading: “Create your first project.”
 - Explanation: “A project maps to one repository or codebase.”
@@ -202,8 +202,8 @@ Visible elements:
 - Project name and non-secret public reference.
 - Primary instruction: “In your repository, run `dongo connect`.”
 - Copy command action.
-- Explanation: “Dongo will open one secure browser link. Approve the project, then return to your terminal.”
-- Host options for Dongo CLI, Codex MCP, Claude MCP, and generic MCP.
+- Explanation: “dongo will open one secure browser link. Approve the project, then return to your terminal.”
+- Host options for dongo CLI, Codex MCP, Claude MCP, and generic MCP.
 - Connection status summary for independently authorized installations.
 - Security note: credentials are stored by the CLI or MCP host and are never committed.
 - Skip for now and Open minimal project status actions.
@@ -238,16 +238,16 @@ Terminal error/recovery states:
 - Cancelled: stop polling and leave no partial credential.
 - Unsafe or credential-bearing repository origin: omit the repository URL from the proposal rather than placing it in browser history; an explicitly supplied unsafe URL fails before authorization starts.
 
-### Screen 5C — Browser: approve Dongo CLI
+### Screen 5C — Browser: approve dongo CLI
 
 Purpose: let the authenticated human authorize one terminal installation for one project.
 
 Visible elements:
 
-- Heading: “Authorize Dongo CLI.”
+- Heading: “Authorize dongo CLI.”
 - Confirmation code, with instruction to ensure it matches the terminal.
 - Authorizing account and organization.
-- Verified client name: Dongo CLI.
+- Verified client name: dongo CLI.
 - Repository/machine label when safely supplied.
 - Fixed project selected by the CLI/agent from an exact reference, the repository marker, repository URL, unique name/slug, or the account's only active project. The human confirms this binding but does not choose it on the consent page.
 - If an account has multiple projects and repository context does not resolve exactly one, show “No unambiguous project match,” disable approval, and tell the agent to reconnect with an exact public project reference.
@@ -322,7 +322,7 @@ Visible elements:
 - Approve and Deny.
 - Unexpected-request warning.
 
-The grant/token family and installation Actor are distinct from the Dongo CLI and from every other MCP host. Error states cover discovery/registration failure, invalid redirect/state/PKCE, pending host project approval, insufficient scope, audience mismatch, revoked refresh, configuration-name collision, and unsupported host version.
+The grant/token family and installation Actor are distinct from the dongo CLI and from every other MCP host. Error states cover discovery/registration failure, invalid redirect/state/PKCE, pending host project approval, insufficient scope, audience mismatch, revoked refresh, configuration-name collision, and unsupported host version.
 
 ### Screen 5H — Terminal/TUI: verify connected agent surfaces
 
@@ -332,7 +332,7 @@ Visible elements:
 - Each configured MCP host with Connected, Needs authentication, Pending project trust, Needs reauthorization, Revoked, or Failed status.
 - Tool count and verification of `dongo_session_start` where the host exposes it.
 - Doctor/retry/reauthorize guidance.
-- Open Dongo action only after the selected surface verifies successfully.
+- Open dongo action only after the selected surface verifies successfully.
 
 ### Screen 6 — First empty Overview after the agent protocol gate
 
@@ -637,18 +637,18 @@ When Attention is created:
 
 Native push shows:
 
-- Dongo app name/icon.
+- dongo app name/icon.
 - Neutral title such as “Claude needs a decision.”
 - Project name when allowed by notification settings.
 - No private request body or work content in the payload.
 
 Important-attention email shows:
 
-- Dongo sender identity.
+- dongo sender identity.
 - Subject indicating unresolved human attention.
 - Project and WorkItem title.
 - Request type and concise safe summary.
-- Open in Dongo button linking to Screen 14.
+- Open in dongo button linking to Screen 14.
 - No status-change digest or unrelated activity.
 
 ## 9. Completion journey
@@ -860,7 +860,7 @@ Native apps intentionally omit billing, organization settings, project creation,
 
 Visible elements mirror web Sign in:
 
-- Dongo identity and short promise.
+- dongo identity and short promise.
 - Continue with Google.
 - Email field and Continue with email.
 - Native one-time-code entry state.
@@ -988,9 +988,9 @@ Visible elements:
 
 The V1 journey is complete when the following feels continuous:
 
-1. In the repository, René runs `dongo connect`; the CLI detects the Dongo repository, proposes the Dongo project, opens one complete browser link, and displays a matching confirmation code.
+1. In the repository, René runs `dongo connect`; the CLI detects the dongo repository, proposes the dongo project, opens one complete browser link, and displays a matching confirmation code.
 2. René signs in with Google or an email code if needed. No pre-existing project is required to reach the authorization review.
-3. The browser shows the exact CLI proposal, scopes, account, resource, and comparison code. René chooses Create & approve; Dongo creates the personal organization and first project, binds that project to the pending device request, and approves it.
+3. The browser shows the exact CLI proposal, scopes, account, resource, and comparison code. René chooses Create & approve; dongo creates the personal organization and first project, binds that project to the pending device request, and approves it.
 4. René returns to the polling terminal. The CLI receives only the new project-scoped grant, securely stores it, writes only a non-secret marker, and passes doctor. If the project already existed, the agent selects it from repository context before opening the link; the browser shows that fixed binding for confirmation and Approve without creating anything.
 5. René connects Codex or Claude to the project-specific remote MCP endpoint. The host opens a separate OAuth consent request; René approves that host for the same project, and a read-only `dongo_session_start` verifies it.
 6. René enters Overview and types “checkout gets stuck here,” attaches a screen recording, and submits.
@@ -1001,7 +1001,7 @@ The V1 journey is complete when the following feels continuous:
 11. The agent discovers a migration decision and requests Attention.
 12. The item moves to Needs You, and René receives push when a native client is installed.
 13. René opens the item, sees the request in context, answers, and the response is recorded in the conversation.
-14. Dongo states that the local agent will see the response on its next pull.
+14. dongo states that the local agent will see the response on its next pull.
 15. The agent continues, finishes, and attaches its commit/PR/preview artifacts.
 16. Overview moves the item into Recently Done.
 17. René opens it and sees the goal, outcome, artifacts, conversation, source Intake, and completion details.

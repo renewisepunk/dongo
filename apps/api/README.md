@@ -1,4 +1,4 @@
-# Dongo CLI API Worker
+# dongo CLI API Worker
 
 Cloudflare Worker for the canonical CLI REST surface at
 `https://dev.dongo.so/api/agent/v1/{operation}`.

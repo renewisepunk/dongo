@@ -3,9 +3,9 @@ import { expect, test } from "@playwright/test";
 test("reviews and approves the exact terminal, project, resource, and scopes", async ({ page }) => {
   const requestPath = "/device?user_code=ABCD-EFGH&project_ref=companion-project&project_name=Companion";
   await page.goto(requestPath);
-  await expect(page.getByRole("heading", { name: "Authorize Dongo CLI" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Authorize dongo CLI" })).toBeVisible();
   await expect(page.getByText("ABCD-EFGH", { exact: true })).toBeVisible();
-  await expect(page.getByText("Dongo CLI · official client", { exact: true })).toBeVisible();
+  await expect(page.getByText("dongo CLI · official client", { exact: true })).toBeVisible();
   await expect(page.getByText("fixture@example.test", { exact: true })).toBeVisible();
   await expect(page.getByText("https://dev.dongo.so/api/agent/v1", { exact: true })).toBeVisible();
   await expect(page.getByText("Read this project’s Intake, work, comments, and artifacts.")).toBeVisible();
@@ -13,7 +13,7 @@ test("reviews and approves the exact terminal, project, resource, and scopes", a
 
   await expect(page.getByText("Fixture Studio / Companion", { exact: true })).toBeVisible();
   await expect(page.getByRole("combobox")).toHaveCount(0);
-  await expect(page.getByText(/Project selected by the Dongo CLI/)).toBeVisible();
+  await expect(page.getByText(/Project selected by the dongo CLI/)).toBeVisible();
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("Approved — you can close this window", { exact: true })).toBeVisible();
   await expect(page.getByText("This page never displays access or refresh tokens.")).toBeVisible();
@@ -29,8 +29,8 @@ test("reviews and approves the exact terminal, project, resource, and scopes", a
 });
 
 test("matches the agent proposal by repository and fails closed when context is ambiguous", async ({ page }) => {
-  await page.goto("/device?user_code=ABCD-EFGH&project_name=Dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo.git");
-  await expect(page.getByText("Fixture Studio / Dongo", { exact: true })).toBeVisible();
+  await page.goto("/device?user_code=ABCD-EFGH&project_name=dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo.git");
+  await expect(page.getByText("Fixture Studio / dongo", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve" })).toBeEnabled();
 
   await page.goto("/device?user_code=ABCD-EFGH");
@@ -57,7 +57,7 @@ test("supports manual comparison-code entry and formatting", async ({ page }) =>
   await code.fill("abcd-efgh");
   await expect(code).toHaveValue("ABCD-EFGH");
   await page.getByRole("button", { name: "Review request" }).click();
-  await expect(page.getByRole("heading", { name: "Authorize Dongo CLI" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Authorize dongo CLI" })).toBeVisible();
 });
 
 test("fails closed for completed and invalid requests", async ({ page }) => {
@@ -72,12 +72,12 @@ test("fails closed for completed and invalid requests", async ({ page }) => {
 });
 
 test("creates the CLI-proposed first project and approves the same terminal request", async ({ page }) => {
-  const requestPath = "/device?user_code=NOPR-OJ00&project_name=Dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo&execution_mode=manual";
+  const requestPath = "/device?user_code=NOPR-OJ00&project_name=dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo&execution_mode=manual";
   await page.goto(requestPath);
-  await expect(page.getByText("New: Dongo", { exact: true })).toBeVisible();
+  await expect(page.getByText("New: dongo", { exact: true })).toBeVisible();
   await expect(page.getByText("CLI project proposal", { exact: true })).toBeVisible();
   await expect(page.getByText("https://github.com/renewisepunk/dongo", { exact: true })).toBeVisible();
-  await expect(page.getByText("Create “Dongo” as this account’s first project and bind this terminal to it.")).toBeVisible();
+  await expect(page.getByText("Create “dongo” as this account’s first project and bind this terminal to it.")).toBeVisible();
 
   await page.getByRole("button", { name: "Create & approve" }).click();
   await expect(page.getByText("Approved — you can close this window", { exact: true })).toBeVisible();
@@ -85,7 +85,7 @@ test("creates the CLI-proposed first project and approves the same terminal requ
     "data-fixture-device-created-project",
     JSON.stringify({
       user: { id: "user-fixture", name: "Fixture Owner", email: "fixture@example.test" },
-      name: "Dongo",
+      name: "dongo",
       slug: "dongo",
       repositoryUrl: "https://github.com/renewisepunk/dongo",
       executionMode: "manual",
@@ -110,7 +110,7 @@ test("keeps approval closed when a legacy device request has no project proposal
     "/onboarding?returnTo=%2Fdevice%3Fuser_code%3DNOPR-OJ00",
   );
 
-  await page.goto("/device?user_code=NOPR-OJ00&project_name=Dongo&repository_url=javascript%3Aalert(1)&execution_mode=manual");
+  await page.goto("/device?user_code=NOPR-OJ00&project_name=dongo&repository_url=javascript%3Aalert(1)&execution_mode=manual");
   await expect(page.getByText("CLI project proposal", { exact: true })).toBeHidden();
   await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
 });

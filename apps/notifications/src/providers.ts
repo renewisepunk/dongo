@@ -52,15 +52,15 @@ export function renderAttentionEmail(input: EmailDeliveryRequest): {
   const subject = `Attention still needed for ${input.workIdentifier}`;
   const kind = input.attentionKind[0]!.toUpperCase() + input.attentionKind.slice(1);
   const plain = [
-    "Dongo still needs your attention.",
+    "dongo still needs your attention.",
     "",
     `Project: ${input.projectName}`,
     `Work: ${input.workIdentifier} — ${input.workTitle}`,
     `${kind}: ${input.attentionTitle}`,
     "",
-    `Open in Dongo: ${input.deepLink}`,
+    `Open in dongo: ${input.deepLink}`,
   ].join("\n");
-  const html = `<!doctype html><html><body style="margin:0;background:#08080a;color:#ececee;font-family:Arial,sans-serif"><div style="max-width:600px;margin:0 auto;padding:40px 24px"><p style="font-family:monospace;color:#93939c;letter-spacing:.12em;text-transform:uppercase">Dongo</p><h1 style="font-size:24px;font-weight:600">Attention still needed</h1><p style="color:#93939c;line-height:1.6">${escapeHtml(input.projectName)} · ${escapeHtml(input.workIdentifier)}</p><h2 style="font-size:18px">${escapeHtml(input.workTitle)}</h2><p style="line-height:1.6"><strong>${escapeHtml(kind)}:</strong> ${escapeHtml(input.attentionTitle)}</p><p style="margin-top:32px"><a href="${escapeHtml(input.deepLink)}" style="display:inline-block;background:#f0b429;color:#08080a;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Open in Dongo</a></p></div></body></html>`;
+  const html = `<!doctype html><html><body style="margin:0;background:#08080a;color:#ececee;font-family:Arial,sans-serif"><div style="max-width:600px;margin:0 auto;padding:40px 24px"><p style="font-family:monospace;color:#93939c;letter-spacing:.12em;text-transform:uppercase">dongo</p><h1 style="font-size:24px;font-weight:600">Attention still needed</h1><p style="color:#93939c;line-height:1.6">${escapeHtml(input.projectName)} · ${escapeHtml(input.workIdentifier)}</p><h2 style="font-size:18px">${escapeHtml(input.workTitle)}</h2><p style="line-height:1.6"><strong>${escapeHtml(kind)}:</strong> ${escapeHtml(input.attentionTitle)}</p><p style="margin-top:32px"><a href="${escapeHtml(input.deepLink)}" style="display:inline-block;background:#f0b429;color:#08080a;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Open in dongo</a></p></div></body></html>`;
   return { subject, text: plain, html };
 }
 
@@ -154,8 +154,8 @@ export async function deliverApns(input: {
         body: JSON.stringify({
           aps: {
             alert: {
-              title: "Dongo needs you",
-              body: "Open Dongo to respond.",
+              title: "dongo needs you",
+              body: "Open dongo to respond.",
             },
             sound: "default",
           },
@@ -277,8 +277,8 @@ export async function deliverFcm(input: {
           message: {
             token: input.request.pushToken,
             notification: {
-              title: "Dongo needs you",
-              body: "Open Dongo to respond.",
+              title: "dongo needs you",
+              body: "Open dongo to respond.",
             },
             data: {
               attentionRequestId: input.request.attentionRequestId,

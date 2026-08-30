@@ -1,4 +1,4 @@
-# Dongo build plan
+# dongo build plan
 
 Status: implementation-ready. Product implementation must follow the design handoff below; the original PRD remains unchanged.
 

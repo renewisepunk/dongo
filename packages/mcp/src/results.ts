@@ -57,7 +57,7 @@ function errorResult(
     message: error.message,
     retryable: error.retryable,
   };
-  const base = `Dongo error ${payload.code}: ${payload.message} (retryable: ${payload.retryable}; request: ${requestId})`;
+  const base = `dongo error ${payload.code}: ${payload.message} (retryable: ${payload.retryable}; request: ${requestId})`;
   const withDetails =
     boundedDetailsJson === undefined
       ? base

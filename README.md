@@ -1,6 +1,6 @@
-# Dongo
+# dongo
 
-Dongo turns unstructured human Intake into durable work that local coding agents can claim, discuss, and complete. Convex is authoritative; the CLI and remote MCP server expose the same versioned operation contract, while the web product stays focused on capture, truthful status, and decisions that need a person.
+dongo turns unstructured human Intake into durable work that local coding agents can claim, discuss, and complete. Convex is authoritative; the CLI and remote MCP server expose the same versioned operation contract, while the web product stays focused on capture, truthful status, and decisions that need a person.
 
 Development runs at [dev.dongo.so](https://dev.dongo.so) against Convex deployment `wandering-camel-662`. The existing [dongo.so](https://dongo.so) landing deployment is intentionally separate and must not be changed by development deploys.
 
@@ -81,7 +81,7 @@ dongo integrate claude
 dongo integrate generic
 ```
 
-Use `--apply` only after reviewing the exact managed configuration. Dongo writes URL-only MCP entries and versioned instruction blocks; it never copies CLI credentials into Codex, Claude, or another host. Each host completes its own OAuth flow and receives an independently revocable installation Actor and token family.
+Use `--apply` only after reviewing the exact managed configuration. dongo writes URL-only MCP entries and versioned instruction blocks; it never copies CLI credentials into Codex, Claude, or another host. Each host completes its own OAuth flow and receives an independently revocable installation Actor and token family.
 
 ## Security model
 
@@ -91,6 +91,6 @@ Use `--apply` only after reviewing the exact managed configuration. Dongo writes
 - Every mutation is idempotent and revision/lease conflicts fail closed.
 - Attachment links are short-lived and method-, project-, object-, size-, and checksum-bound. Large bytes never transit Convex.
 - Credentials, OTPs, device/authorization codes, signed URLs, and private work content are excluded from repository files and default logs.
-- `.agent-work` export is deterministic and one-way. Dongo never stages, commits, pushes, or imports edits.
+- `.agent-work` export is deterministic and one-way. dongo never stages, commits, pushes, or imports edits.
 
 Operational recovery and rollback procedures live in [`docs/runbooks/`](docs/runbooks/README.md). The complete release criteria are in [`build-plan/03-release-gates.md`](build-plan/03-release-gates.md).

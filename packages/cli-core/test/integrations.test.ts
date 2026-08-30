@@ -49,7 +49,7 @@ test("Codex apply preserves unrelated TOML and prose and is idempotent", async (
   assert.equal(second.files.every((file) => !file.changed), true);
 });
 
-test("Codex apply replaces only an exact stale Dongo project table", async () => {
+test("Codex apply replaces only an exact stale dongo project table", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "dongo-integrate-codex-replace-"));
   await mkdir(path.join(root, ".codex"));
   await import("node:fs/promises").then((fs) =>
@@ -104,7 +104,7 @@ test("Claude JSON merge preserves unrelated servers and conflicting ownership ch
   assert.equal(await readFile(path.join(root, ".mcp.json"), "utf8"), before);
 });
 
-test("Claude apply replaces only an exact stale Dongo project entry", async () => {
+test("Claude apply replaces only an exact stale dongo project entry", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "dongo-integrate-claude-replace-"));
   await import("node:fs/promises").then((fs) =>
     fs.writeFile(

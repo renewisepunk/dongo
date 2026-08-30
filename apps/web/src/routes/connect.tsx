@@ -107,9 +107,9 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
 
   const instruction = createMemo(() => {
     if (host() === "AGENTS.md") {
-      return "Read AGENTS.md, install the Dongo adapter in this repository, then run dongo connect.";
+      return "Read AGENTS.md, install the dongo adapter in this repository, then run dongo connect.";
     }
-    return `Install Dongo in this repository and run dongo connect. Configure the ${host()} MCP connection when prompted.`;
+    return `Install dongo in this repository and run dongo connect. Configure the ${host()} MCP connection when prompted.`;
   });
 
   const copyInstruction = async () => {
@@ -151,7 +151,7 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
         <div class="title-group">
           <div class="eyebrow eyebrow--green">Project created</div>
           <h1 class="auth-title">Connect a coding agent</h1>
-          <p class="auth-lede">Open your repository with your coding agent and tell it to install Dongo.</p>
+          <p class="auth-lede">Open your repository with your coding agent and tell it to install dongo.</p>
         </div>
 
         <div ref={hostTabs} class="host-tabs" role="tablist" aria-label="Coding agent host">

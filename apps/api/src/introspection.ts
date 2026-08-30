@@ -140,7 +140,7 @@ function requiredClaim(
 ): string {
   const value = response[name];
   if (typeof value !== "string" || value.length === 0 || value.length > maxLength) {
-    invalidToken("The access token is missing a required Dongo binding");
+    invalidToken("The access token is missing a required dongo binding");
   }
   return value;
 }

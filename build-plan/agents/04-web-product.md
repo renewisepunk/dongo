@@ -4,7 +4,7 @@
 
 After the agent protocol gate, implement the focused SolidStart human experience from the minimal live loop through the complete authenticated shell, capture, Overview, Work detail, Attention response, search, and administration, with responsive and accessible behavior.
 
-The mandatory visual and responsive source of truth is [`../06-design-implementation-contract.md`](../06-design-implementation-contract.md) and the user-authored handoff it references. Preserve the supplied Dongo design language and adapt only the obsolete pairing interaction to the accepted OAuth device/consent flows.
+The mandatory visual and responsive source of truth is [`../06-design-implementation-contract.md`](../06-design-implementation-contract.md) and the user-authored handoff it references. Preserve the supplied dongo design language and adapt only the obsolete pairing interaction to the accepted OAuth device/consent flows.
 
 ## Exclusive ownership
 

@@ -61,7 +61,7 @@ export async function requireCurrentProfile(
     )
     .unique();
   if (!profile) {
-    fail("unauthorized", "Complete account bootstrap before using Dongo");
+    fail("unauthorized", "Complete account bootstrap before using dongo");
   }
   return profile;
 }

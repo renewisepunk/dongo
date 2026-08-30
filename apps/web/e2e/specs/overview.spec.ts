@@ -27,7 +27,7 @@ test("switches projects through an accessible keyboard menu", async ({ page }) =
   const trigger = page.getByRole("button", { name: "Select organization or project" });
   await trigger.click();
   const menu = page.getByRole("menu", { name: "Organizations and projects" });
-  const current = menu.getByRole("menuitemradio", { name: "Dongo" });
+  const current = menu.getByRole("menuitemradio", { name: "dongo" });
   const companion = menu.getByRole("menuitemradio", { name: "Companion" });
   await expect(current).toHaveAttribute("aria-checked", "true");
   await expect(current).toBeFocused();
@@ -40,7 +40,7 @@ test("switches projects through an accessible keyboard menu", async ({ page }) =
 test("restores focus when project navigation is dismissed", async ({ page }) => {
   const trigger = page.getByRole("button", { name: "Select organization or project" });
   await trigger.click();
-  await expect(page.getByRole("menuitemradio", { name: "Dongo" })).toBeFocused();
+  await expect(page.getByRole("menuitemradio", { name: "dongo" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu", { name: "Organizations and projects" })).toBeHidden();
   await expect(trigger).toBeFocused();
@@ -125,7 +125,7 @@ test("uploads a browser-selected file before Intake submission", async ({ page }
   await page.locator('input[type="file"]').setInputFiles({
     name: "fixture.txt",
     mimeType: "text/plain",
-    buffer: Buffer.from("Dongo E2E fixture"),
+    buffer: Buffer.from("dongo E2E fixture"),
   });
   await expect(page.getByText("fixture.txt", { exact: true })).toBeVisible();
   await expect(

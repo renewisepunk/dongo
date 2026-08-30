@@ -167,7 +167,7 @@ function requiredClaim(
   if (typeof value !== "string" || value.length === 0 || value.length > maxLength) {
     oauthFailure(
       OAuthErrorCode.InvalidToken,
-      "The access token is missing a required Dongo binding",
+      "The access token is missing a required dongo binding",
     );
   }
   return value;
@@ -245,7 +245,7 @@ export class BetterAuthIntrospectionTokenVerifier implements DongoTokenVerifier 
       }
     }
     if ([...RESOURCE_SCOPES].some((scope) => this.#allowedScopes.has(scope) === false)) {
-      throw new Error("allowedScopes must include every Dongo resource scope");
+      throw new Error("allowedScopes must include every dongo resource scope");
     }
   }
 

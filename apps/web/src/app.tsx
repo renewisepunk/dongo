@@ -11,11 +11,11 @@ function SafeApplicationError() {
       <div class="auth-stack">
         <div class="title-group">
           <div class="eyebrow eyebrow--amber">Recovery</div>
-          <h1 class="auth-title">Dongo could not finish loading</h1>
+          <h1 class="auth-title">dongo could not finish loading</h1>
           <p class="auth-lede">Your work was not changed. Reload the current screen, or return home and choose the project again.</p>
         </div>
         <button class="button button--primary button--full" type="button" onClick={() => window.location.reload()}>
-          Reload Dongo
+          Reload dongo
         </button>
         <a class="button button--full" href="/">Return home</a>
         <p class="security-note">No error details or project content are included on this recovery screen.</p>
@@ -29,7 +29,7 @@ export default function App() {
     <Router
       root={(props) => (
         <MetaProvider>
-          <Title>Dongo — agent work, without the project management</Title>
+          <Title>dongo — agent work, without the project management</Title>
           <Meta name="color-scheme" content="dark" />
           <Meta name="theme-color" content="#08080a" />
           <Link rel="icon" href="/favicon.svg" type="image/svg+xml" />

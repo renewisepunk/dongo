@@ -1,4 +1,4 @@
-# Dongo operational runbooks
+# dongo operational runbooks
 
 These runbooks cover the development stack at `https://dev.dongo.so` and Convex deployment `wandering-camel-662`. They are diagnosis-first: preserve evidence, avoid copying credentials or user content into tickets, and prefer revocation or rollback over manual database repair.
 

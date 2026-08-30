@@ -111,12 +111,12 @@ export function projectRefForGrant(input: {
   referenceId?: string;
 }): string {
   if (input.resources.length !== 1) {
-    throw new Error("Dongo grants must target exactly one resource");
+    throw new Error("dongo grants must target exactly one resource");
   }
   const resource = new URL(input.resources[0]!);
   const publicOrigin = new URL(input.publicOrigin);
   if (resource.origin !== publicOrigin.origin || resource.search || resource.hash) {
-    throw new Error("OAuth resource is outside this Dongo environment");
+    throw new Error("OAuth resource is outside this dongo environment");
   }
 
   const mcpProject = MCP_RESOURCE.exec(resource.pathname)?.[1];
@@ -132,7 +132,7 @@ export function projectRefForGrant(input: {
   }
 
   if (resource.pathname !== "/api/agent/v1" || !input.activeProjectRef) {
-    throw new Error("A project must be selected for the Dongo CLI grant");
+    throw new Error("A project must be selected for the dongo CLI grant");
   }
   return input.activeProjectRef;
 }

@@ -155,7 +155,7 @@ export class FileSecretStore implements SecretStore {
 export function defaultConfigDirectory(): string {
   const override = process.env.DONGO_CONFIG_DIR;
   if (override) return path.resolve(override);
-  if (process.platform === "win32") return path.join(process.env.LOCALAPPDATA ?? os.homedir(), "Dongo");
+  if (process.platform === "win32") return path.join(process.env.LOCALAPPDATA ?? os.homedir(), "dongo");
   return path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"), "dongo");
 }
 
@@ -165,7 +165,7 @@ export function createDefaultSecretStore(options: {
   if (process.platform === "win32") {
     throw new CliCoreError({
       code: "secure_store_unavailable",
-      message: "Persistent interactive login is not yet supported on Windows. Use Dongo in WSL on its Linux filesystem.",
+      message: "Persistent interactive login is not yet supported on Windows. Use dongo in WSL on its Linux filesystem.",
       exitCode: 4,
     });
   }

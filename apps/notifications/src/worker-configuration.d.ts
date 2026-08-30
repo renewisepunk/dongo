@@ -6,7 +6,7 @@ interface __BaseEnv_Env {
 	ALLOWED_HOSTNAMES: "dev.dongo.so";
 	PUBLIC_ORIGIN: "https://dev.dongo.so";
 	RESEND_FROM_EMAIL: "notifications@dev.dongo.so";
-	RESEND_FROM_NAME: "Dongo";
+	RESEND_FROM_NAME: "dongo";
 	DONGO_NOTIFICATION_DISPATCH_SECRET: string;
 	DONGO_RESEND_CONFIG: string;
 	DONGO_APNS_CONFIG: string;

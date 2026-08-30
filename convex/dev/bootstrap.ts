@@ -51,13 +51,13 @@ export const createWalkingSkeleton = internalMutation({
     const now = Date.now();
     const profileId = await ctx.db.insert("humanProfiles", {
       authSubject,
-      name: "Dongo developer",
+      name: "dongo developer",
       email: `${args.key}@development.invalid`,
       createdAt: now,
       updatedAt: now,
     });
     const organizationId = await ctx.db.insert("organizations", {
-      name: "Dongo development",
+      name: "dongo development",
       slug: args.organizationSlug,
       createdByProfileId: profileId,
       plan: "free",
@@ -73,7 +73,7 @@ export const createWalkingSkeleton = internalMutation({
     await ctx.db.insert("actors", {
       organizationId,
       type: "human",
-      name: "Dongo developer",
+      name: "dongo developer",
       profileId,
       createdAt: now,
       lastSeenAt: now,
@@ -81,13 +81,13 @@ export const createWalkingSkeleton = internalMutation({
     await ctx.db.insert("actors", {
       organizationId,
       type: "system",
-      name: "Dongo",
+      name: "dongo",
       createdAt: now,
     });
     const publicRef = `${String(organizationId).slice(-8)}-${args.projectSlug}`;
     const projectId = await ctx.db.insert("projects", {
       organizationId,
-      name: "Dongo development",
+      name: "dongo development",
       slug: args.projectSlug,
       publicRef,
       identifierPrefix: "DON",
@@ -129,7 +129,7 @@ export const createWalkingSkeleton = internalMutation({
       projectId,
       installationId,
       projectRef: publicRef,
-      projectName: "Dongo development",
+      projectName: "dongo development",
       created: true,
     };
   },

@@ -109,7 +109,7 @@ describe("notifications Worker", () => {
       expect(headers.get("apns-collapse-id")).toBe(request.attentionRequestId);
       expect(JSON.parse(String(init?.body))).toEqual({
         aps: {
-          alert: { title: "Dongo needs you", body: "Open Dongo to respond." },
+          alert: { title: "dongo needs you", body: "Open dongo to respond." },
           sound: "default",
         },
         attentionRequestId: request.attentionRequestId,
@@ -163,8 +163,8 @@ describe("notifications Worker", () => {
         message: {
           token: request.pushToken,
           notification: {
-            title: "Dongo needs you",
-            body: "Open Dongo to respond.",
+            title: "dongo needs you",
+            body: "Open dongo to respond.",
           },
           data: {
             attentionRequestId: request.attentionRequestId,
@@ -259,7 +259,7 @@ function emailPayload(): EmailDeliveryRequest {
     workItemId: "work-1",
     projectId: "project-1",
     deepLink: "https://dev.dongo.so/app/org/project?work=work-1",
-    projectName: "Dongo <release>",
+    projectName: "dongo <release>",
     workIdentifier: "DON-1",
     workTitle: "Ship safely",
     attentionKind: "decision",

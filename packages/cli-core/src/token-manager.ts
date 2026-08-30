@@ -44,10 +44,10 @@ function parseCredential(value: string): StoredCredential {
   try {
     record = JSON.parse(value) as Record<string, unknown>;
   } catch {
-    throw new CliCoreError({ code: "authentication_required", message: "Stored Dongo credentials are corrupted. Log out and reconnect." });
+    throw new CliCoreError({ code: "authentication_required", message: "Stored dongo credentials are corrupted. Log out and reconnect." });
   }
   if (record.schemaVersion !== 1 || typeof record.clientId !== "string" || typeof record.issuer !== "string") {
-    throw new CliCoreError({ code: "authentication_required", message: "Stored Dongo credentials use an unsupported format." });
+    throw new CliCoreError({ code: "authentication_required", message: "Stored dongo credentials use an unsupported format." });
   }
   return {
     schemaVersion: 1,
@@ -99,7 +99,7 @@ async function withFileLock<T>(
       try {
         const info = await lstat(lockFile);
         if (info.isSymbolicLink() || !info.isFile()) {
-          throw new CliCoreError({ code: "unsafe_path", message: "The Dongo refresh lock path is unsafe." });
+          throw new CliCoreError({ code: "unsafe_path", message: "The dongo refresh lock path is unsafe." });
         }
         if (now() - info.mtimeMs > 30_000) await rm(lockFile, { force: true });
       } catch (statError) {
@@ -110,7 +110,7 @@ async function withFileLock<T>(
   }
   throw new CliCoreError({
     code: "temporary_failure",
-    message: "Another Dongo command is refreshing authorization. Retry shortly.",
+    message: "Another dongo command is refreshing authorization. Retry shortly.",
     retryable: true,
     exitCode: 5,
   });
@@ -120,10 +120,10 @@ async function prepareLockDirectory(directory: string): Promise<void> {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const info = await lstat(directory);
   if (info.isSymbolicLink() || !info.isDirectory()) {
-    throw new CliCoreError({ code: "unsafe_path", message: "The Dongo refresh lock directory is unsafe." });
+    throw new CliCoreError({ code: "unsafe_path", message: "The dongo refresh lock directory is unsafe." });
   }
   if (typeof process.getuid === "function" && info.uid !== process.getuid()) {
-    throw new CliCoreError({ code: "unsafe_path", message: "The Dongo refresh lock directory is owned by another user." });
+    throw new CliCoreError({ code: "unsafe_path", message: "The dongo refresh lock directory is owned by another user." });
   }
   await chmod(directory, 0o700);
 }
@@ -138,7 +138,7 @@ export class TokenManager implements AccessTokenProvider {
 
   constructor(options: TokenManagerOptions) {
     if (!/^[A-Za-z0-9._-]{1,128}$/.test(options.profile)) {
-      throw new CliCoreError({ code: "validation", message: "The Dongo credential profile is invalid." });
+      throw new CliCoreError({ code: "validation", message: "The dongo credential profile is invalid." });
     }
     this.#profile = options.profile;
     this.#store = options.store;
@@ -233,7 +233,7 @@ export class TokenManager implements AccessTokenProvider {
       } catch (cause) {
         throw new CliCoreError({
           code: "temporary_failure",
-          message: "Could not revoke the Dongo grant. Local credentials were retained so logout can be retried.",
+          message: "Could not revoke the dongo grant. Local credentials were retained so logout can be retried.",
           retryable: true,
           exitCode: 5,
           cause,
@@ -242,7 +242,7 @@ export class TokenManager implements AccessTokenProvider {
       if (!response.ok) {
         throw new CliCoreError({
           code: "temporary_failure",
-          message: `Dongo grant revocation failed with HTTP ${response.status}. Local credentials were retained.`,
+          message: `dongo grant revocation failed with HTTP ${response.status}. Local credentials were retained.`,
           retryable: response.status >= 500 || response.status === 429,
           exitCode: 5,
         });
@@ -267,7 +267,7 @@ export class TokenManager implements AccessTokenProvider {
     } catch (cause) {
       throw new CliCoreError({
         code: "temporary_failure",
-        message: "Could not refresh Dongo authorization.",
+        message: "Could not refresh dongo authorization.",
         retryable: true,
         exitCode: 5,
         cause,
@@ -280,8 +280,8 @@ export class TokenManager implements AccessTokenProvider {
         code: code === "invalid_grant" ? "authentication_required" : code,
         message:
           code === "invalid_grant"
-            ? "Dongo authorization is no longer valid. Run dongo connect again."
-            : "Could not refresh Dongo authorization.",
+            ? "dongo authorization is no longer valid. Run dongo connect again."
+            : "Could not refresh dongo authorization.",
         retryable: response.status >= 500 || response.status === 429,
         exitCode: code === "invalid_grant" ? 3 : 5,
       });

@@ -27,7 +27,7 @@ export interface DongoAuthValidationOptions {
 function invalidToken(): never {
   throw new OAuthError(
     OAuthErrorCode.InvalidToken,
-    "The access token is not valid for this Dongo resource",
+    "The access token is not valid for this dongo resource",
   );
 }
 
@@ -133,7 +133,7 @@ export function getDongoRequestContext(authInfo: AuthInfo | undefined): {
     typeof requestId !== "string" ||
     requestId.length === 0
   ) {
-    throw new Error("Validated Dongo request context is missing");
+    throw new Error("Validated dongo request context is missing");
   }
 
   return {

@@ -32,13 +32,13 @@ export function renderDongoManagedIntegrationBundle(input: {
     input.origin.search !== "" ||
     input.origin.hash !== ""
   ) {
-    throw new Error("Dongo host integration origin must be an HTTPS origin");
+    throw new Error("dongo host integration origin must be an HTTPS origin");
   }
   if (PROJECT_REF.test(input.publicProjectRef) === false) {
-    throw new Error("Invalid Dongo public project reference");
+    throw new Error("Invalid dongo public project reference");
   }
   if (SHORT_REF.test(input.shortProjectRef) === false) {
-    throw new Error("Invalid Dongo short project reference");
+    throw new Error("Invalid dongo short project reference");
   }
 
   const serverName = `dongo-${input.shortProjectRef}`;

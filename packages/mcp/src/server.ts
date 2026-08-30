@@ -105,7 +105,7 @@ async function executeWithTimeout(
       operation,
       domainFailure(
         "validation",
-        "Tool arguments cannot select trusted Dongo identity fields",
+        "Tool arguments cannot select trusted dongo identity fields",
       ),
       requestContext.requestId,
       options.limits,
@@ -142,11 +142,11 @@ async function executeWithTimeout(
   const timeout = new Promise<OperationExecutionResult>((resolve) => {
     timeoutId = setTimeout(() => {
       timedOut = true;
-      controller.abort(new Error("Dongo operation timed out"));
+      controller.abort(new Error("dongo operation timed out"));
       resolve(
         domainFailure(
           "temporarily_unavailable",
-          "The Dongo operation timed out; retry only when safe for the operation",
+          "The dongo operation timed out; retry only when safe for the operation",
           true,
         ),
       );
@@ -196,7 +196,7 @@ async function executeWithTimeout(
         cancelled ? "request_cancelled" : "internal",
         cancelled
           ? "The MCP request was cancelled"
-          : "The Dongo operation failed unexpectedly",
+          : "The dongo operation failed unexpectedly",
         cancelled === false,
       ),
       requestContext.requestId,
@@ -258,9 +258,9 @@ export function createDongoMcpServerFactory(
       "dongo-server-instructions",
       "dongo://server/instructions",
       {
-        title: "Dongo server instructions",
+        title: "dongo server instructions",
         description:
-          "Canonical workflow and safety instructions shared by Dongo MCP hosts.",
+          "Canonical workflow and safety instructions shared by dongo MCP hosts.",
         mimeType: "text/plain",
         cacheHint: { ttlMs: 300_000, cacheScope: "private" },
       },
@@ -282,9 +282,9 @@ export function createDongoMcpServerFactory(
         "dongo-project-capabilities",
         uri,
         {
-          title: "Dongo project MCP capabilities",
+          title: "dongo project MCP capabilities",
           description:
-            "Non-secret project binding and scope names for this authenticated Dongo endpoint.",
+            "Non-secret project binding and scope names for this authenticated dongo endpoint.",
           mimeType: "application/json",
           cacheHint: { ttlMs: 60_000, cacheScope: "private" },
         },

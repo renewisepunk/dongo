@@ -13,7 +13,7 @@
 ## Agent protocol and authentication gate
 
 - The exact pinned Better Auth + Convex human session still authenticates Convex after the chosen OAuth/MCP/device composition is installed.
-- `dongo connect` opens `verification_uri_complete`, shows matching terminal/browser code, requires explicit fixed-project/scopes approval, resumes by polling, and stores its credential only in the documented Dongo user credential file outside the repository.
+- `dongo connect` opens `verification_uri_complete`, shows matching terminal/browser code, requires explicit fixed-project/scopes approval, resumes by polling, and stores its credential only in the documented dongo user credential file outside the repository.
 - CLI approve, deny, expiry, `slow_down`, refresh rotation, logout, server revocation, local-file ownership/mode/type/symlink/corruption failure, interrupted atomic write, and SSH/headless flows pass. Clean macOS/Linux tests prove no Keychain, Secret Service, installer, helper process, or OS credential prompt occurs.
 - MCP Protected Resource Metadata and authorization-server discovery are standards-compliant.
 - MCP `2026-07-28` `server/discover`, per-request protocol metadata, method/tool routing headers, stateless handling, and cacheable deterministic list results pass. Any legacy era remains enabled only for a pinned supported host and uses the same tools/auth rules.
@@ -104,7 +104,7 @@
 The exact PRD success flow passes against production candidates:
 
 1. Sign in, create/select project, and authorize the CLI from one terminal-opened browser link without learning the API or copying a token.
-2. Connect Codex or Claude to the remote MCP server and authorize that host through the same Dongo web identity and project-consent experience.
+2. Connect Codex or Claude to the remote MCP server and authorize that host through the same dongo web identity and project-consent experience.
 3. Submit text plus screen recording in seconds.
 4. A later local agent session notices and usefully triages it through CLI or MCP.
 5. Agent claims work and Overview immediately presents truthful status.

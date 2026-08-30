@@ -1,4 +1,4 @@
-# Dongo attachment edge
+# dongo attachment edge
 
 Private Cloudflare R2 edge for development attachments. The bucket has no
 public listing or public R2 domain; objects are reachable only through the

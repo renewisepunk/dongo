@@ -71,7 +71,7 @@ export function createUnavailableDongoMcpWorker(
           const metadata = oauthMetadataResponse(request, {
             oauthMetadata: options.authorizationServerMetadata,
             resourceServerUrl,
-            resourceName: `Dongo project ${projectRef ?? ""}`,
+            resourceName: `dongo project ${projectRef ?? ""}`,
             scopesSupported: [
               "dongo:work:read",
               "dongo:work:write",

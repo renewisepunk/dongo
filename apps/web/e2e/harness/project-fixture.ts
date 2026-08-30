@@ -11,7 +11,7 @@ import type {
 
 const currentProject: ProjectInfo = {
   id: "project-fixture",
-  name: "Dongo",
+  name: "dongo",
   slug: "dongo",
   publicRef: "fixture-dongo",
   organizationName: "Fixture Studio",

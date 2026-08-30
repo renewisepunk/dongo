@@ -168,7 +168,7 @@ test("connect forwards an explicit first-project proposal", async () => {
   const exitCode = await runCli([
     "connect",
     "--project-ref", "project_dongo",
-    "--project-name", "Dongo",
+    "--project-name", "dongo",
     "--repository-url", "https://github.com/renewisepunk/dongo",
     "--execution-mode", "manual",
     "--json",
@@ -183,7 +183,7 @@ test("connect forwards an explicit first-project proposal", async () => {
     }) as never,
   });
   assert.equal(exitCode, 0);
-  assert.equal(received?.projectName, "Dongo");
+  assert.equal(received?.projectName, "dongo");
   assert.equal(received?.projectRef, "project_dongo");
   assert.equal(received?.repositoryUrl, "https://github.com/renewisepunk/dongo");
   assert.equal(received?.executionMode, "manual");
@@ -205,7 +205,7 @@ test("cancellation uses the shell-standard exit code and stable JSON", async () 
     serviceFactory: () => ({
       ...fakeService,
       connect: async () => {
-        throw new CliCoreError({ code: "cancelled", message: "Dongo authorization was cancelled. No credential was stored.", exitCode: 130 });
+        throw new CliCoreError({ code: "cancelled", message: "dongo authorization was cancelled. No credential was stored.", exitCode: 130 });
       },
     }) as never,
   });
@@ -324,7 +324,7 @@ test("generated mutation keys are recoverable after a temporary response failure
       ...fakeService,
       execute: async (_operation: string, input: { idempotencyKey: string }) => {
         receivedKey = input.idempotencyKey;
-        throw new DongoClientError({ code: "network_error", message: "Could not reach Dongo.", retryable: true });
+        throw new DongoClientError({ code: "network_error", message: "Could not reach dongo.", retryable: true });
       },
     }) as never,
   });

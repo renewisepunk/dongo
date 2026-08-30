@@ -18,9 +18,9 @@ function json(body: Record<string, unknown>, status: number): Response {
 
 export function renderOtpEmail(otp: string): { subject: string; text: string; html: string } {
   return {
-    subject: `${otp} is your Dongo sign-in code`,
-    text: `Your Dongo sign-in code is ${otp}. It expires in 10 minutes. If you did not request this code, you can ignore this email.`,
-    html: `<!doctype html><html><body style="margin:0;background:#08080a;color:#ececee;font-family:Arial,sans-serif"><div style="max-width:560px;margin:0 auto;padding:40px 24px"><p style="font-family:monospace;color:#93939c;letter-spacing:.12em;text-transform:uppercase">Dongo</p><h1 style="font-size:24px;font-weight:600">Your sign-in code</h1><p style="font-family:monospace;font-size:36px;letter-spacing:.2em;color:#f0b429">${otp}</p><p style="color:#93939c;line-height:1.6">It expires in 10 minutes. If you did not request this code, you can ignore this email.</p></div></body></html>`,
+    subject: `${otp} is your dongo sign-in code`,
+    text: `Your dongo sign-in code is ${otp}. It expires in 10 minutes. If you did not request this code, you can ignore this email.`,
+    html: `<!doctype html><html><body style="margin:0;background:#08080a;color:#ececee;font-family:Arial,sans-serif"><div style="max-width:560px;margin:0 auto;padding:40px 24px"><p style="font-family:monospace;color:#93939c;letter-spacing:.12em;text-transform:uppercase">dongo</p><h1 style="font-size:24px;font-weight:600">Your sign-in code</h1><p style="font-family:monospace;font-size:36px;letter-spacing:.2em;color:#f0b429">${otp}</p><p style="color:#93939c;line-height:1.6">It expires in 10 minutes. If you did not request this code, you can ignore this email.</p></div></body></html>`,
   };
 }
 
@@ -76,7 +76,7 @@ export async function sendOtpEmail(
   const message = renderOtpEmail(parsed.data.otp);
   await env.EMAIL.send({
     to: parsed.data.email,
-    from: { email: "auth@dev.dongo.so", name: "Dongo" },
+    from: { email: "auth@dev.dongo.so", name: "dongo" },
     subject: message.subject,
     text: message.text,
     html: message.html,

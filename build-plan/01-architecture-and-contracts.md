@@ -177,7 +177,7 @@ The MCP gateway targets protocol revision `2026-07-28` using the official TypeSc
 - Prefer CIMD for public MCP client identity; keep DCR only for clients in the supported compatibility matrix.
 - Fetch client metadata only from allowed HTTPS origins with SSRF protections, response-size/time limits, redirect limits, and no private-network access; validate every redirect URI exactly before issuing a code.
 - Require authorization code plus S256 PKCE for MCP clients.
-- Register the Dongo CLI as a public native client using Device Authorization and refresh-token grants; it has no client secret.
+- Register the dongo CLI as a public native client using Device Authorization and refresh-token grants; it has no client secret.
 - Bind access tokens to their exact API or MCP audience, validate issuer/audience/expiry/scopes on every request, and rotate refresh tokens.
 - Start with `dongo:work:read`, `dongo:work:write`, and `dongo:attachments:read`; reserve `offline_access` for clients that need refresh tokens. Each operation declares and enforces its required scopes.
 - Use separate grants/token families for CLI, Codex, Claude, generic clients, CI/service credentials, and environments.

@@ -168,7 +168,7 @@ export function createAgentApiJsonSchema(): JsonObject {
   return {
     $schema: JSON_SCHEMA_DIALECT,
     $id: "https://dongo.so/schemas/agent-api-v1.json",
-    title: "Dongo Agent API v1 schema catalog",
+    title: "dongo Agent API v1 schema catalog",
     description:
       "Transport-neutral input, output, envelope, and operation metadata generated from @dongo/contracts.",
     type: "object",
@@ -202,11 +202,11 @@ export function createAgentApiOpenApi(): JsonObject {
 
     const operation: JsonObject = {
       operationId: name,
-      summary: `Dongo ${name.replaceAll("_", " ")}`,
+      summary: `dongo ${name.replaceAll("_", " ")}`,
       security: [{ bearerAuth: [...specification.scopes] }],
       responses: {
         "200": {
-          description: "Successful Dongo operation",
+          description: "Successful dongo operation",
           content: {
             "application/json": {
               schema: { $ref: `#/components/schemas/${successName}` },
@@ -214,7 +214,7 @@ export function createAgentApiOpenApi(): JsonObject {
           },
         },
         default: {
-          description: "Dongo operation error",
+          description: "dongo operation error",
           content: {
             "application/json": {
               schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -248,10 +248,10 @@ export function createAgentApiOpenApi(): JsonObject {
   return {
     openapi: "3.1.1",
     info: {
-      title: "Dongo Agent API",
+      title: "dongo Agent API",
       version: "1.0.0",
       description:
-        "The versioned HTTPS operation contract shared by the Dongo CLI and MCP gateway.",
+        "The versioned HTTPS operation contract shared by the dongo CLI and MCP gateway.",
     },
     servers: [
       {
@@ -259,7 +259,7 @@ export function createAgentApiOpenApi(): JsonObject {
         variables: {
           host: {
             default: "dev.dongo.so",
-            description: "Use the Dongo environment host assigned to the installation.",
+            description: "Use the dongo environment host assigned to the installation.",
           },
         },
       },

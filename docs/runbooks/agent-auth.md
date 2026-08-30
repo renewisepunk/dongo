@@ -10,7 +10,7 @@ dongo auth status --json
 dongo doctor --json
 ```
 
-The terminal opens one `verification_uri_complete` link, displays a comparison code, and polls. The browser must show the same code, Dongo CLI client, intended account, project, API resource, and requested scopes. Approval is not connection: the terminal reports success only after secure credential storage, repository marker creation, and doctor checks pass.
+The terminal opens one `verification_uri_complete` link, displays a comparison code, and polls. The browser must show the same code, dongo CLI client, intended account, project, API resource, and requested scopes. Approval is not connection: the terminal reports success only after secure credential storage, repository marker creation, and doctor checks pass.
 
 For SSH/headless use, add `--no-browser` and open the printed complete link on a trusted browser. Never send the code or link to another person and never substitute a copied bearer token.
 
@@ -24,11 +24,11 @@ For SSH/headless use, add `--no-browser` and open the printed complete link on a
 
 ### Credential-file or marker failure
 
-The npm CLI uses only its Dongo-owned user credential directory. On macOS/Linux it requires an owner-only `0700` directory and owner-only `0600` regular file outside the repository. It does not use Keychain, Secret Service, an installer, or a generic helper; any such prompt is unexpected and must be denied and reported as a release-blocking regression.
+The npm CLI uses only its dongo-owned user credential directory. On macOS/Linux it requires an owner-only `0700` directory and owner-only `0600` regular file outside the repository. It does not use Keychain, Secret Service, an installer, or a generic helper; any such prompt is unexpected and must be denied and reported as a release-blocking regression.
 
 Do not move the credential into the repository, relax permissions, follow a symlink, edit token JSON, restore an older credential from backup, or substitute a copied token. A wrong owner, broad mode, non-regular file, symlink, malformed schema, issuer/resource mismatch, or repository-profile mismatch fails closed. Follow the migration and threat model in `build-plan/07-cli-credential-storage.md`.
 
-`.agent-work/project.json` is non-secret and may be recreated by a new successful `dongo connect`. Before replacing it, verify the repository root and remove only the Dongo-owned marker. Never remove `.git`, unrelated `.agent-work` data, or credential-store entries by hand. Use:
+`.agent-work/project.json` is non-secret and may be recreated by a new successful `dongo connect`. Before replacing it, verify the repository root and remove only the dongo-owned marker. Never remove `.git`, unrelated `.agent-work` data, or credential-store entries by hand. Use:
 
 ```sh
 dongo auth logout --json
@@ -62,7 +62,7 @@ curl -fsS https://dev.dongo.so/.well-known/oauth-protected-resource/p/<project-r
 curl -fsS https://dev.dongo.so/.well-known/oauth-authorization-server/api/auth
 ```
 
-The protected-resource document must identify the exact MCP URL, authorization server `https://dev.dongo.so/api/auth`, and the supported Dongo scopes. A resource, issuer, redirect, PKCE, client, project, or scope mismatch must be repaired at discovery/configuration; never weaken validation.
+The protected-resource document must identify the exact MCP URL, authorization server `https://dev.dongo.so/api/auth`, and the supported dongo scopes. A resource, issuer, redirect, PKCE, client, project, or scope mismatch must be repaired at discovery/configuration; never weaken validation.
 
 Preview host changes first:
 
@@ -79,7 +79,7 @@ dongo integrate codex --apply
 dongo integrate claude --apply
 ```
 
-The installer may alter only its named MCP entry and versioned Dongo instruction block. A name collision, malformed marker, symlink target, or unexpected existing URL is a hard stop. Follow the printed rollback steps; do not overwrite unrelated TOML, JSON, `AGENTS.md`, or `CLAUDE.md` content.
+The installer may alter only its named MCP entry and versioned dongo instruction block. A name collision, malformed marker, symlink target, or unexpected existing URL is a hard stop. Follow the printed rollback steps; do not overwrite unrelated TOML, JSON, `AGENTS.md`, or `CLAUDE.md` content.
 
 After host-native OAuth, call one read-only session-start tool. Then verify one idempotent write using a fresh test work item. If login succeeds but tools fail, compare the exact resource URL and approved scopes before reauthorizing.
 

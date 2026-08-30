@@ -22,7 +22,7 @@ const signedConsentQuery = [
 
 test("selects exactly one project before continuing MCP authorization", async ({ page }) => {
   await page.goto(`/oauth/project?${signedProjectQuery}`);
-  await expect(page.getByRole("heading", { name: "Choose one Dongo project" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose one dongo project" })).toBeVisible();
   await page.getByRole("radio", { name: /Companion/ }).click();
   await page.getByRole("button", { name: "Continue" }).click();
 
@@ -57,7 +57,7 @@ test("fails MCP project selection closed for no project, session, or backend", a
 
 test("reviews and allows an MCP host with exact account, project, resource, and scopes", async ({ page }) => {
   await page.goto(`/oauth/consent?${signedConsentQuery}`);
-  await expect(page.getByRole("heading", { name: "Allow Claude Code to use Dongo?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Allow Claude Code to use dongo?" })).toBeVisible();
   await expect(page.getByText("fixture@example.test", { exact: true })).toBeVisible();
   await expect(page.getByText("https://dev.dongo.so/p/fixture-project/mcp", { exact: true })).toBeVisible();
   await expect(page.getByText("Read project context, work, comments, and attachment metadata.")).toBeVisible();
@@ -82,6 +82,19 @@ test("denies MCP access without selecting or binding a project", async ({ page }
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-consent-project", /./);
   const decision = await page.locator("html").getAttribute("data-fixture-consent-decision");
   expect(JSON.parse(decision ?? "null")).toMatchObject({ accept: false });
+});
+
+test("keeps a branded confirmation visible while completing a loopback callback", async ({ page }) => {
+  await page.goto(`/oauth/consent?${signedConsentQuery}&scenario=loopback`);
+  await page.getByRole("button", { name: "Allow access" }).click();
+
+  await expect(page.getByText("Approved — return to your terminal", { exact: true })).toBeVisible();
+  await expect(page.getByText("You can safely close this window.", { exact: true })).toBeVisible();
+  await expect(page.locator('iframe[title="OAuth loopback callback"]')).toHaveAttribute(
+    "src",
+    "http://127.0.0.1:9/callback?code=fixture-code",
+  );
+  await expect(page).toHaveURL(/\/oauth\/consent/);
 });
 
 test("fails MCP consent closed for missing client, project, session, or backend", async ({ page }) => {

@@ -23,7 +23,7 @@ describe("human authorization bridge", () => {
       subject: "user-1",
       issuer: "https://human.example.test",
       email: "owner@example.test",
-      name: "Dongo Owner",
+      name: "dongo Owner",
     });
     const profile = await t.mutation(
       api.domains.identity.index.bootstrapCurrentUser,
@@ -48,7 +48,7 @@ describe("human authorization bridge", () => {
       sub: profile.profileId,
       profileId: profile.profileId,
       email: "owner@example.test",
-      name: "Dongo Owner",
+      name: "dongo Owner",
       returnTo: "/device/approve?user_code=ABCD",
     });
   });

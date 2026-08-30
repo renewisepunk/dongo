@@ -143,7 +143,7 @@ function verificationUrl(value: unknown, name: string): string {
 }
 
 function cancellationError(): CliCoreError {
-  return new CliCoreError({ code: "cancelled", message: "Dongo authorization was cancelled. No credential was stored.", exitCode: 130 });
+  return new CliCoreError({ code: "cancelled", message: "dongo authorization was cancelled. No credential was stored.", exitCode: 130 });
 }
 
 export class DeviceAuthorizationClient {
@@ -204,7 +204,7 @@ export class DeviceAuthorizationClient {
       if (this.#options.signal?.aborted) throw cancellationError();
       throw new CliCoreError({
         code: "temporary_failure",
-        message: "Could not start Dongo authorization.",
+        message: "Could not start dongo authorization.",
         retryable: true,
         exitCode: 5,
         cause,
@@ -215,7 +215,7 @@ export class DeviceAuthorizationClient {
     if (!response.ok || error) {
       throw new CliCoreError({
         code: error?.code ?? "authorization_failed",
-        message: error?.code === "invalid_client" ? "The Dongo CLI registration is invalid." : "Could not start Dongo authorization.",
+        message: error?.code === "invalid_client" ? "The dongo CLI registration is invalid." : "Could not start dongo authorization.",
         retryable: response.status >= 500 || response.status === 429,
         exitCode: response.status >= 500 ? 5 : 3,
       });
@@ -310,13 +310,13 @@ export class DeviceAuthorizationClient {
         case "access_denied":
           throw new CliCoreError({
             code: "authorization_denied",
-            message: "Dongo authorization was denied. No credential was stored.",
+            message: "dongo authorization was denied. No credential was stored.",
             exitCode: 3,
           });
         case "expired_token":
           throw new CliCoreError({
             code: "authorization_expired",
-            message: "The Dongo authorization request expired. Run dongo connect again for a fresh link.",
+            message: "The dongo authorization request expired. Run dongo connect again for a fresh link.",
             exitCode: 3,
           });
         default:
@@ -330,7 +330,7 @@ export class DeviceAuthorizationClient {
     }
     throw new CliCoreError({
       code: "authorization_expired",
-      message: "The Dongo authorization request expired. Run dongo connect again for a fresh link.",
+      message: "The dongo authorization request expired. Run dongo connect again for a fresh link.",
       exitCode: 3,
     });
   }

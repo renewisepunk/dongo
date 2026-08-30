@@ -16,7 +16,7 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
   const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const googleConfigured = Boolean(googleClientId && googleClientSecret);
   return {
-    appName: "Dongo",
+    appName: "dongo",
     baseURL: process.env.CONVEX_SITE_URL,
     secret: process.env.BETTER_AUTH_SECRET,
     trustedOrigins: [siteUrl],
@@ -44,7 +44,7 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         rateLimit: { window: 60, max: 3 },
         async sendVerificationOTP({ email, otp, type }) {
           if (type !== "sign-in" && type !== "email-verification") {
-            throw new Error("Unsupported Dongo email OTP type");
+            throw new Error("Unsupported dongo email OTP type");
           }
           await sendOtpEmail({ email, otp, type });
         },

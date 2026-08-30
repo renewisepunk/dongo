@@ -98,7 +98,7 @@ test("bounds callback failures without exposing provider details", async ({ page
   await page.goto("/auth/callback?scenario=token-error");
   await expect(page.getByRole("heading", { name: "We couldn’t complete sign-in" })).toBeVisible();
   await expect(page.getByText(
-    "Your sign-in finished, but Dongo could not establish the browser session.",
+    "Your sign-in finished, but dongo could not establish the browser session.",
   )).toBeVisible();
   await expect(page.getByText("fixture token detail must stay hidden")).toBeHidden();
 

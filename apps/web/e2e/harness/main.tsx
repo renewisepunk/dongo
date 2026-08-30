@@ -65,7 +65,7 @@ const authCallbackDependencies = {
       : [{
           id: "project-fixture",
           publicRef: "fixture-project",
-          name: "Dongo",
+          name: "dongo",
           slug: "dongo",
           organizationName: "Fixture Studio",
           organizationSlug: "fixture-studio",
@@ -140,7 +140,7 @@ const deviceDependencies = {
     return [
       {
         publicRef: "fixture-project",
-        name: "Dongo",
+        name: "dongo",
         slug: "dongo",
         organizationName: "Fixture Studio",
         organizationSlug: "fixture-studio",
@@ -184,7 +184,7 @@ const deviceDependencies = {
 const oauthProjects = [
   {
     publicRef: "fixture-project",
-    name: "Dongo",
+    name: "dongo",
     slug: "dongo",
     organizationName: "Fixture Studio",
     organizationSlug: "fixture-studio",
@@ -252,6 +252,9 @@ const oauthConsentDependencies = {
   },
   async decideOAuthConsent(search: string, accept: boolean) {
     document.documentElement.dataset.fixtureConsentDecision = JSON.stringify({ search, accept });
+    if (oauthScenario() === "loopback") {
+      return { redirect: true, url: "http://127.0.0.1:9/callback?code=fixture-code" };
+    }
     return { redirect: true, url: "/fixture/oauth-complete" };
   },
   followOAuthResult(result: { redirect?: boolean; url?: string }) {
@@ -276,7 +279,7 @@ const connectDependencies = {
     return {
       project: {
         id: "project-fixture",
-        name: "Dongo",
+        name: "dongo",
         slug: "dongo",
         publicRef: "fixture-project",
         organizationName: "Fixture Studio",
@@ -310,7 +313,7 @@ const connectDependencies = {
                 kind: "cli",
                 status: "active",
                 clientId: "dongo-cli",
-                label: "Dongo CLI",
+                label: "dongo CLI",
                 machineLabel: "Fixture Mac",
                 scopes: ["dongo:work:read", "dongo:work:write"],
                 createdAt: Date.now(),
@@ -339,7 +342,7 @@ function fixtureAdministration() {
   const archived = oauthScenario() === "archived";
   return {
     project: {
-      name: "Dongo",
+      name: "dongo",
       slug: "dongo",
       repositoryUrl: "https://github.com/renewisepunk/dongo",
       identifierPrefix: "DONGO",
@@ -412,7 +415,7 @@ const settingsDependencies = {
         kind: "cli" as const,
         status: "active" as const,
         clientId: "dongo-cli",
-        label: "Dongo CLI",
+        label: "dongo CLI",
         machineLabel: "Fixture Mac",
         scopes: ["dongo:work:read", "dongo:work:write"],
         createdAt: Date.now() - 3_600_000,

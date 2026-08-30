@@ -25,10 +25,10 @@ function validateOrigin(input: string): string {
     origin.protocol !== "https:" &&
     !(origin.protocol === "http:" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(origin.hostname))
   ) {
-    throw new CliCoreError({ code: "validation", message: "Dongo origins must use HTTPS except for localhost." });
+    throw new CliCoreError({ code: "validation", message: "dongo origins must use HTTPS except for localhost." });
   }
   if (origin.username || origin.password || origin.search || origin.hash || origin.pathname !== "/") {
-    throw new CliCoreError({ code: "validation", message: "The Dongo origin must not include credentials, a path, or a query." });
+    throw new CliCoreError({ code: "validation", message: "The dongo origin must not include credentials, a path, or a query." });
   }
   return origin.origin;
 }

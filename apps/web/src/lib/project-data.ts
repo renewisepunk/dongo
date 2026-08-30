@@ -607,7 +607,7 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
   const conversation: ConversationEntry[] = detail.comments.map((comment) => {
     const actor = actors.get(comment.actorId);
     return {
-      who: actor?.name || "Dongo",
+      who: actor?.name || "dongo",
       when: relativeTime(comment.createdAt, now) || "now",
       text: comment.body,
       human: actor?.type === "human",

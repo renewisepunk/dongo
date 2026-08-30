@@ -140,7 +140,7 @@ export class CoreService {
     const profile = credentialProfile(environment.productOrigin, repositoryRoot);
     const requestedProjectRef = options.projectRef?.trim();
     if (requestedProjectRef !== undefined && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/u.test(requestedProjectRef)) {
-      throw new CliCoreError({ code: "validation", message: "--project-ref must be a valid Dongo public project reference.", exitCode: 2 });
+      throw new CliCoreError({ code: "validation", message: "--project-ref must be a valid dongo public project reference.", exitCode: 2 });
     }
     const existingMarker = await readProjectMarker(repositoryRoot);
     const markerMatchesEnvironment = existingMarker
@@ -233,7 +233,7 @@ export class CoreService {
       throw new CliCoreError({
         code: "authentication_required",
         message:
-          "Set DONGO_TOKEN to a Dongo CI/service credential before running dongo ci setup.",
+          "Set DONGO_TOKEN to a dongo CI/service credential before running dongo ci setup.",
         exitCode: 3,
       });
     }
@@ -399,7 +399,7 @@ export class CoreService {
     const context = await this.#context(true);
     const snapshot = await this.#client(context.environment.apiBaseUrl, context.manager).syncSnapshot({}, { signal });
     if (!snapshot || !Array.isArray(snapshot.workItems)) {
-      throw new CliCoreError({ code: "validation", message: "Dongo returned an invalid sync snapshot." });
+      throw new CliCoreError({ code: "validation", message: "dongo returned an invalid sync snapshot." });
     }
     if (signal?.aborted) throw this.#cancellationError();
     return { snapshot, export: await exportSnapshot(context.repositoryRoot, snapshot) };
@@ -445,7 +445,7 @@ export class CoreService {
     ) {
       throw new CliCoreError({
         code: "authentication_required",
-        message: "Stored Dongo authorization does not match this repository marker. Run dongo connect again.",
+        message: "Stored dongo authorization does not match this repository marker. Run dongo connect again.",
         exitCode: 3,
       });
     }
@@ -513,12 +513,12 @@ export class CoreService {
 
   #validateSession(session: SessionStartData): void {
     if (!session?.project?.publicRef || !session.project.name || !session.installation?.id) {
-      throw new CliCoreError({ code: "validation", message: "Dongo returned an incomplete session context." });
+      throw new CliCoreError({ code: "validation", message: "dongo returned an incomplete session context." });
     }
   }
 
   #cancellationError(): CliCoreError {
-    return new CliCoreError({ code: "cancelled", message: "The Dongo command was cancelled.", exitCode: 130 });
+    return new CliCoreError({ code: "cancelled", message: "The dongo command was cancelled.", exitCode: 130 });
   }
 }
 

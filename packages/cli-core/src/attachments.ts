@@ -61,11 +61,11 @@ function validateDownloadUrl(value: string): string {
   try {
     url = new URL(value);
   } catch {
-    throw new CliCoreError({ code: "validation", message: "Dongo returned an invalid attachment download location." });
+    throw new CliCoreError({ code: "validation", message: "dongo returned an invalid attachment download location." });
   }
   const local = url.protocol === "http:" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname);
   if ((url.protocol !== "https:" && !local) || url.username || url.password) {
-    throw new CliCoreError({ code: "validation", message: "Dongo returned an unsafe attachment download location." });
+    throw new CliCoreError({ code: "validation", message: "dongo returned an unsafe attachment download location." });
   }
   return url.toString();
 }
@@ -101,7 +101,7 @@ export async function fetchAttachmentFile(input: {
     }
     throw new CliCoreError({
       code: "temporary_failure",
-      message: "Could not download the Dongo attachment.",
+      message: "Could not download the dongo attachment.",
       retryable: true,
       exitCode: 5,
       cause,

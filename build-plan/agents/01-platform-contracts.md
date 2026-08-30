@@ -56,7 +56,7 @@ Acceptance:
 
 - Define the transport-neutral operation registry, request/response schemas, view models, scope/effect/idempotency metadata, error codes, request IDs, pagination, revisions, and idempotency fields.
 - Publish fixtures for success, validation, authorization, insufficient scope, claim conflict, revision conflict, lease expiry, quota, and retry.
-- Publish standards-native fixtures for device authorization and polling errors, authorization/token/refresh/revocation, protected-resource and authorization-server discovery, OAuth challenges, and MCP JSON-RPC mapping. OAuth and MCP responses are not wrapped in the Dongo HTTPS envelope.
+- Publish standards-native fixtures for device authorization and polling errors, authorization/token/refresh/revocation, protected-resource and authorization-server discovery, OAuth challenges, and MCP JSON-RPC mapping. OAuth and MCP responses are not wrapped in the dongo HTTPS envelope.
 - Produce machine-readable JSON Schema/OpenAPI artifacts for non-TypeScript clients.
 
 Acceptance:

@@ -33,7 +33,7 @@ test("local credential storage refuses symlink targets", async () => {
   await assert.rejects(store.set("profile", "second"), /symlink/);
 });
 
-test("default storage is a Dongo-owned local file and needs no platform helper", async () => {
+test("default storage is a dongo-owned local file and needs no platform helper", async () => {
   const configDirectory = await mkdtemp(path.join(os.tmpdir(), "dongo-default-store-"));
   const store = createDefaultSecretStore({ configDirectory });
   assert.equal(store.kind, "local-user-file");

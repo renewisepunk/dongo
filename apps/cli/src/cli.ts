@@ -33,7 +33,7 @@ export interface CliDependencies {
   serviceOptions?: CoreServiceOptions;
 }
 
-const HELP = `Dongo CLI
+const HELP = `dongo CLI
 
 Usage:
   dongo connect [--environment development|production] [--origin URL] [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]

@@ -19,7 +19,7 @@ test("explains one-link authorization and copies host-specific instructions", as
   await expect(page.getByRole("button", { name: "copied" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute(
     "data-fixture-clipboard",
-    "Install Dongo in this repository and run dongo connect. Configure the Claude Code MCP connection when prompted.",
+    "Install dongo in this repository and run dongo connect. Configure the Claude Code MCP connection when prompted.",
   );
 });
 
@@ -36,8 +36,8 @@ test("uses the preferred project and renders a live connected installation", asy
     "preferred-project",
   );
   await expect(page.getByText("Agent connected", { exact: true })).toBeVisible();
-  await expect(page.getByText("Dongo CLI · Fixture Mac.", { exact: true })).toBeVisible();
-  await expect(page.getByText("project · Dongo", { exact: true })).toBeVisible();
+  await expect(page.getByText("dongo CLI · Fixture Mac.", { exact: true })).toBeVisible();
+  await expect(page.getByText("project · dongo", { exact: true })).toBeVisible();
   await expect(page.getByText("grant · cli · active", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Continue to Overview" })).toHaveAttribute(
     "href",

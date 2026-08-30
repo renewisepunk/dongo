@@ -85,4 +85,4 @@ Before publishing, install that archive into an isolated prefix and run `dongo -
 
 If a published CLI is bad, deprecate that exact version in the registry, restore the last known-good version as the documented install target, and publish a fixed new version; do not silently replace an immutable package. Existing OAuth grants remain server-side installations and must not be copied into the replacement install. Run `dongo doctor --json` after upgrading or downgrading.
 
-For Codex/Claude/generic integration rollback, use the installer’s printed rollback instructions. Remove only the Dongo-owned MCP entry and versioned instruction block. Host OAuth logout removes host-local credentials; server-side revocation is a separate explicit action.
+For Codex/Claude/generic integration rollback, use the installer’s printed rollback instructions. Remove only the dongo-owned MCP entry and versioned instruction block. Host OAuth logout removes host-local credentials; server-side revocation is a separate explicit action.

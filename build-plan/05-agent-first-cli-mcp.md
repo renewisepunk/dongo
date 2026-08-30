@@ -6,9 +6,9 @@ Research checked: 2026-08-30.
 
 ## 1. Outcome
 
-Dongo launches with two first-class agent surfaces:
+dongo launches with two first-class agent surfaces:
 
-1. The Dongo CLI for terminal use, scripts, diagnostics, and deterministic local repository export.
+1. The dongo CLI for terminal use, scripts, diagnostics, and deterministic local repository export.
 2. A hosted remote Streamable HTTP MCP server for Codex, Claude Code, and other MCP hosts.
 
 The source of truth is a transport-neutral operation registry plus Convex domain invariants. HTTPS and MCP are adapters over that registry. The CLI does not become the MCP server's production backend, and the MCP server does not own repository files.
@@ -52,7 +52,7 @@ human-authenticated adapters; they do not call the MCP server.
 - The HTTPS and MCP adapters share schemas and golden fixtures.
 - The gateway derives project, scopes, grant, and Actor from validated authorization context.
 - An inbound MCP token is validated for the MCP audience and never passed through as a downstream Convex credential.
-- CLI and host credentials are independent grants. A successful Dongo CLI login does not silently authorize Codex or Claude.
+- CLI and host credentials are independent grants. A successful dongo CLI login does not silently authorize Codex or Claude.
 - Only the CLI writes `.agent-work`; remote MCP returns a deterministic snapshot for a local client to write.
 - The gateway targets stateless MCP `2026-07-28` with no domain dependence on a protocol session. The same SDK tool factory serves a legacy initialize era only if a pinned supported host requires it.
 
@@ -92,7 +92,7 @@ Requirements:
 - Register the CLI as a public client with no client secret.
 - Request only the API audience and approved scopes; use `offline_access` only when refresh is required.
 - Never put tokens or device codes in argv, repository files, shell history, analytics, logs, or support bundles.
-- Never invoke Keychain, Secret Service, an installer, or a generic helper from the npm CLI. POSIX credentials use a Dongo-owned `0700` directory and `0600` file with the threat model and Windows gate in `build-plan/07-cli-credential-storage.md`.
+- Never invoke Keychain, Secret Service, an installer, or a generic helper from the npm CLI. POSIX credentials use a dongo-owned `0700` directory and `0600` file with the threat model and Windows gate in `build-plan/07-cli-credential-storage.md`.
 - `dongo auth status`, `dongo auth logout`, and server-side Revoke are required. Logout clears local material; Revoke invalidates the server grant. The UI explains the difference.
 
 ## 5. MCP authentication
@@ -245,7 +245,7 @@ Test the exact release artifacts against:
 
 | Surface | Required cases |
 |---|---|
-| Dongo CLI | browser opens, complete URL fallback, approve, deny, expire, `slow_down`, refresh, logout, revoke, local-file ownership/mode/symlink/corruption failures, zero Keychain/helper prompts, SSH/headless, native Windows storage blocked until ACL gate |
+| dongo CLI | browser opens, complete URL fallback, approve, deny, expire, `slow_down`, refresh, logout, revoke, local-file ownership/mode/symlink/corruption failures, zero Keychain/helper prompts, SSH/headless, native Windows storage blocked until ACL gate |
 | Codex | remote HTTP add, OAuth login, CIMD/DCR selection, read/write tools, instructions, project config trust, token refresh, revoke/reauth |
 | Claude Code | remote HTTP add, shell login and `/mcp`, project approval, read/write tools, token refresh, revoke/reauth, no-browser/paste fallback where supported |
 | Generic MCP | modern `server/discover`, stateless per-request metadata/headers, discovery, registration, PKCE, metadata challenge, deterministic tool list/call, JSON-RPC errors, tested legacy negotiation if admitted |

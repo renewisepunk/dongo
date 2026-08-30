@@ -1,6 +1,6 @@
 # `@dongo/mcp`
 
-Production-facing remote MCP adapter for Dongo's canonical agent operations. It serves project-specific Streamable HTTP resources at `/p/{publicProjectRef}/mcp`, targets protocol `2026-07-28`, and deliberately uses the official SDK's stateless legacy fallback from the same server factory.
+Production-facing remote MCP adapter for dongo's canonical agent operations. It serves project-specific Streamable HTTP resources at `/p/{publicProjectRef}/mcp`, targets protocol `2026-07-28`, and deliberately uses the official SDK's stateless legacy fallback from the same server factory.
 
 ## Composition boundary
 

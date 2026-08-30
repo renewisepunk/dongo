@@ -27,7 +27,7 @@ function normalizeBaseUrl(value: string): string {
   ) {
     throw new DongoClientError({
       code: "validation",
-      message: "The Dongo API URL must use HTTPS (HTTP is allowed only for localhost).",
+      message: "The dongo API URL must use HTTPS (HTTP is allowed only for localhost).",
     });
   }
   url.hash = "";
@@ -69,24 +69,24 @@ function safeErrorCode(value: string): string {
 function safeErrorMessage(code: string): string {
   switch (code) {
     case "unauthorized":
-      return "Dongo authorization was rejected. Reconnect and try again.";
+      return "dongo authorization was rejected. Reconnect and try again.";
     case "forbidden":
-      return "This Dongo installation cannot perform that operation.";
+      return "This dongo installation cannot perform that operation.";
     case "insufficient_scope":
-      return "The Dongo installation needs additional access for this operation.";
+      return "The dongo installation needs additional access for this operation.";
     case "not_found":
-      return "The requested Dongo resource was not found.";
+      return "The requested dongo resource was not found.";
     case "validation":
-      return "Dongo rejected the request as invalid.";
+      return "dongo rejected the request as invalid.";
     case "revision_conflict":
     case "claim_conflict":
     case "lease_expired":
     case "idempotency_conflict":
-      return "Dongo rejected the operation because the work changed. Refetch before retrying.";
+      return "dongo rejected the operation because the work changed. Refetch before retrying.";
     case "rate_limited":
-      return "Dongo is receiving too many requests. Retry later.";
+      return "dongo is receiving too many requests. Retry later.";
     default:
-      return "Dongo rejected the operation.";
+      return "dongo rejected the operation.";
   }
 }
 
@@ -135,7 +135,7 @@ export class DongoClient {
     if (!validation.success) {
       throw new DongoClientError({
         code: "validation",
-        message: `The ${operation} request does not match the Dongo v1 contract.`,
+        message: `The ${operation} request does not match the dongo v1 contract.`,
       });
     }
     const validatedInput = validation.data as OperationInput<Name>;
@@ -194,10 +194,10 @@ export class DongoClient {
         throw new DongoClientError({
           code: cancelled ? "cancelled" : "network_error",
           message: cancelled
-            ? "The Dongo request was cancelled."
+            ? "The dongo request was cancelled."
             : timeoutController.signal.aborted
-              ? "The Dongo request timed out."
-              : "Could not reach Dongo.",
+              ? "The dongo request timed out."
+              : "Could not reach dongo.",
           retryable: !cancelled,
           cause,
         });
@@ -208,7 +208,7 @@ export class DongoClient {
       if (!isApiResult(body)) {
         throw new DongoClientError({
           code: response.ok ? "invalid_response" : `http_${response.status}`,
-          message: response.ok ? "Dongo returned an invalid response." : `Dongo returned HTTP ${response.status}.`,
+          message: response.ok ? "dongo returned an invalid response." : `dongo returned HTTP ${response.status}.`,
           retryable: RETRYABLE_STATUS.has(response.status),
           requestId,
           status: response.status,
@@ -219,7 +219,7 @@ export class DongoClient {
         if (body.ok) {
           throw new DongoClientError({
             code: `http_${response.status}`,
-            message: `Dongo returned HTTP ${response.status}.`,
+            message: `dongo returned HTTP ${response.status}.`,
             retryable: RETRYABLE_STATUS.has(response.status),
             requestId,
             status: response.status,

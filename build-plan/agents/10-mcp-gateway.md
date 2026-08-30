@@ -2,7 +2,7 @@
 
 ## Mission
 
-Deliver Dongo as a standards-based remote MCP service from the first agent walking skeleton:
+Deliver dongo as a standards-based remote MCP service from the first agent walking skeleton:
 
 ```text
 Codex / Claude Code / generic MCP hosts
@@ -42,7 +42,7 @@ Agent 01 owns shared/root manifests and deployment composition. Agent 02 owns OA
 - Discover the stable authorization issuer and complete authorization code with S256 PKCE.
 - Prefer CIMD when advertised and support DCR only for clients in the accepted support matrix.
 - Validate issuer, exact MCP audience/resource, expiry, scopes, client/grant state, and revocation on every request.
-- Negotiate the modern era and serve the SDK's legacy initialize-compatible era only for pinned supported hosts that need it. Both eras use one generated tool factory. Do not bind Dongo domain state to an MCP session identifier.
+- Negotiate the modern era and serve the SDK's legacy initialize-compatible era only for pinned supported hosts that need it. Both eras use one generated tool factory. Do not bind dongo domain state to an MCP session identifier.
 - Prove real OAuth and one read/one idempotent write fixture through Codex, Claude, and a generic MCP inspector.
 
 Acceptance:
@@ -83,7 +83,7 @@ dongo_sync_snapshot
 - Return bounded structured content and concise text fallbacks.
 - Add accurate `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` annotations. No V1 operation is labeled destructive unless it can actually destroy or irreversibly remove state.
 - Convert validation/conflict errors into model-correctable tool results while retaining request IDs and stable error codes.
-- Keep OAuth/transport errors standards-native rather than wrapping them in the Dongo HTTPS envelope.
+- Keep OAuth/transport errors standards-native rather than wrapping them in the dongo HTTPS envelope.
 
 Acceptance:
 
@@ -106,7 +106,7 @@ Acceptance:
 - Manual mode never starts arbitrary Ready work in real-agent evaluations.
 - Autonomous mode starts at most one suitable Ready item per session.
 - Claim/lease loss stops work until a successful refetch/reclaim.
-- Prompt injection in Intake/attachments cannot override tenant, auth, secret, or Dongo workflow rules.
+- Prompt injection in Intake/attachments cannot override tenant, auth, secret, or dongo workflow rules.
 
 ### M-04 — Project-specific MCP endpoint and host manifests
 
@@ -131,7 +131,7 @@ Acceptance:
 - Repository-shareable config contains only the project-specific URL and non-secret metadata.
 - Existing config/instructions/hooks survive install, upgrade, and uninstall.
 - Revocation and local config removal are separate documented actions.
-- Multiple Dongo projects on one machine use distinct endpoints, names, grants, and installation Actors.
+- Multiple dongo projects on one machine use distinct endpoints, names, grants, and installation Actors.
 - Agent 06 can apply the manifests without duplicating their content or OAuth logic.
 
 ### M-05 — Attachment, resource, and output handling

@@ -185,7 +185,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
         return;
       }
       setAccountUser(session.user);
-      setAccount(session.user.email || session.user.name || "Dongo account");
+      setAccount(session.user.email || session.user.name || "dongo account");
       await bridgeSession(currentReturnTo());
       const [deviceRequest, availableProjects] = await Promise.all([
         loadDeviceRequest(code),
@@ -213,7 +213,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
 
   const decide = async (accept: boolean) => {
     if (accept && !canApprove()) {
-      setError("Dongo could not resolve exactly one project for this repository. Deny this request and let the agent reconnect with an exact project reference.");
+      setError("dongo could not resolve exactly one project for this repository. Deny this request and let the agent reconnect with an exact project reference.");
       return;
     }
     setState("loading");
@@ -258,7 +258,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
         <form class="auth-stack" onSubmit={(event) => { event.preventDefault(); void load(); }}>
           <div class="title-group">
             <div class="eyebrow eyebrow--amber">Authorize terminal</div>
-            <h1 class="auth-title">Review a Dongo CLI request</h1>
+            <h1 class="auth-title">Review a dongo CLI request</h1>
             <p class="auth-lede">The normal terminal link fills this code automatically.</p>
           </div>
           <div class="field-group">
@@ -278,7 +278,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
         <div class="auth-stack">
           <div class="title-group">
             <div class="eyebrow eyebrow--amber">Authorize terminal</div>
-            <h1 class="auth-title">Authorize Dongo CLI</h1>
+            <h1 class="auth-title">Authorize dongo CLI</h1>
             <p class="auth-lede">Confirm this is the terminal and project you intended to authorize.</p>
           </div>
           <div class="field-group">
@@ -286,7 +286,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
             <div class="authorization-card__code" aria-describedby="device-warning">{formatUserCode(loaded().userCode)}</div>
           </div>
           <div class="consent-summary">
-            <div class="consent-summary__row"><span class="consent-summary__key">client</span><span class="consent-summary__value">{loaded().clientId === "dongo-cli" ? "Dongo CLI · official client" : loaded().clientId}</span></div>
+            <div class="consent-summary__row"><span class="consent-summary__key">client</span><span class="consent-summary__value">{loaded().clientId === "dongo-cli" ? "dongo CLI · official client" : loaded().clientId}</span></div>
             <div class="consent-summary__row"><span class="consent-summary__key">account</span><span class="consent-summary__value">{account()}</span></div>
             <div class="consent-summary__row">
               <Show
@@ -301,7 +301,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
                 </span>
               </Show>
             </div>
-            <div class="consent-summary__row"><span class="consent-summary__key">resource</span><span class="consent-summary__value mono">{loaded().resources.join(", ") || "Dongo agent API"}</span></div>
+            <div class="consent-summary__row"><span class="consent-summary__key">resource</span><span class="consent-summary__value mono">{loaded().resources.join(", ") || "dongo agent API"}</span></div>
             <div class="consent-summary__row"><span class="consent-summary__key">status</span><span class="consent-summary__value">{loaded().status}</span></div>
           </div>
           <div class="field-group">
@@ -334,11 +334,11 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
           </Show>
           <Show when={projects().length > 0 && !selectedProject()}>
             <div class="error" role="alert">
-              Dongo could not match this repository to exactly one active project. Deny this request and let the agent reconnect with an exact project reference.
+              dongo could not match this repository to exactly one active project. Deny this request and let the agent reconnect with an exact project reference.
             </div>
           </Show>
           <Show when={selectedProject()}>
-            <p class="note">Project selected by the Dongo CLI from this repository. Confirm the binding above; project selection is not editable during approval.</p>
+            <p class="note">Project selected by the dongo CLI from this repository. Confirm the binding above; project selection is not editable during approval.</p>
           </Show>
           <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
           <p class="note" id="device-warning">Approve only if this code matches a terminal in your possession. Do not approve a code sent in a message.</p>

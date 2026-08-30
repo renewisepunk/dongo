@@ -82,7 +82,7 @@ export default function OAuthProjectRoute(props: OAuthProjectRouteProps = {}) {
         <div class="auth-stack">
           <div class="title-group">
             <div class="eyebrow eyebrow--amber">MCP authorization</div>
-            <h1 class="auth-title">Choose one Dongo project</h1>
+            <h1 class="auth-title">Choose one dongo project</h1>
             <p class="auth-lede">This MCP host receives a separate grant limited to the project you select.</p>
           </div>
           <Show when={projects().length > 0} fallback={

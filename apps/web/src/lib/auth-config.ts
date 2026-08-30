@@ -4,7 +4,7 @@ function configuredUrl(value: string | undefined, fallback: string): string {
   const candidate = value?.trim() || fallback;
   const url = new URL(candidate);
   if (url.protocol !== "https:" && !(url.protocol === "http:" && url.hostname === "localhost")) {
-    throw new Error("Dongo authentication URLs must use HTTPS outside localhost.");
+    throw new Error("dongo authentication URLs must use HTTPS outside localhost.");
   }
   return url.toString().replace(/\/$/, "");
 }

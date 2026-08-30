@@ -386,7 +386,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
     if (!connection || addingMember() || !owner()) return;
     const email = memberEmail().trim().toLowerCase();
     if (!email || !email.includes("@")) {
-      setError("Enter the email for an existing Dongo account.");
+      setError("Enter the email for an existing dongo account.");
       return;
     }
     setAddingMember(true);
@@ -398,7 +398,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
       setMemberEmail("");
       setStatus(result.created ? "Member access added." : "That account is already a member.");
     } catch {
-      setError("The member could not be added. Ask them to sign in to Dongo once, then try again.");
+      setError("The member could not be added. Ask them to sign in to dongo once, then try again.");
     } finally {
       setAddingMember(false);
     }
@@ -520,7 +520,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                     <div class="service-secret" role="status" aria-live="polite">
                       <div>
                         <strong>Copy this credential now.</strong>
-                        <p class="note">It cannot be revealed again. Dongo stores only its keyed hash.</p>
+                        <p class="note">It cannot be revealed again. dongo stores only its keyed hash.</p>
                       </div>
                       <label class="field-label" for="service-credential-secret">One-time DONGO_TOKEN value</label>
                       <textarea
@@ -577,7 +577,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
               <Show when={owner()}>
                 <form class="settings-section" onSubmit={addMember}>
                   <div class="settings-section__title">Add member</div>
-                  <p class="note">Add someone who has already signed in to Dongo. New members receive the standard member role.</p>
+                  <p class="note">Add someone who has already signed in to dongo. New members receive the standard member role.</p>
                   <div class="settings-actions">
                     <div class="field-group" style={{ flex: 1 }}>
                       <label class="field-label" for="member-email">Account email</label>
@@ -611,7 +611,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 <div class="plan-stat"><span class="plan-stat__value">{admin().activeProjectCount} / {admin().organization.plan === "free" ? "1" : "∞"}</span><span class="plan-stat__label">active projects</span></div>
                 <div class="plan-stat"><span class="plan-stat__value">{formatBytes(admin().storage.activeBytes + admin().storage.reservedBytes)} / {formatBytes(admin().storage.limitBytes)}</span><span class="plan-stat__label">media storage</span></div>
               </div>
-              <section class="settings-section"><div class="settings-section__title">{admin().organization.plan === "free" ? "Free" : "Paid"} plan</div><p class="note">Individual uploads are limited to {formatBytes(admin().storage.maximumAttachmentBytes)}. Dongo does not meter people, agents, or WorkItems.</p><Show when={admin().organization.plan === "free"}><p class="security-note">Billing checkout is not configured in this development environment.</p></Show></section>
+              <section class="settings-section"><div class="settings-section__title">{admin().organization.plan === "free" ? "Free" : "Paid"} plan</div><p class="note">Individual uploads are limited to {formatBytes(admin().storage.maximumAttachmentBytes)}. dongo does not meter people, agents, or WorkItems.</p><Show when={admin().organization.plan === "free"}><p class="security-note">Billing checkout is not configured in this development environment.</p></Show></section>
             </>
           )}</Show>
         </div>

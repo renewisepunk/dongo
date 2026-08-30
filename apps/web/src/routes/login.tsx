@@ -118,7 +118,7 @@ export default function LoginRoute(props: LoginRouteProps = {}) {
           <button class="button button--full" type="submit" disabled={pending()}>{pending() ? "Sending code…" : "Continue with email"}</button>
         </form>
 
-        <p class="note">Dongo sends a one-time code. There is no password to create or remember.</p>
+        <p class="note">dongo sends a one-time code. There is no password to create or remember.</p>
       </div>
     </AuthFrame>
   );

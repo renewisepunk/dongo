@@ -57,7 +57,7 @@ describe("authentication input and errors", () => {
   });
 
   it("derives deterministic backend-safe first-project identifiers", () => {
-    expect(projectIdentifierPrefix("Dongo web")).toBe("DONGOWEB");
+    expect(projectIdentifierPrefix("dongo web")).toBe("DONGOWEB");
     expect(projectIdentifierPrefix("X")).toBe("X1");
     expect(projectIdentifierPrefix("🚀")).toBe("PRJ");
     expect(personalOrganizationSlug({ name: "René Bauer", userId: "user_ABC123" })).toBe("rene-bauer-userabc123");

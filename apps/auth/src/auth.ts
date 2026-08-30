@@ -48,7 +48,7 @@ function staticCliDiscovery(): OAuthProviderExtension["clientDiscovery"] {
         clientCredentialsScopes: [],
         createdAt: now,
         updatedAt: now,
-        name: "Dongo CLI",
+        name: "dongo CLI",
         uri: "https://dongo.so",
         redirectUris: [],
         tokenEndpointAuthMethod: "none",
@@ -130,16 +130,16 @@ function tokenPinning(env: AuthWorkerEnv) {
       typeof user.id !== "string" ||
       typeof user.convexProfileId !== "string"
     ) {
-      throw new Error("Dongo token issuance requires a linked Convex user");
+      throw new Error("dongo token issuance requires a linked Convex user");
     }
 
     if (info.grantType === "refresh_token") {
-      if (!currentGrant) throw new Error("Refresh token is not pinned to a Dongo grant");
+      if (!currentGrant) throw new Error("Refresh token is not pinned to a dongo grant");
       if (
         currentGrant.subject !== user.id ||
         currentGrant.profileId !== user.convexProfileId
       ) {
-        throw new Error("Refresh token user does not match its Dongo grant");
+        throw new Error("Refresh token user does not match its dongo grant");
       }
       const binding = await resolveOAuthGrant(env, currentGrant);
       return { ...currentGrant, scopes: [...info.scopes], binding };
@@ -148,7 +148,7 @@ function tokenPinning(env: AuthWorkerEnv) {
     const authorizationCode = info.grantType === "authorization_code";
     const deviceCode = info.grantType === DEVICE_CODE_GRANT_TYPE;
     if (!authorizationCode && !deviceCode) {
-      throw new Error("Unsupported Dongo OAuth grant type");
+      throw new Error("Unsupported dongo OAuth grant type");
     }
     const query = (info.verificationValue?.query ?? {}) as Record<string, unknown>;
     const clientId = deviceCode
@@ -179,7 +179,7 @@ function tokenPinning(env: AuthWorkerEnv) {
     });
     const kind: BindGrantInput["kind"] = deviceCode ? "cli" : "mcp";
     const label = deviceCode
-      ? "Dongo CLI"
+      ? "dongo CLI"
       : typeof info.metadata?.client_name === "string"
         ? info.metadata.client_name
         : "MCP host";
@@ -265,7 +265,7 @@ export function createAuthorizationServer(env: AuthWorkerEnv) {
   const staticClient = staticCliDiscovery();
   const pinning = tokenPinning(env);
   return betterAuth({
-    appName: "Dongo",
+    appName: "dongo",
     baseURL: env.AUTH_ISSUER,
     basePath: "/api/auth",
     secret: env.BETTER_AUTH_SECRET,
@@ -320,7 +320,7 @@ export function createAuthorizationServer(env: AuthWorkerEnv) {
         resources: [
           {
             identifier: `${env.PUBLIC_ORIGIN}/api/agent/v1`,
-            name: "Dongo agent API",
+            name: "dongo agent API",
             accessTokenTtl: 600,
             refreshTokenTtl: 30 * 24 * 60 * 60,
             allowedScopes: [...AGENT_SCOPES],
@@ -366,7 +366,7 @@ export function createAuthorizationServer(env: AuthWorkerEnv) {
               typeof projectRef !== "string" ||
               !/^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/.test(projectRef)
             ) {
-              throw new Error("Select a Dongo project before authorizing");
+              throw new Error("Select a dongo project before authorizing");
             }
             // Better Auth invokes this callback once when it stores consent and
             // again when it immediately checks that consent. The reference must

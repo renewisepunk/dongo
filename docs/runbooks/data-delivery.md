@@ -2,7 +2,7 @@
 
 ## Expired or lost claims
 
-Claims are leases, not permanent ownership. A local agent must renew while actively working. If a lease expires, Dongo closes stale activity, clears the claim, and makes the item reclaimable; the UI must not present it as currently working.
+Claims are leases, not permanent ownership. A local agent must renew while actively working. If a lease expires, dongo closes stale activity, clears the claim, and makes the item reclaimable; the UI must not present it as currently working.
 
 1. Run `dongo session-start --json` to refresh server truth.
 2. Fetch the item and compare its current revision and claim status.
@@ -13,7 +13,7 @@ Never patch claim rows directly. If reconciliation jobs are failing, inspect rec
 
 ## Repository export conflict or corruption
 
-Convex is authoritative and `.agent-work` export is one-way. `dongo sync` may replace only Dongo-managed generated files; it never imports edits, stages, commits, or pushes.
+Convex is authoritative and `.agent-work` export is one-way. `dongo sync` may replace only dongo-managed generated files; it never imports edits, stages, commits, or pushes.
 
 ```sh
 dongo doctor --json

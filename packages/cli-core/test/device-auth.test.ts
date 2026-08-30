@@ -36,7 +36,7 @@ test("device authorization opens one complete link and honors pending and slow_d
     resource: "https://dev.dongo.so/api/agent/v1",
     scopes: ["dongo:work:read", "offline_access"],
     projectProposal: {
-      name: "Dongo",
+      name: "dongo",
       repositoryUrl: "https://github.com/renewisepunk/dongo",
       executionMode: "manual",
       projectRef: "project_dongo",
@@ -64,10 +64,10 @@ test("device authorization opens one complete link and honors pending and slow_d
 
   const tokens = await client.authorize();
   assert.deepEqual(opened, [
-    "https://dev.dongo.so/device?user_code=ABCD-EFGH&project_name=Dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo&execution_mode=manual&project_ref=project_dongo",
+    "https://dev.dongo.so/device?user_code=ABCD-EFGH&project_name=dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo&execution_mode=manual&project_ref=project_dongo",
   ]);
   assert.deepEqual(reportedProposal, {
-    name: "Dongo",
+    name: "dongo",
     repositoryUrl: "https://github.com/renewisepunk/dongo",
     executionMode: "manual",
     projectRef: "project_dongo",

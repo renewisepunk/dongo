@@ -82,7 +82,7 @@ export async function provisionProjectResource(
   const agentApiIdentifier = `${new URL(env.PUBLIC_ORIGIN).origin}/api/agent/v1`;
   const resourceName = parsed.data.projectName
     ? `${parsed.data.projectName} MCP`
-    : `Dongo project ${parsed.data.projectRef}`;
+    : `dongo project ${parsed.data.projectRef}`;
   const encryptedResourceClientSecret = await symmetricEncrypt({
     key: env.BETTER_AUTH_SECRET,
     data: env.BETTER_AUTH_RESOURCE_CLIENT_SECRET,
@@ -106,7 +106,7 @@ export async function provisionProjectResource(
     ).bind(
       crypto.randomUUID(),
       agentApiIdentifier,
-      "Dongo agent API",
+      "dongo agent API",
       600,
       30 * 24 * 60 * 60,
       JSON.stringify(scopes),
@@ -165,7 +165,7 @@ export async function provisionProjectResource(
       JSON.stringify([]),
       now,
       now,
-      "Dongo MCP resource server",
+      "dongo MCP resource server",
       JSON.stringify([]),
       "client_secret_basic",
       "web",
@@ -197,7 +197,7 @@ export async function provisionProjectResource(
       JSON.stringify([]),
       now,
       now,
-      "Dongo agent API resource server",
+      "dongo agent API resource server",
       JSON.stringify([]),
       "client_secret_basic",
       "web",

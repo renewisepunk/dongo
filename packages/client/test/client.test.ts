@@ -38,7 +38,7 @@ test("session start follows the canonical POST contract", async () => {
       request = new Request(input, init);
       return Response.json({
         ok: true,
-        data: { project: { name: "Dongo", publicRef: "pub_1" }, installation: { id: "actor_1" } },
+        data: { project: { name: "dongo", publicRef: "pub_1" }, installation: { id: "actor_1" } },
         requestId: "req_session",
         apiVersion: "v1",
       });
@@ -96,7 +96,7 @@ test("client surfaces stable API errors without reflecting credentials", async (
     assert.ok(error instanceof DongoClientError);
     assert.equal(error.code, "insufficient_scope");
     assert.equal(error.requestId, "req_3");
-    assert.equal(error.message, "The Dongo installation needs additional access for this operation.");
+    assert.equal(error.message, "The dongo installation needs additional access for this operation.");
     assert.doesNotMatch(error.message, /not-a-real-token|signature=secret|customer content/);
     return true;
   });
@@ -141,7 +141,7 @@ test("invalid error envelopes surface a stable client error", async () => {
   await assert.rejects(client.getOverview(), (error: unknown) => {
     assert.ok(error instanceof DongoClientError);
     assert.equal(error.code, "http_500");
-    assert.equal(error.message, "Dongo returned HTTP 500.");
+    assert.equal(error.message, "dongo returned HTTP 500.");
     return true;
   });
 });

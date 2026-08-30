@@ -114,7 +114,7 @@ function authorizationMetadata(env: DongoWorkerEnv): OAuthMetadata {
       "dongo:attachments:read",
     ]) === false
   ) {
-    throw new Error("Authorization metadata lacks required Dongo OAuth capabilities");
+    throw new Error("Authorization metadata lacks required dongo OAuth capabilities");
   }
   if (
     typeof metadata.registration_endpoint !== "string" &&

@@ -105,14 +105,14 @@ function mergeInstruction(existing: string | undefined, managedBlock: string): s
   if (starts !== 1 || ends !== 1) {
     throw new CliCoreError({
       code: "conflict",
-      message: "Managed Dongo instruction markers are malformed or duplicated; no file was changed.",
+      message: "Managed dongo instruction markers are malformed or duplicated; no file was changed.",
       exitCode: 6,
     });
   }
   const start = existing.indexOf(MANAGED_START);
   const end = existing.indexOf(MANAGED_END, start);
   if (end < start) {
-    throw new CliCoreError({ code: "conflict", message: "Managed Dongo instruction markers are out of order.", exitCode: 6 });
+    throw new CliCoreError({ code: "conflict", message: "Managed dongo instruction markers are out of order.", exitCode: 6 });
   }
   return `${existing.slice(0, start)}${managedBlock}${existing.slice(end + MANAGED_END.length).replace(/^\r?\n/, "")}`;
 }
@@ -348,7 +348,7 @@ export async function configureIntegration(input: {
       ? [`codex mcp logout ${bundle.serverName}`, `codex mcp remove ${bundle.serverName}`]
       : input.host === "claude"
         ? [`claude mcp logout ${bundle.serverName}`, `claude mcp remove --scope project ${bundle.serverName}`]
-        : ["Remove only the rendered Dongo server entry and managed instruction block."];
+        : ["Remove only the rendered dongo server entry and managed instruction block."];
   return {
     host: input.host,
     applied: input.apply,

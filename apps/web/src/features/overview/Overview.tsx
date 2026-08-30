@@ -1012,7 +1012,7 @@ export function Overview(props: OverviewProps) {
               )}
             >
               <div class="profile-summary" role="presentation">
-                <strong>{viewer()?.name ?? "Dongo user"}</strong>
+                <strong>{viewer()?.name ?? "dongo user"}</strong>
                 <span>{viewer()?.email ?? ""}</span>
                 <span>{currentProject()?.organizationName ?? projectName()} · {currentProject()?.membershipRole ?? "member"}</span>
               </div>

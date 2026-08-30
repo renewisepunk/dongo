@@ -97,7 +97,7 @@ describe("agent lifecycle reliability", () => {
       subject: seedKey,
       issuer: "development",
       email: `${seedKey}@development.invalid`,
-      name: "Dongo developer",
+      name: "dongo developer",
     });
     const responseInput = {
       attentionRequestId: firstAttention.id as Id<"attentionRequests">,
@@ -287,7 +287,7 @@ describe("agent lifecycle reliability", () => {
       subject: seedKey,
       issuer: "development",
       email: `${seedKey}@development.invalid`,
-      name: "Dongo developer",
+      name: "dongo developer",
     });
     const intake = await human.mutation(api.domains.intake.index.create, {
       projectId: context.projectId,
