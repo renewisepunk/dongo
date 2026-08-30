@@ -179,6 +179,7 @@ export default defineSchema({
     projectId: v.id("projects"),
     createdByProfileId: v.id("humanProfiles"),
     createdByActorId: v.id("actors"),
+    clientRequestId: v.optional(v.string()),
     text: v.optional(v.string()),
     status: v.union(
       v.literal("new"),

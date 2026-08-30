@@ -46,6 +46,8 @@ export type WorkItem = {
 export type Intake = {
   id: string;
   text: string;
+  submissionKey?: string;
+  optimistic?: boolean;
   attachment?: string;
   status: "waiting" | "triaging" | "processed";
   age: string;

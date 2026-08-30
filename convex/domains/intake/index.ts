@@ -79,6 +79,7 @@ export const create = mutation({
           projectId: args.projectId,
           createdByProfileId: principal.profile._id,
           createdByActorId: principal.actor._id,
+          clientRequestId: args.idempotencyKey,
           text,
           status: "new",
           revision: 1,

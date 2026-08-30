@@ -96,6 +96,7 @@ type AttentionDoc = {
 
 type IntakeDoc = {
   _id: string;
+  clientRequestId?: string;
   text?: string;
   status: "new" | "claimed" | "processed" | "dismissed";
   createdAt: number;
@@ -297,6 +298,7 @@ export function mapOverviewSnapshot(snapshot: OverviewSnapshot): ProjectOverview
   const done = snapshot.recentlyDone.map((work) => baseWork(work, "done", now));
   const intakes = snapshot.inbox.map(({ intake, attachments }) => ({
     id: intake._id,
+    submissionKey: intake.clientRequestId,
     text: intake.text || attachments[0]?.filename || "Attachment",
     attachment: attachments[0]?.filename,
     attachmentCount: attachments.length,

@@ -8,6 +8,10 @@ import {
   formatAttachmentBytes,
   MAX_INTAKE_ATTACHMENTS,
 } from "../../lib/attachment-upload";
+import {
+  createOptimisticIntake,
+  mergeOptimisticIntakes,
+} from "../../lib/optimistic-intake";
 import { ProjectDataConnection } from "../../lib/project-data";
 import type { Intake, WorkItem } from "./model";
 import "./overview.css";
@@ -38,6 +42,7 @@ export function Overview(props: OverviewProps) {
   const navigate = useNavigate();
   const [work, setWork] = createSignal<WorkItem[]>([]);
   const [intakes, setIntakes] = createSignal<Intake[]>([]);
+  const [optimisticIntakes, setOptimisticIntakes] = createSignal<Intake[]>([]);
   const [draft, setDraft] = createSignal("");
   const [draftAttachments, setDraftAttachments] = createSignal<DraftAttachment[]>([]);
   const [submissionKey, setSubmissionKey] = createSignal(crypto.randomUUID());
@@ -79,13 +84,18 @@ export function Overview(props: OverviewProps) {
         : [],
     ),
   );
+  const visibleIntakes = createMemo(() =>
+    mergeOptimisticIntakes(intakes(), optimisticIntakes()),
+  );
   const selectedWork = createMemo(() => {
     const detail = selectedWorkDetail();
     return detail?.id === selectedWorkId()
       ? detail
       : work().find((item) => item.id === selectedWorkId());
   });
-  const selectedIntake = createMemo(() => intakes().find((item) => item.id === selectedIntakeId()));
+  const selectedIntake = createMemo(() =>
+    visibleIntakes().find((item) => item.id === selectedIntakeId()),
+  );
 
   const results = createMemo<SearchResult[]>(() => {
     const value = query().trim().toLowerCase();
@@ -94,7 +104,7 @@ export function Overview(props: OverviewProps) {
       ...work()
         .filter((item) => `${item.title} ${item.goal} ${item.identifier}`.toLowerCase().includes(value))
         .map((item) => ({ kind: "work" as const, id: item.id, identifier: item.identifier, title: item.title })),
-      ...intakes()
+      ...visibleIntakes()
         .filter((item) => item.text.toLowerCase().includes(value))
         .map((item) => ({ kind: "intake" as const, id: item.id, identifier: "inbox", title: item.text })),
     ];
@@ -263,18 +273,35 @@ export function Overview(props: OverviewProps) {
       uploadPending() ||
       uploadFailed()
     ) return;
+    const key = submissionKey();
+    const availableAttachments = draftAttachments().filter(
+      (attachment) => attachment.state === "available",
+    );
+    const optimistic = createOptimisticIntake({
+      submissionKey: key,
+      ...(text ? { text } : {}),
+      ...(availableAttachments[0]
+        ? { firstAttachmentName: availableAttachments[0].file.name }
+        : {}),
+      attachmentCount: attachmentIds.length,
+      createdAt: Date.now(),
+    });
+    setOptimisticIntakes((items) => [optimistic, ...items]);
     setSubmitting(true);
     try {
       await connection.createIntake(
         text || undefined,
         attachmentIds,
-        submissionKey(),
+        key,
       );
       setDraft("");
       setDraftAttachments([]);
       setSubmissionKey(crypto.randomUUID());
       announce("Added to Inbox");
     } catch {
+      setOptimisticIntakes((items) =>
+        items.filter((item) => item.submissionKey !== key),
+      );
       announce("Could not add this Intake");
     } finally {
       setSubmitting(false);
@@ -351,6 +378,18 @@ export function Overview(props: OverviewProps) {
             setProjectName(overview.projectName);
             setWork(overview.work);
             setIntakes(overview.intakes);
+            const committedKeys = new Set(
+              overview.intakes.flatMap((intake) =>
+                intake.submissionKey ? [intake.submissionKey] : [],
+              ),
+            );
+            setOptimisticIntakes((items) =>
+              items.filter(
+                (item) =>
+                  item.submissionKey === undefined ||
+                  !committedKeys.has(item.submissionKey),
+              ),
+            );
             setLoadError("");
             setLoading(false);
           },
@@ -548,7 +587,7 @@ export function Overview(props: OverviewProps) {
             </div>
           </Show>
 
-          <Show when={!loading() && !loadError() && work().length === 0 && intakes().length === 0}>
+          <Show when={!loading() && !loadError() && work().length === 0 && visibleIntakes().length === 0}>
             <div class="empty-state">
               <div>Add anything you want the agent to look at.</div>
               <div class="empty-state__types">bug · idea · screenshot · video · request</div>
@@ -619,17 +658,23 @@ export function Overview(props: OverviewProps) {
             </section>
           </Show>
 
-          <Show when={intakes().length}>
+          <Show when={visibleIntakes().length}>
             <section class="work-section" aria-labelledby="inbox-heading">
               <div class="section-heading" id="inbox-heading">
-                <span>inbox</span><span class="section-heading__count">{intakes().length}</span>
+                <span>inbox</span><span class="section-heading__count">{visibleIntakes().length}</span>
               </div>
-              <For each={intakes()}>{(intake) => (
+              <For each={visibleIntakes()}>{(intake) => (
                 <button class="work-row" type="button" onClick={() => openIntake(intake.id)}>
                   <span class="work-row__summary">{intake.text}</span>
                   <span class="work-row__meta">
                     <span style={{ color: intake.status === "processed" ? "var(--green)" : "var(--amber)" }}>
-                      {intake.status === "waiting" ? "waiting for local agent" : intake.status === "triaging" ? "agent is triaging" : "processed"}
+                      {intake.optimistic
+                        ? "sending securely…"
+                        : intake.status === "waiting"
+                          ? "waiting for local agent"
+                          : intake.status === "triaging"
+                            ? "agent is triaging"
+                            : "processed"}
                     </span>
                     <span>·</span><span>{intake.attachmentCount ? `${intake.attachmentCount} attachment${intake.attachmentCount === 1 ? "" : "s"}` : "no attachment"}</span><span>·</span><span>{intake.age}</span>
                   </span>
