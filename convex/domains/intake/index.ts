@@ -22,6 +22,7 @@ import { runIdempotent } from "../../lib/idempotency";
 import { isLeaseActive, newLease } from "../../lib/leases";
 import { createWorkItem, linkIntakeToWork } from "../work/service";
 import { attachmentSummary } from "../attachments/summary";
+import { intakeSummaryForHuman } from "../human/summary";
 
 const newWorkValidator = v.object({
   title: v.string(),
@@ -120,7 +121,15 @@ export const getForHuman = query({
       .query("intakeWorkLinks")
       .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
       .take(100);
-    return { intake, attachments, links };
+    return {
+      intake: intakeSummaryForHuman(intake),
+      attachments,
+      links: links.map((link) => ({
+        workItemId: link.workItemId,
+        relation: link.relation,
+        createdAt: link.createdAt,
+      })),
+    };
   },
 });
 

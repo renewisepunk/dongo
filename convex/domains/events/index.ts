@@ -6,6 +6,7 @@ import {
   requireHumanProject,
   resolveAgentPrincipal,
 } from "../../lib/authz";
+import { eventSummaryForHuman } from "../human/summary";
 
 export const listForHuman = query({
   args: {
@@ -14,11 +15,12 @@ export const listForHuman = query({
   },
   handler: async (ctx, args) => {
     await requireHumanProject(ctx, args.projectId, { allowArchived: true });
-    return await ctx.db
+    const page = await ctx.db
       .query("events")
       .withIndex("by_project_created", (q) => q.eq("projectId", args.projectId))
       .order("desc")
       .paginate(args.paginationOpts);
+    return { ...page, page: page.page.map(eventSummaryForHuman) };
   },
 });
 

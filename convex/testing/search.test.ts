@@ -46,8 +46,12 @@ describe("project search", () => {
 
     expect(result.page).toHaveLength(1);
     expect(result.page[0]).toMatchObject({
-      comment: { _id: comment.commentId, workItemId: work.workItemId },
+      comment: { _id: comment.commentId },
       work: { _id: work.workItemId, title: "Repair the callback" },
     });
+    expect(result.page[0]?.comment).not.toHaveProperty("workItemId");
+    expect(result.page[0]?.comment).not.toHaveProperty("organizationId");
+    expect(result.page[0]?.work).not.toHaveProperty("organizationId");
+    expect(result.page[0]?.work).not.toHaveProperty("createdByActorId");
   });
 });

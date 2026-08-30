@@ -8,6 +8,13 @@ import {
   resolveAgentPrincipal,
 } from "../../lib/authz";
 import { attachmentSummary } from "../attachments/summary";
+import {
+  actorSummaryForHuman,
+  attentionSummaryForHuman,
+  intakeSummaryForHuman,
+  runSummaryForHuman,
+  workSummaryForHuman,
+} from "../human/summary";
 
 const OVERVIEW_SECTION_LIMIT = 50;
 
@@ -165,7 +172,40 @@ export const getForHuman = query({
     const principal = await requireHumanProject(ctx, args.projectId, {
       allowArchived: true,
     });
-    return await buildOverview(ctx, principal.project!, principal.profile._id);
+    const snapshot = await buildOverview(
+      ctx,
+      principal.project!,
+      principal.profile._id,
+    );
+    return {
+      project: {
+        _id: snapshot.project._id,
+        name: snapshot.project.name,
+        publicRef: snapshot.project.publicRef,
+      },
+      generatedAt: snapshot.generatedAt,
+      needsYou: snapshot.needsYou.map(({ request, work, actor }) => ({
+        request: attentionSummaryForHuman(request),
+        work: work ? workSummaryForHuman(work) : null,
+        actor: actor ? actorSummaryForHuman(actor) : null,
+      })),
+      working: snapshot.working.map(({ work, run, actor }) => ({
+        work: workSummaryForHuman(work),
+        run: run ? runSummaryForHuman(run) : null,
+        actor: actor ? actorSummaryForHuman(actor) : null,
+      })),
+      ready: snapshot.ready.map(({ work, effectiveState, staleClaim }) => ({
+        work: workSummaryForHuman(work),
+        effectiveState,
+        staleClaim,
+      })),
+      inbox: snapshot.inbox.map(({ intake, attachments, staleClaim }) => ({
+        intake: intakeSummaryForHuman(intake),
+        attachments,
+        staleClaim,
+      })),
+      recentlyDone: snapshot.recentlyDone.map(workSummaryForHuman),
+    };
   },
 });
 

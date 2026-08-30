@@ -29,6 +29,15 @@ import {
   requireString,
 } from "../../lib/errors";
 import { attachmentSummary } from "../attachments/summary";
+import {
+  actorSummaryForHuman,
+  artifactSummaryForHuman,
+  attentionSummaryForHuman,
+  commentSummaryForHuman,
+  intakeSummaryForHuman,
+  runSummaryForHuman,
+  workSummaryForHuman,
+} from "../human/summary";
 import { runIdempotent } from "../../lib/idempotency";
 import { isLeaseActive, newLease } from "../../lib/leases";
 import { createWorkItem, linkIntakeToWork } from "./service";
@@ -293,7 +302,14 @@ export const getForHuman = query({
     const work = await ctx.db.get(args.workItemId);
     if (!work) fail("not_found", "Work item not found");
     await requireHumanProject(ctx, work.projectId, { allowArchived: true });
-    return await workDetail(ctx, work);
+    const detail = await workDetail(ctx, work);
+    return {
+      work: workSummaryForHuman(detail.work),
+      runs: detail.runs.map(runSummaryForHuman),
+      comments: detail.comments.map(commentSummaryForHuman),
+      artifacts: detail.artifacts.map(artifactSummaryForHuman),
+      attention: detail.attention.map(attentionSummaryForHuman),
+    };
   },
 });
 
@@ -338,7 +354,19 @@ export const getDetailForHuman = query({
     const actors = (
       await Promise.all([...actorIds].map((actorId) => ctx.db.get(actorId)))
     ).filter((actor): actor is Doc<"actors"> => actor !== null);
-    return { ...detail, actors, attachments, sourceIntakes };
+    return {
+      work: workSummaryForHuman(detail.work),
+      runs: detail.runs.map(runSummaryForHuman),
+      comments: detail.comments.map(commentSummaryForHuman),
+      artifacts: detail.artifacts.map(artifactSummaryForHuman),
+      attention: detail.attention.map(attentionSummaryForHuman),
+      actors: actors.map(actorSummaryForHuman),
+      attachments,
+      sourceIntakes: sourceIntakes.map(({ intake, attachments: sourceAttachments }) => ({
+        intake: intakeSummaryForHuman(intake),
+        attachments: sourceAttachments,
+      })),
+    };
   },
 });
 
@@ -349,13 +377,14 @@ export const listCompletedForHuman = query({
   },
   handler: async (ctx, args) => {
     await requireHumanProject(ctx, args.projectId, { allowArchived: true });
-    return await ctx.db
+    const page = await ctx.db
       .query("workItems")
       .withIndex("by_project_state_updated", (q) =>
         q.eq("projectId", args.projectId).eq("state", "done"),
       )
       .order("desc")
       .paginate(args.paginationOpts);
+    return { ...page, page: page.page.map(workSummaryForHuman) };
   },
 });
 

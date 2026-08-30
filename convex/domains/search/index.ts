@@ -7,6 +7,11 @@ import {
   resolveAgentPrincipal,
 } from "../../lib/authz";
 import { requireString } from "../../lib/errors";
+import {
+  commentSummaryForHuman,
+  intakeSummaryForHuman,
+  workSummaryForHuman,
+} from "../human/summary";
 
 const humanArgs = {
   projectId: v.id("projects"),
@@ -24,12 +29,13 @@ export const workForHuman = query({
   handler: async (ctx, args) => {
     await requireHumanProject(ctx, args.projectId, { allowArchived: true });
     const term = requireString(args.term, "term", 200);
-    return await ctx.db
+    const page = await ctx.db
       .query("workItems")
       .withSearchIndex("search_title", (q) =>
         q.search("title", term).eq("projectId", args.projectId),
       )
       .paginate(args.paginationOpts);
+    return { ...page, page: page.page.map(workSummaryForHuman) };
   },
 });
 
@@ -38,12 +44,13 @@ export const intakesForHuman = query({
   handler: async (ctx, args) => {
     await requireHumanProject(ctx, args.projectId, { allowArchived: true });
     const term = requireString(args.term, "term", 200);
-    return await ctx.db
+    const page = await ctx.db
       .query("intakes")
       .withSearchIndex("search_text", (q) =>
         q.search("text", term).eq("projectId", args.projectId),
       )
       .paginate(args.paginationOpts);
+    return { ...page, page: page.page.map(intakeSummaryForHuman) };
   },
 });
 
@@ -62,8 +69,10 @@ export const commentsForHuman = query({
       ...page,
       page: await Promise.all(
         page.page.map(async (comment) => ({
-          comment,
-          work: await ctx.db.get(comment.workItemId),
+          comment: commentSummaryForHuman(comment),
+          work: await ctx.db
+            .get(comment.workItemId)
+            .then((work) => work ? workSummaryForHuman(work) : null),
         })),
       ),
     };

@@ -31,6 +31,7 @@ import {
   cancelOutstandingNotifications,
   enqueueAttentionNotifications,
 } from "../notifications/service";
+import { attentionSummaryForHuman } from "../human/summary";
 
 export const request = internalMutation({
   args: {
@@ -513,7 +514,8 @@ export const listMine = query({
     return batches
       .flat()
       .sort((left, right) => right.createdAt - left.createdAt)
-      .slice(0, limit);
+      .slice(0, limit)
+      .map(attentionSummaryForHuman);
   },
 });
 

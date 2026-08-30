@@ -53,7 +53,12 @@ export const current = query({
         createdAt: profile.createdAt,
         updatedAt: profile.updatedAt,
       },
-      memberships,
+      memberships: memberships.map((membership) => ({
+        _id: membership._id,
+        organizationId: membership.organizationId,
+        role: membership.role,
+        createdAt: membership.createdAt,
+      })),
     };
   },
 });
