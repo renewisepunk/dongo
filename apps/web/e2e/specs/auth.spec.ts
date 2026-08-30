@@ -54,10 +54,7 @@ test("completes the email-code journey and preserves the safe return path", asyn
 
   await code.fill("ABC123");
   await page.getByRole("button", { name: "Verify", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Fixture authentication complete" })).toBeVisible();
-  await expect(page).toHaveURL(
-    /\/auth\/callback\?returnTo=%2Fconnect%3Frequest%3Dfixture$/,
-  );
+  await expect(page).toHaveURL(/\/connect\?request=fixture$/);
 });
 
 test("resends an email code without changing the account", async ({ page }) => {
@@ -72,4 +69,40 @@ test("resends an email code without changing the account", async ({ page }) => {
 test("returns to sign-in when the code route has no account context", async ({ page }) => {
   await page.goto("/auth/code?returnTo=%2Fconnect");
   await expect(page).toHaveURL(/\/login\?returnTo=%2Fconnect$/);
+});
+
+test("bridges authorization continuations before leaving the callback", async ({ page }) => {
+  await page.goto("/auth/callback?returnTo=%2Fdevice%3Fuser_code%3DABCD-EFGH");
+  await expect(page).toHaveURL(/\/device\?user_code=ABCD-EFGH&bridged=1$/);
+});
+
+test("uses the last safe app route when no callback destination is supplied", async ({ page }) => {
+  await page.goto("/login");
+  await page.evaluate(() => sessionStorage.setItem(
+    "dongo:last-app-route",
+    "/app/fixture-studio/dongo?work=work-done",
+  ));
+  await page.goto("/auth/callback");
+  await expect(page).toHaveURL(/\/app\/fixture-studio\/dongo\?work=work-done$/);
+});
+
+test("selects the first project or onboarding after authentication", async ({ page }) => {
+  await page.goto("/auth/callback");
+  await expect(page).toHaveURL(/\/app\/fixture-studio\/dongo$/);
+
+  await page.goto("/auth/callback?scenario=no-project");
+  await expect(page).toHaveURL(/\/onboarding$/);
+});
+
+test("bounds callback failures without exposing provider details", async ({ page }) => {
+  await page.goto("/auth/callback?scenario=token-error");
+  await expect(page.getByRole("heading", { name: "We couldn’t complete sign-in" })).toBeVisible();
+  await expect(page.getByText(
+    "Your sign-in finished, but Dongo could not establish the browser session.",
+  )).toBeVisible();
+  await expect(page.getByText("fixture token detail must stay hidden")).toBeHidden();
+
+  await page.goto("/auth/callback?returnTo=%2Fdevice%3Fuser_code%3DABCD-EFGH&scenario=invalid-bridge");
+  await expect(page.getByRole("heading", { name: "We couldn’t complete sign-in" })).toBeVisible();
+  await expect(page).toHaveURL(/\/auth\/callback\?/);
 });

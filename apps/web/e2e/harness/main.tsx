@@ -1,6 +1,7 @@
 import { Route, Router } from "@solidjs/router";
 import { render } from "solid-js/web";
 import { Overview } from "../../src/features/overview/Overview";
+import AuthCallbackRoute from "../../src/routes/auth/callback";
 import EmailCodeRoute from "../../src/routes/auth/code";
 import LoginRoute from "../../src/routes/login";
 import { connectFixtureProject, fixtureSession } from "./project-fixture";
@@ -26,6 +27,47 @@ const authDependencies = {
   resendCooldownSeconds: 0,
 };
 
+const authCallbackDependencies = {
+  async consumeCrossDomainOneTimeToken() {
+    if (new URLSearchParams(window.location.search).get("scenario") === "token-error") {
+      throw new Error("fixture token detail must stay hidden");
+    }
+  },
+  async humanSession() {
+    return new URLSearchParams(window.location.search).get("scenario") === "missing-session"
+      ? null
+      : fixtureSession();
+  },
+  async bootstrapHumanIdentity() {
+    if (new URLSearchParams(window.location.search).get("scenario") === "bootstrap-error") {
+      throw new Error("fixture bootstrap detail must stay hidden");
+    }
+  },
+  async bridgeAuthorizationSession(returnTo: string) {
+    if (new URLSearchParams(window.location.search).get("scenario") === "invalid-bridge") {
+      return "https://evil.example/steal";
+    }
+    const destination = new URL(returnTo, window.location.origin);
+    destination.searchParams.set("bridged", "1");
+    return `${destination.pathname}${destination.search}`;
+  },
+  async listAuthorizableProjects() {
+    return new URLSearchParams(window.location.search).get("scenario") === "no-project"
+      ? []
+      : [{
+          id: "project-fixture",
+          publicRef: "fixture-project",
+          name: "Dongo",
+          slug: "dongo",
+          organizationName: "Fixture Studio",
+          organizationSlug: "fixture-studio",
+        }];
+  },
+  assignLocation(href: string) {
+    window.location.assign(href);
+  },
+};
+
 function FixtureOverview() {
   return (
     <Overview
@@ -46,11 +88,7 @@ function FixtureEmailCode() {
 }
 
 function FixtureAuthCallback() {
-  return (
-    <main>
-      <h1>Fixture authentication complete</h1>
-    </main>
-  );
+  return <AuthCallbackRoute dependencies={authCallbackDependencies} />;
 }
 
 const root = document.getElementById("app");

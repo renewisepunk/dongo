@@ -5,21 +5,43 @@ import { consumeCrossDomainOneTimeToken, humanSession } from "../../lib/auth-cli
 import { bootstrapHumanIdentity, bridgeAuthorizationSession, listAuthorizableProjects } from "../../lib/authorization-client";
 import { isAuthorizationReturnTo, LAST_APP_ROUTE_KEY, safeReturnTo } from "../../lib/auth-flow";
 
-export default function AuthCallbackRoute() {
+export type AuthCallbackRouteDependencies = {
+  consumeCrossDomainOneTimeToken: typeof consumeCrossDomainOneTimeToken;
+  humanSession: () => Promise<unknown | null>;
+  bootstrapHumanIdentity: () => Promise<unknown>;
+  bridgeAuthorizationSession: typeof bridgeAuthorizationSession;
+  listAuthorizableProjects: () => Promise<Array<{
+    organizationSlug: string;
+    slug: string;
+  }>>;
+  assignLocation: (href: string) => void;
+};
+
+export type AuthCallbackRouteProps = {
+  dependencies?: Partial<AuthCallbackRouteDependencies>;
+};
+
+export default function AuthCallbackRoute(props: AuthCallbackRouteProps = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams<{ returnTo?: string }>();
   const [error, setError] = createSignal("");
+  const consumeToken = props.dependencies?.consumeCrossDomainOneTimeToken ?? consumeCrossDomainOneTimeToken;
+  const loadHumanSession = props.dependencies?.humanSession ?? humanSession;
+  const bootstrapIdentity = props.dependencies?.bootstrapHumanIdentity ?? bootstrapHumanIdentity;
+  const bridgeSession = props.dependencies?.bridgeAuthorizationSession ?? bridgeAuthorizationSession;
+  const loadProjects = props.dependencies?.listAuthorizableProjects ?? listAuthorizableProjects;
+  const assignLocation = props.dependencies?.assignLocation ?? ((href: string) => window.location.assign(href));
 
   onMount(async () => {
     const returnTo = safeReturnTo(searchParams.returnTo);
     try {
-      await consumeCrossDomainOneTimeToken();
-      if (!(await humanSession())) throw new Error("missing session");
-      await bootstrapHumanIdentity();
+      await consumeToken();
+      if (!(await loadHumanSession())) throw new Error("missing session");
+      await bootstrapIdentity();
       if (isAuthorizationReturnTo(returnTo)) {
-        const bridgedReturnTo = safeReturnTo(await bridgeAuthorizationSession(returnTo!));
+        const bridgedReturnTo = safeReturnTo(await bridgeSession(returnTo!));
         if (!bridgedReturnTo) throw new Error("invalid return path");
-        window.location.assign(bridgedReturnTo);
+        assignLocation(bridgedReturnTo);
         return;
       }
       const directDestination = safeReturnTo(returnTo) || safeReturnTo(sessionStorage.getItem(LAST_APP_ROUTE_KEY));
@@ -27,7 +49,7 @@ export default function AuthCallbackRoute() {
         navigate(directDestination, { replace: true });
         return;
       }
-      const firstProject = (await listAuthorizableProjects())[0];
+      const firstProject = (await loadProjects())[0];
       navigate(firstProject ? `/app/${firstProject.organizationSlug}/${firstProject.slug}` : "/onboarding", { replace: true });
     } catch {
       setError("Your sign-in finished, but Dongo could not establish the browser session.");
