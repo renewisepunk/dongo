@@ -23,7 +23,23 @@ const scopeCopy: Record<string, string> = {
   offline_access: "Keep this host authorized until its grant is revoked.",
 };
 
-export default function OAuthConsentRoute() {
+export type OAuthConsentRouteDependencies = {
+  humanSession: () => Promise<{
+    user: { email?: string; name: string };
+  } | null>;
+  bridgeAuthorizationSession: typeof bridgeAuthorizationSession;
+  getOAuthClientSummary: typeof getOAuthClientSummary;
+  listAuthorizableProjects: typeof listAuthorizableProjects;
+  selectAuthorizationProject: typeof selectAuthorizationProject;
+  decideOAuthConsent: typeof decideOAuthConsent;
+  followOAuthResult: typeof followOAuthResult;
+};
+
+export type OAuthConsentRouteProps = {
+  dependencies?: Partial<OAuthConsentRouteDependencies>;
+};
+
+export default function OAuthConsentRoute(props: OAuthConsentRouteProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams<{ client_id?: string; scope?: string; resource?: string | string[] }>();
@@ -33,6 +49,13 @@ export default function OAuthConsentRoute() {
   const [account, setAccount] = createSignal("");
   const [state, setState] = createSignal<"loading" | "review" | "submitting" | "error">("loading");
   const [error, setError] = createSignal("");
+  const loadHumanSession = props.dependencies?.humanSession ?? humanSession;
+  const bridgeSession = props.dependencies?.bridgeAuthorizationSession ?? bridgeAuthorizationSession;
+  const loadClient = props.dependencies?.getOAuthClientSummary ?? getOAuthClientSummary;
+  const loadProjects = props.dependencies?.listAuthorizableProjects ?? listAuthorizableProjects;
+  const chooseProject = props.dependencies?.selectAuthorizationProject ?? selectAuthorizationProject;
+  const saveConsent = props.dependencies?.decideOAuthConsent ?? decideOAuthConsent;
+  const followOAuth = props.dependencies?.followOAuthResult ?? followOAuthResult;
   const returnTo = () => `${location.pathname}${location.search}`;
   const selectedProject = createMemo(() => projects().find((project) => project.publicRef === projectRef()));
   const requestParameters = createMemo(() => {
@@ -45,17 +68,17 @@ export default function OAuthConsentRoute() {
 
   onMount(async () => {
     try {
-      const session = await humanSession();
+      const session = await loadHumanSession();
       if (!session) {
         navigate(loginHref(returnTo()), { replace: true });
         return;
       }
       setAccount(session.user.email || session.user.name);
-      await bridgeAuthorizationSession(returnTo());
+      await bridgeSession(returnTo());
       if (!clientId()) throw new AuthorizationFlowError("invalid", "This request does not identify an OAuth client.");
       const [summary, availableProjects] = await Promise.all([
-        getOAuthClientSummary(clientId()!),
-        listAuthorizableProjects(),
+        loadClient(clientId()!),
+        loadProjects(),
       ]);
       setClient(summary);
       setProjects(availableProjects);
@@ -79,8 +102,8 @@ export default function OAuthConsentRoute() {
     setState("submitting");
     setError("");
     try {
-      if (accept) await selectAuthorizationProject(projectRef(), returnTo());
-      followOAuthResult(await decideOAuthConsent(location.search, accept));
+      if (accept) await chooseProject(projectRef(), returnTo());
+      followOAuth(await saveConsent(location.search, accept));
     } catch (cause) {
       setError(cause instanceof AuthorizationFlowError ? cause.message : "The authorization decision could not be saved.");
       setState("review");

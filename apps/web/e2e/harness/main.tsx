@@ -6,6 +6,8 @@ import EmailCodeRoute from "../../src/routes/auth/code";
 import DeviceAuthorizationRoute from "../../src/routes/device";
 import LoginRoute from "../../src/routes/login";
 import OnboardingRoute from "../../src/routes/onboarding";
+import OAuthConsentRoute from "../../src/routes/oauth/consent";
+import OAuthProjectRoute from "../../src/routes/oauth/project";
 import { connectFixtureProject, fixtureSession } from "./project-fixture";
 import "../../src/styles/global.css";
 
@@ -157,6 +159,84 @@ const deviceDependencies = {
   },
 };
 
+const oauthProjects = [
+  {
+    publicRef: "fixture-project",
+    name: "Dongo",
+    slug: "dongo",
+    organizationName: "Fixture Studio",
+    organizationSlug: "fixture-studio",
+  },
+  {
+    publicRef: "companion-project",
+    name: "Companion",
+    slug: "companion",
+    organizationName: "Fixture Studio",
+    organizationSlug: "fixture-studio",
+  },
+];
+
+function oauthScenario(): string | null {
+  return new URLSearchParams(window.location.search).get("scenario");
+}
+
+const oauthProjectDependencies = {
+  async humanSession() {
+    return oauthScenario() === "missing-session" ? null : { user: { id: "fixture" } };
+  },
+  async bridgeAuthorizationSession(returnTo: string) {
+    document.documentElement.dataset.fixtureOauthBridge = returnTo;
+    return returnTo;
+  },
+  async listAuthorizableProjects() {
+    if (oauthScenario() === "project-error") {
+      throw new Error("fixture project detail must stay hidden");
+    }
+    return oauthScenario() === "no-project" ? [] : oauthProjects;
+  },
+  async selectAuthorizationProject(publicRef: string, returnTo: string) {
+    document.documentElement.dataset.fixtureOauthProject = JSON.stringify({ publicRef, returnTo });
+  },
+  async continueOAuthAfterProject(search: string) {
+    document.documentElement.dataset.fixtureOauthContinue = search;
+    return { redirect: true, url: "/oauth/consent?fixture=continued" };
+  },
+  followOAuthResult(result: { redirect?: boolean; url?: string }) {
+    document.documentElement.dataset.fixtureOauthFollow = JSON.stringify(result);
+  },
+};
+
+const oauthConsentDependencies = {
+  async humanSession() {
+    return oauthScenario() === "missing-session"
+      ? null
+      : { user: { name: "Fixture Owner", email: "fixture@example.test" } };
+  },
+  async bridgeAuthorizationSession(returnTo: string) {
+    document.documentElement.dataset.fixtureConsentBridge = returnTo;
+    return returnTo;
+  },
+  async getOAuthClientSummary(clientId: string) {
+    if (oauthScenario() === "client-error") {
+      throw new Error("fixture client detail must stay hidden");
+    }
+    return { clientId, name: clientId === "claude" ? "Claude Code" : "Codex" };
+  },
+  async listAuthorizableProjects() {
+    return oauthScenario() === "no-project" ? [] : oauthProjects;
+  },
+  async selectAuthorizationProject(publicRef: string, returnTo: string) {
+    document.documentElement.dataset.fixtureConsentProject = JSON.stringify({ publicRef, returnTo });
+  },
+  async decideOAuthConsent(search: string, accept: boolean) {
+    document.documentElement.dataset.fixtureConsentDecision = JSON.stringify({ search, accept });
+    return { redirect: true, url: "/fixture/oauth-complete" };
+  },
+  followOAuthResult(result: { redirect?: boolean; url?: string }) {
+    document.documentElement.dataset.fixtureConsentFollow = JSON.stringify(result);
+  },
+};
+
 function FixtureOverview() {
   return (
     <Overview
@@ -191,6 +271,8 @@ render(
       <Route path="/auth/callback" component={FixtureAuthCallback} />
       <Route path="/onboarding" component={() => <OnboardingRoute dependencies={onboardingDependencies} />} />
       <Route path="/device" component={() => <DeviceAuthorizationRoute dependencies={deviceDependencies} />} />
+      <Route path="/oauth/project" component={() => <OAuthProjectRoute dependencies={oauthProjectDependencies} />} />
+      <Route path="/oauth/consent" component={() => <OAuthConsentRoute dependencies={oauthConsentDependencies} />} />
       <Route path="*" component={FixtureOverview} />
     </Router>
   ),
