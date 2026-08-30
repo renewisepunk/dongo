@@ -116,6 +116,7 @@ export function Overview(props: OverviewProps) {
   let profileMenuButton: HTMLButtonElement | undefined;
   let profileMenu: HTMLDivElement | undefined;
   let searchButton: HTMLButtonElement | undefined;
+  let searchInput: HTMLInputElement | undefined;
   let searchReturnFocus: HTMLElement | undefined;
   let detailReturnFocus: HTMLElement | undefined;
   const uploadControllers = new Map<string, AbortController>();
@@ -225,6 +226,7 @@ export function Overview(props: OverviewProps) {
     setProfileMenuOpen(false);
     setSearchOpen(true);
     if (updateRoute) setRouteParams({ search: "1" });
+    queueMicrotask(() => searchInput?.focus());
   };
 
   const closeSearch = (updateRoute = true, restoreFocus = true) => {
@@ -1216,8 +1218,8 @@ export function Overview(props: OverviewProps) {
             <div class="search-box__head">
               <span class="mono" style={{ color: "var(--text-faint)" }}>/</span>
               <input
+                ref={searchInput}
                 class="search-box__input"
-                autofocus
                 value={query()}
                 onInput={(event) => setQuery(event.currentTarget.value)}
                 placeholder="Search work, comments and intake…"
