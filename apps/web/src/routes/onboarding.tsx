@@ -10,7 +10,19 @@ import { slugify } from "../lib/slug";
 
 type ExecutionMode = "manual" | "autonomous";
 
-export default function OnboardingRoute() {
+export type OnboardingRouteDependencies = {
+  humanSession: () => Promise<{
+    user: { id: string; name?: string; email?: string };
+  } | null>;
+  bootstrapHumanIdentity: () => Promise<unknown>;
+  createFirstProject: typeof createFirstProject;
+};
+
+export type OnboardingRouteProps = {
+  dependencies?: Partial<OnboardingRouteDependencies>;
+};
+
+export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams<{ returnTo?: string }>();
   const [name, setName] = createSignal("");
@@ -20,9 +32,11 @@ export default function OnboardingRoute() {
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal("");
   const slug = createMemo(() => slugify(name()));
+  const loadHumanSession = props.dependencies?.humanSession ?? humanSession;
+  const provisionFirstProject = props.dependencies?.createFirstProject ?? createFirstProject;
 
   onMount(async () => {
-    const session = await humanSession();
+    const session = await loadHumanSession();
     if (!session) return;
     setOrganizationSlug(personalOrganizationSlug({
       name: session.user.name,
@@ -53,9 +67,9 @@ export default function OnboardingRoute() {
     setPending(true);
     setError("");
     try {
-      const session = await humanSession();
+      const session = await loadHumanSession();
       if (!session) throw new AuthorizationFlowError("authentication_required", "Sign in again to create this project.");
-      const project = await createFirstProject({
+      const project = await provisionFirstProject({
         user: { id: session.user.id, name: session.user.name, email: session.user.email },
         name: projectName,
         slug: slug(),
@@ -81,7 +95,7 @@ export default function OnboardingRoute() {
   };
 
   return (
-    <RequireHumanSession><AuthFrame>
+    <RequireHumanSession dependencies={props.dependencies}><AuthFrame>
       <form class="auth-stack" onSubmit={createProject}>
         <div class="title-group">
           <div class="eyebrow eyebrow--amber">Set up your workspace</div>

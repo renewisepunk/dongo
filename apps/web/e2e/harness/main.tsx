@@ -4,6 +4,7 @@ import { Overview } from "../../src/features/overview/Overview";
 import AuthCallbackRoute from "../../src/routes/auth/callback";
 import EmailCodeRoute from "../../src/routes/auth/code";
 import LoginRoute from "../../src/routes/login";
+import OnboardingRoute from "../../src/routes/onboarding";
 import { connectFixtureProject, fixtureSession } from "./project-fixture";
 import "../../src/styles/global.css";
 
@@ -68,6 +69,43 @@ const authCallbackDependencies = {
   },
 };
 
+const onboardingDependencies = {
+  async humanSession() {
+    return new URLSearchParams(window.location.search).get("scenario") === "missing-session"
+      ? null
+      : {
+          user: {
+            id: "user-fixture",
+            name: "Fixture Owner",
+            email: "fixture@example.test",
+          },
+        };
+  },
+  async bootstrapHumanIdentity() {
+    if (new URLSearchParams(window.location.search).get("scenario") === "session-error") {
+      throw new Error("fixture session detail must stay hidden");
+    }
+  },
+  async createFirstProject(input: {
+    name: string;
+    slug: string;
+    repositoryUrl?: string;
+    executionMode: "manual" | "autonomous";
+  }) {
+    if (input.name === "Fail safely") {
+      throw new Error("fixture provisioning detail must stay hidden");
+    }
+    return {
+      projectId: "project-created",
+      publicRef: "fixture-created",
+      created: true,
+      resourceProvisioned: true as const,
+      organizationId: "organization-fixture",
+      organizationSlug: "fixture-owner-serfixture",
+    };
+  },
+};
+
 function FixtureOverview() {
   return (
     <Overview
@@ -100,6 +138,7 @@ render(
       <Route path="/login" component={FixtureLogin} />
       <Route path="/auth/code" component={FixtureEmailCode} />
       <Route path="/auth/callback" component={FixtureAuthCallback} />
+      <Route path="/onboarding" component={() => <OnboardingRoute dependencies={onboardingDependencies} />} />
       <Route path="*" component={FixtureOverview} />
     </Router>
   ),

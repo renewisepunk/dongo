@@ -6,20 +6,32 @@ import { bootstrapHumanIdentity } from "../lib/authorization-client";
 import { LAST_APP_ROUTE_KEY, loginHref } from "../lib/auth-flow";
 import { AuthFrame } from "./AuthFrame";
 
-export function RequireHumanSession(props: { children: JSX.Element }) {
+export type RequireHumanSessionDependencies = {
+  humanSession: () => Promise<unknown | null>;
+  bootstrapHumanIdentity: () => Promise<unknown>;
+};
+
+export type RequireHumanSessionProps = {
+  children: JSX.Element;
+  dependencies?: Partial<RequireHumanSessionDependencies>;
+};
+
+export function RequireHumanSession(props: RequireHumanSessionProps) {
   const navigate = useNavigate();
   const [ready, setReady] = createSignal(false);
   const [error, setError] = createSignal(false);
+  const loadHumanSession = props.dependencies?.humanSession ?? humanSession;
+  const bootstrapIdentity = props.dependencies?.bootstrapHumanIdentity ?? bootstrapHumanIdentity;
 
   onMount(async () => {
     try {
-      const session = await humanSession();
+      const session = await loadHumanSession();
       if (!session) {
         const returnTo = `${window.location.pathname}${window.location.search}`;
         navigate(loginHref(returnTo), { replace: true });
         return;
       }
-      await bootstrapHumanIdentity();
+      await bootstrapIdentity();
       if (window.location.pathname.startsWith("/app/")) {
         sessionStorage.setItem(LAST_APP_ROUTE_KEY, `${window.location.pathname}${window.location.search}`);
       }
