@@ -131,3 +131,36 @@ test("bounds settings load and mutation failures", async ({ page }) => {
   );
   await expect(page.getByText("fixture update detail must stay hidden")).toBeHidden();
 });
+
+test("bounds installation revocation and credential-copy failures", async ({ page }) => {
+  await page.goto(
+    "/app/fixture-studio/dongo/settings?tab=Agent%20access&scenario=installation-error",
+  );
+  await expect(page.getByRole("alert")).toHaveText(
+    "Agent installations are temporarily unavailable.",
+  );
+  await expect(page.getByText("fixture installation detail must stay hidden")).toBeHidden();
+
+  await page.goto(
+    "/app/fixture-studio/dongo/settings?tab=Agent%20access&scenario=mutation-error",
+  );
+  await page.getByRole("button", { name: "Revoke" }).click();
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "The installation could not be revoked. Try again.",
+  );
+  await expect(page.getByText("fixture revoke detail must stay hidden")).toBeHidden();
+
+  await page.goto(
+    "/app/fixture-studio/dongo/settings?tab=Agent%20access&scenario=copy-error",
+  );
+  await page.getByRole("button", { name: "Create CI credential" }).click();
+  await page.getByRole("button", { name: "Copy credential" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Copy failed. Select the credential and copy it manually before closing it.",
+  );
+  await expect(page.getByText("fixture copy detail must stay hidden")).toBeHidden();
+  await expect(page.getByLabel("One-time DONGO_TOKEN value")).toHaveValue(
+    "fixture-ci-token-not-secret",
+  );
+});
