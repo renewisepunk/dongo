@@ -33,5 +33,11 @@ crons.interval(
   internal.gateway.security.removeExpiredNonces,
   { limit: 1_000 },
 );
+crons.interval(
+  "dispatch due notifications",
+  { minutes: 1 },
+  internal.domains.notifications.dispatcher.dispatchDue,
+  { limit: 25 },
+);
 
 export default crons;

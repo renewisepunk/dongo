@@ -67,3 +67,32 @@ export async function enqueueAttentionNotifications(
   });
   return { push, email: 1 };
 }
+
+export async function cancelOutstandingNotifications(
+  ctx: MutationCtx,
+  options: {
+    attentionRequestId: Id<"attentionRequests">;
+    now: number;
+  },
+): Promise<number> {
+  const deliveries = await ctx.db
+    .query("notificationOutbox")
+    .withIndex("by_attention", (query) =>
+      query.eq("attentionRequestId", options.attentionRequestId),
+    )
+    .collect();
+  let cancelled = 0;
+  for (const delivery of deliveries) {
+    if (delivery.status !== "pending" && delivery.status !== "delivering") {
+      continue;
+    }
+    await ctx.db.patch(delivery._id, {
+      status: "cancelled",
+      cancelledAt: options.now,
+      deliveryAttemptId: undefined,
+      lastErrorCode: "attention_resolved",
+    });
+    cancelled += 1;
+  }
+  return cancelled;
+}

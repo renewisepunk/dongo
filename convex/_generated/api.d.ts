@@ -22,6 +22,7 @@ import type * as domains_identity_assertions from "../domains/identity/assertion
 import type * as domains_identity_index from "../domains/identity/index.js";
 import type * as domains_installations_index from "../domains/installations/index.js";
 import type * as domains_intake_index from "../domains/intake/index.js";
+import type * as domains_notifications_dispatcher from "../domains/notifications/dispatcher.js";
 import type * as domains_notifications_index from "../domains/notifications/index.js";
 import type * as domains_notifications_service from "../domains/notifications/service.js";
 import type * as domains_overview_index from "../domains/overview/index.js";
@@ -67,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   "domains/identity/index": typeof domains_identity_index;
   "domains/installations/index": typeof domains_installations_index;
   "domains/intake/index": typeof domains_intake_index;
+  "domains/notifications/dispatcher": typeof domains_notifications_dispatcher;
   "domains/notifications/index": typeof domains_notifications_index;
   "domains/notifications/service": typeof domains_notifications_service;
   "domains/overview/index": typeof domains_overview_index;

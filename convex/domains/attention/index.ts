@@ -27,7 +27,10 @@ import {
 } from "../../lib/errors";
 import { runIdempotent } from "../../lib/idempotency";
 import { pauseRunForAttention } from "../work/service";
-import { enqueueAttentionNotifications } from "../notifications/service";
+import {
+  cancelOutstandingNotifications,
+  enqueueAttentionNotifications,
+} from "../notifications/service";
 
 export const request = internalMutation({
   args: {
@@ -238,6 +241,10 @@ export const respond = mutation({
           selectedOption,
           resolutionKind: "responded",
         });
+        await cancelOutstandingNotifications(ctx, {
+          attentionRequestId: request._id,
+          now,
+        });
         await appendEvent(ctx, {
           organizationId: request.organizationId,
           projectId: request.projectId,
@@ -292,6 +299,10 @@ export const resolveWithoutResponse = mutation({
           resolvedAt: now,
           resolvedByActorId: principal.actor._id,
           resolutionKind: "resolved",
+        });
+        await cancelOutstandingNotifications(ctx, {
+          attentionRequestId: request._id,
+          now,
         });
         await appendEvent(ctx, {
           organizationId: request.organizationId,
@@ -348,6 +359,10 @@ export const cancel = internalMutation({
           resolvedAt: now,
           resolvedByActorId: principal.actor._id,
           resolutionKind: "cancelled",
+        });
+        await cancelOutstandingNotifications(ctx, {
+          attentionRequestId: request._id,
+          now,
         });
         await appendEvent(ctx, {
           organizationId: request.organizationId,
@@ -441,6 +456,10 @@ export const resolveForAgent = internalMutation({
           resolutionCommentId: commentId,
           selectedOption,
           resolutionKind: commentId ? "responded" : "resolved",
+        });
+        await cancelOutstandingNotifications(ctx, {
+          attentionRequestId: request._id,
+          now,
         });
         await appendEvent(ctx, {
           organizationId: request.organizationId,
