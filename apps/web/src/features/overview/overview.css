@@ -593,6 +593,9 @@
 }
 
 .view-all {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
   border: 0;
   background: transparent;
   color: var(--text-quiet);
