@@ -144,6 +144,52 @@ describe("attachment edge contract", () => {
         `${reserved.attachmentId}\n${reserved.storageKey}\n${download.expiresAt}`,
       ),
     );
+    const publicAttachment = await t.query(
+      api.domains.attachments.index.getForHuman,
+      { attachmentId: reserved.attachmentId },
+    );
+    expect(publicAttachment).toEqual({
+      _id: reserved.attachmentId,
+      filename: "proof.txt",
+      mimeType: "text/plain",
+      byteSize: 5,
+    });
+    const createdIntake = await t.mutation(api.domains.intake.index.create, {
+      projectId: project.projectId,
+      text: "Review the attachment privacy boundary",
+      attachmentIds: [reserved.attachmentId],
+      idempotencyKey: crypto.randomUUID(),
+    });
+    const intakeDetail = await t.query(
+      api.domains.intake.index.getForHuman,
+      { intakeId: createdIntake.intakeId },
+    );
+    expect(intakeDetail.attachments).toEqual([publicAttachment]);
+    const overview = await t.query(
+      api.domains.overview.index.getForHuman,
+      { projectId: project.projectId },
+    );
+    expect(
+      overview.inbox.find(({ intake }) => intake._id === createdIntake.intakeId)
+        ?.attachments,
+    ).toEqual([publicAttachment]);
+    const createdWork = await t.mutation(
+      api.domains.work.index.createForHuman,
+      {
+        projectId: project.projectId,
+        title: "Attachment privacy",
+        description: "Keep internal object metadata server-side",
+        kind: "task",
+        sourceIntakeIds: [createdIntake.intakeId],
+        idempotencyKey: crypto.randomUUID(),
+      },
+    );
+    const workDetail = await t.query(
+      api.domains.work.index.getDetailForHuman,
+      { workItemId: createdWork.workItemId },
+    );
+    expect(workDetail.sourceIntakes).toHaveLength(1);
+    expect(workDetail.sourceIntakes[0]?.attachments).toEqual([publicAttachment]);
     const stranger = root.withIdentity({
       tokenIdentifier: "https://human.example.test|attachment-stranger",
       subject: "attachment-stranger",

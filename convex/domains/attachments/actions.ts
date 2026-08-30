@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { action } from "../../_generated/server";
-import { api } from "../../_generated/api";
+import { api, internal } from "../../_generated/api";
 import type { Id } from "../../_generated/dataModel";
 import { fail } from "../../lib/errors";
 
@@ -216,7 +216,7 @@ export const downloadForHuman = action({
     expiresAt: number;
   }> => {
     const attachment = await ctx.runQuery(
-      api.domains.attachments.index.getForHuman,
+      internal.domains.attachments.index.getDownloadMetadataForHuman,
       { attachmentId: args.attachmentId },
     );
     const baseUrl = process.env.DONGO_ATTACHMENT_DOWNLOAD_BASE_URL;

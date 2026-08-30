@@ -28,6 +28,7 @@ import {
   optionalString,
   requireString,
 } from "../../lib/errors";
+import { attachmentSummary } from "../attachments/summary";
 import { runIdempotent } from "../../lib/idempotency";
 import { isLeaseActive, newLease } from "../../lib/leases";
 import { createWorkItem, linkIntakeToWork } from "./service";
@@ -308,7 +309,9 @@ export const getDetailForHuman = query({
         .query("attachments")
         .withIndex("by_work", (q) => q.eq("workItemId", work._id))
         .take(100)
-    ).filter((attachment) => attachment.status === "available");
+    )
+      .filter((attachment) => attachment.status === "available")
+      .map(attachmentSummary);
     const sourceIntakes = (
       await Promise.all(detail.sources.map(async (source) => {
         const intake = await ctx.db.get(source.intakeId);
@@ -318,7 +321,9 @@ export const getDetailForHuman = query({
             .query("attachments")
             .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
             .take(100)
-        ).filter((attachment) => attachment.status === "available");
+        )
+          .filter((attachment) => attachment.status === "available")
+          .map(attachmentSummary);
         return { intake, attachments: sourceAttachments };
       }))
     ).filter((source): source is NonNullable<typeof source> => source !== null);

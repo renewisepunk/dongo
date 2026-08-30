@@ -17,6 +17,7 @@ import {
   MAX_ATTACHMENT_BYTES,
   organizationStorageLimit,
 } from "../../lib/plans";
+import { attachmentSummary } from "./summary";
 
 const RESERVATION_TTL_MS = 60 * 60 * 1_000;
 
@@ -279,7 +280,22 @@ export const getForHuman = query({
       fail("not_found", "Attachment not found");
     }
     await requireHumanProject(ctx, attachment.projectId, { allowArchived: true });
-    return attachment;
+    return attachmentSummary(attachment);
+  },
+});
+
+export const getDownloadMetadataForHuman = internalQuery({
+  args: { attachmentId: v.id("attachments") },
+  handler: async (ctx, args) => {
+    const attachment = await ctx.db.get(args.attachmentId);
+    if (!attachment || attachment.status !== "available") {
+      fail("not_found", "Attachment not found");
+    }
+    await requireHumanProject(ctx, attachment.projectId, { allowArchived: true });
+    return {
+      ...attachmentSummary(attachment),
+      storageKey: attachment.storageKey,
+    };
   },
 });
 

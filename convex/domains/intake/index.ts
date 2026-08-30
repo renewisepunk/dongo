@@ -21,6 +21,7 @@ import { fail, optionalString } from "../../lib/errors";
 import { runIdempotent } from "../../lib/idempotency";
 import { isLeaseActive, newLease } from "../../lib/leases";
 import { createWorkItem, linkIntakeToWork } from "../work/service";
+import { attachmentSummary } from "../attachments/summary";
 
 const newWorkValidator = v.object({
   title: v.string(),
@@ -113,7 +114,8 @@ export const getForHuman = query({
     const attachments = await ctx.db
       .query("attachments")
       .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
-      .take(100);
+      .take(100)
+      .then((items) => items.map(attachmentSummary));
     const links = await ctx.db
       .query("intakeWorkLinks")
       .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))

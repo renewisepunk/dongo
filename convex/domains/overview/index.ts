@@ -7,6 +7,7 @@ import {
   requireHumanProject,
   resolveAgentPrincipal,
 } from "../../lib/authz";
+import { attachmentSummary } from "../attachments/summary";
 
 const OVERVIEW_SECTION_LIMIT = 50;
 
@@ -134,7 +135,8 @@ export async function buildOverview(
       attachments: await ctx.db
         .query("attachments")
         .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
-        .take(20),
+        .take(20)
+        .then((attachments) => attachments.map(attachmentSummary)),
     })),
   );
   const needsYou = await Promise.all(
