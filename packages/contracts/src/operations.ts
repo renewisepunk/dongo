@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type {
+  Artifact,
   Attention,
   Intake,
   Overview,
@@ -38,6 +39,12 @@ export type RequestIdentity = {
 };
 
 export type MutationInput = { idempotencyKey: string };
+export type AgentArtifactInput = {
+  kind: Artifact["kind"];
+  label: string;
+  url?: string;
+  repositoryPath?: string;
+};
 
 export type OperationMap = {
   session_start: { input: { externalSessionId: string }; output: SessionStart };
@@ -49,9 +56,9 @@ export type OperationMap = {
   create_work: { input: MutationInput & { title: string; goal: string; sourceIntakeIds?: string[]; parentWorkItemId?: string }; output: WorkItem };
   get_work: { input: { workItemId?: string; identifier?: string }; output: WorkItem };
   start_work: { input: MutationInput & { workItemId: string; expectedRevision: number; externalSessionId: string; leaseSeconds?: number }; output: WorkItem };
-  update_work: { input: MutationInput & { workItemId: string; expectedRevision: number; title?: string; goal?: string; latestUpdate?: string; artifact?: { kind: string; label: string; url?: string; repositoryPath?: string } }; output: WorkItem };
+  update_work: { input: MutationInput & { workItemId: string; expectedRevision: number; title?: string; goal?: string; latestUpdate?: string; artifact?: AgentArtifactInput }; output: WorkItem };
   renew_claim: { input: MutationInput & { workItemId: string; expectedRevision: number; leaseSeconds?: number }; output: WorkItem };
-  finish_work: { input: MutationInput & { workItemId: string; expectedRevision: number; outcome: string; artifacts?: Array<{ kind: string; label: string; url?: string; repositoryPath?: string }> }; output: WorkItem };
+  finish_work: { input: MutationInput & { workItemId: string; expectedRevision: number; outcome: string; artifacts?: AgentArtifactInput[] }; output: WorkItem };
   add_comment: { input: MutationInput & { workItemId: string; body: string }; output: WorkItem };
   request_attention: { input: MutationInput & { workItemId: string; expectedRevision: number; kind: "review" | "decision" | "question" | "blocked"; title: string; body: string; important?: boolean; options?: string[] }; output: Attention };
   get_attention: { input: { attentionId: string }; output: Attention };
@@ -88,7 +95,16 @@ const emptyInput = z.object({}).strict();
 const mutationFields = { idempotencyKey } as const;
 const workArtifactInput = z
   .object({
-    kind: z.string().min(1).max(64),
+    kind: z.enum([
+      "commit",
+      "pull_request",
+      "deployment",
+      "preview",
+      "url",
+      "image",
+      "file",
+      "report",
+    ]),
     label: z.string().min(1).max(500),
     url: z.url().optional(),
     repositoryPath: z.string().min(1).max(2_048).optional(),

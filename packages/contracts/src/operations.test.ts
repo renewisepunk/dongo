@@ -22,4 +22,28 @@ describe("operation registry", () => {
     expect(operationRegistry.session_start.readOnly).toBe(true);
     expect(operationRegistry.session_start.scopes).toEqual(["dongo:work:read"]);
   });
+
+  it("rejects unsupported artifact kinds at the public contract boundary", () => {
+    const base = {
+      workItemId: "work-1",
+      expectedRevision: 1,
+      idempotencyKey: "idempotency-key",
+    };
+    expect(operationRegistry.update_work.inputSchema.safeParse({
+      ...base,
+      artifact: {
+        kind: "file",
+        label: "Build plan",
+        repositoryPath: "build-plan/README.md",
+      },
+    }).success).toBe(true);
+    expect(operationRegistry.update_work.inputSchema.safeParse({
+      ...base,
+      artifact: {
+        kind: "repository",
+        label: "Unsupported",
+        repositoryPath: "build-plan/README.md",
+      },
+    }).success).toBe(false);
+  });
 });

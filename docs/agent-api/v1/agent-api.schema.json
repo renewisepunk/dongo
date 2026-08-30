@@ -1358,8 +1358,16 @@
           "properties": {
             "kind": {
               "type": "string",
-              "minLength": 1,
-              "maxLength": 64
+              "enum": [
+                "commit",
+                "pull_request",
+                "deployment",
+                "preview",
+                "url",
+                "image",
+                "file",
+                "report"
+              ]
             },
             "label": {
               "type": "string",
@@ -1503,8 +1511,16 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "minLength": 1,
-                "maxLength": 64
+                "enum": [
+                  "commit",
+                  "pull_request",
+                  "deployment",
+                  "preview",
+                  "url",
+                  "image",
+                  "file",
+                  "report"
+                ]
               },
               "label": {
                 "type": "string",
