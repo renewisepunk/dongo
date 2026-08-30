@@ -83,6 +83,55 @@ test("opens search by keyboard and restores focus after detail close", async ({ 
   await expect(searchButton).toBeFocused();
 });
 
+test("reconciles browser Back and preserves the overview scroll position", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 420 });
+  const row = page.locator('[data-work-id="work-done"]');
+  await row.scrollIntoViewIfNeeded();
+  const scrollBefore = await page.evaluate(() => window.scrollY);
+  expect(scrollBefore).toBeGreaterThan(0);
+
+  await row.click();
+  const dialog = page.getByRole("dialog", { name: "Complete the agent golden journey" });
+  await expect(dialog).toBeVisible();
+  await expect(page).toHaveURL(/\?work=work-done$/);
+  await page.goBack();
+
+  await expect(dialog).toBeHidden();
+  await expect(row).toBeFocused();
+  await expect.poll(async () => page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+});
+
+test("traps keyboard focus inside work detail", async ({ page }) => {
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  const dialog = page.getByRole("dialog", { name: "Verify fixture search" });
+  const close = dialog.getByRole("button", { name: /close|back/i });
+  const comment = dialog.getByPlaceholder("Add a comment…");
+  await expect(close).toBeFocused();
+
+  await page.keyboard.press("Shift+Tab");
+  await expect(comment).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(close).toBeFocused();
+});
+
+test("reflows at 320 CSS pixels and honors reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 320, height: 720 });
+  await expect.poll(async () => page.evaluate(() =>
+    document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+  )).toBe(true);
+
+  const motion = await page.locator(".brand__cursor").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      duration: Number.parseFloat(style.animationDuration),
+      iterations: style.animationIterationCount,
+    };
+  });
+  expect(motion.duration).toBeLessThanOrEqual(0.001);
+  expect(motion.iterations).toBe("1");
+});
+
 test("keeps mobile controls reachable without horizontal overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(async () => await page.evaluate(() =>

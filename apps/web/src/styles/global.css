@@ -46,7 +46,6 @@
 }
 
 html {
-  min-width: 320px;
   min-height: 100%;
   background: var(--bg);
 }

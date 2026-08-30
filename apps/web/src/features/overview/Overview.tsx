@@ -115,6 +115,13 @@ function restoreFocusAfterRender(
   });
 }
 
+function restoreScrollAfterRender(position: { x: number; y: number } | undefined) {
+  if (!position) return;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => window.scrollTo(position.x, position.y));
+  });
+}
+
 type OverviewRouteState = {
   work?: string;
   intake?: string;
@@ -179,6 +186,7 @@ export function Overview(props: OverviewProps) {
   let searchReturnFocus: HTMLElement | undefined;
   let detailReturnFocus: HTMLElement | undefined;
   let detailReturnToSearch = false;
+  let detailReturnScroll: { x: number; y: number } | undefined;
   const uploadControllers = new Map<string, AbortController>();
   const pendingUploads = new Map<string, Promise<void>>();
   let disposed = false;
@@ -375,8 +383,10 @@ export function Overview(props: OverviewProps) {
     const returnFocus = detailReturnFocus;
     const returnWorkId = selectedWorkId();
     const returnToSearch = detailReturnToSearch;
+    const returnScroll = detailReturnScroll;
     detailReturnFocus = undefined;
     detailReturnToSearch = false;
+    detailReturnScroll = undefined;
     if (updateRoute) {
       applyRouteUpdate({ work: undefined, intake: undefined });
     }
@@ -397,6 +407,7 @@ export function Overview(props: OverviewProps) {
       }
       return searchButton;
     });
+    restoreScrollAfterRender(returnScroll);
   };
 
   const openWork = (
@@ -414,6 +425,7 @@ export function Overview(props: OverviewProps) {
       detailReturnFocus = resolvedReturnFocus;
       detailReturnToSearch = resolvedReturnFocus === searchButton ||
         resolvedReturnFocus?.classList.contains("search-button") === true;
+      detailReturnScroll = { x: window.scrollX, y: window.scrollY };
     }
     unsubscribeWork?.();
     unsubscribeWork = undefined;
@@ -464,6 +476,7 @@ export function Overview(props: OverviewProps) {
       detailReturnFocus = resolvedReturnFocus;
       detailReturnToSearch = resolvedReturnFocus === searchButton ||
         resolvedReturnFocus?.classList.contains("search-button") === true;
+      detailReturnScroll = { x: window.scrollX, y: window.scrollY };
     }
     unsubscribeWork?.();
     unsubscribeWork = undefined;
