@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import {
   internalMutation,
   internalQuery,
@@ -314,6 +315,23 @@ export const getDetailForHuman = query({
       await Promise.all([...actorIds].map((actorId) => ctx.db.get(actorId)))
     ).filter((actor): actor is Doc<"actors"> => actor !== null);
     return { ...detail, actors };
+  },
+});
+
+export const listCompletedForHuman = query({
+  args: {
+    projectId: v.id("projects"),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    await requireHumanProject(ctx, args.projectId, { allowArchived: true });
+    return await ctx.db
+      .query("workItems")
+      .withIndex("by_project_state_updated", (q) =>
+        q.eq("projectId", args.projectId).eq("state", "done"),
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
   },
 });
 

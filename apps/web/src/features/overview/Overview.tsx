@@ -51,6 +51,7 @@ export function Overview(props: OverviewProps) {
   const [routeParams, setRouteParams] = useSearchParams<{
     work?: string;
     intake?: string;
+    search?: string;
   }>();
   const [work, setWork] = createSignal<WorkItem[]>([]);
   const [intakes, setIntakes] = createSignal<Intake[]>([]);
@@ -156,6 +157,17 @@ export function Overview(props: OverviewProps) {
     window.setTimeout(() => setToast(""), 2200);
   };
 
+  const openSearch = (updateRoute = true) => {
+    setSearchOpen(true);
+    if (updateRoute) setRouteParams({ search: "1" });
+  };
+
+  const closeSearch = (updateRoute = true) => {
+    setSearchOpen(false);
+    setQuery("");
+    if (updateRoute) setRouteParams({ search: undefined });
+  };
+
   const closeDetail = (updateRoute = true) => {
     unsubscribeWork?.();
     unsubscribeWork = undefined;
@@ -231,6 +243,9 @@ export function Overview(props: OverviewProps) {
     if (!connectionReady()) return;
     const workId = routeParams.work?.trim();
     const intakeId = routeParams.intake?.trim();
+    const shouldSearch = routeParams.search === "1";
+    if (shouldSearch && !searchOpen()) openSearch(false);
+    if (!shouldSearch && searchOpen()) closeSearch(false);
     if (workId) {
       if (selectedWorkId() !== workId) openWork(workId, false);
       return;
@@ -452,8 +467,7 @@ export function Overview(props: OverviewProps) {
   };
 
   const selectSearchResult = (result: ProjectSearchResult) => {
-    setSearchOpen(false);
-    setQuery("");
+    closeSearch();
     if (result.targetKind === "work") openWork(result.targetId);
     else openIntake(result.targetId);
   };
@@ -462,12 +476,11 @@ export function Overview(props: OverviewProps) {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        if (!loading() && !loadError()) setSearchOpen(true);
+        if (!loading() && !loadError()) openSearch();
       }
       if (event.key === "Escape") {
         if (searchOpen()) {
-          setSearchOpen(false);
-          setQuery("");
+          closeSearch();
         } else {
           closeDetail();
         }
@@ -558,7 +571,7 @@ export function Overview(props: OverviewProps) {
           <span>{projectName()}</span><span style={{ color: "var(--text-faint)" }}>▾</span>
         </button>
         <div class="header-spacer" />
-        <button class="search-button" type="button" disabled={loading() || Boolean(loadError())} onClick={() => setSearchOpen(true)} aria-label="Search this project">
+        <button class="search-button" type="button" disabled={loading() || Boolean(loadError())} onClick={() => openSearch()} aria-label="Search this project">
           <span>search</span><span class="shortcut">⌘K</span>
         </button>
         <button class="avatar-button" type="button" aria-label="Profile and settings" onClick={() => navigate(`/app/${props.orgSlug}/${props.projectSlug}/settings`)}>
@@ -869,7 +882,7 @@ export function Overview(props: OverviewProps) {
 
       <Show when={searchOpen()}>
         <div class="search-overlay" role="dialog" aria-modal="true" aria-label="Search this project" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setSearchOpen(false);
+          if (event.target === event.currentTarget) closeSearch();
         }}>
           <div class="search-box">
             <div class="search-box__head">
@@ -884,7 +897,7 @@ export function Overview(props: OverviewProps) {
               <Show when={query()}>
                 <button class="icon-button mono" type="button" aria-label="Clear search" onClick={() => setQuery("")}>clear</button>
               </Show>
-              <button class="icon-button mono" type="button" onClick={() => setSearchOpen(false)}>esc</button>
+              <button class="icon-button mono" type="button" onClick={() => closeSearch()}>esc</button>
             </div>
             <div class="search-box__results">
               <div class="search-scope">

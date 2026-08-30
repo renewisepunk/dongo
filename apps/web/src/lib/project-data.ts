@@ -184,6 +184,11 @@ export type ProjectSearchPage = {
   nextCursor?: ProjectSearchCursor;
 };
 
+export type ProjectCompletedPage = {
+  items: WorkItem[];
+  nextCursor?: string;
+};
+
 type SearchPage<T> = {
   page: T[];
   isDone: boolean;
@@ -222,6 +227,11 @@ const workDetailReference = makeFunctionReference<"query", { workItemId: string 
 const intakeDetailReference = makeFunctionReference<"query", { intakeId: string }, IntakeDetailSnapshot>(
   "domains/intake/index:getForHuman",
 );
+const completedWorkReference = makeFunctionReference<
+  "query",
+  { projectId: string; paginationOpts: SearchPagination },
+  SearchPage<WorkDoc>
+>("domains/work/index:listCompletedForHuman");
 const createIntakeReference = makeFunctionReference<
   "mutation",
   { projectId: string; text?: string; attachmentIds: string[]; idempotencyKey: string },
@@ -609,6 +619,18 @@ export class ProjectDataConnection {
       (detail) => onUpdate(mapIntakeDetail(detail)),
       onError,
     );
+  }
+
+  async listCompleted(cursor: string | null = null): Promise<ProjectCompletedPage> {
+    const page = await this.#client.query(completedWorkReference, {
+      projectId: this.projectId,
+      paginationOpts: { cursor, numItems: 25 },
+    });
+    const now = Date.now();
+    return {
+      items: page.page.map((work) => baseWork(work, "done", now)),
+      ...(page.isDone ? {} : { nextCursor: page.continueCursor }),
+    };
   }
 
   async searchProject(
