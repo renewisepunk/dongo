@@ -11,6 +11,26 @@ import {
 type Host = "Codex" | "Claude Code" | "AGENTS.md";
 const HOSTS: readonly Host[] = ["Codex", "Claude Code", "AGENTS.md"];
 
+type ConnectRouteConnection = {
+  project: ProjectInfo;
+  subscribeInstallations: (
+    onUpdate: (installations: ProjectInstallation[]) => void,
+    onError: (error: Error) => void,
+  ) => () => void;
+  close: () => Promise<void>;
+};
+
+export type ConnectRouteDependencies = {
+  connectFirst: (preferredProjectId?: string) => Promise<ConnectRouteConnection>;
+  humanSession: () => Promise<unknown | null>;
+  bootstrapHumanIdentity: () => Promise<unknown>;
+  writeClipboard: (text: string) => Promise<void>;
+};
+
+export type ConnectRouteProps = {
+  dependencies?: Partial<ConnectRouteDependencies>;
+};
+
 function hostId(host: Host): string {
   return host.toLowerCase().replace(/[^a-z]+/gu, "-").replace(/^-|-$/gu, "");
 }
@@ -27,7 +47,7 @@ function preferredProjectId(): string | undefined {
   }
 }
 
-export default function ConnectRoute() {
+export default function ConnectRoute(props: ConnectRouteProps = {}) {
   const [host, setHost] = createSignal<Host>("Codex");
   const [copied, setCopied] = createSignal(false);
   const [copyError, setCopyError] = createSignal("");
@@ -35,11 +55,15 @@ export default function ConnectRoute() {
   const [installations, setInstallations] = createSignal<ProjectInstallation[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal("");
-  let connection: ProjectDataConnection | undefined;
+  let connection: ConnectRouteConnection | undefined;
   let unsubscribe: (() => void) | undefined;
   let hostTabs: HTMLDivElement | undefined;
   let copyTimer: number | undefined;
   let disposed = false;
+  const connectFirst = props.dependencies?.connectFirst ?? ProjectDataConnection.connectFirst;
+  const writeClipboard = props.dependencies?.writeClipboard ?? (
+    (text: string) => navigator.clipboard.writeText(text)
+  );
 
   const activeInstallation = createMemo(() => installations().find(
     (installation) =>
@@ -48,7 +72,7 @@ export default function ConnectRoute() {
   ));
 
   onMount(() => {
-    void ProjectDataConnection.connectFirst(preferredProjectId())
+    void connectFirst(preferredProjectId())
       .then((connected) => {
         if (disposed) {
           void connected.close();
@@ -91,7 +115,7 @@ export default function ConnectRoute() {
   const copyInstruction = async () => {
     setCopyError("");
     try {
-      await navigator.clipboard.writeText(instruction());
+      await writeClipboard(instruction());
       setCopied(true);
       if (copyTimer !== undefined) window.clearTimeout(copyTimer);
       copyTimer = window.setTimeout(() => {
@@ -122,7 +146,7 @@ export default function ConnectRoute() {
   };
 
   return (
-    <RequireHumanSession><AuthFrame>
+    <RequireHumanSession dependencies={props.dependencies}><AuthFrame>
       <div class="auth-stack" style={{ gap: "22px" }}>
         <div class="title-group">
           <div class="eyebrow eyebrow--green">Project created</div>

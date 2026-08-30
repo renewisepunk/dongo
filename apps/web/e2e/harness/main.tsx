@@ -3,6 +3,7 @@ import { render } from "solid-js/web";
 import { Overview } from "../../src/features/overview/Overview";
 import AuthCallbackRoute from "../../src/routes/auth/callback";
 import EmailCodeRoute from "../../src/routes/auth/code";
+import ConnectRoute from "../../src/routes/connect";
 import DeviceAuthorizationRoute from "../../src/routes/device";
 import LoginRoute from "../../src/routes/login";
 import OnboardingRoute from "../../src/routes/onboarding";
@@ -237,6 +238,81 @@ const oauthConsentDependencies = {
   },
 };
 
+const connectDependencies = {
+  async humanSession() {
+    return oauthScenario() === "missing-session" ? null : { user: { id: "fixture" } };
+  },
+  async bootstrapHumanIdentity() {
+    if (oauthScenario() === "session-error") {
+      throw new Error("fixture connect session detail must stay hidden");
+    }
+  },
+  async connectFirst(preferredProjectId?: string) {
+    document.documentElement.dataset.fixtureConnectPreferredProject = preferredProjectId ?? "none";
+    if (oauthScenario() === "connect-error") {
+      throw new Error("fixture connection detail must stay hidden");
+    }
+    return {
+      project: {
+        id: "project-fixture",
+        name: "Dongo",
+        slug: "dongo",
+        publicRef: "fixture-project",
+        organizationName: "Fixture Studio",
+        organizationSlug: "fixture-studio",
+        organizationPlan: "paid" as const,
+        membershipRole: "owner" as const,
+        activeProjectCount: 1,
+        identifierPrefix: "DONGO",
+        executionMode: "manual" as const,
+      },
+      subscribeInstallations(
+        onUpdate: (installations: Array<{
+          id: string;
+          kind: "cli" | "mcp" | "service" | "development";
+          status: "pending" | "active" | "needs_reauth" | "revoked";
+          clientId: string;
+          label: string;
+          machineLabel?: string;
+          scopes: string[];
+          createdAt: number;
+          lastUsedAt?: number;
+        }>) => void,
+        onError: (error: Error) => void,
+      ) {
+        if (oauthScenario() === "status-error") {
+          onError(new Error("fixture status detail must stay hidden"));
+        } else {
+          onUpdate(oauthScenario() === "connected"
+            ? [{
+                id: "installation-fixture",
+                kind: "cli",
+                status: "active",
+                clientId: "dongo-cli",
+                label: "Dongo CLI",
+                machineLabel: "Fixture Mac",
+                scopes: ["dongo:work:read", "dongo:work:write"],
+                createdAt: Date.now(),
+              }]
+            : []);
+        }
+        return () => {
+          document.documentElement.dataset.fixtureConnectUnsubscribed = "true";
+        };
+      },
+      async close() {
+        document.documentElement.dataset.fixtureConnectClosed = "true";
+      },
+    };
+  },
+  async writeClipboard(value: string) {
+    if (oauthScenario() === "copy-error") {
+      throw new Error("fixture clipboard detail must stay hidden");
+    }
+    document.documentElement.dataset.fixtureClipboard = value;
+  },
+};
+
 function FixtureOverview() {
   return (
     <Overview
@@ -273,6 +349,7 @@ render(
       <Route path="/device" component={() => <DeviceAuthorizationRoute dependencies={deviceDependencies} />} />
       <Route path="/oauth/project" component={() => <OAuthProjectRoute dependencies={oauthProjectDependencies} />} />
       <Route path="/oauth/consent" component={() => <OAuthConsentRoute dependencies={oauthConsentDependencies} />} />
+      <Route path="/connect" component={() => <ConnectRoute dependencies={connectDependencies} />} />
       <Route path="*" component={FixtureOverview} />
     </Router>
   ),
