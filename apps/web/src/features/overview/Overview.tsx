@@ -49,6 +49,28 @@ function HighlightedSearchText(props: { text: string; query: string }) {
   );
 }
 
+function trapModalFocus(
+  event: KeyboardEvent & { currentTarget: HTMLElement },
+) {
+  if (event.key !== "Tab") return;
+  const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )].filter((element) => element.getAttribute("aria-hidden") !== "true");
+  if (focusable.length === 0) {
+    event.preventDefault();
+    return;
+  }
+  const first = focusable[0]!;
+  const last = focusable.at(-1)!;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 export function Overview(props: OverviewProps) {
   const navigate = useNavigate();
   const [routeParams, setRouteParams] = useSearchParams<{
@@ -93,6 +115,9 @@ export function Overview(props: OverviewProps) {
   let projectMenu: HTMLDivElement | undefined;
   let profileMenuButton: HTMLButtonElement | undefined;
   let profileMenu: HTMLDivElement | undefined;
+  let searchButton: HTMLButtonElement | undefined;
+  let searchReturnFocus: HTMLElement | undefined;
+  let detailReturnFocus: HTMLElement | undefined;
   const uploadControllers = new Map<string, AbortController>();
   const pendingUploads = new Map<string, Promise<void>>();
   let disposed = false;
@@ -193,16 +218,27 @@ export function Overview(props: OverviewProps) {
   };
 
   const openSearch = (updateRoute = true) => {
+    if (!searchOpen() && document.activeElement instanceof HTMLElement) {
+      searchReturnFocus = document.activeElement;
+    }
     setProjectMenuOpen(false);
     setProfileMenuOpen(false);
     setSearchOpen(true);
     if (updateRoute) setRouteParams({ search: "1" });
   };
 
-  const closeSearch = (updateRoute = true) => {
+  const closeSearch = (updateRoute = true, restoreFocus = true) => {
+    const returnFocus = searchReturnFocus;
+    searchReturnFocus = undefined;
     setSearchOpen(false);
     setQuery("");
     if (updateRoute) setRouteParams({ search: undefined });
+    if (restoreFocus) {
+      queueMicrotask(() => {
+        if (returnFocus?.isConnected) returnFocus.focus();
+        else searchButton?.focus();
+      });
+    }
   };
 
   const switchProject = (project: ProjectInfo) => {
@@ -265,6 +301,8 @@ export function Overview(props: OverviewProps) {
   };
 
   const closeDetail = (updateRoute = true) => {
+    const returnFocus = detailReturnFocus;
+    detailReturnFocus = undefined;
     unsubscribeWork?.();
     unsubscribeWork = undefined;
     unsubscribeIntake?.();
@@ -276,9 +314,24 @@ export function Overview(props: OverviewProps) {
     if (updateRoute) {
       setRouteParams({ work: undefined, intake: undefined });
     }
+    queueMicrotask(() => {
+      if (returnFocus?.isConnected) returnFocus.focus();
+      else searchButton?.focus();
+    });
   };
 
-  const openWork = (id: string, updateRoute = true) => {
+  const openWork = (
+    id: string,
+    updateRoute = true,
+    returnFocus?: HTMLElement,
+  ) => {
+    if (!selectedWorkId() && !selectedIntakeId()) {
+      detailReturnFocus = returnFocus ?? (
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : undefined
+      );
+    }
     unsubscribeWork?.();
     unsubscribeWork = undefined;
     unsubscribeIntake?.();
@@ -314,7 +367,18 @@ export function Overview(props: OverviewProps) {
         );
   };
 
-  const openIntake = (id: string, updateRoute = true) => {
+  const openIntake = (
+    id: string,
+    updateRoute = true,
+    returnFocus?: HTMLElement,
+  ) => {
+    if (!selectedWorkId() && !selectedIntakeId()) {
+      detailReturnFocus = returnFocus ?? (
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : undefined
+      );
+    }
     unsubscribeWork?.();
     unsubscribeWork = undefined;
     unsubscribeIntake?.();
@@ -576,9 +640,10 @@ export function Overview(props: OverviewProps) {
   };
 
   const selectSearchResult = (result: ProjectSearchResult) => {
-    closeSearch();
-    if (result.targetKind === "work") openWork(result.targetId);
-    else openIntake(result.targetId);
+    const returnFocus = searchReturnFocus;
+    closeSearch(true, false);
+    if (result.targetKind === "work") openWork(result.targetId, true, returnFocus);
+    else openIntake(result.targetId, true, returnFocus);
   };
 
   onMount(() => {
@@ -767,7 +832,7 @@ export function Overview(props: OverviewProps) {
           </Show>
         </div>
         <div class="header-spacer" />
-        <button class="search-button" type="button" disabled={loading() || Boolean(loadError())} onClick={() => openSearch()} aria-label="Search this project">
+        <button ref={searchButton} class="search-button" type="button" disabled={loading() || Boolean(loadError())} onClick={() => openSearch()} aria-label="Search this project">
           <span>search</span><span class="shortcut">⌘K</span>
         </button>
         <div class="header-menu header-menu--right">
@@ -1137,9 +1202,16 @@ export function Overview(props: OverviewProps) {
       )}</Show>
 
       <Show when={searchOpen()}>
-        <div class="search-overlay" role="dialog" aria-modal="true" aria-label="Search this project" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) closeSearch();
-        }}>
+        <div
+          class="search-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Search this project"
+          onKeyDown={trapModalFocus}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeSearch();
+          }}
+        >
           <div class="search-box">
             <div class="search-box__head">
               <span class="mono" style={{ color: "var(--text-faint)" }}>/</span>
@@ -1226,6 +1298,9 @@ function WorkDetail(props: WorkDetailProps) {
   const [response, setResponse] = createSignal("");
   const [comment, setComment] = createSignal("");
   const [pending, setPending] = createSignal(false);
+  let closeButton: HTMLButtonElement | undefined;
+
+  onMount(() => closeButton?.focus());
 
   const stateLine = () => {
     if (props.item.state === "needs") return `Working · waiting for your ${props.item.attention?.kind.toLowerCase()}`;
@@ -1277,9 +1352,9 @@ function WorkDetail(props: WorkDetailProps) {
   };
 
   return (
-    <aside class="detail" role="dialog" aria-modal="true" aria-labelledby="work-detail-title">
+    <aside class="detail" role="dialog" aria-modal="true" aria-labelledby="work-detail-title" onKeyDown={trapModalFocus}>
       <div class="detail__head">
-        <button class="detail__close" type="button" onClick={props.onClose}>
+        <button ref={closeButton} class="detail__close" type="button" onClick={props.onClose}>
           <span class="detail-close-desktop">✕&nbsp; close</span><span class="detail-close-mobile">{props.mobileCloseLabel}</span>
         </button>
         <div class="detail__head-spacer" />
@@ -1380,10 +1455,14 @@ type IntakeDetailProps = {
 
 function IntakeDetail(props: IntakeDetailProps) {
   const linked = () => props.work.filter((item) => props.intake.linkedWorkIds?.includes(item.id));
+  let closeButton: HTMLButtonElement | undefined;
+
+  onMount(() => closeButton?.focus());
+
   return (
-    <aside class="detail" role="dialog" aria-modal="true" aria-labelledby="intake-detail-title">
+    <aside class="detail" role="dialog" aria-modal="true" aria-labelledby="intake-detail-title" onKeyDown={trapModalFocus}>
       <div class="detail__head">
-        <button class="detail__close" type="button" onClick={props.onClose}>
+        <button ref={closeButton} class="detail__close" type="button" onClick={props.onClose}>
           <span class="detail-close-desktop">✕&nbsp; close</span><span class="detail-close-mobile">←&nbsp; back</span>
         </button>
         <div class="detail__head-spacer" /><span class="detail__identifier">inbox</span>
