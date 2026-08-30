@@ -269,6 +269,23 @@
   font-size: 12px;
 }
 
+.attachment-row__preview {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid #26262d;
+  background: #09090b;
+}
+
+.attachment-row__preview img,
+.attachment-row__preview video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .attachment-row__copy {
   display: flex;
   min-width: 0;

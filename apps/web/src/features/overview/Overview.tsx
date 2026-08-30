@@ -31,6 +31,7 @@ type OverviewProps = {
 type DraftAttachment = {
   localId: string;
   file: File;
+  previewUrl?: string;
   state: "uploading" | "available" | "error" | "removing";
   phase: "reserving" | "uploading" | "available";
   progress: number;
@@ -361,6 +362,10 @@ export function Overview(props: OverviewProps) {
     ));
   };
 
+  const revokeAttachmentPreview = (attachment: DraftAttachment) => {
+    if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+  };
+
   const uploadDraftAttachment = async (localId: string) => {
     const item = draftAttachments().find((candidate) => candidate.localId === localId);
     if (!item || !connection || item.state === "removing") return;
@@ -425,9 +430,13 @@ export function Overview(props: OverviewProps) {
     }
     const accepted = files.slice(0, remaining).map((file) => {
       const error = attachmentSelectionError(file);
+      const kind = attachmentKind(file);
       return {
         localId: crypto.randomUUID(),
         file,
+        ...(!error && kind !== "FILE"
+          ? { previewUrl: URL.createObjectURL(file) }
+          : {}),
         state: error ? "error" as const : "uploading" as const,
         phase: "reserving" as const,
         progress: error ? 0 : 4,
@@ -450,6 +459,7 @@ export function Overview(props: OverviewProps) {
     uploadControllers.get(localId)?.abort();
     uploadControllers.delete(localId);
     if (!item.attachmentId || !connection) {
+      revokeAttachmentPreview(item);
       setDraftAttachments((items) => items.filter((candidate) => candidate.localId !== localId));
       setSubmissionKey(crypto.randomUUID());
       return;
@@ -457,6 +467,7 @@ export function Overview(props: OverviewProps) {
     updateDraftAttachment(localId, { state: "removing" });
     try {
       await connection.discardAttachment(item.attachmentId);
+      revokeAttachmentPreview(item);
       setDraftAttachments((items) => items.filter((candidate) => candidate.localId !== localId));
       setSubmissionKey(crypto.randomUUID());
     } catch {
@@ -498,6 +509,9 @@ export function Overview(props: OverviewProps) {
         attachmentIds,
         key,
       );
+      for (const attachment of availableAttachments) {
+        revokeAttachmentPreview(attachment);
+      }
       setDraft("");
       setDraftAttachments([]);
       setSubmissionKey(crypto.randomUUID());
@@ -666,6 +680,9 @@ export function Overview(props: OverviewProps) {
     disposed = true;
     const connected = connection;
     const unattachedIds = availableAttachmentIds();
+    for (const attachment of draftAttachments()) {
+      revokeAttachmentPreview(attachment);
+    }
     for (const controller of uploadControllers.values()) controller.abort();
     uploadControllers.clear();
     unsubscribeOverview?.();
@@ -832,7 +849,28 @@ export function Overview(props: OverviewProps) {
               <div class="attachment-tray" aria-label="Selected attachments">
                 <For each={draftAttachments()}>{(attachment) => (
                   <div class="attachment-row" data-state={attachment.state}>
-                    <div class="attachment-row__icon">{attachmentKind(attachment.file)}</div>
+                    <Show
+                      when={attachment.previewUrl}
+                      fallback={<div class="attachment-row__icon">{attachmentKind(attachment.file)}</div>}
+                    >
+                      {(previewUrl) => (
+                        <div class="attachment-row__preview" aria-hidden="true">
+                          <Show
+                            when={attachmentKind(attachment.file) === "IMG"}
+                            fallback={
+                              <video
+                                src={previewUrl()}
+                                muted
+                                playsinline
+                                preload="metadata"
+                              />
+                            }
+                          >
+                            <img src={previewUrl()} alt="" />
+                          </Show>
+                        </div>
+                      )}
+                    </Show>
                     <div class="attachment-row__copy">
                       <div class="attachment-row__name">{attachment.file.name}</div>
                       <div class="attachment-row__state">
