@@ -1,7 +1,9 @@
 import { useNavigate } from "@solidjs/router";
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
-import { initialIntakes, initialWork, type Intake, type WorkItem } from "./model";
+import { humanSession } from "../../lib/auth-client";
+import { ProjectDataConnection } from "../../lib/project-data";
+import type { Intake, WorkItem } from "./model";
 import "./overview.css";
 
 type OverviewProps = {
@@ -18,21 +20,35 @@ type SearchResult = {
 
 export function Overview(props: OverviewProps) {
   const navigate = useNavigate();
-  const [work, setWork] = createSignal<WorkItem[]>(initialWork);
-  const [intakes, setIntakes] = createSignal<Intake[]>(initialIntakes);
+  const [work, setWork] = createSignal<WorkItem[]>([]);
+  const [intakes, setIntakes] = createSignal<Intake[]>([]);
   const [draft, setDraft] = createSignal("");
-  const [attachment, setAttachment] = createSignal(false);
   const [selectedWorkId, setSelectedWorkId] = createSignal<string>();
+  const [selectedWorkDetail, setSelectedWorkDetail] = createSignal<WorkItem>();
   const [selectedIntakeId, setSelectedIntakeId] = createSignal<string>();
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [query, setQuery] = createSignal("");
   const [toast, setToast] = createSignal("");
+  const [loading, setLoading] = createSignal(true);
+  const [loadError, setLoadError] = createSignal("");
+  const [submitting, setSubmitting] = createSignal(false);
+  const [projectName, setProjectName] = createSignal(props.projectSlug);
+  const [viewerInitials, setViewerInitials] = createSignal("ME");
+  let connection: ProjectDataConnection | undefined;
+  let unsubscribeOverview: (() => void) | undefined;
+  let unsubscribeWork: (() => void) | undefined;
+  let disposed = false;
 
   const needs = createMemo(() => work().filter((item) => item.state === "needs"));
   const working = createMemo(() => work().filter((item) => item.state === "working"));
   const ready = createMemo(() => work().filter((item) => item.state === "ready"));
   const done = createMemo(() => work().filter((item) => item.state === "done"));
-  const selectedWork = createMemo(() => work().find((item) => item.id === selectedWorkId()));
+  const selectedWork = createMemo(() => {
+    const detail = selectedWorkDetail();
+    return detail?.id === selectedWorkId()
+      ? detail
+      : work().find((item) => item.id === selectedWorkId());
+  });
   const selectedIntake = createMemo(() => intakes().find((item) => item.id === selectedIntakeId()));
 
   const results = createMemo<SearchResult[]>(() => {
@@ -54,14 +70,31 @@ export function Overview(props: OverviewProps) {
   };
 
   const closeDetail = () => {
+    unsubscribeWork?.();
+    unsubscribeWork = undefined;
+    setSelectedWorkDetail(undefined);
     setSelectedWorkId(undefined);
     setSelectedIntakeId(undefined);
   };
 
   const openWork = (id: string) => {
-    setWork((items) => items.map((item) => item.id === id ? { ...item, unseen: false } : item));
+    unsubscribeWork?.();
+    unsubscribeWork = undefined;
+    setSelectedWorkDetail(undefined);
     setSelectedIntakeId(undefined);
     setSelectedWorkId(id);
+    const item = work().find((candidate) => candidate.id === id);
+    if (!item || !connection) return;
+    if (item.unseen && item.attention) {
+      void connection.markAttentionSeen(item.attention.id).catch(() => {
+        announce("Could not mark the request as seen");
+      });
+    }
+    unsubscribeWork = connection.subscribeWorkDetail(
+      item,
+      setSelectedWorkDetail,
+      () => announce("Could not load the latest work detail"),
+    );
   };
 
   const openIntake = (id: string) => {
@@ -69,37 +102,41 @@ export function Overview(props: OverviewProps) {
     setSelectedIntakeId(id);
   };
 
-  const submitIntake = () => {
-    if (!draft().trim() && !attachment()) return;
-    setIntakes((items) => [{
-      id: `intake-${crypto.randomUUID()}`,
-      text: draft().trim() || "New screen recording",
-      attachment: attachment() ? "checkout-stall.mov" : undefined,
-      status: "waiting",
-      age: "now",
-    }, ...items]);
-    setDraft("");
-    setAttachment(false);
-    announce("Added to Inbox");
+  const submitIntake = async () => {
+    const text = draft().trim();
+    if (!text || !connection || submitting()) return;
+    setSubmitting(true);
+    try {
+      await connection.createIntake(text);
+      setDraft("");
+      announce("Added to Inbox");
+    } catch {
+      announce("Could not add this Intake");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const moveReady = (id: string, direction: -1 | 1) => {
-    setWork((items) => {
-      const readyItems = items.filter((item) => item.state === "ready");
-      const index = readyItems.findIndex((item) => item.id === id);
-      const target = index + direction;
-      if (index < 0 || target < 0 || target >= readyItems.length) return items;
-      const reordered = [...readyItems];
-      const [moved] = reordered.splice(index, 1);
-      reordered.splice(target, 0, moved);
-      let readyIndex = 0;
-      return items.map((item) => item.state === "ready" ? reordered[readyIndex++] : item);
-    });
-    announce("Ready order updated");
-  };
-
-  const updateWork = (id: string, update: (item: WorkItem) => WorkItem) => {
-    setWork((items) => items.map((item) => item.id === id ? update(item) : item));
+  const moveReady = async (id: string, direction: -1 | 1) => {
+    const readyItems = ready();
+    const index = readyItems.findIndex((item) => item.id === id);
+    const target = index + direction;
+    const item = readyItems[index];
+    const targetItem = readyItems[target];
+    if (!connection || !item || !targetItem || target < 0 || target >= readyItems.length) return;
+    const rank = direction < 0
+      ? target === 0
+        ? targetItem.rank - 1_024
+        : (readyItems[target - 1]!.rank + targetItem.rank) / 2
+      : target === readyItems.length - 1
+        ? targetItem.rank + 1_024
+        : (targetItem.rank + readyItems[target + 1]!.rank) / 2;
+    try {
+      await connection.reorderWork(item, rank);
+      announce("Ready order updated");
+    } catch {
+      announce("The Ready order changed; try again");
+    }
   };
 
   const selectSearchResult = (result: SearchResult) => {
@@ -125,7 +162,52 @@ export function Overview(props: OverviewProps) {
       }
     };
     window.addEventListener("keydown", onKeyDown);
+    void (async () => {
+      try {
+        const [connected, session] = await Promise.all([
+          ProjectDataConnection.connect(props.orgSlug, props.projectSlug),
+          humanSession(),
+        ]);
+        if (disposed) {
+          await connected.close();
+          return;
+        }
+        connection = connected;
+        setProjectName(connected.projectName);
+        const name = session?.user.name || session?.user.email || "Me";
+        const initials = name
+          .split(/\s+|@/)
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((part) => part[0]!.toUpperCase())
+          .join("");
+        setViewerInitials(initials || "ME");
+        unsubscribeOverview = connected.subscribeOverview(
+          (overview) => {
+            setProjectName(overview.projectName);
+            setWork(overview.work);
+            setIntakes(overview.intakes);
+            setLoadError("");
+            setLoading(false);
+          },
+          () => {
+            setLoadError("Live project data is temporarily unavailable.");
+            setLoading(false);
+          },
+        );
+      } catch {
+        setLoadError("This project could not be loaded for your account.");
+        setLoading(false);
+      }
+    })();
     onCleanup(() => window.removeEventListener("keydown", onKeyDown));
+  });
+
+  onCleanup(() => {
+    disposed = true;
+    unsubscribeOverview?.();
+    unsubscribeWork?.();
+    void connection?.close();
   });
 
   return (
@@ -133,14 +215,14 @@ export function Overview(props: OverviewProps) {
       <header class="app-header">
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
         <button class="project-button" type="button" aria-label="Select organization or project">
-          <span>{props.projectSlug}</span><span style={{ color: "var(--text-faint)" }}>▾</span>
+          <span>{projectName()}</span><span style={{ color: "var(--text-faint)" }}>▾</span>
         </button>
         <div class="header-spacer" />
         <button class="search-button" type="button" onClick={() => setSearchOpen(true)} aria-label="Search this project">
           <span>search</span><span class="shortcut">⌘K</span>
         </button>
         <button class="avatar-button" type="button" aria-label="Profile and settings" onClick={() => navigate(`/app/${props.orgSlug}/${props.projectSlug}/settings`)}>
-          RB
+          {viewerInitials()}
         </button>
       </header>
 
@@ -153,38 +235,39 @@ export function Overview(props: OverviewProps) {
               value={draft()}
               onInput={(event) => setDraft(event.currentTarget.value)}
               onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitIntake();
+                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void submitIntake();
               }}
               placeholder="Add something…"
             />
-            <Show when={attachment()}>
-              <div class="attachment-row">
-                <div class="attachment-row__icon">MOV</div>
-                <div class="attachment-row__copy">
-                  <div class="attachment-row__name">checkout-stall.mov</div>
-                  <div class="attachment-row__state">18.4 MB · ready</div>
-                </div>
-                <button class="icon-button" type="button" aria-label="Remove attachment" onClick={() => setAttachment(false)}>✕</button>
-              </div>
-            </Show>
             <div class="composer__actions">
-              <button class="attach-button" type="button" onClick={() => setAttachment(true)}>
+              <button class="attach-button" type="button" disabled title="Attachment upload is coming in the next UI slice">
                 <span class="mono">+</span><span>Attach</span>
               </button>
-              <span class="composer__hint">no categories, no fields</span>
+              <span class="composer__hint">text Intake is live</span>
               <button
                 class="submit-button"
                 type="button"
-                disabled={!draft().trim() && !attachment()}
+                disabled={!draft().trim() || submitting() || loading() || Boolean(loadError())}
                 aria-label="Submit to Inbox"
-                onClick={submitIntake}
+                onClick={() => void submitIntake()}
               >
-                ↵
+                {submitting() ? "…" : "↵"}
               </button>
             </div>
           </section>
 
-          <Show when={work().length === 0 && intakes().length === 0}>
+          <Show when={loading()}>
+            <div class="empty-state" role="status">Loading live project activity…</div>
+          </Show>
+
+          <Show when={loadError()}>
+            <div class="empty-state" role="alert">
+              <div>{loadError()}</div>
+              <button class="button" type="button" onClick={() => window.location.reload()}>Retry</button>
+            </div>
+          </Show>
+
+          <Show when={!loading() && !loadError() && work().length === 0 && intakes().length === 0}>
             <div class="empty-state">
               <div>Add anything you want the agent to look at.</div>
               <div class="empty-state__types">bug · idea · screenshot · video · request</div>
@@ -242,8 +325,8 @@ export function Overview(props: OverviewProps) {
               <For each={ready()}>{(item, index) => (
                 <div class="ready-row">
                   <div class="reorder-controls">
-                    <button class="reorder-button" type="button" disabled={index() === 0} aria-label={`Move ${item.title} up`} onClick={() => moveReady(item.id, -1)}>▲</button>
-                    <button class="reorder-button" type="button" disabled={index() === ready().length - 1} aria-label={`Move ${item.title} down`} onClick={() => moveReady(item.id, 1)}>▼</button>
+                    <button class="reorder-button" type="button" disabled={index() === 0} aria-label={`Move ${item.title} up`} onClick={() => void moveReady(item.id, -1)}>▲</button>
+                    <button class="reorder-button" type="button" disabled={index() === ready().length - 1} aria-label={`Move ${item.title} down`} onClick={() => void moveReady(item.id, 1)}>▼</button>
                   </div>
                   <button class="ready-row__open" type="button" onClick={() => openWork(item.id)}>
                     <span class="ready-row__position">{String(index() + 1).padStart(2, "0")}</span>
@@ -267,7 +350,7 @@ export function Overview(props: OverviewProps) {
                     <span style={{ color: intake.status === "processed" ? "var(--green)" : "var(--amber)" }}>
                       {intake.status === "waiting" ? "waiting for local agent" : intake.status === "triaging" ? "agent is triaging" : "processed"}
                     </span>
-                    <span>·</span><span>{intake.attachment ? "1 attachment" : "no attachment"}</span><span>·</span><span>{intake.age}</span>
+                    <span>·</span><span>{intake.attachmentCount ? `${intake.attachmentCount} attachment${intake.attachmentCount === 1 ? "" : "s"}` : "no attachment"}</span><span>·</span><span>{intake.age}</span>
                   </span>
                 </button>
               )}</For>
@@ -296,8 +379,38 @@ export function Overview(props: OverviewProps) {
           item={item()}
           mobileCloseLabel="←  back"
           onClose={closeDetail}
-          onUpdate={(update) => updateWork(item().id, update)}
-          onAnnounce={announce}
+          onRespond={async (selectedOption, body) => {
+            const attention = item().attention;
+            if (!connection || !attention) return;
+            try {
+              await connection.respondToAttention(attention.id, selectedOption, body);
+              announce("Response sent to your agent");
+            } catch {
+              announce("Your response could not be sent");
+              throw new Error("response_failed");
+            }
+          }}
+          onResolve={async () => {
+            const attention = item().attention;
+            if (!connection || !attention) return;
+            try {
+              await connection.resolveAttention(attention.id);
+              announce("Attention resolved");
+            } catch {
+              announce("Attention could not be resolved");
+              throw new Error("resolve_failed");
+            }
+          }}
+          onComment={async (body) => {
+            if (!connection) return;
+            try {
+              await connection.addComment(item().id, body);
+              announce("Comment added");
+            } catch {
+              announce("Comment could not be added");
+              throw new Error("comment_failed");
+            }
+          }}
         />
       )}</Show>
 
@@ -353,14 +466,16 @@ type WorkDetailProps = {
   item: WorkItem;
   mobileCloseLabel: string;
   onClose: () => void;
-  onUpdate: (update: (item: WorkItem) => WorkItem) => void;
-  onAnnounce: (message: string) => void;
+  onRespond: (selectedOption?: string, body?: string) => Promise<void>;
+  onResolve: () => Promise<void>;
+  onComment: (body: string) => Promise<void>;
 };
 
 function WorkDetail(props: WorkDetailProps) {
   const [choice, setChoice] = createSignal<string>();
   const [response, setResponse] = createSignal("");
   const [comment, setComment] = createSignal("");
+  const [pending, setPending] = createSignal(false);
 
   const stateLine = () => {
     if (props.item.state === "needs") return `Working · waiting for your ${props.item.attention?.kind.toLowerCase()}`;
@@ -369,37 +484,46 @@ function WorkDetail(props: WorkDetailProps) {
     return "Ready";
   };
 
-  const respond = () => {
-    const text = [choice(), response().trim()].filter(Boolean).join(" — ");
-    if (!text) return;
-    props.onUpdate((item) => ({
-      ...item,
-      state: "working",
-      unseen: false,
-      attention: item.attention ? { ...item.attention, response: text } : undefined,
-      conversation: [...(item.conversation ?? []), { who: "René Bauer", when: "now", text, human: true }],
-    }));
-    setChoice(undefined);
-    setResponse("");
-    props.onAnnounce("Response sent to your agent");
+  const respond = async () => {
+    const selectedOption = choice();
+    const body = response().trim();
+    if ((!selectedOption && !body) || pending()) return;
+    setPending(true);
+    try {
+      await props.onRespond(selectedOption, body || undefined);
+      setChoice(undefined);
+      setResponse("");
+    } catch {
+      return;
+    } finally {
+      setPending(false);
+    }
   };
 
-  const resolveWithoutResponse = () => {
-    props.onUpdate((item) => ({
-      ...item,
-      state: "working",
-      unseen: false,
-      attention: item.attention ? { ...item.attention, response: "Resolved without response" } : undefined,
-    }));
-    props.onAnnounce("Attention resolved");
+  const resolveWithoutResponse = async () => {
+    if (pending()) return;
+    setPending(true);
+    try {
+      await props.onResolve();
+    } catch {
+      return;
+    } finally {
+      setPending(false);
+    }
   };
 
-  const addComment = () => {
+  const addComment = async () => {
     const text = comment().trim();
-    if (!text) return;
-    props.onUpdate((item) => ({ ...item, conversation: [...(item.conversation ?? []), { who: "René Bauer", when: "now", text, human: true }] }));
-    setComment("");
-    props.onAnnounce("Comment added");
+    if (!text || pending()) return;
+    setPending(true);
+    try {
+      await props.onComment(text);
+      setComment("");
+    } catch {
+      return;
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -441,8 +565,8 @@ function WorkDetail(props: WorkDetailProps) {
                 )}</For>
                 <textarea class="textarea" value={response()} onInput={(event) => setResponse(event.currentTarget.value)} placeholder="Add anything the agent should know…" rows={3} />
                 <div class="response-actions">
-                  <button class="button button--primary" type="button" disabled={!choice() && !response().trim()} onClick={respond}>Respond</button>
-                  <button class="button button--quiet" type="button" onClick={resolveWithoutResponse}>Resolve without response</button>
+                  <button class="button button--primary" type="button" disabled={pending() || (!choice() && !response().trim())} onClick={() => void respond()}>Respond</button>
+                  <button class="button button--quiet" type="button" disabled={pending()} onClick={() => void resolveWithoutResponse()}>Resolve without response</button>
                 </div>
               </div>
             </Show>
@@ -466,9 +590,12 @@ function WorkDetail(props: WorkDetailProps) {
           <section class="detail-section">
             <div class="detail-section__label">artifacts</div>
             <For each={props.item.artifacts}>{(artifact) => (
-              <div class="artifact-row">
-                <span class="artifact-row__kind">{artifact.kind}</span><span class="artifact-row__label">{artifact.label}</span><span style={{ color: "var(--amber)" }}>↗</span>
-              </div>
+              <Show
+                when={artifact.href}
+                fallback={<div class="artifact-row"><span class="artifact-row__kind">{artifact.kind}</span><span class="artifact-row__label">{artifact.label}</span></div>}
+              >
+                {(href) => <a class="artifact-row" href={href()} target="_blank" rel="noreferrer"><span class="artifact-row__kind">{artifact.kind}</span><span class="artifact-row__label">{artifact.label}</span><span style={{ color: "var(--amber)" }}>↗</span></a>}
+              </Show>
             )}</For>
           </section>
         </Show>
@@ -487,12 +614,8 @@ function WorkDetail(props: WorkDetailProps) {
 
         <div class="comment-form">
           <textarea class="textarea" value={comment()} onInput={(event) => setComment(event.currentTarget.value)} placeholder="Add a comment…" rows={2} />
-          <button class="button" type="button" disabled={!comment().trim()} onClick={addComment}>Add comment</button>
+          <button class="button" type="button" disabled={pending() || !comment().trim()} onClick={() => void addComment()}>Add comment</button>
         </div>
-
-        <Show when={props.item.state === "done"}>
-          <div class="export-note">synced to .agent-work/{props.item.identifier}.md</div>
-        </Show>
       </div>
     </aside>
   );
@@ -523,11 +646,11 @@ function IntakeDetail(props: IntakeDetailProps) {
         <section class="detail-section">
           <div class="detail-section__label">submitted</div>
           <div class="detail-card">
-            <div class="detail-section__body">René Bauer · {props.intake.age}</div>
+            <div class="detail-section__body">You · {props.intake.age}</div>
             <Show when={props.intake.attachment}>
               <div class="attachment-row" style={{ "margin-top": "11px" }}>
-                <div class="attachment-row__icon">MOV</div>
-                <div class="attachment-row__copy"><div class="attachment-row__name">{props.intake.attachment}</div><div class="attachment-row__state">18.4 MB · screen recording</div></div>
+                <div class="attachment-row__icon">FILE</div>
+                <div class="attachment-row__copy"><div class="attachment-row__name">{props.intake.attachment}</div><div class="attachment-row__state">available to authorized agents</div></div>
               </div>
             </Show>
           </div>

@@ -141,10 +141,13 @@ export async function buildOverview(
     })),
   );
   const needsYou = await Promise.all(
-    attention.map(async (request) => ({
-      request,
-      work: await ctx.db.get(request.workItemId),
-    })),
+    attention.map(async (request) => {
+      const [work, actor] = await Promise.all([
+        ctx.db.get(request.workItemId),
+        ctx.db.get(request.requestedByActorId),
+      ]);
+      return { request, work, actor };
+    }),
   );
   return {
     project,

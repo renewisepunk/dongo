@@ -1,22 +1,76 @@
 import { A } from "@solidjs/router";
-import { createMemo, createSignal, Show } from "solid-js";
+import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { AuthFrame } from "../components/AuthFrame";
 import { RequireHumanSession } from "../components/RequireHumanSession";
+import {
+  ProjectDataConnection,
+  type ProjectInfo,
+  type ProjectInstallation,
+} from "../lib/project-data";
 
 type Host = "Codex" | "Claude Code" | "AGENTS.md";
 
-const fallbackProject = {
-  name: "Dongo",
-  slug: "dongo",
-  repositoryUrl: "github.com/renewisepunk/dongo",
-};
+function preferredProjectId(): string | undefined {
+  if (typeof sessionStorage === "undefined") return undefined;
+  try {
+    const stored = JSON.parse(sessionStorage.getItem("dongo:project") || "null") as
+      | { projectId?: unknown }
+      | null;
+    return typeof stored?.projectId === "string" ? stored.projectId : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export default function ConnectRoute() {
-  const stored = typeof sessionStorage === "undefined" ? null : sessionStorage.getItem("dongo:project");
-  const project = stored ? { ...fallbackProject, ...JSON.parse(stored) } : fallbackProject;
   const [host, setHost] = createSignal<Host>("Codex");
   const [copied, setCopied] = createSignal(false);
-  const [connected, setConnected] = createSignal(false);
+  const [project, setProject] = createSignal<ProjectInfo>();
+  const [installations, setInstallations] = createSignal<ProjectInstallation[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal("");
+  let connection: ProjectDataConnection | undefined;
+  let unsubscribe: (() => void) | undefined;
+  let disposed = false;
+
+  const activeInstallation = createMemo(() => installations().find(
+    (installation) =>
+      installation.status === "active" &&
+      (installation.kind === "cli" || installation.kind === "mcp"),
+  ));
+
+  onMount(() => {
+    void ProjectDataConnection.connectFirst(preferredProjectId())
+      .then((connected) => {
+        if (disposed) {
+          void connected.close();
+          return;
+        }
+        connection = connected;
+        setProject(connected.project);
+        unsubscribe = connected.subscribeInstallations(
+          (next) => {
+            setInstallations(next);
+            setLoading(false);
+            setError("");
+          },
+          () => {
+            setError("Agent connection status is temporarily unavailable.");
+            setLoading(false);
+          },
+        );
+      })
+      .catch(() => {
+        setError("Create a project before connecting an agent.");
+        setLoading(false);
+      });
+  });
+
+  onCleanup(() => {
+    disposed = true;
+    unsubscribe?.();
+    void connection?.close();
+  });
 
   const instruction = createMemo(() => {
     if (host() === "AGENTS.md") {
@@ -72,34 +126,32 @@ export default function ConnectRoute() {
           </div>
         </div>
 
-        <div class="connection-card" data-state={connected() ? "connected" : "waiting"}>
+        <div class="connection-card" data-state={activeInstallation() ? "connected" : "waiting"}>
           <div class="connection-card__title">
-            <Show when={connected()} fallback={<span class="status-spinner" aria-hidden="true" />}>
+            <Show when={activeInstallation()} fallback={<span class="status-spinner" aria-hidden="true" />}>
               <span class="status-dot" aria-hidden="true" />
             </Show>
-            <span>{connected() ? "Agent connected" : "Waiting for browser approval"}</span>
+            <span>{loading() ? "Checking agent access" : activeInstallation() ? "Agent connected" : "Waiting for browser approval"}</span>
           </div>
           <div class="connection-card__body">
-            {connected()
-              ? `${host()} connected from macbook-rene · just now.`
+            {activeInstallation()
+              ? `${activeInstallation()!.label}${activeInstallation()!.machineLabel ? ` · ${activeInstallation()!.machineLabel}` : ""}.`
               : "Approve the link opened by your terminal. This screen updates after local credential storage and the connection check succeed."}
           </div>
-          <Show when={connected()}>
+          <Show when={activeInstallation()}>
             <div class="connection-card__meta">
-              <div>repo matched · {project.repositoryUrl || "local repository"}</div>
-              <div>adapter · {host().toLowerCase().replace(" ", "-")}</div>
+              <div>project · {project()?.name}</div>
+              <div>grant · {activeInstallation()!.kind} · {activeInstallation()!.status}</div>
             </div>
           </Show>
         </div>
 
-        <Show when={!connected()}>
-          <button class="button button--full" type="button" onClick={() => setConnected(true)}>
-            Preview approved state
-          </button>
-        </Show>
-        <A class="button button--primary button--full" href={`/app/rene/${project.slug}`}>
-          {connected() ? "Continue to Overview" : "Go to Overview"}
-        </A>
+        <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
+        <Show when={project()}>{(loaded) => (
+          <A class="button button--primary button--full" href={`/app/${loaded().organizationSlug}/${loaded().slug}`}>
+            {activeInstallation() ? "Continue to Overview" : "Go to Overview"}
+          </A>
+        )}</Show>
         <p class="security-note">credential stored locally · never committed</p>
       </div>
     </AuthFrame></RequireHumanSession>

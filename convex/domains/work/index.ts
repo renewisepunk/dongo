@@ -295,6 +295,28 @@ export const getForHuman = query({
   },
 });
 
+export const getDetailForHuman = query({
+  args: { workItemId: v.id("workItems") },
+  handler: async (ctx, args) => {
+    const work = await ctx.db.get(args.workItemId);
+    if (!work) fail("not_found", "Work item not found");
+    await requireHumanProject(ctx, work.projectId, { allowArchived: true });
+    const detail = await workDetail(ctx, work);
+    const actorIds = new Set<Id<"actors">>();
+    for (const run of detail.runs) actorIds.add(run.actorId);
+    for (const comment of detail.comments) actorIds.add(comment.actorId);
+    for (const artifact of detail.artifacts) actorIds.add(artifact.actorId);
+    for (const request of detail.attention) {
+      actorIds.add(request.requestedByActorId);
+      if (request.resolvedByActorId) actorIds.add(request.resolvedByActorId);
+    }
+    const actors = (
+      await Promise.all([...actorIds].map((actorId) => ctx.db.get(actorId)))
+    ).filter((actor): actor is Doc<"actors"> => actor !== null);
+    return { ...detail, actors };
+  },
+});
+
 export const getForAgent = internalQuery({
   args: { authorization: agentContextValidator, workItemId: v.id("workItems") },
   handler: async (ctx, args) => {

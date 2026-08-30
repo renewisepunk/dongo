@@ -98,6 +98,16 @@
   gap: 14px;
 }
 
+.confirmation-row,
+.installation-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.installation-row__actions { justify-content: flex-end; }
+
 .installation-list {
   display: flex;
   flex-direction: column;
