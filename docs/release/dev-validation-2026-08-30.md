@@ -15,10 +15,10 @@ This is a living evidence ledger for the development stack. It is not a producti
 
 | Gate | Evidence |
 |---|---|
-| Local unit/integration suite | `npm test`: 223 tests passed across Workers, CLI, local storage, web, MCP, contracts, and Convex on the current candidate. |
+| Local unit/integration suite | `npm test`: 224 tests passed across Workers, CLI, local storage, web, MCP, contracts, and Convex on the current candidate. |
 | Web browser matrix | Playwright: 183/183 passed across Chromium, Firefox, and WebKit, including auth states, onboarding, first-project device approval, MCP consent, paste image, full-page drop, upload retry/cancel, overview, detail, responsive, and settings. |
 | Static/type/build checks | `npm run check`, contract generation, lowercase brand verification, six-Worker development isolation, the 347-file secret scan, and the 171-file safe-runtime-log scan passed on the current candidate. Both production-only and full dependency audits reported zero vulnerabilities. |
-| Development runtime | `npm run smoke:dev -- --project-ref p58de816-dongo`: 14/14 passed after deployment. Notification readiness explicitly requires dispatch plus Resend for Web Beta and still reports APNs/FCM as disabled. |
+| Development runtime | Web version `3896fc7d-a8ec-47e4-a1a5-7be0ff84469a` is deployed only to development. `npm run smoke:dev -- --project-ref p58de816-dongo`: 14/14 passed after deployment. Notification readiness explicitly requires dispatch plus Resend for Web Beta and still reports APNs/FCM as disabled. |
 | Packaged CLI in this repository | Packed `@dongo/cli@0.1.0` (SHA-256 `6716a8acfa1b0dd6d700d8182eef58dfc7d070191b8bc590b108320473f78b00`), installed that tarball into a clean temporary prefix, and ran the exact binary from this repository. `doctor`, `session-start`, `overview`, and deterministic `sync` succeeded against the live project. A second `sync` made no changes. |
 | Repository metadata | Live `doctor` returned repository URL `https://github.com/renewisepunk/dongo`, project ref `p58de816-dongo`, and matching server installation context. |
 | CLI credential policy | Live CLI uses the owner-only dongo credential file and produces no Keychain/helper prompt. Tests cover file ownership, mode, symlink, repository escape, corruption, refresh rotation, and failed-revocation retention. |
@@ -28,11 +28,10 @@ This is a living evidence ledger for the development stack. It is not a producti
 | OAuth callback safety implementation | MCP consent uses `window.location.assign` for a top-level host-owned loopback redirect. dongo does not frame, fetch, probe, or proxy localhost. A live Chrome observation that the private-network/device-access prompt is absent remains required. |
 | Claude compatibility implementation | The deployed authorization Worker accepts only Claude Code's exact CIMD client and exact port-bearing localhost callback shape after verifying the official metadata's base callback. Auth tests cover the positive case and every rejected host/scheme/path/query/client variant. |
 | Lowercase product name | Static copy verifier now covers root source, JS/TS strings, prose, HTML, JSON/JSONC, SQL, SVG, and XML. Legacy CLI system labels were migrated idempotently in Convex and auth D1; user-created project names remain verbatim. |
-| Important Attention schedule | Live request `jn7126d0h40h05fb0cr3etdbtn8dfg8p` created delayed Resend outbox item `ks7dka8784aha3ps7ynv8hhj0n8de289`, due after the real one-hour escalation window. |
+| Important Attention delivery | Live request `jn7126d0h40h05fb0cr3etdbtn8dfg8p` created delayed outbox item `ks7dka8784aha3ps7ynv8hhj0n8de289`. It dispatched once at the real one-hour boundary with no error or retry. Convex recorded provider message `b266c07d-0769-41dd-8723-93fb1a967ec0`; the Wisepunk Resend account reported that same message delivered from `dongo <notifications@dev.dongo.so>` with subject `Attention still needed for DONGO-1`. |
 
 ## Still required
 
-- Observe the Important Attention outbox transition after its real due time and match it to the Resend provider message.
 - Repeat MCP consent in the user's Chrome session and verify that no private-network/device-access permission prompt appears and that the branded callback completion page is shown.
 - Complete Claude Code browser authorization, verify connected status, then call one read and one idempotent write tool with a distinct grant.
 - Complete a current generic MCP Inspector OAuth login, strict tool list, read call, idempotent write retry, refresh, and independent revocation evidence.
