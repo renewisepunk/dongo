@@ -142,6 +142,12 @@ type WorkDetailSnapshot = {
   actors: ActorDoc[];
 };
 
+type IntakeDetailSnapshot = {
+  intake: IntakeDoc;
+  attachments: AttachmentDoc[];
+  links: Array<{ workItemId: string }>;
+};
+
 export type ProjectOverview = {
   projectId: string;
   projectName: string;
@@ -212,6 +218,9 @@ const searchCommentsReference = makeFunctionReference<
 >("domains/search/index:commentsForHuman");
 const workDetailReference = makeFunctionReference<"query", { workItemId: string }, WorkDetailSnapshot>(
   "domains/work/index:getDetailForHuman",
+);
+const intakeDetailReference = makeFunctionReference<"query", { intakeId: string }, IntakeDetailSnapshot>(
+  "domains/intake/index:getForHuman",
 );
 const createIntakeReference = makeFunctionReference<
   "mutation",
@@ -444,6 +453,26 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
   };
 }
 
+export function mapIntakeDetail(detail: IntakeDetailSnapshot): Intake {
+  const first = detail.attachments[0];
+  return {
+    id: detail.intake._id,
+    submissionKey: detail.intake.clientRequestId,
+    text: detail.intake.text || first?.filename || "Attachment",
+    attachment: first?.filename,
+    attachmentCount: detail.attachments.length,
+    status:
+      detail.intake.status === "claimed"
+        ? "triaging"
+        : detail.intake.status === "processed" || detail.intake.status === "dismissed"
+          ? "processed"
+          : "waiting",
+    age: relativeTime(detail.intake.createdAt, Date.now()) || "now",
+    createdAt: detail.intake.createdAt,
+    linkedWorkIds: detail.links.map((link) => link.workItemId),
+  };
+}
+
 export class ProjectDataConnection {
   readonly #client: ConvexClient;
 
@@ -544,6 +573,40 @@ export class ProjectDataConnection {
       workDetailReference,
       { workItemId: workItem.id },
       (detail) => onUpdate(mapWorkDetail(workItem, detail)),
+      onError,
+    );
+  }
+
+  subscribeWorkById(
+    workItemId: string,
+    onUpdate: (work: WorkItem) => void,
+    onError: (error: Error) => void,
+  ): () => void {
+    return this.#client.onUpdate(
+      workDetailReference,
+      { workItemId },
+      (detail) => {
+        const state =
+          detail.work.state === "done" || detail.work.state === "cancelled"
+            ? "done"
+            : detail.work.state === "working"
+              ? "working"
+              : "ready";
+        onUpdate(mapWorkDetail(baseWork(detail.work, state, Date.now()), detail));
+      },
+      onError,
+    );
+  }
+
+  subscribeIntakeDetail(
+    intakeId: string,
+    onUpdate: (intake: Intake) => void,
+    onError: (error: Error) => void,
+  ): () => void {
+    return this.#client.onUpdate(
+      intakeDetailReference,
+      { intakeId },
+      (detail) => onUpdate(mapIntakeDetail(detail)),
       onError,
     );
   }

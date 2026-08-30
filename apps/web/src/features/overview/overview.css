@@ -320,6 +320,7 @@
   cursor: pointer;
   padding: 14px 15px;
   text-align: left;
+  text-decoration: none;
 }
 
 .work-row:hover {

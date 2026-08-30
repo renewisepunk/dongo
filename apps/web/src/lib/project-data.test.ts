@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { mapOverviewSnapshot, type OverviewSnapshot } from "./project-data";
+import {
+  mapIntakeDetail,
+  mapOverviewSnapshot,
+  type OverviewSnapshot,
+} from "./project-data";
 
 describe("live project overview mapping", () => {
   it("maps Convex state without inventing fixture activity", () => {
@@ -74,5 +78,28 @@ describe("live project overview mapping", () => {
       attachmentCount: 0,
     })]);
     expect(result.work.some((item) => item.identifier === "DON-143")).toBe(false);
+  });
+
+  it("maps a direct Intake detail with attachments and Work links", () => {
+    const mapped = mapIntakeDetail({
+      intake: {
+        _id: "intake-direct",
+        clientRequestId: "submission-direct",
+        text: "Investigate the deep link",
+        status: "processed",
+        createdAt: Date.now(),
+      },
+      attachments: [{ _id: "attachment-1", filename: "context.png" }],
+      links: [{ workItemId: "work-1" }],
+    });
+
+    expect(mapped).toMatchObject({
+      id: "intake-direct",
+      submissionKey: "submission-direct",
+      status: "processed",
+      attachment: "context.png",
+      attachmentCount: 1,
+      linkedWorkIds: ["work-1"],
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { useNavigate } from "@solidjs/router";
+import { useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
 import { humanSession } from "../../lib/auth-client";
@@ -48,6 +48,10 @@ function HighlightedSearchText(props: { text: string; query: string }) {
 
 export function Overview(props: OverviewProps) {
   const navigate = useNavigate();
+  const [routeParams, setRouteParams] = useSearchParams<{
+    work?: string;
+    intake?: string;
+  }>();
   const [work, setWork] = createSignal<WorkItem[]>([]);
   const [intakes, setIntakes] = createSignal<Intake[]>([]);
   const [optimisticIntakes, setOptimisticIntakes] = createSignal<Intake[]>([]);
@@ -57,6 +61,7 @@ export function Overview(props: OverviewProps) {
   const [selectedWorkId, setSelectedWorkId] = createSignal<string>();
   const [selectedWorkDetail, setSelectedWorkDetail] = createSignal<WorkItem>();
   const [selectedIntakeId, setSelectedIntakeId] = createSignal<string>();
+  const [selectedIntakeDetail, setSelectedIntakeDetail] = createSignal<Intake>();
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [query, setQuery] = createSignal("");
   const [searchResults, setSearchResults] = createSignal<ProjectSearchResult[]>([]);
@@ -66,6 +71,7 @@ export function Overview(props: OverviewProps) {
   const [searchRetry, setSearchRetry] = createSignal(0);
   const [toast, setToast] = createSignal("");
   const [loading, setLoading] = createSignal(true);
+  const [connectionReady, setConnectionReady] = createSignal(false);
   const [loadError, setLoadError] = createSignal("");
   const [submitting, setSubmitting] = createSignal(false);
   const [projectName, setProjectName] = createSignal(props.projectSlug);
@@ -73,6 +79,7 @@ export function Overview(props: OverviewProps) {
   let connection: ProjectDataConnection | undefined;
   let unsubscribeOverview: (() => void) | undefined;
   let unsubscribeWork: (() => void) | undefined;
+  let unsubscribeIntake: (() => void) | undefined;
   let fileInput: HTMLInputElement | undefined;
   const uploadControllers = new Map<string, AbortController>();
   const pendingUploads = new Map<string, Promise<void>>();
@@ -108,7 +115,9 @@ export function Overview(props: OverviewProps) {
       : work().find((item) => item.id === selectedWorkId());
   });
   const selectedIntake = createMemo(() =>
-    visibleIntakes().find((item) => item.id === selectedIntakeId()),
+    selectedIntakeDetail()?.id === selectedIntakeId()
+      ? selectedIntakeDetail()
+      : visibleIntakes().find((item) => item.id === selectedIntakeId()),
   );
 
   createEffect(() => {
@@ -147,38 +156,91 @@ export function Overview(props: OverviewProps) {
     window.setTimeout(() => setToast(""), 2200);
   };
 
-  const closeDetail = () => {
+  const closeDetail = (updateRoute = true) => {
     unsubscribeWork?.();
     unsubscribeWork = undefined;
+    unsubscribeIntake?.();
+    unsubscribeIntake = undefined;
     setSelectedWorkDetail(undefined);
+    setSelectedIntakeDetail(undefined);
     setSelectedWorkId(undefined);
     setSelectedIntakeId(undefined);
+    if (updateRoute) {
+      setRouteParams({ work: undefined, intake: undefined });
+    }
   };
 
-  const openWork = (id: string) => {
+  const openWork = (id: string, updateRoute = true) => {
     unsubscribeWork?.();
     unsubscribeWork = undefined;
+    unsubscribeIntake?.();
+    unsubscribeIntake = undefined;
     setSelectedWorkDetail(undefined);
+    setSelectedIntakeDetail(undefined);
     setSelectedIntakeId(undefined);
     setSelectedWorkId(id);
+    if (updateRoute) setRouteParams({ work: id, intake: undefined });
     const item = work().find((candidate) => candidate.id === id);
-    if (!item || !connection) return;
-    if (item.unseen && item.attention) {
+    if (!connection) return;
+    if (item?.unseen && item.attention) {
       void connection.markAttentionSeen(item.attention.id).catch(() => {
         announce("Could not mark the request as seen");
       });
     }
-    unsubscribeWork = connection.subscribeWorkDetail(
-      item,
-      setSelectedWorkDetail,
-      () => announce("Could not load the latest work detail"),
+    unsubscribeWork = item
+      ? connection.subscribeWorkDetail(
+          item,
+          setSelectedWorkDetail,
+          () => {
+            announce("Could not load the latest work detail");
+            closeDetail();
+          },
+        )
+      : connection.subscribeWorkById(
+          id,
+          setSelectedWorkDetail,
+          () => {
+            announce("This Work item is unavailable");
+            closeDetail();
+          },
+        );
+  };
+
+  const openIntake = (id: string, updateRoute = true) => {
+    unsubscribeWork?.();
+    unsubscribeWork = undefined;
+    unsubscribeIntake?.();
+    unsubscribeIntake = undefined;
+    setSelectedWorkDetail(undefined);
+    setSelectedIntakeDetail(undefined);
+    setSelectedWorkId(undefined);
+    setSelectedIntakeId(id);
+    if (updateRoute) setRouteParams({ work: undefined, intake: id });
+    if (!connection || id.startsWith("optimistic:")) return;
+    unsubscribeIntake = connection.subscribeIntakeDetail(
+      id,
+      setSelectedIntakeDetail,
+      () => {
+        announce("This Intake is unavailable");
+        closeDetail();
+      },
     );
   };
 
-  const openIntake = (id: string) => {
-    setSelectedWorkId(undefined);
-    setSelectedIntakeId(id);
-  };
+  createEffect(() => {
+    if (!connectionReady()) return;
+    const workId = routeParams.work?.trim();
+    const intakeId = routeParams.intake?.trim();
+    if (workId) {
+      if (selectedWorkId() !== workId) openWork(workId, false);
+      return;
+    }
+    if (intakeId) {
+      if (selectedIntakeId() !== intakeId) openIntake(intakeId, false);
+      return;
+    }
+    if (selectedWorkId() || selectedIntakeId()) closeDetail(false);
+  });
 
   const updateDraftAttachment = (
     localId: string,
@@ -423,6 +485,7 @@ export function Overview(props: OverviewProps) {
           return;
         }
         connection = connected;
+        setConnectionReady(true);
         setProjectName(connected.projectName);
         const name = session?.user.name || session?.user.email || "Me";
         const initials = name
@@ -473,6 +536,7 @@ export function Overview(props: OverviewProps) {
     uploadControllers.clear();
     unsubscribeOverview?.();
     unsubscribeWork?.();
+    unsubscribeIntake?.();
     void (async () => {
       await Promise.allSettled([...pendingUploads.values()]);
       if (connected) {

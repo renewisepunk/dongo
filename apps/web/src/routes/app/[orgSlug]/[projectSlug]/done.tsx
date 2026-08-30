@@ -63,11 +63,11 @@ export default function CompletedRoute() {
           <Show when={error()}><div class="empty-state" role="alert">{error()}</div></Show>
           <section class="work-section" style={{ "margin-top": "0" }}>
             <For each={completed()}>{(item) => (
-              <div class="work-row work-row--done">
+              <A class="work-row work-row--done" href={`/app/${params.orgSlug}/${params.projectSlug}?work=${encodeURIComponent(item.id)}`}>
                 <span class="mono" style={{ color: "var(--green)" }}>✓</span>
                 <span class="work-row__title work-row__title--done">{item.title}</span>
                 <span class="work-row__identifier mono">{item.identifier} · {item.completedAt}</span>
-              </div>
+              </A>
             )}</For>
             <Show when={!loading() && !error() && completed().length === 0}>
               <div class="empty-state">No work has been completed yet.</div>
