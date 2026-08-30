@@ -17,7 +17,7 @@ On POSIX systems:
 - credential file: forced to owner-only `0600`;
 - writes: create a new same-directory temporary file with exclusive creation, then atomically rename;
 - reads: reject symlinks, non-regular files, wrong ownership, and group/other permissions before parsing;
-- secrets never appear in argv, environment variables, repository files, browser storage, JSON output, logs, analytics, support bundles, or error text.
+- interactive credentials never appear in argv, inherited child environments, repository files, browser storage, JSON output, logs, analytics, support bundles, or error text. The separately documented `DONGO_TOKEN` CI/service override is the only intentional credential environment variable and remains externally managed.
 
 Normal use must not invoke Keychain, Secret Service, a password manager, an installer, Swift, PowerShell, or an external credential helper. It must never produce an OS credential prompt. The human journey remains browser approval followed by terminal `Connected`.
 
@@ -212,7 +212,7 @@ Normal output must not say:
 - copy an access or refresh token;
 - choose a weaker fallback after an unexplained failure.
 
-`dongo auth status` may report `local-user-file` and the config root, but never the credential filename, profile hash, or token. Documentation must plainly say that the file is not encrypted and is protected by the OS user boundary and strict permissions.
+`dongo auth status` may report `local-user-file`, the config root, and the non-secret repository marker, but never the credential filename or token. Documentation must plainly say that the file is not encrypted and is protected by the OS user boundary and strict permissions.
 
 If permissions, ownership, file type, schema, issuer, resource, or marker binding is wrong, Dongo fails closed with a stable remediation message. It never relaxes permissions, follows a symlink, changes backends, or starts a new device flow merely because one command could not read the credential.
 
