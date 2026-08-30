@@ -165,6 +165,25 @@ export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
         redirect: "manual",
         signal: controller.signal,
       });
+    } catch (error) {
+      const cause =
+        error && typeof error === "object" && "cause" in error
+          ? (error as { cause?: unknown }).cause
+          : undefined;
+      const causeCode =
+        cause && typeof cause === "object" && "code" in cause
+          ? (cause as { code?: unknown }).code
+          : undefined;
+      console.warn(JSON.stringify({
+        event: "cimd_metadata_fetch_failure",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        causeName: cause instanceof Error ? cause.name : undefined,
+        causeCode:
+          typeof causeCode === "string" && /^[A-Za-z0-9_.-]{1,80}$/.test(causeCode)
+            ? causeCode
+            : undefined,
+      }));
+      throw error;
     } finally {
       clearTimeout(timeout);
       request.signal.removeEventListener("abort", abort);
