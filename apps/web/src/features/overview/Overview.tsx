@@ -20,7 +20,7 @@ import type {
   ProjectSearchResult,
 } from "../../lib/project-data";
 import { searchHighlightSegments } from "../../lib/search-highlight";
-import type { Intake, WorkItem } from "./model";
+import type { AttachmentSummary, Intake, WorkItem } from "./model";
 import "./overview.css";
 
 type OverviewProps = {
@@ -614,6 +614,17 @@ export function Overview(props: OverviewProps) {
     }
   };
 
+  const downloadAttachment = async (attachmentId: string) => {
+    if (!connection) throw new Error("download_unavailable");
+    try {
+      await connection.downloadAttachment(attachmentId);
+      announce("Download started");
+    } catch {
+      announce("This attachment could not be downloaded");
+      throw new Error("download_failed");
+    }
+  };
+
   const loadMoreSearch = async () => {
     const cursor = searchCursor();
     const term = query().trim();
@@ -1164,6 +1175,8 @@ export function Overview(props: OverviewProps) {
           item={item()}
           mobileCloseLabel="←  back"
           onClose={closeDetail}
+          onOpenIntake={openIntake}
+          onDownload={downloadAttachment}
           onRespond={async (selectedOption, body) => {
             const attention = item().attention;
             if (!connection || !attention) return;
@@ -1200,7 +1213,7 @@ export function Overview(props: OverviewProps) {
       )}</Show>
 
       <Show when={selectedIntake()}>{(intake) => (
-        <IntakeDetail intake={intake()} work={work()} onClose={closeDetail} onOpenWork={openWork} />
+        <IntakeDetail intake={intake()} work={work()} onClose={closeDetail} onOpenWork={openWork} onDownload={downloadAttachment} />
       )}</Show>
 
       <Show when={searchOpen()}>
@@ -1290,6 +1303,8 @@ type WorkDetailProps = {
   item: WorkItem;
   mobileCloseLabel: string;
   onClose: () => void;
+  onOpenIntake: (id: string) => void;
+  onDownload: (attachmentId: string) => Promise<void>;
   onRespond: (selectedOption?: string, body?: string) => Promise<void>;
   onResolve: () => Promise<void>;
   onComment: (body: string) => Promise<void>;
@@ -1405,6 +1420,36 @@ function WorkDetail(props: WorkDetailProps) {
           <div class="detail-section__body">{props.item.goal}</div>
         </section>
 
+        <Show when={props.item.sources?.length}>
+          <section class="detail-section">
+            <div class="detail-section__label">source intake</div>
+            <div class="detail-attachment-list">
+              <For each={props.item.sources}>{(source) => (
+                <div class="detail-card source-intake-card">
+                  <button class="source-intake-card__open" type="button" onClick={() => props.onOpenIntake(source.id)}>
+                    <span>{source.text}</span>
+                    <span class="mono">You · {source.age} →</span>
+                  </button>
+                  <For each={source.attachments}>{(attachment) => (
+                    <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} />
+                  )}</For>
+                </div>
+              )}</For>
+            </div>
+          </section>
+        </Show>
+
+        <Show when={props.item.attachments?.length}>
+          <section class="detail-section">
+            <div class="detail-section__label">attachments</div>
+            <div class="detail-attachment-list">
+              <For each={props.item.attachments}>{(attachment) => (
+                <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} />
+              )}</For>
+            </div>
+          </section>
+        </Show>
+
         <Show when={props.item.latest}>
           <section class="detail-section">
             <div class="detail-section__label">latest from {props.item.agent ?? "agent"}</div>
@@ -1453,6 +1498,7 @@ type IntakeDetailProps = {
   work: WorkItem[];
   onClose: () => void;
   onOpenWork: (id: string) => void;
+  onDownload: (attachmentId: string) => Promise<void>;
 };
 
 function IntakeDetail(props: IntakeDetailProps) {
@@ -1478,10 +1524,11 @@ function IntakeDetail(props: IntakeDetailProps) {
           <div class="detail-section__label">submitted</div>
           <div class="detail-card">
             <div class="detail-section__body">You · {props.intake.age}</div>
-            <Show when={props.intake.attachment}>
-              <div class="attachment-row" style={{ "margin-top": "11px" }}>
-                <div class="attachment-row__icon">FILE</div>
-                <div class="attachment-row__copy"><div class="attachment-row__name">{props.intake.attachment}</div><div class="attachment-row__state">available to authorized agents</div></div>
+            <Show when={props.intake.attachments?.length}>
+              <div class="detail-attachment-list" style={{ "margin-top": "11px" }}>
+                <For each={props.intake.attachments}>{(attachment) => (
+                  <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} />
+                )}</For>
               </div>
             </Show>
           </div>
@@ -1498,5 +1545,49 @@ function IntakeDetail(props: IntakeDetailProps) {
         </Show>
       </div>
     </aside>
+  );
+}
+
+function AttachmentDownloadRow(props: {
+  attachment: AttachmentSummary;
+  onDownload: (attachmentId: string) => Promise<void>;
+}) {
+  const [pending, setPending] = createSignal(false);
+
+  const download = async () => {
+    if (pending()) return;
+    setPending(true);
+    try {
+      await props.onDownload(props.attachment.id);
+    } catch {
+      return;
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div class="attachment-row">
+      <div class="attachment-row__icon">
+        {props.attachment.mimeType.startsWith("image/")
+          ? "IMG"
+          : props.attachment.mimeType.startsWith("video/")
+            ? "VID"
+            : "FILE"}
+      </div>
+      <div class="attachment-row__copy">
+        <div class="attachment-row__name">{props.attachment.filename}</div>
+        <div class="attachment-row__state">{formatAttachmentBytes(props.attachment.byteSize)} · secure download</div>
+      </div>
+      <button
+        class="attachment-row__action"
+        type="button"
+        disabled={pending()}
+        aria-label={`Download ${props.attachment.filename}`}
+        onClick={() => void download()}
+      >
+        {pending() ? "Preparing…" : "Download"}
+      </button>
+    </div>
   );
 }

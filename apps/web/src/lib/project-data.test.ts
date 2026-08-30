@@ -4,6 +4,8 @@ import {
   mapAvailableProjects,
   mapIntakeDetail,
   mapOverviewSnapshot,
+  mapWorkDetail,
+  safeHumanAttachmentDownload,
   type OverviewSnapshot,
 } from "./project-data";
 
@@ -158,7 +160,12 @@ describe("live project overview mapping", () => {
         status: "processed",
         createdAt: Date.now(),
       },
-      attachments: [{ _id: "attachment-1", filename: "context.png" }],
+      attachments: [{
+        _id: "attachment-1",
+        filename: "context.png",
+        mimeType: "image/png",
+        byteSize: 4_096,
+      }],
       links: [{ workItemId: "work-1" }],
     });
 
@@ -168,8 +175,100 @@ describe("live project overview mapping", () => {
       status: "processed",
       attachment: "context.png",
       attachmentCount: 1,
+      attachments: [{
+        id: "attachment-1",
+        filename: "context.png",
+        mimeType: "image/png",
+        byteSize: 4_096,
+      }],
       linkedWorkIds: ["work-1"],
     });
+  });
+
+  it("maps Work sources and every authorized attachment", () => {
+    const now = Date.now();
+    const work = {
+      _id: "work-detail",
+      identifier: "DON-3",
+      title: "Trace the source Intake",
+      description: "Keep the submitted context visible.",
+      state: "ready" as const,
+      rank: 1_024,
+      revision: 1,
+      createdAt: now - 120_000,
+      updatedAt: now - 60_000,
+    };
+    const mapped = mapWorkDetail({
+      id: work._id,
+      identifier: work.identifier,
+      title: work.title,
+      state: "ready",
+      goal: work.description,
+      rank: work.rank,
+      revision: work.revision,
+    }, {
+      work,
+      runs: [],
+      comments: [],
+      artifacts: [],
+      attention: [],
+      actors: [],
+      attachments: [{
+        _id: "attachment-work",
+        filename: "result.log",
+        mimeType: "text/plain",
+        byteSize: 512,
+      }],
+      sourceIntakes: [{
+        intake: {
+          _id: "intake-source",
+          text: "The browser freezes after upload",
+          status: "processed",
+          createdAt: now - 90_000,
+        },
+        attachments: [{
+          _id: "attachment-source",
+          filename: "freeze.mov",
+          mimeType: "video/quicktime",
+          byteSize: 8_192,
+        }],
+      }],
+    });
+
+    expect(mapped.attachments).toEqual([expect.objectContaining({
+      id: "attachment-work",
+      filename: "result.log",
+    })]);
+    expect(mapped.sources).toEqual([expect.objectContaining({
+      id: "intake-source",
+      text: "The browser freezes after upload",
+      attachments: [expect.objectContaining({
+        id: "attachment-source",
+        filename: "freeze.mov",
+      })],
+    })]);
+  });
+
+  it("accepts only short-lived same-origin attachment capabilities", () => {
+    const now = 1_800_000_000_000;
+    const access = {
+      attachmentId: "attachment-1",
+      expiresAt: now + 300_000,
+      downloadUrl:
+        `https://dev.dongo.so/api/files/download/attachment-1?expires=${now + 300_000}&key=abcdefghijklmnop&signature=abcdefghijklmnopqrstuvwxyzABCDEF`,
+    };
+    expect(safeHumanAttachmentDownload(
+      access,
+      "attachment-1",
+      "https://dev.dongo.so",
+      now,
+    ).pathname).toBe("/api/files/download/attachment-1");
+    expect(() => safeHumanAttachmentDownload(
+      { ...access, downloadUrl: access.downloadUrl.replace("dev.dongo.so", "evil.example") },
+      "attachment-1",
+      "https://dev.dongo.so",
+      now,
+    )).toThrow("invalid download capability");
   });
 
   it("does not present an expired Intake claim as active triage", () => {

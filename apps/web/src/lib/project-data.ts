@@ -3,6 +3,7 @@ import { makeFunctionReference } from "convex/server";
 
 import type {
   Artifact,
+  AttachmentSummary,
   Attention,
   ConversationEntry,
   Intake,
@@ -191,6 +192,8 @@ type IntakeDoc = {
 type AttachmentDoc = {
   _id: string;
   filename: string;
+  mimeType: string;
+  byteSize: number;
 };
 
 type CommentDoc = {
@@ -230,6 +233,11 @@ type WorkDetailSnapshot = {
   artifacts: ArtifactDoc[];
   attention: AttentionDoc[];
   actors: ActorDoc[];
+  attachments: AttachmentDoc[];
+  sourceIntakes: Array<{
+    intake: IntakeDoc;
+    attachments: AttachmentDoc[];
+  }>;
 };
 
 type IntakeDetailSnapshot = {
@@ -430,6 +438,18 @@ const discardUploadReference = makeFunctionReference<
   { attachmentId: string },
   { attachmentId: string; deleted: true }
 >("domains/attachments/actions:discardUpload");
+const downloadAttachmentReference = makeFunctionReference<
+  "action",
+  { attachmentId: string },
+  {
+    attachmentId: string;
+    filename: string;
+    contentType: string;
+    byteSize: number;
+    downloadUrl: string;
+    expiresAt: number;
+  }
+>("domains/attachments/actions:downloadForHuman");
 
 function relativeTime(timestamp: number | undefined, now: number): string | undefined {
   if (timestamp === undefined) return undefined;
@@ -519,6 +539,51 @@ function artifactKind(type: ArtifactDoc["type"]): Artifact["kind"] {
   return "report";
 }
 
+function mapAttachment(attachment: AttachmentDoc): AttachmentSummary {
+  return {
+    id: attachment._id,
+    filename: attachment.filename,
+    mimeType: attachment.mimeType,
+    byteSize: attachment.byteSize,
+  };
+}
+
+export function safeHumanAttachmentDownload(
+  access: {
+    attachmentId: string;
+    downloadUrl: string;
+    expiresAt: number;
+  },
+  expectedAttachmentId: string,
+  browserOrigin: string,
+  now = Date.now(),
+): URL {
+  const url = new URL(access.downloadUrl);
+  const entries = [...url.searchParams.entries()];
+  if (
+    access.attachmentId !== expectedAttachmentId ||
+    url.protocol !== "https:" ||
+    url.origin !== browserOrigin ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.pathname !== `/api/files/download/${encodeURIComponent(expectedAttachmentId)}` ||
+    url.hash !== "" ||
+    entries.length !== 3 ||
+    !url.searchParams.has("expires") ||
+    !url.searchParams.has("key") ||
+    !url.searchParams.has("signature") ||
+    url.searchParams.get("expires") !== String(access.expiresAt) ||
+    !Number.isSafeInteger(access.expiresAt) ||
+    access.expiresAt <= now ||
+    access.expiresAt > now + 5 * 60 * 1_000 + 30_000 ||
+    !/^[A-Za-z0-9_-]{16,2048}$/u.test(url.searchParams.get("key") ?? "") ||
+    !/^[A-Za-z0-9_-]{32,128}$/u.test(url.searchParams.get("signature") ?? "")
+  ) {
+    throw new Error("Attachment service returned an invalid download capability");
+  }
+  return url;
+}
+
 export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkItem {
   const now = Date.now();
   const actors = new Map(detail.actors.map((actor) => [actor._id, actor]));
@@ -585,6 +650,13 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
         : base.elapsed,
     artifacts,
     conversation,
+    attachments: detail.attachments.map(mapAttachment),
+    sources: detail.sourceIntakes.map(({ intake, attachments }) => ({
+      id: intake._id,
+      text: intake.text || attachments[0]?.filename || "Attachment",
+      age: relativeTime(intake.createdAt, now) || "now",
+      attachments: attachments.map(mapAttachment),
+    })),
   };
 }
 
@@ -595,6 +667,7 @@ export function mapIntakeDetail(detail: IntakeDetailSnapshot): Intake {
     submissionKey: detail.intake.clientRequestId,
     text: detail.intake.text || first?.filename || "Attachment",
     attachment: first?.filename,
+    attachments: detail.attachments.map(mapAttachment),
     attachmentCount: detail.attachments.length,
     status:
       detail.intake.status === "claimed" &&
@@ -914,6 +987,26 @@ export class ProjectDataConnection {
 
   async discardAttachment(attachmentId: string): Promise<void> {
     await this.#client.action(discardUploadReference, { attachmentId });
+  }
+
+  async downloadAttachment(attachmentId: string): Promise<void> {
+    const access = await this.#client.action(downloadAttachmentReference, {
+      attachmentId,
+    });
+    const url = safeHumanAttachmentDownload(
+      access,
+      attachmentId,
+      window.location.origin,
+    );
+    const link = document.createElement("a");
+    link.href = url.toString();
+    link.download = access.filename;
+    link.rel = "noopener";
+    link.referrerPolicy = "no-referrer";
+    link.hidden = true;
+    document.body.append(link);
+    link.click();
+    link.remove();
   }
 
   async reorderWork(work: WorkItem, rank: number): Promise<void> {

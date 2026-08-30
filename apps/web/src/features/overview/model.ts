@@ -24,6 +24,20 @@ export type ConversationEntry = {
   human?: boolean;
 };
 
+export type AttachmentSummary = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  byteSize: number;
+};
+
+export type SourceIntakeSummary = {
+  id: string;
+  text: string;
+  age: string;
+  attachments: AttachmentSummary[];
+};
+
 export type WorkItem = {
   id: string;
   identifier: string;
@@ -37,6 +51,8 @@ export type WorkItem = {
   attention?: Attention;
   artifacts?: Artifact[];
   conversation?: ConversationEntry[];
+  attachments?: AttachmentSummary[];
+  sources?: SourceIntakeSummary[];
   completedAt?: string;
   unseen?: boolean;
   rank: number;
@@ -49,6 +65,7 @@ export type Intake = {
   submissionKey?: string;
   optimistic?: boolean;
   attachment?: string;
+  attachments?: AttachmentSummary[];
   status: "waiting" | "triaging" | "processed";
   age: string;
   attachmentCount?: number;
