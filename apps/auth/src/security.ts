@@ -144,8 +144,16 @@ function metadataResponseHeaders(source: Headers): Headers {
 
 export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const request = new Request(input, init);
-    const url = new URL(request.url);
+    const sourceRequest = input instanceof Request ? input : undefined;
+    const rawUrl = sourceRequest
+      ? sourceRequest.url
+      : input instanceof URL || typeof input === "string"
+        ? input.toString()
+        : input.url;
+    const url = new URL(rawUrl);
+    const method = (init?.method ?? sourceRequest?.method ?? "GET").toUpperCase();
+    const headers = new Headers(init?.headers ?? sourceRequest?.headers);
+    const callerSignal = init?.signal ?? sourceRequest?.signal;
     if (
       url.protocol !== "https:" ||
       url.username !== "" ||
@@ -155,7 +163,7 @@ export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
     ) {
       throw new Error("Client metadata URL is not allowed");
     }
-    if (request.method !== "GET" && request.method !== "HEAD") {
+    if (method !== "GET" && method !== "HEAD") {
       throw new Error("Client metadata fetch permits only GET and HEAD");
     }
     // Workerd accepts AbortController-backed fetch signals, but composite
@@ -165,8 +173,8 @@ export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
     const controller = new AbortController();
     const abort = () => controller.abort();
     const timeout = setTimeout(abort, METADATA_TIMEOUT_MS);
-    if (request.signal.aborted) abort();
-    else request.signal.addEventListener("abort", abort, { once: true });
+    if (callerSignal?.aborted) abort();
+    else callerSignal?.addEventListener("abort", abort, { once: true });
     let response: Response;
     try {
       // Do not reuse the caller-owned Request here. CIMD resolvers commonly
@@ -174,8 +182,8 @@ export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
       // that Request while overriding the redirect mode. Rebuild the bounded
       // GET/HEAD subrequest from the already-validated URL and headers.
       response = await fetch(url.toString(), {
-        method: request.method,
-        headers: request.headers,
+        method,
+        headers,
         redirect: "manual",
         signal: controller.signal,
       });
@@ -200,15 +208,32 @@ export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
       throw error;
     } finally {
       clearTimeout(timeout);
-      request.signal.removeEventListener("abort", abort);
+      callerSignal?.removeEventListener("abort", abort);
     }
     if (response.status >= 300 && response.status < 400) {
       throw new Error("Client metadata redirects are not allowed");
     }
-    const body =
-      request.method === "HEAD"
-        ? null
-        : ownedArrayBuffer(await readBoundedMetadataBody(response));
+    console.info(JSON.stringify({
+      event: "cimd_metadata_fetch_response",
+      status: response.status,
+      contentType: response.headers.get("content-type")?.slice(0, 100),
+      encoded: response.headers.has("content-encoding"),
+      declaredLength: response.headers.has("content-length"),
+      redirected: response.redirected,
+      bodyUsed: response.bodyUsed,
+    }));
+    let body: ArrayBuffer | null = null;
+    if (method !== "HEAD") {
+      try {
+        body = ownedArrayBuffer(await readBoundedMetadataBody(response));
+      } catch (error) {
+        console.warn(JSON.stringify({
+          event: "cimd_metadata_body_failure",
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        }));
+        throw error;
+      }
+    }
     // Worker fetches may decode the body while retaining upstream transport
     // headers. Return a small clean response so the CIMD resolver never sees a
     // stale content-encoding/content-length pair, cookies, or unrelated origin
