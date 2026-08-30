@@ -6,6 +6,7 @@ export interface ParsedArgs {
   subcommand?: string;
   positionals: string[];
   json: boolean;
+  version: boolean;
   noBrowser: boolean;
   allowFileSecretStore: boolean;
   apply: boolean;
@@ -46,6 +47,7 @@ const VALUE_OPTIONS = new Set([
 export function parseArgs(argv: string[]): ParsedArgs {
   const positional: string[] = [];
   let json = false;
+  let version = false;
   let noBrowser = false;
   let allowFileSecretStore = false;
   let apply = false;
@@ -60,6 +62,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     const argument = argv[index];
     if (argument === "--json") json = true;
     else if (argument === "--help" || argument === "-h") help = true;
+    else if (argument === "--version" || argument === "-V") version = true;
     else if (argument === "--no-browser") noBrowser = true;
     else if (argument === "--allow-file-secret-store") allowFileSecretStore = true;
     else if (argument === "--apply") apply = true;
@@ -87,10 +90,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   return {
-    command: help ? "help" : (positional[0] ?? "help"),
+    command: help ? "help" : version ? "version" : (positional[0] ?? "help"),
     subcommand: positional[1],
     positionals: positional,
     json,
+    version,
     noBrowser,
     allowFileSecretStore,
     apply,

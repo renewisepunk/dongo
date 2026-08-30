@@ -28,6 +28,10 @@ test("the packed CLI installs and runs without workspace dependencies", async ()
     assert.equal(result.ok, true);
     assert.equal(result.command, "help");
     assert.match(String(result.data?.usage), /Dongo CLI/);
+    const { stdout: versionStdout } = await execute(executable, ["--version"], {
+      cwd: temporaryDirectory,
+    });
+    assert.equal(versionStdout, "dongo 0.1.0\n");
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }

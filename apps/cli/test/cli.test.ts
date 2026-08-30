@@ -39,6 +39,22 @@ const fakeService = {
   integration: async (host: string, apply: boolean) => ({ host, applied: apply, files: [] }),
 };
 
+test("--version reports the package version in human and JSON modes", async () => {
+  const human = capture();
+  assert.equal(await runCli(["--version"], { output: human.output }), 0);
+  assert.equal(human.values().stdout, "dongo 0.1.0\n");
+  assert.equal(human.values().stderr, "");
+
+  const json = capture();
+  assert.equal(await runCli(["--version", "--json"], { output: json.output }), 0);
+  assert.deepEqual(JSON.parse(json.values().stdout), {
+    ok: true,
+    command: "version",
+    data: { version: "0.1.0" },
+  });
+  assert.equal(json.values().stderr, "");
+});
+
 test("--json writes exactly one machine-readable result to stdout", async () => {
   const stream = capture();
   const exitCode = await runCli(["overview", "--json"], {

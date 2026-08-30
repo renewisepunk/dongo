@@ -2,10 +2,15 @@ import { CliCoreError, CoreService } from "@dongo/cli-core";
 import type { CoreServiceOptions } from "@dongo/cli-core";
 import { DongoClient } from "@dongo/client";
 import type { OperationInput } from "@dongo/contracts";
+import { readFileSync } from "node:fs";
 import { parseArgs } from "./args.ts";
 import type { ParsedArgs } from "./args.ts";
 import type { OutputWriter } from "./output.ts";
 import { errorResult, processOutput, writeJson } from "./output.ts";
+
+const CLI_VERSION = (JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+) as { version: string }).version;
 
 export interface CliDependencies {
   output?: OutputWriter;
@@ -45,6 +50,7 @@ Usage:
   dongo integrate codex|claude|generic [--apply]
 
 Options:
+  --version, -V                Print the installed CLI version
   --json                       Write one stable JSON result to stdout
   --no-browser                 Print the complete approval link without opening it
   --allow-file-secret-store    Explicitly permit the user-scoped 0600 fallback
@@ -165,6 +171,14 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         allowOnlyValues(parsed, []);
         if (parsed.json) writeJson(output, { ok: true, command: "help", data: { usage: HELP } });
         else output.stdout(HELP);
+        return 0;
+      case "version":
+        allowOnlyValues(parsed, []);
+        if (parsed.json) {
+          writeJson(output, { ok: true, command: "version", data: { version: CLI_VERSION } });
+        } else {
+          output.stdout(`dongo ${CLI_VERSION}\n`);
+        }
         return 0;
       case "connect":
         allowOnlyValues(parsed, []);
