@@ -52,7 +52,9 @@ export function suggestedProjectName(repositoryRoot: string): string {
 export function normalizeRepositoryUrl(value: string): string | undefined {
   const raw = value.trim();
   if (!raw || raw.length > 2_048 || /[\r\n\0]/u.test(raw)) return undefined;
-  const scp = /^(?:[^@\s/:]+@)?([A-Za-z0-9.-]+):([^\s?#]+)$/u.exec(raw);
+  const scp = raw.includes("://")
+    ? null
+    : /^(?:[^@\s/:]+@)?([A-Za-z0-9.-]+):([^\s?#]+)$/u.exec(raw);
   if (scp) {
     const host = scp[1]!.toLowerCase();
     const repositoryPath = scp[2]!.replace(/^\/+|\/+$/gu, "");
