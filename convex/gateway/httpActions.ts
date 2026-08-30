@@ -156,19 +156,23 @@ const serviceCredentialResolveEnvelopeSchema = z
     input: z.object({ token: z.string().min(1).max(256) }).strict(),
   })
   .strict();
-const serviceCredentialResolveOutputSchema = z
-  .object({
-    installationId: identifier,
-    serviceCredentialId: identifier,
-    actorId: identifier,
-    organizationId: identifier,
-    projectId: identifier,
-    projectRef: z.string().min(3).max(128),
-    clientId: z.string().min(1).max(500),
-    resource: z.string().min(1).max(2_048),
-    scopes: z.array(z.string()).min(1).max(3),
-  })
-  .strict();
+const serviceCredentialResolveOutputSchema = z.discriminatedUnion("active", [
+  z.object({ active: z.literal(false) }).strict(),
+  z
+    .object({
+      active: z.literal(true),
+      installationId: identifier,
+      serviceCredentialId: identifier,
+      actorId: identifier,
+      organizationId: identifier,
+      projectId: identifier,
+      projectRef: z.string().min(3).max(128),
+      clientId: z.string().min(1).max(500),
+      resource: z.string().min(1).max(2_048),
+      scopes: z.array(z.string()).min(1).max(3),
+    })
+    .strict(),
+]);
 
 const attachmentFinalizeEnvelopeSchema = z
   .object({
@@ -1070,21 +1074,19 @@ export const resolveServiceCredential = httpAction(async (ctx, request) => {
           { tokenPrefix },
         )
       : null;
-    if (
-      !candidate ||
-      !(await verifyServiceCredentialToken(token, candidate.tokenHash))
-    ) {
-      throw new GatewayError(
-        "unauthorized",
-        "Service credential is not active",
-        401,
-      );
-    }
-    const result = await ctx.runMutation(
-      internal.domains.installations.index.activateServiceCredential,
-      { serviceCredentialId: candidate.serviceCredentialId },
+    const active = Boolean(
+      candidate &&
+        (await verifyServiceCredentialToken(token, candidate.tokenHash)),
     );
-    const output = serviceCredentialResolveOutputSchema.safeParse(result);
+    const result = active
+      ? await ctx.runMutation(
+          internal.domains.installations.index.activateServiceCredential,
+          { serviceCredentialId: candidate!.serviceCredentialId },
+        )
+      : null;
+    const output = serviceCredentialResolveOutputSchema.safeParse(
+      result ? { active: true, ...result } : { active: false },
+    );
     if (!output.success) {
       throw new GatewayError(
         "internal",

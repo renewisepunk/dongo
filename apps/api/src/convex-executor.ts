@@ -1,8 +1,8 @@
 import { agentScopes, operationRegistry } from "@dongo/contracts";
 import type {
   ApiOperationExecutor,
+  ApiInstallationPrincipal,
   DongoDomainError,
-  DongoInstallationPrincipal,
   DongoOperationName,
   JsonRecord,
   OperationExecutionResult,
@@ -125,17 +125,19 @@ function unavailable(message: string): OperationExecutionResult {
 }
 
 function validPrincipal(
-  principal: DongoInstallationPrincipal,
+  principal: ApiInstallationPrincipal,
   expectedResource: string,
 ): boolean {
   const identifiers = [
-    principal.grantId,
     principal.installationId,
     principal.installationActorId,
     principal.organizationId,
     principal.projectId,
   ];
+  const oauth = principal.grantId !== undefined;
+  const service = principal.serviceCredentialId !== undefined;
   if (
+    oauth === service ||
     principal.clientId.length === 0 ||
     principal.clientId.length > 500 ||
     identifiers.some((value) => value.length === 0 || value.length > 256) ||
@@ -148,7 +150,13 @@ function validPrincipal(
   ) {
     return false;
   }
+  const authorizationId = oauth
+    ? principal.grantId
+    : principal.serviceCredentialId;
+  if (!authorizationId || authorizationId.length > 256) return false;
+  if (service) return principal.issuer === undefined;
   try {
+    if (!principal.issuer) return false;
     const issuer = new URL(principal.issuer);
     return (
       issuer.protocol === "https:" &&
@@ -254,7 +262,7 @@ export class ApiConvexOperationExecutor implements ApiOperationExecutor {
     operation: DongoOperationName,
     input: JsonRecord,
     context: {
-      readonly principal: DongoInstallationPrincipal;
+      readonly principal: ApiInstallationPrincipal;
       readonly requestId: string;
       readonly signal: AbortSignal;
     },
@@ -296,8 +304,15 @@ export class ApiConvexOperationExecutor implements ApiOperationExecutor {
         projectId: context.principal.projectId,
         projectRef: context.principal.projectRef,
         clientId: context.principal.clientId,
-        grantId: context.principal.grantId,
-        issuer: context.principal.issuer,
+        ...(context.principal.grantId
+          ? { grantId: context.principal.grantId }
+          : {}),
+        ...(context.principal.serviceCredentialId
+          ? { serviceCredentialId: context.principal.serviceCredentialId }
+          : {}),
+        ...(context.principal.issuer
+          ? { issuer: context.principal.issuer }
+          : {}),
         resource: context.principal.resource,
         scopes: [...context.principal.scopes],
         ...(typeof externalSessionId === "string" && externalSessionId.length > 0

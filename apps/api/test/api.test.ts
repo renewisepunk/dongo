@@ -6,9 +6,15 @@ import {
   createUnavailableDongoApiWorker,
 } from "../src/gateway.ts";
 import { ApiIntrospectionTokenVerifier } from "../src/introspection.ts";
+import {
+  ApiRoutedTokenVerifier,
+  ApiServiceCredentialTokenVerifier,
+  isServiceCredentialBearer,
+} from "../src/service-credentials.ts";
 import { ApiBoundaryError } from "../src/types.ts";
 import type {
   ApiOperationExecutor,
+  ApiInstallationPrincipal,
   ApiRateLimiter,
   ApiTokenVerifier,
   DongoInstallationPrincipal,
@@ -20,6 +26,9 @@ const NOW_SECONDS = 2_000_000_000;
 const NOW_MS = NOW_SECONDS * 1_000;
 const SECRET = "0123456789abcdef0123456789abcdef";
 const NONCE = "00000000-0000-4000-8000-000000000001";
+const SERVICE_REQUEST_ID = "00000000-0000-4000-8000-000000000002";
+const SERVICE_PREFIX = "abcdefghijk";
+const SERVICE_TOKEN = `dng_svc_${SERVICE_PREFIX}_${"s".repeat(43)}`;
 
 function principal(
   scopes: readonly string[] = [
@@ -135,6 +144,111 @@ describe("generic API token introspection", () => {
   });
 });
 
+describe("service credential verification", () => {
+  it("routes the CI bearer through the signed Convex boundary and returns a service principal", async () => {
+    let observed: Request | undefined;
+    const verifier = new ApiServiceCredentialTokenVerifier({
+      convexSiteUrl: new URL("https://wandering-camel-662.convex.site/"),
+      resource: RESOURCE,
+      secret: SECRET,
+      nowMs: () => NOW_MS,
+      nonce: () => NONCE,
+      requestId: () => SERVICE_REQUEST_ID,
+      fetch: async function (this: void, input, init) {
+        expect(this).toBeUndefined();
+        observed = new Request(input, init);
+        return Response.json({
+          ok: true,
+          apiVersion: "v1",
+          requestId: SERVICE_REQUEST_ID,
+          data: {
+            active: true,
+            installationId: "service-installation-id",
+            serviceCredentialId: "service-credential-id",
+            actorId: "service-actor-id",
+            organizationId: "organization-id",
+            projectId: "project-id",
+            projectRef: "project_ref_123",
+            clientId: `dongo-service-v1:${SERVICE_PREFIX}`,
+            resource: RESOURCE.toString(),
+            scopes: ["dongo:work:read", "dongo:work:write"],
+          },
+        });
+      },
+    });
+    const result = await verifier.verifyAccessToken(
+      SERVICE_TOKEN,
+      new AbortController().signal,
+    );
+    expect(result).toEqual({
+      clientId: `dongo-service-v1:${SERVICE_PREFIX}`,
+      serviceCredentialId: "service-credential-id",
+      installationId: "service-installation-id",
+      installationActorId: "service-actor-id",
+      organizationId: "organization-id",
+      projectId: "project-id",
+      projectRef: "project_ref_123",
+      resource: RESOURCE.toString(),
+      scopes: ["dongo:work:read", "dongo:work:write"],
+    });
+    expect(observed).toBeDefined();
+    const request = observed!;
+    expect(request.url).toBe(
+      "https://wandering-camel-662.convex.site/internal/service-credentials/v1/resolve",
+    );
+    expect(request.headers.has("authorization")).toBe(false);
+    expect(request.headers.has("cookie")).toBe(false);
+    const body = await request.clone().text();
+    expect(JSON.parse(body)).toEqual({
+      version: 1,
+      requestId: SERVICE_REQUEST_ID,
+      input: { token: SERVICE_TOKEN },
+    });
+    const hash = createHash("sha256").update(body).digest("hex");
+    const expected = createHmac("sha256", SECRET)
+      .update(
+        `${NOW_MS}\n${NONCE}\nPOST\n/internal/service-credentials/v1/resolve\n${hash}`,
+      )
+      .digest("base64url");
+    expect(request.headers.get("x-dongo-signature")).toBe(expected);
+  });
+
+  it("rejects inactive or malformed CI credentials without falling back to OAuth", async () => {
+    let serviceCalls = 0;
+    const service = new ApiServiceCredentialTokenVerifier({
+      convexSiteUrl: new URL("https://wandering-camel-662.convex.site/"),
+      resource: RESOURCE,
+      secret: SECRET,
+      nowMs: () => NOW_MS,
+      nonce: () => NONCE,
+      requestId: () => SERVICE_REQUEST_ID,
+      fetch: async () => {
+        serviceCalls += 1;
+        return Response.json({
+          ok: true,
+          apiVersion: "v1",
+          requestId: SERVICE_REQUEST_ID,
+          data: { active: false },
+        });
+      },
+    });
+    const oauth = new FakeVerifier(principal());
+    const routed = new ApiRoutedTokenVerifier(oauth, service);
+    await expect(
+      routed.verifyAccessToken(SERVICE_TOKEN, new AbortController().signal),
+    ).rejects.toMatchObject({ code: "unauthorized", status: 401 });
+    await expect(
+      routed.verifyAccessToken(
+        "dng_svc_malformed",
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: "unauthorized", status: 401 });
+    expect(serviceCalls).toBe(1);
+    expect(oauth.calls).toEqual([]);
+    expect(isServiceCredentialBearer("opaque-oauth-token")).toBe(false);
+  });
+});
+
 describe("Convex signed executor", () => {
   it("signs the canonical gateway envelope for the generic resource without forwarding bearer data", async () => {
     let observed: Request | undefined;
@@ -198,6 +312,67 @@ describe("Convex signed executor", () => {
     expect(request.headers.get("x-dongo-signature")).toBe(expected);
   });
 
+  it("forwards only the service credential binding after bearer verification", async () => {
+    let context: Record<string, unknown> | undefined;
+    const executor = new ApiConvexOperationExecutor({
+      convexSiteUrl: new URL("https://wandering-camel-662.convex.site/"),
+      resource: RESOURCE,
+      secret: SECRET,
+      nowMs: () => NOW_MS,
+      nonce: () => NONCE,
+      fetch: async (input, init) => {
+        const request = new Request(input, init);
+        context = (JSON.parse(await request.text()) as { context: Record<string, unknown> }).context;
+        return Response.json({
+          ok: true,
+          apiVersion: "v1",
+          requestId: "service-operation-request",
+          data: {
+            project: {
+              id: "project-id",
+              publicRef: "project_ref_123",
+              organizationId: "organization-id",
+              organizationSlug: "organization",
+              name: "Project",
+              slug: "project",
+              identifierPrefix: "DON",
+              executionMode: "manual",
+            },
+            needsYou: [],
+            working: [],
+            ready: [],
+            inbox: [],
+            recentlyDone: [],
+            serverTime: NOW_MS,
+          },
+        });
+      },
+    });
+    const servicePrincipal: ApiInstallationPrincipal = {
+      clientId: `dongo-service-v1:${SERVICE_PREFIX}`,
+      serviceCredentialId: "service-credential-id",
+      installationId: "service-installation-id",
+      installationActorId: "service-actor-id",
+      organizationId: "organization-id",
+      projectId: "project-id",
+      projectRef: "project_ref_123",
+      resource: RESOURCE.toString(),
+      scopes: ["dongo:work:read"],
+    };
+    const result = await executor.execute("get_overview", {}, {
+      principal: servicePrincipal,
+      requestId: "service-operation-request",
+      signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    expect(context).toMatchObject({
+      serviceCredentialId: "service-credential-id",
+      installationId: "service-installation-id",
+    });
+    expect(context).not.toHaveProperty("grantId");
+    expect(context).not.toHaveProperty("issuer");
+  });
+
   it("rejects response contract drift and mismatched request IDs", async () => {
     for (const response of [
       {
@@ -250,9 +425,9 @@ describe("Convex signed executor", () => {
 class FakeVerifier implements ApiTokenVerifier {
   calls: string[] = [];
 
-  constructor(readonly value: DongoInstallationPrincipal) {}
+  constructor(readonly value: ApiInstallationPrincipal) {}
 
-  async verifyAccessToken(token: string): Promise<DongoInstallationPrincipal> {
+  async verifyAccessToken(token: string): Promise<ApiInstallationPrincipal> {
     this.calls.push(token);
     return this.value;
   }

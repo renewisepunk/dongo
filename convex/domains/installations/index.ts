@@ -383,6 +383,7 @@ export const persistServiceCredential = internalMutation({
       });
     }
     const now = Date.now();
+    const clientId = `dongo-service-v1:${args.tokenPrefix}`;
     const actorId = await ctx.db.insert("actors", {
       organizationId: principal.project!.organizationId,
       type: "agent",
@@ -396,7 +397,7 @@ export const persistServiceCredential = internalMutation({
       actorId,
       kind: "service",
       status: "active",
-      clientId: "dongo-service-v1",
+      clientId,
       label,
       resource,
       scopes,
@@ -419,7 +420,7 @@ export const persistServiceCredential = internalMutation({
       projectId: principal.project!._id,
       actorId,
       type: "installation.authorized",
-      data: { clientId: "dongo-service-v1", kind: "service", scopes },
+      data: { clientId, kind: "service", scopes },
       createdAt: now,
     });
     return { installationId, serviceCredentialId };
@@ -466,25 +467,22 @@ export const activateServiceCredential = internalMutation({
       project.organizationId !== credential.organizationId ||
       project.archivedAt !== undefined ||
       !installation.authorizedByProfileId
-    ) {
-      fail("unauthorized", "Service credential is not active");
-    }
-    const membership = await requireMembership(
-      ctx,
-      project.organizationId,
-      installation.authorizedByProfileId,
-    );
-    if (membership.role !== "owner") {
-      fail("unauthorized", "Service credential is not active");
-    }
+    ) return null;
+    const membership = await ctx.db
+      .query("memberships")
+      .withIndex("by_organization_profile", (query) =>
+        query
+          .eq("organizationId", project.organizationId)
+          .eq("profileId", installation.authorizedByProfileId!),
+      )
+      .unique();
+    if (!membership || membership.role !== "owner") return null;
     const actor = await ctx.db.get(installation.actorId);
     if (
       !actor ||
       actor.type !== "agent" ||
       actor.organizationId !== project.organizationId
-    ) {
-      fail("unauthorized", "Service credential is not active");
-    }
+    ) return null;
     const now = Date.now();
     await ctx.db.patch(credential._id, { lastUsedAt: now });
     await ctx.db.patch(installation._id, { lastUsedAt: now, updatedAt: now });

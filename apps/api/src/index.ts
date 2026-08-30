@@ -5,6 +5,10 @@ import {
   type DongoApiWorker,
 } from "./gateway.ts";
 import { ApiIntrospectionTokenVerifier } from "./introspection.ts";
+import {
+  ApiRoutedTokenVerifier,
+  ApiServiceCredentialTokenVerifier,
+} from "./service-credentials.ts";
 import type { ApiRateLimiter } from "./types.ts";
 
 interface DongoApiEnv extends Env {
@@ -71,20 +75,28 @@ function configuredWorker(env: DongoApiEnv): DongoApiWorker {
   return createDongoApiGateway({
     resource,
     allowedHostnames: commaSeparated(requiredBinding(env, "ALLOWED_HOSTNAMES")),
-    tokenVerifier: new ApiIntrospectionTokenVerifier({
-      introspectionUrl: new URL(
-        requiredBinding(env, "BETTER_AUTH_INTROSPECTION_URL"),
-      ),
-      issuer,
-      resource,
-      resourceClientId: requiredBinding(env, "BETTER_AUTH_RESOURCE_CLIENT_ID"),
-      resourceClientSecret: requiredBinding(
-        env,
-        "BETTER_AUTH_RESOURCE_CLIENT_SECRET",
-      ),
-      fetch: ((input: RequestInfo | URL, init?: RequestInit) =>
-        env.AUTH_SERVICE.fetch(new Request(input, init))) as typeof fetch,
-    }),
+    tokenVerifier: new ApiRoutedTokenVerifier(
+      new ApiIntrospectionTokenVerifier({
+        introspectionUrl: new URL(
+          requiredBinding(env, "BETTER_AUTH_INTROSPECTION_URL"),
+        ),
+        issuer,
+        resource,
+        resourceClientId: requiredBinding(env, "BETTER_AUTH_RESOURCE_CLIENT_ID"),
+        resourceClientSecret: requiredBinding(
+          env,
+          "BETTER_AUTH_RESOURCE_CLIENT_SECRET",
+        ),
+        fetch: ((input: RequestInfo | URL, init?: RequestInit) =>
+          env.AUTH_SERVICE.fetch(new Request(input, init))) as typeof fetch,
+      }),
+      new ApiServiceCredentialTokenVerifier({
+        convexSiteUrl: new URL(requiredBinding(env, "CONVEX_SITE_URL")),
+        resource,
+        secret: requiredBinding(env, "DONGO_INTERNAL_GATEWAY_SECRET"),
+        keyId: env.DONGO_INTERNAL_GATEWAY_KEY_ID ?? "v1",
+      }),
+    ),
     operationExecutor: new ApiConvexOperationExecutor({
       convexSiteUrl: new URL(requiredBinding(env, "CONVEX_SITE_URL")),
       resource,
@@ -120,4 +132,9 @@ export {
   createUnavailableDongoApiWorker,
 } from "./gateway.ts";
 export { ApiIntrospectionTokenVerifier } from "./introspection.ts";
+export {
+  ApiRoutedTokenVerifier,
+  ApiServiceCredentialTokenVerifier,
+  isServiceCredentialBearer,
+} from "./service-credentials.ts";
 export type * from "./types.ts";

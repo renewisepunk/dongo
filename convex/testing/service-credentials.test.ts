@@ -71,7 +71,7 @@ describe("service credentials", () => {
     expect(stored.serialized).not.toContain(created.token);
     expect(stored.installation).toMatchObject({
       kind: "service",
-      clientId: "dongo-service-v1",
+      clientId: `dongo-service-v1:${created.tokenPrefix}`,
       resource: "https://dev.dongo.so/api/agent/v1",
       status: "active",
     });
@@ -86,7 +86,11 @@ describe("service credentials", () => {
         input: { token: invalidToken },
       },
     );
-    expect(invalid.status).toBe(401);
+    expect(invalid.status).toBe(200);
+    await expect(invalid.json()).resolves.toMatchObject({
+      ok: true,
+      data: { active: false },
+    });
 
     const resolved = await callSigned(
       root,
@@ -112,10 +116,11 @@ describe("service credentials", () => {
       };
     };
     expect(resolution.data).toMatchObject({
+      active: true,
       installationId: created.installationId,
       serviceCredentialId: created.serviceCredentialId,
       projectId: project.projectId,
-      clientId: "dongo-service-v1",
+      clientId: `dongo-service-v1:${created.tokenPrefix}`,
     });
     const agent = await callSigned(root, "/internal/agent/v1/execute", {
       version: 1,
@@ -148,7 +153,11 @@ describe("service credentials", () => {
         input: { token: created.token },
       },
     );
-    expect(revoked.status).toBe(401);
+    expect(revoked.status).toBe(200);
+    await expect(revoked.json()).resolves.toMatchObject({
+      ok: true,
+      data: { active: false },
+    });
     const revokedAgent = await callSigned(root, "/internal/agent/v1/execute", {
       version: 1,
       operation: "get_overview",
@@ -239,7 +248,11 @@ describe("service credentials", () => {
         input: { token: created.token },
       },
     );
-    expect(demoted.status).toBe(401);
+    expect(demoted.status).toBe(200);
+    await expect(demoted.json()).resolves.toMatchObject({
+      ok: true,
+      data: { active: false },
+    });
   });
 });
 
@@ -290,4 +303,3 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 function base64Url(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64url");
 }
-

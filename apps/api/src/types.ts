@@ -14,11 +14,20 @@ export type {
   OperationExecutionResult,
 };
 
+export type ApiInstallationPrincipal = Omit<
+  DongoInstallationPrincipal,
+  "grantId" | "issuer"
+> & {
+  readonly grantId?: string;
+  readonly serviceCredentialId?: string;
+  readonly issuer?: string;
+};
+
 export interface ApiTokenVerifier {
   verifyAccessToken(
     token: string,
     signal: AbortSignal,
-  ): Promise<DongoInstallationPrincipal>;
+  ): Promise<ApiInstallationPrincipal>;
 }
 
 export interface ApiOperationExecutor {
@@ -26,7 +35,7 @@ export interface ApiOperationExecutor {
     operation: DongoOperationName,
     input: JsonRecord,
     context: {
-      readonly principal: DongoInstallationPrincipal;
+      readonly principal: ApiInstallationPrincipal;
       readonly requestId: string;
       readonly signal: AbortSignal;
     },

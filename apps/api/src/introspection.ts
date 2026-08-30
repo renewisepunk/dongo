@@ -1,7 +1,7 @@
 import { agentScopes } from "@dongo/contracts";
 import type {
+  ApiInstallationPrincipal,
   ApiTokenVerifier,
-  DongoInstallationPrincipal,
   JsonRecord,
 } from "./types.ts";
 import { ApiBoundaryError } from "./types.ts";
@@ -208,7 +208,7 @@ export class ApiIntrospectionTokenVerifier implements ApiTokenVerifier {
   async verifyAccessToken(
     token: string,
     signal: AbortSignal,
-  ): Promise<DongoInstallationPrincipal> {
+  ): Promise<ApiInstallationPrincipal> {
     if (
       token.length === 0 ||
       token.length > 16 * 1024 ||
