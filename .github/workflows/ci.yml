@@ -39,6 +39,9 @@ jobs:
       - name: Enforce development and production boundaries
         run: npm run verify:environment-boundaries
 
+      - name: Verify generated API contracts
+        run: npm run verify:contracts
+
       - name: Audit dependencies
         run: npm audit --audit-level=high
 

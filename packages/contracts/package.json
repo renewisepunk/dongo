@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./artifacts": "./src/artifacts.ts",
     "./domain": "./src/domain.ts",
     "./operations": "./src/operations.ts",
     "./schemas": "./src/schemas.ts"
@@ -14,7 +15,9 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
-    "test": "vitest run"
+    "generate:artifacts": "node ../../scripts/generate-contract-artifacts.mjs",
+    "test": "vitest run",
+    "verify:artifacts": "node ../../scripts/generate-contract-artifacts.mjs --check"
   },
   "devDependencies": {
     "typescript": "7.0.2",

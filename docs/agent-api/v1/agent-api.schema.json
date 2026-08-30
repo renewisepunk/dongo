@@ -1,0 +1,2236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dongo.so/schemas/agent-api-v1.json",
+  "title": "Dongo Agent API v1 schema catalog",
+  "description": "Transport-neutral input, output, envelope, and operation metadata generated from @dongo/contracts.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {},
+  "$defs": {
+    "DomainError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "unauthorized",
+            "forbidden",
+            "insufficient_scope",
+            "not_found",
+            "validation",
+            "revision_conflict",
+            "claim_conflict",
+            "lease_expired",
+            "idempotency_conflict",
+            "quota_exceeded",
+            "upload_incomplete",
+            "rate_limited",
+            "internal"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": true
+      }
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "error",
+        "requestId"
+      ],
+      "properties": {
+        "ok": {
+          "const": false
+        },
+        "error": {
+          "$ref": "#/$defs/DomainError"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "ActorSummary": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "human",
+            "installation",
+            "service"
+          ]
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "agentType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "machineLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "displayName"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectSummary": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "publicRef": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "organizationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organizationSlug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "identifierPrefix": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "repositoryUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "executionMode": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "autonomous"
+          ]
+        },
+        "archivedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "publicRef",
+        "organizationId",
+        "organizationSlug",
+        "name",
+        "slug",
+        "identifierPrefix",
+        "executionMode"
+      ],
+      "additionalProperties": false
+    },
+    "Attachment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "contentType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "byteSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "reserved",
+            "uploading",
+            "ready",
+            "failed",
+            "deleted"
+          ]
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "filename",
+        "contentType",
+        "byteSize",
+        "state",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "Intake": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "waiting",
+            "claimed",
+            "clarification_needed",
+            "processed",
+            "dismissed"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "createdBy": {
+          "$ref": "#/$defs/ActorSummary"
+        },
+        "claimedBy": {
+          "$ref": "#/$defs/ActorSummary"
+        },
+        "claimExpiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "attachmentIds": {
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "linkedWorkItemIds": {
+          "maxItems": 500,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "updatedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "text",
+        "state",
+        "revision",
+        "createdBy",
+        "attachmentIds",
+        "linkedWorkItemIds",
+        "createdAt",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "Artifact": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "commit",
+            "pull_request",
+            "deployment",
+            "preview",
+            "url",
+            "image",
+            "file",
+            "report"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "repositoryPath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "label",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "ConversationEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "actor": {
+          "$ref": "#/$defs/ActorSummary"
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "actor",
+        "body",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "Attention": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "review",
+            "decision",
+            "question",
+            "blocked"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "important": {
+          "type": "boolean"
+        },
+        "options": {
+          "minItems": 2,
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "requestedBy": {
+          "$ref": "#/$defs/ActorSummary"
+        },
+        "requestedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "resolvedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "resolvedBy": {
+          "$ref": "#/$defs/ActorSummary"
+        },
+        "resolutionCommentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "resolution": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "responded",
+                "resolved",
+                "cancelled"
+              ]
+            },
+            "body": {
+              "type": "string",
+              "maxLength": 100000
+            },
+            "selectedOption": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "workItemId",
+        "kind",
+        "title",
+        "body",
+        "important",
+        "requestedBy",
+        "requestedAt"
+      ],
+      "additionalProperties": false
+    },
+    "Run": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "installationActor": {
+          "$ref": "#/$defs/ActorSummary"
+        },
+        "externalSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "running",
+            "waiting_for_human",
+            "finished",
+            "failed",
+            "abandoned"
+          ]
+        },
+        "latestUpdate": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "startedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "activeUntil": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "finishedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "workItemId",
+        "installationActor",
+        "externalSessionId",
+        "state",
+        "startedAt"
+      ],
+      "additionalProperties": false
+    },
+    "WorkItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "sequence": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "goal": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "outcome": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "working",
+            "done",
+            "cancelled"
+          ]
+        },
+        "orderKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "revision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sourceIntakeIds": {
+          "maxItems": 500,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "activeRun": {
+          "$ref": "#/$defs/Run"
+        },
+        "openAttention": {
+          "$ref": "#/$defs/Attention"
+        },
+        "artifacts": {
+          "maxItems": 500,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          }
+        },
+        "conversation": {
+          "maxItems": 500,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConversationEntry"
+          }
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "updatedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "completedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "identifier",
+        "sequence",
+        "title",
+        "goal",
+        "state",
+        "orderKey",
+        "revision",
+        "sourceIntakeIds",
+        "artifacts",
+        "conversation",
+        "createdAt",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "Overview": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "$ref": "#/$defs/ProjectSummary"
+        },
+        "needsYou": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkItem"
+          }
+        },
+        "working": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkItem"
+          }
+        },
+        "ready": {
+          "maxItems": 500,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkItem"
+          }
+        },
+        "inbox": {
+          "maxItems": 500,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Intake"
+          }
+        },
+        "recentlyDone": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkItem"
+          }
+        },
+        "serverTime": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "project",
+        "needsYou",
+        "working",
+        "ready",
+        "inbox",
+        "recentlyDone",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
+    "SessionStart": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "$ref": "#/$defs/ProjectSummary"
+        },
+        "installation": {
+          "$ref": "#/$defs/ActorSummary"
+        },
+        "overview": {
+          "$ref": "#/$defs/Overview"
+        },
+        "newlyResolvedAttention": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Attention"
+          }
+        },
+        "instructions": {
+          "type": "object",
+          "properties": {
+            "executionMode": {
+              "type": "string",
+              "enum": [
+                "manual",
+                "autonomous"
+              ]
+            },
+            "maxNewWorkItemsPerSession": {
+              "type": "number",
+              "const": 1
+            },
+            "wakeUpSemantics": {
+              "type": "string",
+              "const": "next_pull"
+            }
+          },
+          "required": [
+            "executionMode",
+            "maxNewWorkItemsPerSession",
+            "wakeUpSemantics"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "project",
+        "installation",
+        "overview",
+        "newlyResolvedAttention",
+        "instructions"
+      ],
+      "additionalProperties": false
+    },
+    "SyncSnapshot": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "generatedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "project": {
+          "$ref": "#/$defs/ProjectSummary"
+        },
+        "workItems": {
+          "maxItems": 5000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkItem"
+          }
+        }
+      },
+      "required": [
+        "version",
+        "generatedAt",
+        "project",
+        "workItems"
+      ],
+      "additionalProperties": false
+    },
+    "AttachmentAccess": {
+      "type": "object",
+      "properties": {
+        "attachmentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "contentType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "byteSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "downloadUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "expiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "attachmentId",
+        "filename",
+        "contentType",
+        "byteSize",
+        "downloadUrl",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "SessionStartInput": {
+      "type": "object",
+      "properties": {
+        "externalSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "externalSessionId"
+      ],
+      "additionalProperties": false
+    },
+    "SessionStartSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/SessionStart"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "GetOverviewInput": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "GetOverviewSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/Overview"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "GetIntakeInput": {
+      "type": "object",
+      "properties": {
+        "intakeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "intakeId"
+      ],
+      "additionalProperties": false
+    },
+    "GetIntakeSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/Intake"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "ClaimIntakeInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "intakeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "leaseSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 3600
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "intakeId",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "ClaimIntakeSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/Intake"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "RenewIntakeClaimInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "intakeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "leaseSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 3600
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "intakeId",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "RenewIntakeClaimSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/Intake"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "CompleteTriageInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "intakeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "processed",
+            "dismissed"
+          ]
+        },
+        "explanation": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "linkedWorkItemIds": {
+          "maxItems": 500,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "intakeId",
+        "expectedRevision",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "CompleteTriageSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/Intake"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "CreateWorkInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "goal": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "sourceIntakeIds": {
+          "maxItems": 500,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "parentWorkItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "title",
+        "goal"
+      ],
+      "additionalProperties": false
+    },
+    "CreateWorkSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/WorkItem"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "GetWorkInput": {
+      "type": "object",
+      "properties": {
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "additionalProperties": false
+    },
+    "GetWorkSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/WorkItem"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "StartWorkInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "externalSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "leaseSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 3600
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "workItemId",
+        "expectedRevision",
+        "externalSessionId"
+      ],
+      "additionalProperties": false
+    },
+    "StartWorkSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/WorkItem"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "UpdateWorkInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "goal": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "latestUpdate": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "artifact": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "repositoryPath": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "kind",
+            "label"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "workItemId",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "UpdateWorkSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/WorkItem"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "RenewClaimInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "leaseSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 3600
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "workItemId",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "RenewClaimSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/WorkItem"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "FinishWorkInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "outcome": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "artifacts": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "repositoryPath": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              }
+            },
+            "required": [
+              "kind",
+              "label"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "workItemId",
+        "expectedRevision",
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
+    "FinishWorkSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/WorkItem"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "AddCommentInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 100000
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "workItemId",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "AddCommentSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/WorkItem"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "RequestAttentionInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "review",
+            "decision",
+            "question",
+            "blocked"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "important": {
+          "type": "boolean"
+        },
+        "options": {
+          "minItems": 2,
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "workItemId",
+        "expectedRevision",
+        "kind",
+        "title",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "RequestAttentionSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/Attention"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "GetAttentionInput": {
+      "type": "object",
+      "properties": {
+        "attentionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "attentionId"
+      ],
+      "additionalProperties": false
+    },
+    "GetAttentionSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/Attention"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "ResolveAttentionInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "attentionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "selectedOption": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "resolveWithoutResponse": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "attentionId"
+      ],
+      "additionalProperties": false
+    },
+    "ResolveAttentionSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/Attention"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "GetAttachmentInput": {
+      "type": "object",
+      "properties": {
+        "attachmentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "attachmentId"
+      ],
+      "additionalProperties": false
+    },
+    "GetAttachmentSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/AttachmentAccess"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "SyncSnapshotInput": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "SyncSnapshotSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/SyncSnapshot"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    }
+  },
+  "x-dongo-operations": {
+    "session_start": {
+      "method": "POST",
+      "path": "/api/agent/v1/session_start",
+      "scopes": [
+        "dongo:work:read"
+      ],
+      "readOnly": true,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/SessionStartInput"
+      },
+      "output": {
+        "$ref": "#/$defs/SessionStart"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/SessionStartSuccessResponse"
+      }
+    },
+    "get_overview": {
+      "method": "GET",
+      "path": "/api/agent/v1/get_overview",
+      "scopes": [
+        "dongo:work:read"
+      ],
+      "readOnly": true,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/GetOverviewInput"
+      },
+      "output": {
+        "$ref": "#/$defs/Overview"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/GetOverviewSuccessResponse"
+      }
+    },
+    "get_intake": {
+      "method": "GET",
+      "path": "/api/agent/v1/get_intake",
+      "scopes": [
+        "dongo:work:read"
+      ],
+      "readOnly": true,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/GetIntakeInput"
+      },
+      "output": {
+        "$ref": "#/$defs/Intake"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/GetIntakeSuccessResponse"
+      }
+    },
+    "claim_intake": {
+      "method": "POST",
+      "path": "/api/agent/v1/claim_intake",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/ClaimIntakeInput"
+      },
+      "output": {
+        "$ref": "#/$defs/Intake"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/ClaimIntakeSuccessResponse"
+      }
+    },
+    "renew_intake_claim": {
+      "method": "POST",
+      "path": "/api/agent/v1/renew_intake_claim",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/RenewIntakeClaimInput"
+      },
+      "output": {
+        "$ref": "#/$defs/Intake"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/RenewIntakeClaimSuccessResponse"
+      }
+    },
+    "complete_triage": {
+      "method": "POST",
+      "path": "/api/agent/v1/complete_triage",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/CompleteTriageInput"
+      },
+      "output": {
+        "$ref": "#/$defs/Intake"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/CompleteTriageSuccessResponse"
+      }
+    },
+    "create_work": {
+      "method": "POST",
+      "path": "/api/agent/v1/create_work",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/CreateWorkInput"
+      },
+      "output": {
+        "$ref": "#/$defs/WorkItem"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/CreateWorkSuccessResponse"
+      }
+    },
+    "get_work": {
+      "method": "GET",
+      "path": "/api/agent/v1/get_work",
+      "scopes": [
+        "dongo:work:read"
+      ],
+      "readOnly": true,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/GetWorkInput"
+      },
+      "output": {
+        "$ref": "#/$defs/WorkItem"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/GetWorkSuccessResponse"
+      }
+    },
+    "start_work": {
+      "method": "POST",
+      "path": "/api/agent/v1/start_work",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/StartWorkInput"
+      },
+      "output": {
+        "$ref": "#/$defs/WorkItem"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/StartWorkSuccessResponse"
+      }
+    },
+    "update_work": {
+      "method": "POST",
+      "path": "/api/agent/v1/update_work",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/UpdateWorkInput"
+      },
+      "output": {
+        "$ref": "#/$defs/WorkItem"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/UpdateWorkSuccessResponse"
+      }
+    },
+    "renew_claim": {
+      "method": "POST",
+      "path": "/api/agent/v1/renew_claim",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/RenewClaimInput"
+      },
+      "output": {
+        "$ref": "#/$defs/WorkItem"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/RenewClaimSuccessResponse"
+      }
+    },
+    "finish_work": {
+      "method": "POST",
+      "path": "/api/agent/v1/finish_work",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/FinishWorkInput"
+      },
+      "output": {
+        "$ref": "#/$defs/WorkItem"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/FinishWorkSuccessResponse"
+      }
+    },
+    "add_comment": {
+      "method": "POST",
+      "path": "/api/agent/v1/add_comment",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/AddCommentInput"
+      },
+      "output": {
+        "$ref": "#/$defs/WorkItem"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/AddCommentSuccessResponse"
+      }
+    },
+    "request_attention": {
+      "method": "POST",
+      "path": "/api/agent/v1/request_attention",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/RequestAttentionInput"
+      },
+      "output": {
+        "$ref": "#/$defs/Attention"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/RequestAttentionSuccessResponse"
+      }
+    },
+    "get_attention": {
+      "method": "GET",
+      "path": "/api/agent/v1/get_attention",
+      "scopes": [
+        "dongo:work:read"
+      ],
+      "readOnly": true,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/GetAttentionInput"
+      },
+      "output": {
+        "$ref": "#/$defs/Attention"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/GetAttentionSuccessResponse"
+      }
+    },
+    "resolve_attention": {
+      "method": "POST",
+      "path": "/api/agent/v1/resolve_attention",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/ResolveAttentionInput"
+      },
+      "output": {
+        "$ref": "#/$defs/Attention"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/ResolveAttentionSuccessResponse"
+      }
+    },
+    "get_attachment": {
+      "method": "GET",
+      "path": "/api/agent/v1/get_attachment",
+      "scopes": [
+        "dongo:work:read",
+        "dongo:attachments:read"
+      ],
+      "readOnly": true,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": true,
+      "input": {
+        "$ref": "#/$defs/GetAttachmentInput"
+      },
+      "output": {
+        "$ref": "#/$defs/AttachmentAccess"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/GetAttachmentSuccessResponse"
+      }
+    },
+    "sync_snapshot": {
+      "method": "GET",
+      "path": "/api/agent/v1/sync_snapshot",
+      "scopes": [
+        "dongo:work:read"
+      ],
+      "readOnly": true,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/SyncSnapshotInput"
+      },
+      "output": {
+        "$ref": "#/$defs/SyncSnapshot"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/SyncSnapshotSuccessResponse"
+      }
+    }
+  }
+}

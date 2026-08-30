@@ -1,0 +1,2842 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Dongo Agent API",
+    "version": "1.0.0",
+    "description": "The versioned HTTPS operation contract shared by the Dongo CLI and MCP gateway."
+  },
+  "servers": [
+    {
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "dev.dongo.so",
+          "description": "Use the Dongo environment host assigned to the installation."
+        }
+      }
+    }
+  ],
+  "paths": {
+    "/api/agent/v1/session_start": {
+      "post": {
+        "operationId": "session_start",
+        "summary": "Dongo session start",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionStartSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:read"
+        ],
+        "x-dongo-read-only": true,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionStartInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/get_overview": {
+      "get": {
+        "operationId": "get_overview",
+        "summary": "Dongo get overview",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetOverviewSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:read"
+        ],
+        "x-dongo-read-only": true,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "parameters": []
+      }
+    },
+    "/api/agent/v1/get_intake": {
+      "get": {
+        "operationId": "get_intake",
+        "summary": "Dongo get intake",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetIntakeSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:read"
+        ],
+        "x-dongo-read-only": true,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "parameters": [
+          {
+            "name": "intakeId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        ]
+      }
+    },
+    "/api/agent/v1/claim_intake": {
+      "post": {
+        "operationId": "claim_intake",
+        "summary": "Dongo claim intake",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimIntakeSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimIntakeInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/renew_intake_claim": {
+      "post": {
+        "operationId": "renew_intake_claim",
+        "summary": "Dongo renew intake claim",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenewIntakeClaimSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenewIntakeClaimInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/complete_triage": {
+      "post": {
+        "operationId": "complete_triage",
+        "summary": "Dongo complete triage",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteTriageSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteTriageInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/create_work": {
+      "post": {
+        "operationId": "create_work",
+        "summary": "Dongo create work",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateWorkSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/get_work": {
+      "get": {
+        "operationId": "get_work",
+        "summary": "Dongo get work",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetWorkSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:read"
+        ],
+        "x-dongo-read-only": true,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          {
+            "name": "identifier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        ]
+      }
+    },
+    "/api/agent/v1/start_work": {
+      "post": {
+        "operationId": "start_work",
+        "summary": "Dongo start work",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartWorkSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartWorkInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/update_work": {
+      "post": {
+        "operationId": "update_work",
+        "summary": "Dongo update work",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateWorkSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/renew_claim": {
+      "post": {
+        "operationId": "renew_claim",
+        "summary": "Dongo renew claim",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenewClaimSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenewClaimInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/finish_work": {
+      "post": {
+        "operationId": "finish_work",
+        "summary": "Dongo finish work",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinishWorkSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinishWorkInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/add_comment": {
+      "post": {
+        "operationId": "add_comment",
+        "summary": "Dongo add comment",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddCommentSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddCommentInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/request_attention": {
+      "post": {
+        "operationId": "request_attention",
+        "summary": "Dongo request attention",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestAttentionSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestAttentionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/get_attention": {
+      "get": {
+        "operationId": "get_attention",
+        "summary": "Dongo get attention",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAttentionSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:read"
+        ],
+        "x-dongo-read-only": true,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "parameters": [
+          {
+            "name": "attentionId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        ]
+      }
+    },
+    "/api/agent/v1/resolve_attention": {
+      "post": {
+        "operationId": "resolve_attention",
+        "summary": "Dongo resolve attention",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveAttentionSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveAttentionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/get_attachment": {
+      "get": {
+        "operationId": "get_attachment",
+        "summary": "Dongo get attachment",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:read",
+              "dongo:attachments:read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAttachmentSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:read",
+          "dongo:attachments:read"
+        ],
+        "x-dongo-read-only": true,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": true,
+        "parameters": [
+          {
+            "name": "attachmentId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        ]
+      }
+    },
+    "/api/agent/v1/sync_snapshot": {
+      "get": {
+        "operationId": "sync_snapshot",
+        "summary": "Dongo sync snapshot",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncSnapshotSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:read"
+        ],
+        "x-dongo-read-only": true,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "parameters": []
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "oauth2",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "/api/auth/oauth2/authorize",
+            "tokenUrl": "/api/auth/oauth2/token",
+            "scopes": {
+              "dongo:work:read": "Read project work, Intake, and Attention state.",
+              "dongo:work:write": "Claim, update, and complete project work.",
+              "dongo:attachments:read": "Request short-lived attachment downloads.",
+              "offline_access": "Refresh an authorized installation session."
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "DomainError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "unauthorized",
+              "forbidden",
+              "insufficient_scope",
+              "not_found",
+              "validation",
+              "revision_conflict",
+              "claim_conflict",
+              "lease_expired",
+              "idempotency_conflict",
+              "quota_exceeded",
+              "upload_incomplete",
+              "rate_limited",
+              "internal"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "details": true
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "error",
+          "requestId"
+        ],
+        "properties": {
+          "ok": {
+            "const": false
+          },
+          "error": {
+            "$ref": "#/components/schemas/DomainError"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "ActorSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "human",
+              "installation",
+              "service"
+            ]
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "agentType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "machineLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "displayName"
+        ],
+        "additionalProperties": false
+      },
+      "ProjectSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "publicRef": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 128
+          },
+          "organizationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "organizationSlug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "identifierPrefix": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "repositoryUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "executionMode": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "autonomous"
+            ]
+          },
+          "archivedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "publicRef",
+          "organizationId",
+          "organizationSlug",
+          "name",
+          "slug",
+          "identifierPrefix",
+          "executionMode"
+        ],
+        "additionalProperties": false
+      },
+      "Attachment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "filename": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "contentType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "byteSize": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "reserved",
+              "uploading",
+              "ready",
+              "failed",
+              "deleted"
+            ]
+          },
+          "createdAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "contentType",
+          "byteSize",
+          "state",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "Intake": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "projectId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "claimed",
+              "clarification_needed",
+              "processed",
+              "dismissed"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "createdBy": {
+            "$ref": "#/components/schemas/ActorSummary"
+          },
+          "claimedBy": {
+            "$ref": "#/components/schemas/ActorSummary"
+          },
+          "claimExpiresAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "attachmentIds": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "linkedWorkItemIds": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "createdAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "updatedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "text",
+          "state",
+          "revision",
+          "createdBy",
+          "attachmentIds",
+          "linkedWorkItemIds",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Artifact": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "commit",
+              "pull_request",
+              "deployment",
+              "preview",
+              "url",
+              "image",
+              "file",
+              "report"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "repositoryPath": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "createdAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ConversationEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "actor": {
+            "$ref": "#/components/schemas/ActorSummary"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "createdAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "actor",
+          "body",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "Attention": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "workItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "review",
+              "decision",
+              "question",
+              "blocked"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "important": {
+            "type": "boolean"
+          },
+          "options": {
+            "minItems": 2,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          },
+          "requestedBy": {
+            "$ref": "#/components/schemas/ActorSummary"
+          },
+          "requestedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "resolvedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "resolvedBy": {
+            "$ref": "#/components/schemas/ActorSummary"
+          },
+          "resolutionCommentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "resolution": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "responded",
+                  "resolved",
+                  "cancelled"
+                ]
+              },
+              "body": {
+                "type": "string",
+                "maxLength": 100000
+              },
+              "selectedOption": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "workItemId",
+          "kind",
+          "title",
+          "body",
+          "important",
+          "requestedBy",
+          "requestedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Run": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "workItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "installationActor": {
+            "$ref": "#/components/schemas/ActorSummary"
+          },
+          "externalSessionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "running",
+              "waiting_for_human",
+              "finished",
+              "failed",
+              "abandoned"
+            ]
+          },
+          "latestUpdate": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "startedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "activeUntil": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "finishedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "workItemId",
+          "installationActor",
+          "externalSessionId",
+          "state",
+          "startedAt"
+        ],
+        "additionalProperties": false
+      },
+      "WorkItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "projectId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "identifier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "sequence": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "goal": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "outcome": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "working",
+              "done",
+              "cancelled"
+            ]
+          },
+          "orderKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "sourceIntakeIds": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "activeRun": {
+            "$ref": "#/components/schemas/Run"
+          },
+          "openAttention": {
+            "$ref": "#/components/schemas/Attention"
+          },
+          "artifacts": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Artifact"
+            }
+          },
+          "conversation": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationEntry"
+            }
+          },
+          "createdAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "updatedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "completedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "identifier",
+          "sequence",
+          "title",
+          "goal",
+          "state",
+          "orderKey",
+          "revision",
+          "sourceIntakeIds",
+          "artifacts",
+          "conversation",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Overview": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/ProjectSummary"
+          },
+          "needsYou": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkItem"
+            }
+          },
+          "working": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkItem"
+            }
+          },
+          "ready": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkItem"
+            }
+          },
+          "inbox": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Intake"
+            }
+          },
+          "recentlyDone": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkItem"
+            }
+          },
+          "serverTime": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "project",
+          "needsYou",
+          "working",
+          "ready",
+          "inbox",
+          "recentlyDone",
+          "serverTime"
+        ],
+        "additionalProperties": false
+      },
+      "SessionStart": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/ProjectSummary"
+          },
+          "installation": {
+            "$ref": "#/components/schemas/ActorSummary"
+          },
+          "overview": {
+            "$ref": "#/components/schemas/Overview"
+          },
+          "newlyResolvedAttention": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attention"
+            }
+          },
+          "instructions": {
+            "type": "object",
+            "properties": {
+              "executionMode": {
+                "type": "string",
+                "enum": [
+                  "manual",
+                  "autonomous"
+                ]
+              },
+              "maxNewWorkItemsPerSession": {
+                "type": "number",
+                "const": 1
+              },
+              "wakeUpSemantics": {
+                "type": "string",
+                "const": "next_pull"
+              }
+            },
+            "required": [
+              "executionMode",
+              "maxNewWorkItemsPerSession",
+              "wakeUpSemantics"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "project",
+          "installation",
+          "overview",
+          "newlyResolvedAttention",
+          "instructions"
+        ],
+        "additionalProperties": false
+      },
+      "SyncSnapshot": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "const": 1
+          },
+          "generatedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "project": {
+            "$ref": "#/components/schemas/ProjectSummary"
+          },
+          "workItems": {
+            "maxItems": 5000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkItem"
+            }
+          }
+        },
+        "required": [
+          "version",
+          "generatedAt",
+          "project",
+          "workItems"
+        ],
+        "additionalProperties": false
+      },
+      "AttachmentAccess": {
+        "type": "object",
+        "properties": {
+          "attachmentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "filename": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "contentType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "byteSize": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "downloadUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "attachmentId",
+          "filename",
+          "contentType",
+          "byteSize",
+          "downloadUrl",
+          "expiresAt"
+        ],
+        "additionalProperties": false
+      },
+      "SessionStartInput": {
+        "type": "object",
+        "properties": {
+          "externalSessionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "externalSessionId"
+        ],
+        "additionalProperties": false
+      },
+      "SessionStartSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/SessionStart"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "GetOverviewInput": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "GetOverviewSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Overview"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "GetIntakeInput": {
+        "type": "object",
+        "properties": {
+          "intakeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "intakeId"
+        ],
+        "additionalProperties": false
+      },
+      "GetIntakeSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Intake"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "ClaimIntakeInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "intakeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "leaseSeconds": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 3600
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "intakeId",
+          "expectedRevision"
+        ],
+        "additionalProperties": false
+      },
+      "ClaimIntakeSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Intake"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "RenewIntakeClaimInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "intakeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "leaseSeconds": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 3600
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "intakeId",
+          "expectedRevision"
+        ],
+        "additionalProperties": false
+      },
+      "RenewIntakeClaimSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Intake"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "CompleteTriageInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "intakeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "processed",
+              "dismissed"
+            ]
+          },
+          "explanation": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "linkedWorkItemIds": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "intakeId",
+          "expectedRevision",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "CompleteTriageSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Intake"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "CreateWorkInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "goal": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "sourceIntakeIds": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "parentWorkItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "title",
+          "goal"
+        ],
+        "additionalProperties": false
+      },
+      "CreateWorkSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkItem"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "GetWorkInput": {
+        "type": "object",
+        "properties": {
+          "workItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "identifier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "additionalProperties": false
+      },
+      "GetWorkSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkItem"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "StartWorkInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "workItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "externalSessionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "leaseSeconds": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 3600
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "workItemId",
+          "expectedRevision",
+          "externalSessionId"
+        ],
+        "additionalProperties": false
+      },
+      "StartWorkSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkItem"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "UpdateWorkInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "workItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "goal": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "latestUpdate": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "artifact": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "repositoryPath": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              }
+            },
+            "required": [
+              "kind",
+              "label"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "workItemId",
+          "expectedRevision"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateWorkSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkItem"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "RenewClaimInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "workItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "leaseSeconds": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 3600
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "workItemId",
+          "expectedRevision"
+        ],
+        "additionalProperties": false
+      },
+      "RenewClaimSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkItem"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "FinishWorkInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "workItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "outcome": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "artifacts": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "repositoryPath": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                }
+              },
+              "required": [
+                "kind",
+                "label"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "workItemId",
+          "expectedRevision",
+          "outcome"
+        ],
+        "additionalProperties": false
+      },
+      "FinishWorkSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkItem"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "AddCommentInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "workItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 100000
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "workItemId",
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "AddCommentSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkItem"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "RequestAttentionInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "workItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "review",
+              "decision",
+              "question",
+              "blocked"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "important": {
+            "type": "boolean"
+          },
+          "options": {
+            "minItems": 2,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "workItemId",
+          "expectedRevision",
+          "kind",
+          "title",
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "RequestAttentionSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Attention"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "GetAttentionInput": {
+        "type": "object",
+        "properties": {
+          "attentionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "attentionId"
+        ],
+        "additionalProperties": false
+      },
+      "GetAttentionSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Attention"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "ResolveAttentionInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "attentionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "selectedOption": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "resolveWithoutResponse": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "attentionId"
+        ],
+        "additionalProperties": false
+      },
+      "ResolveAttentionSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Attention"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "GetAttachmentInput": {
+        "type": "object",
+        "properties": {
+          "attachmentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "attachmentId"
+        ],
+        "additionalProperties": false
+      },
+      "GetAttachmentSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/AttachmentAccess"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "SyncSnapshotInput": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "SyncSnapshotSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/SyncSnapshot"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      }
+    }
+  }
+}
