@@ -219,6 +219,60 @@ export const abandon = mutation({
   },
 });
 
+export const discard = mutation({
+  args: { attachmentId: v.id("attachments") },
+  handler: async (ctx, args) => {
+    const attachment = await ctx.db.get(args.attachmentId);
+    if (!attachment) fail("not_found", "Attachment not found");
+    const principal = await requireHumanProject(ctx, attachment.projectId);
+    if (attachment.createdByProfileId !== principal.profile._id) {
+      fail("not_found", "Attachment not found");
+    }
+    if (attachment.intakeId !== undefined || attachment.workItemId !== undefined) {
+      fail("invalid_transition", "Attached media cannot be discarded");
+    }
+    if (attachment.status === "deleted") {
+      return {
+        attachmentId: attachment._id,
+        storageKey: attachment.storageKey,
+        deleted: true as const,
+      };
+    }
+    if (attachment.status !== "pending" && attachment.status !== "available") {
+      fail("invalid_transition", "Attachment cannot be discarded");
+    }
+    const ledger = await ctx.db
+      .query("storageLedgers")
+      .withIndex("by_organization", (q) =>
+        q.eq("organizationId", attachment.organizationId),
+      )
+      .unique();
+    const now = Date.now();
+    if (ledger) {
+      await ctx.db.patch(ledger._id, {
+        reservedBytes:
+          attachment.status === "pending"
+            ? Math.max(0, ledger.reservedBytes - attachment.byteSize)
+            : ledger.reservedBytes,
+        activeBytes:
+          attachment.status === "available"
+            ? Math.max(0, ledger.activeBytes - attachment.byteSize)
+            : ledger.activeBytes,
+        updatedAt: now,
+      });
+    }
+    await ctx.db.patch(attachment._id, {
+      status: "deleted",
+      expiresAt: now,
+    });
+    return {
+      attachmentId: attachment._id,
+      storageKey: attachment.storageKey,
+      deleted: true as const,
+    };
+  },
+});
+
 export const getForHuman = query({
   args: { attachmentId: v.id("attachments") },
   handler: async (ctx, args) => {

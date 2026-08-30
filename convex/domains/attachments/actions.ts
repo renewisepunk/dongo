@@ -5,6 +5,7 @@ import type { Id } from "../../_generated/dataModel";
 import { fail } from "../../lib/errors";
 
 const UPLOAD_PATH = "/api/files/upload";
+const DISCARD_TTL_MS = 60 * 1_000;
 
 export const reserveUpload = action({
   args: {
@@ -80,6 +81,62 @@ export const reserveUpload = action({
       method: "PUT",
       requiredHeaders,
     };
+  },
+});
+
+export const discardUpload = action({
+  args: { attachmentId: v.id("attachments") },
+  handler: async (ctx, args): Promise<{
+    attachmentId: Id<"attachments">;
+    deleted: true;
+  }> => {
+    const baseUrl = process.env.DONGO_ATTACHMENT_UPLOAD_BASE_URL;
+    const secret = process.env.DONGO_ATTACHMENT_URL_SIGNING_SECRET;
+    if (!baseUrl || !secret || secret.length < 32) {
+      fail("internal", "Attachment cleanup is not configured", {
+        retryable: true,
+      });
+    }
+    let configured: URL;
+    try {
+      configured = new URL(baseUrl);
+      if (configured.protocol !== "https:" || configured.pathname !== UPLOAD_PATH) {
+        fail("internal", "Attachment cleanup origin is invalid");
+      }
+    } catch {
+      fail("internal", "Attachment cleanup origin is invalid");
+    }
+    const discarded = await ctx.runMutation(
+      api.domains.attachments.index.discard,
+      args,
+    );
+    const expiresAt = Date.now() + DISCARD_TTL_MS;
+    const url = new URL(
+      `${configured.origin}${UPLOAD_PATH}/${encodeURIComponent(discarded.attachmentId)}`,
+    );
+    const key = base64UrlEncode(new TextEncoder().encode(discarded.storageKey));
+    const signature = await hmacBase64Url(
+      secret,
+      [
+        "DELETE",
+        discarded.attachmentId,
+        discarded.storageKey,
+        String(expiresAt),
+      ].join("\n"),
+    );
+    url.searchParams.set("expires", String(expiresAt));
+    url.searchParams.set("key", key);
+    url.searchParams.set("signature", signature);
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: { accept: "application/json" },
+    });
+    if (!response.ok) {
+      fail("internal", "Attachment cleanup is temporarily unavailable", {
+        retryable: true,
+      });
+    }
+    return { attachmentId: discarded.attachmentId, deleted: true };
   },
 });
 

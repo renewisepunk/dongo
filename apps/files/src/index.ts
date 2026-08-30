@@ -104,6 +104,7 @@ export default {
 
 export {
   createFilesWorker,
+  verifyDeleteLink,
   verifyDownloadLink,
   verifyUploadLink,
 } from "./service.js";

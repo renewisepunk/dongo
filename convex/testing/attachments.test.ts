@@ -89,6 +89,56 @@ describe("attachment edge contract", () => {
     );
     expect(replay.status).toBe(401);
   });
+
+  it("discards an unattached reservation and releases its quota", async () => {
+    const t = convexTest(schema, modules).withIdentity({
+      tokenIdentifier: "https://human.example.test|discard-owner",
+      subject: "discard-owner",
+      issuer: "https://human.example.test",
+      email: "discard@example.test",
+      name: "Discard Owner",
+    });
+    await t.mutation(api.domains.identity.index.bootstrapCurrentUser, {});
+    const slug = `org-${crypto.randomUUID()}`;
+    const organization = await t.mutation(
+      api.domains.projects.index.createPersonalOrganization,
+      { name: "Discard Test", slug },
+    );
+    const project = await t.mutation(api.domains.projects.index.createProject, {
+      organizationId: organization.organizationId,
+      name: "Discard Test",
+      slug: "discard",
+      identifierPrefix: "DSC",
+      executionMode: "manual",
+    });
+    const reserved = await t.mutation(api.domains.attachments.index.reserve, {
+      projectId: project.projectId,
+      filename: "cancelled.mov",
+      mimeType: "video/quicktime",
+      byteSize: 128,
+      idempotencyKey: crypto.randomUUID(),
+    });
+    await expect(
+      t.mutation(api.domains.attachments.index.discard, {
+        attachmentId: reserved.attachmentId,
+      }),
+    ).resolves.toMatchObject({
+      attachmentId: reserved.attachmentId,
+      deleted: true,
+    });
+    const state = await t.run(async (ctx) => {
+      const attachment = await ctx.db.get(reserved.attachmentId);
+      const ledger = await ctx.db
+        .query("storageLedgers")
+        .withIndex("by_organization", (q) =>
+          q.eq("organizationId", organization.organizationId),
+        )
+        .unique();
+      return { attachment, ledger };
+    });
+    expect(state.attachment?.status).toBe("deleted");
+    expect(state.ledger?.reservedBytes).toBe(0);
+  });
 });
 
 async function signedRequest(path: string, body: string): Promise<RequestInit> {

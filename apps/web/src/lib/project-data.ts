@@ -212,6 +212,29 @@ const archiveProjectReference = makeFunctionReference<
   { projectId: string },
   { archived: true }
 >("domains/projects/index:archiveProject");
+const reserveUploadReference = makeFunctionReference<
+  "action",
+  {
+    projectId: string;
+    filename: string;
+    mimeType: string;
+    byteSize: number;
+    idempotencyKey: string;
+  },
+  {
+    attachmentId: string;
+    expiresAt: number;
+    maximumBytes: number;
+    uploadUrl: string;
+    method: "PUT";
+    requiredHeaders: Record<string, string>;
+  }
+>("domains/attachments/actions:reserveUpload");
+const discardUploadReference = makeFunctionReference<
+  "action",
+  { attachmentId: string },
+  { attachmentId: string; deleted: true }
+>("domains/attachments/actions:discardUpload");
 
 function relativeTime(timestamp: number | undefined, now: number): string | undefined {
   if (timestamp === undefined) return undefined;
@@ -468,13 +491,63 @@ export class ProjectDataConnection {
     );
   }
 
-  async createIntake(text: string): Promise<void> {
-    await this.#client.mutation(createIntakeReference, {
+  async createIntake(
+    text: string | undefined,
+    attachmentIds: string[],
+    idempotencyKey: string,
+  ): Promise<{ intakeId: string; revision: number }> {
+    return await this.#client.mutation(createIntakeReference, {
       projectId: this.projectId,
-      text,
-      attachmentIds: [],
+      ...(text ? { text } : {}),
+      attachmentIds,
+      idempotencyKey,
+    });
+  }
+
+  async uploadAttachment(
+    file: File,
+    onProgress: (progress: number, phase: "reserving" | "uploading" | "available") => void,
+    signal: AbortSignal,
+  ): Promise<string> {
+    onProgress(8, "reserving");
+    const reservation = await this.#client.action(reserveUploadReference, {
+      projectId: this.projectId,
+      filename: file.name,
+      mimeType: file.type.trim() || "application/octet-stream",
+      byteSize: file.size,
       idempotencyKey: crypto.randomUUID(),
     });
+    const discard = async () => {
+      await this.#client.action(discardUploadReference, {
+        attachmentId: reservation.attachmentId,
+      });
+    };
+    if (signal.aborted) {
+      await discard().catch(() => undefined);
+      throw new DOMException("Upload cancelled", "AbortError");
+    }
+    try {
+      onProgress(30, "uploading");
+      const response = await fetch(reservation.uploadUrl, {
+        method: reservation.method,
+        headers: reservation.requiredHeaders,
+        body: file,
+        credentials: "omit",
+        cache: "no-store",
+        referrerPolicy: "no-referrer",
+        signal,
+      });
+      if (!response.ok) throw new Error(`Attachment upload failed with HTTP ${response.status}`);
+      onProgress(100, "available");
+      return reservation.attachmentId;
+    } catch (error) {
+      await discard().catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async discardAttachment(attachmentId: string): Promise<void> {
+    await this.#client.action(discardUploadReference, { attachmentId });
   }
 
   async reorderWork(work: WorkItem, rank: number): Promise<void> {

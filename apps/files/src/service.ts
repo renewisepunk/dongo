@@ -3,6 +3,7 @@ const DOWNLOAD_PREFIX = "/api/files/download/";
 const UPLOAD_PREFIX = "/api/files/upload/";
 const MAX_DOWNLOAD_TTL_MS = 5 * 60 * 1_000 + 30_000;
 const MAX_UPLOAD_TTL_MS = 15 * 60 * 1_000 + 30_000;
+const MAX_DELETE_TTL_MS = 60_000 + 30_000;
 const MAX_FILE_BYTES = 250 * 1_024 * 1_024;
 const STORAGE_KEY =
   /^organizations\/([A-Za-z0-9_-]{1,256})\/projects\/([A-Za-z0-9_-]{1,256})\/attachments\/([A-Za-z0-9_-]{1,256})$/u;
@@ -75,6 +76,8 @@ export interface VerifiedUploadLink extends VerifiedDownloadLink {
   readonly mimeType: string;
   readonly checksumSha256?: string;
 }
+
+export type VerifiedDeleteLink = VerifiedDownloadLink;
 
 function json(
   body: Readonly<Record<string, unknown>>,
@@ -309,6 +312,29 @@ export async function verifyUploadLink(
         ...(checksumSha256 === undefined ? {} : { checksumSha256 }),
       })
     : undefined;
+}
+
+export async function verifyDeleteLink(
+  url: URL,
+  attachmentId: string,
+  secret: string,
+  now: number,
+): Promise<VerifiedDeleteLink | undefined> {
+  if (validSecret(secret) === false || IDENTIFIER.test(attachmentId) === false) {
+    return undefined;
+  }
+  const query = strictQuery(url, ["expires", "key", "signature"]);
+  if (query === undefined) return undefined;
+  const expires = query.expires ?? "";
+  const expiresAt = validExpiry(expires, now, MAX_DELETE_TTL_MS);
+  const storageKey = validateStorageKey(query.key ?? "", attachmentId);
+  if (expiresAt === undefined || storageKey === undefined) return undefined;
+  const valid = await verifyHmac(
+    secret,
+    query.signature ?? "",
+    ["DELETE", attachmentId, storageKey, expires].join("\n"),
+  );
+  return valid ? Object.freeze({ attachmentId, storageKey, expiresAt }) : undefined;
 }
 
 function routeIdentifier(pathname: string, prefix: string): string | undefined {
@@ -550,6 +576,37 @@ export function createFilesWorker(options: FilesWorkerOptions): {
           if (request.method === "OPTIONS") {
             return secureResponse(
               corsPreflight(request, options.allowedBrowserOrigin, "PUT"),
+              request,
+              requestId,
+              options.allowedBrowserOrigin,
+            );
+          }
+          if (request.method === "DELETE") {
+            if (validSecret(options.attachmentSigningSecret) === false) {
+              return secureResponse(
+                json({ error: "not_ready" }, 503, { "retry-after": "30" }),
+                request,
+                requestId,
+                options.allowedBrowserOrigin,
+              );
+            }
+            const verified = await verifyDeleteLink(
+              url,
+              uploadId,
+              options.attachmentSigningSecret,
+              now(),
+            );
+            if (verified === undefined) {
+              return secureResponse(
+                json({ error: "invalid_or_expired_link" }, 403),
+                request,
+                requestId,
+                options.allowedBrowserOrigin,
+              );
+            }
+            await options.store.delete(verified.storageKey);
+            return secureResponse(
+              json({ ok: true, attachmentId: uploadId, deleted: true }, 200),
               request,
               requestId,
               options.allowedBrowserOrigin,

@@ -2,6 +2,12 @@ import { useNavigate } from "@solidjs/router";
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
 import { humanSession } from "../../lib/auth-client";
+import {
+  attachmentKind,
+  attachmentSelectionError,
+  formatAttachmentBytes,
+  MAX_INTAKE_ATTACHMENTS,
+} from "../../lib/attachment-upload";
 import { ProjectDataConnection } from "../../lib/project-data";
 import type { Intake, WorkItem } from "./model";
 import "./overview.css";
@@ -18,11 +24,23 @@ type SearchResult = {
   title: string;
 };
 
+type DraftAttachment = {
+  localId: string;
+  file: File;
+  state: "uploading" | "available" | "error" | "removing";
+  phase: "reserving" | "uploading" | "available";
+  progress: number;
+  attachmentId?: string;
+  error?: string;
+};
+
 export function Overview(props: OverviewProps) {
   const navigate = useNavigate();
   const [work, setWork] = createSignal<WorkItem[]>([]);
   const [intakes, setIntakes] = createSignal<Intake[]>([]);
   const [draft, setDraft] = createSignal("");
+  const [draftAttachments, setDraftAttachments] = createSignal<DraftAttachment[]>([]);
+  const [submissionKey, setSubmissionKey] = createSignal(crypto.randomUUID());
   const [selectedWorkId, setSelectedWorkId] = createSignal<string>();
   const [selectedWorkDetail, setSelectedWorkDetail] = createSignal<WorkItem>();
   const [selectedIntakeId, setSelectedIntakeId] = createSignal<string>();
@@ -37,12 +55,30 @@ export function Overview(props: OverviewProps) {
   let connection: ProjectDataConnection | undefined;
   let unsubscribeOverview: (() => void) | undefined;
   let unsubscribeWork: (() => void) | undefined;
+  let fileInput: HTMLInputElement | undefined;
+  const uploadControllers = new Map<string, AbortController>();
+  const pendingUploads = new Map<string, Promise<void>>();
   let disposed = false;
 
   const needs = createMemo(() => work().filter((item) => item.state === "needs"));
   const working = createMemo(() => work().filter((item) => item.state === "working"));
   const ready = createMemo(() => work().filter((item) => item.state === "ready"));
   const done = createMemo(() => work().filter((item) => item.state === "done"));
+  const uploadPending = createMemo(() =>
+    draftAttachments().some((attachment) =>
+      attachment.state === "uploading" || attachment.state === "removing",
+    ),
+  );
+  const uploadFailed = createMemo(() =>
+    draftAttachments().some((attachment) => attachment.state === "error"),
+  );
+  const availableAttachmentIds = createMemo(() =>
+    draftAttachments().flatMap((attachment) =>
+      attachment.state === "available" && attachment.attachmentId
+        ? [attachment.attachmentId]
+        : [],
+    ),
+  );
   const selectedWork = createMemo(() => {
     const detail = selectedWorkDetail();
     return detail?.id === selectedWorkId()
@@ -102,13 +138,141 @@ export function Overview(props: OverviewProps) {
     setSelectedIntakeId(id);
   };
 
+  const updateDraftAttachment = (
+    localId: string,
+    update: Partial<DraftAttachment>,
+  ) => {
+    setDraftAttachments((items) => items.map((item) =>
+      item.localId === localId ? { ...item, ...update } : item,
+    ));
+  };
+
+  const uploadDraftAttachment = async (localId: string) => {
+    const item = draftAttachments().find((candidate) => candidate.localId === localId);
+    if (!item || !connection || item.state === "removing") return;
+    const controller = new AbortController();
+    uploadControllers.get(localId)?.abort();
+    uploadControllers.set(localId, controller);
+    updateDraftAttachment(localId, {
+      state: "uploading",
+      phase: "reserving",
+      progress: 8,
+      error: undefined,
+      attachmentId: undefined,
+    });
+    try {
+      const attachmentId = await connection.uploadAttachment(
+        item.file,
+        (progress, phase) => updateDraftAttachment(localId, { progress, phase }),
+        controller.signal,
+      );
+      if (controller.signal.aborted || disposed) {
+        await connection.discardAttachment(attachmentId).catch(() => undefined);
+        return;
+      }
+      updateDraftAttachment(localId, {
+        state: "available",
+        phase: "available",
+        progress: 100,
+        attachmentId,
+      });
+      setSubmissionKey(crypto.randomUUID());
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      updateDraftAttachment(localId, {
+        state: "error",
+        progress: 0,
+        error:
+          error instanceof Error && /250 MB|quota/i.test(error.message)
+            ? error.message
+            : "Upload interrupted. Retry when you are online.",
+      });
+    } finally {
+      if (uploadControllers.get(localId) === controller) {
+        uploadControllers.delete(localId);
+      }
+    }
+  };
+
+  const startDraftUpload = (localId: string) => {
+    const task = uploadDraftAttachment(localId);
+    pendingUploads.set(localId, task);
+    void task.finally(() => {
+      if (pendingUploads.get(localId) === task) pendingUploads.delete(localId);
+    });
+  };
+
+  const addFiles = (files: File[]) => {
+    if (!connection || files.length === 0) return;
+    const remaining = MAX_INTAKE_ATTACHMENTS - draftAttachments().length;
+    if (remaining <= 0) {
+      announce(`An Intake may include at most ${MAX_INTAKE_ATTACHMENTS} attachments`);
+      return;
+    }
+    const accepted = files.slice(0, remaining).map((file) => {
+      const error = attachmentSelectionError(file);
+      return {
+        localId: crypto.randomUUID(),
+        file,
+        state: error ? "error" as const : "uploading" as const,
+        phase: "reserving" as const,
+        progress: error ? 0 : 4,
+        ...(error ? { error } : {}),
+      } satisfies DraftAttachment;
+    });
+    setDraftAttachments((items) => [...items, ...accepted]);
+    setSubmissionKey(crypto.randomUUID());
+    for (const item of accepted) {
+      if (!item.error) startDraftUpload(item.localId);
+    }
+    if (files.length > remaining) {
+      announce(`Only the first ${remaining} files were added`);
+    }
+  };
+
+  const removeDraftAttachment = async (localId: string) => {
+    const item = draftAttachments().find((candidate) => candidate.localId === localId);
+    if (!item || item.state === "removing") return;
+    uploadControllers.get(localId)?.abort();
+    uploadControllers.delete(localId);
+    if (!item.attachmentId || !connection) {
+      setDraftAttachments((items) => items.filter((candidate) => candidate.localId !== localId));
+      setSubmissionKey(crypto.randomUUID());
+      return;
+    }
+    updateDraftAttachment(localId, { state: "removing" });
+    try {
+      await connection.discardAttachment(item.attachmentId);
+      setDraftAttachments((items) => items.filter((candidate) => candidate.localId !== localId));
+      setSubmissionKey(crypto.randomUUID());
+    } catch {
+      updateDraftAttachment(localId, {
+        state: "error",
+        error: "Could not remove this upload. Try again.",
+      });
+    }
+  };
+
   const submitIntake = async () => {
     const text = draft().trim();
-    if (!text || !connection || submitting()) return;
+    const attachmentIds = availableAttachmentIds();
+    if (
+      (!text && attachmentIds.length === 0) ||
+      !connection ||
+      submitting() ||
+      uploadPending() ||
+      uploadFailed()
+    ) return;
     setSubmitting(true);
     try {
-      await connection.createIntake(text);
+      await connection.createIntake(
+        text || undefined,
+        attachmentIds,
+        submissionKey(),
+      );
       setDraft("");
+      setDraftAttachments([]);
+      setSubmissionKey(crypto.randomUUID());
       announce("Added to Inbox");
     } catch {
       announce("Could not add this Intake");
@@ -205,9 +369,23 @@ export function Overview(props: OverviewProps) {
 
   onCleanup(() => {
     disposed = true;
+    const connected = connection;
+    const unattachedIds = availableAttachmentIds();
+    for (const controller of uploadControllers.values()) controller.abort();
+    uploadControllers.clear();
     unsubscribeOverview?.();
     unsubscribeWork?.();
-    void connection?.close();
+    void (async () => {
+      await Promise.allSettled([...pendingUploads.values()]);
+      if (connected) {
+        await Promise.allSettled(
+          unattachedIds.map(async (attachmentId) =>
+            await connected.discardAttachment(attachmentId),
+          ),
+        );
+        await connected.close();
+      }
+    })();
   });
 
   return (
@@ -228,26 +406,129 @@ export function Overview(props: OverviewProps) {
 
       <div class="overview-scroll">
         <div class="overview-content">
-          <section class="composer" aria-label="Add something">
+          <section
+            class="composer"
+            aria-label="Add something"
+            onDragOver={(event) => {
+              if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+            }}
+            onDrop={(event) => {
+              if (!event.dataTransfer?.files.length) return;
+              event.preventDefault();
+              addFiles([...event.dataTransfer.files]);
+            }}
+          >
             <textarea
               class="composer__input"
               rows={draft().length > 60 ? 4 : 2}
               value={draft()}
-              onInput={(event) => setDraft(event.currentTarget.value)}
+              onInput={(event) => {
+                setDraft(event.currentTarget.value);
+                setSubmissionKey(crypto.randomUUID());
+              }}
+              onPaste={(event) => {
+                const files = [...(event.clipboardData?.files ?? [])];
+                if (files.length) addFiles(files);
+              }}
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void submitIntake();
               }}
               placeholder="Add something…"
             />
+            <Show when={draftAttachments().length}>
+              <div class="attachment-tray" aria-label="Selected attachments">
+                <For each={draftAttachments()}>{(attachment) => (
+                  <div class="attachment-row" data-state={attachment.state}>
+                    <div class="attachment-row__icon">{attachmentKind(attachment.file)}</div>
+                    <div class="attachment-row__copy">
+                      <div class="attachment-row__name">{attachment.file.name}</div>
+                      <div class="attachment-row__state">
+                        <span>{formatAttachmentBytes(attachment.file.size)}</span>
+                        <span> · </span>
+                        <span>
+                          {attachment.state === "available"
+                            ? "ready"
+                            : attachment.state === "error"
+                              ? attachment.error
+                              : attachment.state === "removing"
+                                ? "removing…"
+                                : attachment.phase === "reserving"
+                                  ? "reserving secure upload…"
+                                  : "uploading directly to secure storage…"}
+                        </span>
+                      </div>
+                      <Show when={attachment.state === "uploading"}>
+                        <div
+                          class="attachment-progress"
+                          role="progressbar"
+                          aria-label={`Uploading ${attachment.file.name}`}
+                          aria-valuemin="0"
+                          aria-valuemax="100"
+                          aria-valuenow={attachment.progress}
+                        >
+                          <span style={{ width: `${attachment.progress}%` }} />
+                        </div>
+                      </Show>
+                    </div>
+                    <Show when={
+                      attachment.state === "error" &&
+                      attachmentSelectionError(attachment.file) === undefined
+                    }>
+                      <button class="attachment-row__action" type="button" onClick={() => startDraftUpload(attachment.localId)}>Retry</button>
+                    </Show>
+                    <button
+                      class="attachment-row__action"
+                      type="button"
+                      disabled={attachment.state === "removing"}
+                      aria-label={`Remove ${attachment.file.name}`}
+                      onClick={() => void removeDraftAttachment(attachment.localId)}
+                    >
+                      {attachment.state === "uploading" ? "Cancel" : "Remove"}
+                    </button>
+                  </div>
+                )}</For>
+              </div>
+            </Show>
             <div class="composer__actions">
-              <button class="attach-button" type="button" disabled title="Attachment upload is coming in the next UI slice">
+              <input
+                ref={fileInput}
+                class="visually-hidden"
+                type="file"
+                multiple
+                tabindex="-1"
+                onChange={(event) => {
+                  addFiles([...(event.currentTarget.files ?? [])]);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <button
+                class="attach-button"
+                type="button"
+                disabled={loading() || Boolean(loadError()) || draftAttachments().length >= MAX_INTAKE_ATTACHMENTS}
+                onClick={() => fileInput?.click()}
+              >
                 <span class="mono">+</span><span>Attach</span>
               </button>
-              <span class="composer__hint">text Intake is live</span>
+              <span class="composer__hint">
+                {uploadPending()
+                  ? "finish uploads before submitting"
+                  : uploadFailed()
+                    ? "retry or remove failed files"
+                    : draftAttachments().length
+                      ? "no categorization needed"
+                      : "bug · idea · screenshot · video · request"}
+              </span>
               <button
                 class="submit-button"
                 type="button"
-                disabled={!draft().trim() || submitting() || loading() || Boolean(loadError())}
+                disabled={
+                  (!draft().trim() && availableAttachmentIds().length === 0) ||
+                  submitting() ||
+                  uploadPending() ||
+                  uploadFailed() ||
+                  loading() ||
+                  Boolean(loadError())
+                }
                 aria-label="Submit to Inbox"
                 onClick={() => void submitIntake()}
               >

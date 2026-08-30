@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { describe, it } from "node:test";
 import {
   createFilesWorker,
+  verifyDeleteLink,
   verifyDownloadLink,
   verifyUploadLink,
   type AttachmentFinalizeInput,
@@ -71,6 +72,26 @@ function uploadUrl(
   url.searchParams.set("maxBytes", maxBytes);
   url.searchParams.set("mime", mime);
   if (checksum !== undefined) url.searchParams.set("checksum", checksum);
+  url.searchParams.set("signature", signature);
+  return url;
+}
+
+function deleteUrl(
+  overrides?: Readonly<Record<string, string>>,
+): URL {
+  const expires = overrides?.expires ?? String(NOW + 60_000);
+  const key = overrides?.key ?? base64Url(STORAGE_KEY);
+  const signature = overrides?.signature ?? sign([
+    "DELETE",
+    ATTACHMENT_ID,
+    STORAGE_KEY,
+    expires,
+  ].join("\n"));
+  const url = new URL(
+    `https://dev.dongo.so/api/files/upload/${ATTACHMENT_ID}`,
+  );
+  url.searchParams.set("expires", expires);
+  url.searchParams.set("key", key);
   url.searchParams.set("signature", signature);
   return url;
 }
@@ -170,6 +191,23 @@ describe("signed attachment link parity", () => {
         mimeType: "text/plain",
         checksumSha256: CHECKSUM,
       },
+    );
+  });
+
+  it("verifies a short-lived method-bound delete signature", async () => {
+    assert.deepEqual(
+      await verifyDeleteLink(deleteUrl(), ATTACHMENT_ID, SECRET, NOW),
+      {
+        attachmentId: ATTACHMENT_ID,
+        storageKey: STORAGE_KEY,
+        expiresAt: NOW + 60_000,
+      },
+    );
+    const tampered = deleteUrl();
+    tampered.searchParams.set("expires", String(NOW + 61_000));
+    assert.equal(
+      await verifyDeleteLink(tampered, ATTACHMENT_ID, SECRET, NOW),
+      undefined,
     );
   });
 
@@ -283,6 +321,30 @@ describe("attachment edge routes", () => {
       contentType: "text/plain",
     });
     assert.equal((finalizer as FakeFinalizer).calls[0]?.observedChecksumSha256, undefined);
+  });
+
+  it("deletes only the exact object selected by a signed discard", async () => {
+    const { worker, store } = fixture();
+    const response = await worker.fetch(new Request(deleteUrl(), {
+      method: "DELETE",
+    }));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      attachmentId: ATTACHMENT_ID,
+      deleted: true,
+    });
+    assert.deepEqual(store.deletes, [STORAGE_KEY]);
+
+    const tampered = deleteUrl();
+    tampered.searchParams.set("key", base64Url(
+      STORAGE_KEY.replace(ATTACHMENT_ID, "other_attachment"),
+    ));
+    assert.equal(
+      (await worker.fetch(new Request(tampered, { method: "DELETE" }))).status,
+      403,
+    );
+    assert.deepEqual(store.deletes, [STORAGE_KEY]);
   });
 
   it("deletes the exact R2 object when post-upload finalization fails", async () => {
