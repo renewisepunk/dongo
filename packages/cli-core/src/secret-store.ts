@@ -71,13 +71,6 @@ let identity: [CFString: Any] = [
   kSecAttrAccount: account,
   kSecAttrService: service,
 ]
-let updateStatus = SecItemUpdate(
-  identity as CFDictionary,
-  [kSecValueData: value] as CFDictionary
-)
-if updateStatus == errSecSuccess { exit(0) }
-guard updateStatus == errSecItemNotFound else { exit(1) }
-
 var trustedApplication: SecTrustedApplication?
 guard SecTrustedApplicationCreateFromPath(
   "/usr/bin/security",
@@ -95,6 +88,12 @@ guard SecAccessCreate(
 let access else {
   exit(1)
 }
+let updateStatus = SecItemUpdate(
+  identity as CFDictionary,
+  [kSecValueData: value, kSecAttrAccess: access] as CFDictionary
+)
+if updateStatus == errSecSuccess { exit(0) }
+guard updateStatus == errSecItemNotFound else { exit(1) }
 
 var item = identity
 item[kSecValueData] = value
