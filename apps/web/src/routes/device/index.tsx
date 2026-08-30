@@ -6,6 +6,7 @@ import { humanSession } from "../../lib/auth-client";
 import {
   AuthorizationFlowError,
   bridgeAuthorizationSession,
+  createFirstProject,
   decideDeviceRequest,
   getDeviceRequest,
   listAuthorizableProjects,
@@ -14,8 +15,18 @@ import {
   type DeviceRequest,
 } from "../../lib/authorization-client";
 import { formatUserCode, loginHref, normalizeUserCode } from "../../lib/auth-flow";
+import { slugify } from "../../lib/slug";
 
 type ApprovalState = "entry" | "loading" | "review" | "approved" | "denied" | "error";
+
+type HumanUser = { id: string; email?: string; name?: string };
+
+type FirstProjectProposal = {
+  name: string;
+  slug: string;
+  repositoryUrl?: string;
+  executionMode: "manual" | "autonomous";
+};
 
 const scopeCopy: Record<string, string> = {
   "dongo:work:read": "Read this project’s Intake, work, comments, and artifacts.",
@@ -26,11 +37,12 @@ const scopeCopy: Record<string, string> = {
 
 export type DeviceAuthorizationRouteDependencies = {
   humanSession: () => Promise<{
-    user: { email?: string; name: string };
+    user: HumanUser;
   } | null>;
   bridgeAuthorizationSession: typeof bridgeAuthorizationSession;
   getDeviceRequest: typeof getDeviceRequest;
   listAuthorizableProjects: typeof listAuthorizableProjects;
+  createFirstProject: typeof createFirstProject;
   selectAuthorizationProject: typeof selectAuthorizationProject;
   decideDeviceRequest: typeof decideDeviceRequest;
 };
@@ -42,24 +54,63 @@ export type DeviceAuthorizationRouteProps = {
 export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRouteProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams] = useSearchParams<{ user_code?: string }>();
+  const [searchParams] = useSearchParams<{
+    user_code?: string;
+    project_name?: string;
+    repository_url?: string;
+    execution_mode?: string;
+  }>();
   const initialCode = normalizeUserCode(searchParams.user_code ?? "");
   const [userCode, setUserCode] = createSignal(initialCode);
   const [state, setState] = createSignal<ApprovalState>(initialCode ? "loading" : "entry");
   const [request, setRequest] = createSignal<DeviceRequest>();
   const [projects, setProjects] = createSignal<AuthorizableProject[]>([]);
   const [projectRef, setProjectRef] = createSignal("");
+  const [accountUser, setAccountUser] = createSignal<HumanUser>();
   const [account, setAccount] = createSignal("");
   const [error, setError] = createSignal("");
   const loadHumanSession = props.dependencies?.humanSession ?? humanSession;
   const bridgeSession = props.dependencies?.bridgeAuthorizationSession ?? bridgeAuthorizationSession;
   const loadDeviceRequest = props.dependencies?.getDeviceRequest ?? getDeviceRequest;
   const loadProjects = props.dependencies?.listAuthorizableProjects ?? listAuthorizableProjects;
+  const provisionFirstProject = props.dependencies?.createFirstProject ?? createFirstProject;
   const chooseProject = props.dependencies?.selectAuthorizationProject ?? selectAuthorizationProject;
   const saveDecision = props.dependencies?.decideDeviceRequest ?? decideDeviceRequest;
   const currentReturnTo = () => `${location.pathname}${location.search}`;
   const onboardingHref = () => `/onboarding?returnTo=${encodeURIComponent(currentReturnTo())}`;
   const selectedProject = createMemo(() => projects().find((project) => project.publicRef === projectRef()));
+  const projectProposal = createMemo<FirstProjectProposal | undefined>(() => {
+    const name = searchParams.project_name?.trim();
+    if (!name || name.length > 120) return undefined;
+    const slug = slugify(name);
+    if (!slug) return undefined;
+    if (
+      searchParams.execution_mode !== undefined
+      && searchParams.execution_mode !== "manual"
+      && searchParams.execution_mode !== "autonomous"
+    ) return undefined;
+    const executionMode = searchParams.execution_mode ?? "manual";
+    const rawRepositoryUrl = searchParams.repository_url?.trim();
+    let repositoryUrl: string | undefined;
+    if (rawRepositoryUrl) {
+      if (rawRepositoryUrl.length > 2_048) return undefined;
+      try {
+        const parsed = new URL(rawRepositoryUrl);
+        if (
+          !["http:", "https:"].includes(parsed.protocol)
+          || parsed.username
+          || parsed.password
+          || parsed.search
+          || parsed.hash
+        ) return undefined;
+        repositoryUrl = parsed.toString();
+      } catch {
+        return undefined;
+      }
+    }
+    return { name, slug, repositoryUrl, executionMode };
+  });
+  const canApprove = createMemo(() => Boolean(selectedProject() || (projects().length === 0 && projectProposal())));
 
   const load = async () => {
     const code = normalizeUserCode(userCode());
@@ -77,7 +128,8 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
         navigate(loginHref(`/device?user_code=${encodeURIComponent(formatUserCode(code))}`), { replace: true });
         return;
       }
-      setAccount(session.user.email || session.user.name);
+      setAccountUser(session.user);
+      setAccount(session.user.email || session.user.name || "Dongo account");
       await bridgeSession(`/device?user_code=${encodeURIComponent(formatUserCode(code))}`);
       const [deviceRequest, availableProjects] = await Promise.all([
         loadDeviceRequest(code),
@@ -105,14 +157,38 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
   });
 
   const decide = async (accept: boolean) => {
-    if (accept && !projectRef()) {
-      setError("Choose a project before approving this terminal.");
+    if (accept && !canApprove()) {
+      setError("Choose a project or provide a valid CLI project proposal before approving this terminal.");
       return;
     }
     setState("loading");
     setError("");
     try {
-      if (accept) await chooseProject(projectRef(), currentReturnTo());
+      if (accept) {
+        let approvedProject = selectedProject();
+        if (!approvedProject) {
+          const proposal = projectProposal();
+          const user = accountUser();
+          if (!proposal || !user) throw new AuthorizationFlowError("invalid", "The CLI project proposal is incomplete.");
+          const created = await provisionFirstProject({
+            user,
+            name: proposal.name,
+            slug: proposal.slug,
+            repositoryUrl: proposal.repositoryUrl,
+            executionMode: proposal.executionMode,
+          });
+          approvedProject = {
+            publicRef: created.publicRef,
+            name: proposal.name,
+            slug: proposal.slug,
+            organizationName: user.name?.trim() || user.email || "Personal workspace",
+            organizationSlug: created.organizationSlug,
+          };
+          setProjects([approvedProject]);
+          setProjectRef(approvedProject.publicRef);
+        }
+        await chooseProject(approvedProject.publicRef, currentReturnTo());
+      }
       await saveDecision(userCode(), accept);
       setState(accept ? "approved" : "denied");
     } catch (cause) {
@@ -160,7 +236,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
             <div class="consent-summary__row">
               <Show
                 when={projects().length > 0}
-                fallback={<><span class="consent-summary__key">project</span><span class="consent-summary__value">No project yet</span></>}
+                fallback={<><span class="consent-summary__key">project</span><span class="consent-summary__value">{projectProposal() ? `New: ${projectProposal()!.name}` : "No project yet"}</span></>}
               >
                 <label class="consent-summary__key" for="device-project">project</label>
                 <select class="input consent-summary__select" id="device-project" value={projectRef()} onChange={(event) => setProjectRef(event.currentTarget.value)}>
@@ -173,19 +249,37 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
           </div>
           <div class="field-group">
             <div class="field-label">Requested access</div>
-            <ul class="scope-list"><For each={loaded().scopes}>{(scope) => <li>{scopeCopy[scope] || scope}</li>}</For></ul>
+            <ul class="scope-list">
+              <Show when={projects().length === 0 && projectProposal()}>{(proposal) => (
+                <li>Create “{proposal().name}” as this account’s first project and bind this terminal to it.</li>
+              )}</Show>
+              <For each={loaded().scopes}>{(scope) => <li>{scopeCopy[scope] || scope}</li>}</For>
+            </ul>
           </div>
           <Show when={projects().length === 0}>
             <div class="auth-stack" role="status">
-              <p class="auth-lede">Create your first project to continue this terminal authorization.</p>
-              <A class="button button--primary button--full" href={onboardingHref()}>Create project</A>
+              <Show
+                when={projectProposal()}
+                fallback={<>
+                  <p class="auth-lede">Create your first project to continue this terminal authorization.</p>
+                  <A class="button button--primary button--full" href={onboardingHref()}>Create project</A>
+                </>}
+              >{(proposal) => <>
+                <div class="field-label">CLI project proposal</div>
+                <p class="auth-lede">
+                  {proposal().name}
+                  {proposal().repositoryUrl ? <> · <span class="mono">{proposal().repositoryUrl}</span></> : null}
+                  {` · ${proposal().executionMode} mode`}
+                </p>
+                <p class="note">To change these details, deny this request and rerun <span class="mono">dongo connect</span> with project options.</p>
+              </>}</Show>
             </div>
           </Show>
           <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
           <p class="note" id="device-warning">Approve only if this code matches a terminal in your possession. Do not approve a code sent in a message.</p>
           <div class="consent-actions">
             <button class="button" type="button" onClick={() => void decide(false)}>Deny</button>
-            <button class="button button--primary" type="button" disabled={!selectedProject()} onClick={() => void decide(true)}>Approve</button>
+            <button class="button button--primary" type="button" disabled={!canApprove()} onClick={() => void decide(true)}>{projects().length === 0 && projectProposal() ? "Create & approve" : "Approve"}</button>
           </div>
         </div>
       )}</Show>

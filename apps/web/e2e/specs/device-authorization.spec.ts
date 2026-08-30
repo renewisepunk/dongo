@@ -56,35 +56,48 @@ test("fails closed for completed and invalid requests", async ({ page }) => {
   await expect(page.getByText("fixture request detail must stay hidden")).toBeHidden();
 });
 
-test("creates the first project and returns to the exact pending terminal request", async ({ page }) => {
-  await page.goto("/device?user_code=NOPR-OJ00");
-  await expect(page.getByText("No project yet", { exact: true })).toBeVisible();
-  await expect(page.getByText("Create your first project to continue this terminal authorization.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
+test("creates the CLI-proposed first project and approves the same terminal request", async ({ page }) => {
+  const requestPath = "/device?user_code=NOPR-OJ00&project_name=Dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo&execution_mode=manual";
+  await page.goto(requestPath);
+  await expect(page.getByText("New: Dongo", { exact: true })).toBeVisible();
+  await expect(page.getByText("CLI project proposal", { exact: true })).toBeVisible();
+  await expect(page.getByText("https://github.com/renewisepunk/dongo", { exact: true })).toBeVisible();
+  await expect(page.getByText("Create “Dongo” as this account’s first project and bind this terminal to it.")).toBeVisible();
 
-  const createProject = page.getByRole("link", { name: "Create project" });
-  await expect(createProject).toHaveAttribute(
-    "href",
-    "/onboarding?returnTo=%2Fdevice%3Fuser_code%3DNOPR-OJ00",
-  );
-  await createProject.click();
-  await page.getByLabel("Project name").fill("Dongo");
-  await page.getByLabel("Repository URL").fill("github.com/renewisepunk/dongo");
-  await page.getByRole("button", { name: "Create project" }).click();
-
-  await expect(page).toHaveURL(/\/device\?user_code=NOPR-OJ00$/);
-  await expect(page.getByLabel("project")).toHaveValue("fixture-created");
-  await expect(page.getByRole("button", { name: "Approve" })).toBeEnabled();
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Create & approve" }).click();
   await expect(page.getByText("Approved — return to your terminal", { exact: true })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute(
+    "data-fixture-device-created-project",
+    JSON.stringify({
+      user: { id: "user-fixture", name: "Fixture Owner", email: "fixture@example.test" },
+      name: "Dongo",
+      slug: "dongo",
+      repositoryUrl: "https://github.com/renewisepunk/dongo",
+      executionMode: "manual",
+    }),
+  );
+  await expect(page.locator("html")).toHaveAttribute(
     "data-fixture-device-project",
-    JSON.stringify({ publicRef: "fixture-created", returnTo: "/device?user_code=NOPR-OJ00" }),
+    JSON.stringify({ publicRef: "fixture-created", returnTo: requestPath }),
   );
   await expect(page.locator("html")).toHaveAttribute(
     "data-fixture-device-decision",
     JSON.stringify({ userCode: "NOPROJ00", accept: true }),
   );
+});
+
+test("keeps approval closed when a legacy device request has no project proposal", async ({ page }) => {
+  await page.goto("/device?user_code=NOPR-OJ00");
+  await expect(page.getByText("No project yet", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
+  await expect(page.getByRole("link", { name: "Create project" })).toHaveAttribute(
+    "href",
+    "/onboarding?returnTo=%2Fdevice%3Fuser_code%3DNOPR-OJ00",
+  );
+
+  await page.goto("/device?user_code=NOPR-OJ00&project_name=Dongo&repository_url=javascript%3Aalert(1)&execution_mode=manual");
+  await expect(page.getByText("CLI project proposal", { exact: true })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
 });
 
 test("returns an unauthenticated terminal request to sign-in with its code", async ({ page }) => {
