@@ -33,6 +33,9 @@ jobs:
       - name: Reject committed secrets
         run: npm run verify:no-secrets
 
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
       - name: Check types and deploy bundles
         run: npm run check
 
