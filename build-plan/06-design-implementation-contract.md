@@ -37,6 +37,7 @@ Implement the prototype's hierarchy and states for:
 - agent connection/authorization;
 - empty and populated Overview;
 - Add Something composer and attachment states;
+- composer image paste plus the full-viewport desktop file drop zone;
 - Needs You, Working, Ready, Inbox, and Recently Done;
 - Inbox and Ready/Working/Needs You/Done detail;
 - human Attention response and comments;

@@ -380,7 +380,7 @@ Supported user actions:
 
 - Type or paste text.
 - Paste one or more images.
-- Drag/drop files on desktop.
+- Drag files anywhere over the desktop app; the entire viewport becomes a visible drop zone, and dropping attaches the files to the new Intake without submitting it.
 - Select multiple images, a video, or a file.
 - Remove an attachment.
 - Retry an interrupted upload.
@@ -395,6 +395,7 @@ Validation states:
 - Offline: draft remains local; upload and submit explain that a connection is required.
 - Upload interrupted: completed parts are retained where supported; Retry resumes safely.
 - Attachment still finalizing: Submit remains unavailable and explains what is pending.
+- File drag in progress: a full-viewport “Drop to attach” layer clearly shows that the file will be added to the new issue; it disappears on drop or when the pointer leaves the app.
 
 ### Screen 8 — Intake submitted
 

@@ -137,14 +137,31 @@ test("uploads a browser-selected file before Intake submission", async ({ page }
   await expect(page.getByText("Intake with an attachment", { exact: true })).toHaveCount(1);
 });
 
-test("accepts a desktop file drop", async ({ page }) => {
+test("turns the full page into a file drop zone", async ({ page }) => {
   const dataTransfer = await page.evaluateHandle(() => {
     const transfer = new DataTransfer();
     transfer.items.add(new File(["Dropped fixture"], "dropped-fixture.txt", { type: "text/plain" }));
     return transfer;
   });
-  await page.getByRole("region", { name: "Add something" }).dispatchEvent("drop", { dataTransfer });
+  await page.locator(".app-header").dispatchEvent("dragenter", { dataTransfer });
+  await expect(page.getByText("Drop to attach", { exact: true })).toBeVisible();
+  await page.locator(".app-header").dispatchEvent("drop", { dataTransfer });
+  await expect(page.getByText("Drop to attach", { exact: true })).toBeHidden();
   await expect(page.getByText("dropped-fixture.txt", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Add something" }).getByText("ready", { exact: true }),
+  ).toBeVisible();
+});
+
+test("attaches a pasted clipboard image to the new issue", async ({ page }) => {
+  await page.getByRole("textbox", { name: "Add something…" }).evaluate((composer) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["image bytes"], "pasted-image.png", { type: "image/png" }));
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: transfer });
+    composer.dispatchEvent(event);
+  });
+  await expect(page.getByText("pasted-image.png", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("region", { name: "Add something" }).getByText("ready", { exact: true }),
   ).toBeVisible();

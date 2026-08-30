@@ -173,6 +173,7 @@ export function Overview(props: OverviewProps) {
   const [projectMenuOpen, setProjectMenuOpen] = createSignal(false);
   const [profileMenuOpen, setProfileMenuOpen] = createSignal(false);
   const [draggedReadyId, setDraggedReadyId] = createSignal<string>();
+  const [fileDropActive, setFileDropActive] = createSignal(false);
   let connection: OverviewConnection | undefined;
   let unsubscribeOverview: (() => void) | undefined;
   let unsubscribeWork: (() => void) | undefined;
@@ -192,6 +193,7 @@ export function Overview(props: OverviewProps) {
   const pendingUploads = new Map<string, Promise<void>>();
   let disposed = false;
   let searchGeneration = 0;
+  let fileDragDepth = 0;
   let pendingRouteState: OverviewRouteState | undefined;
 
   const currentRouteState = (): OverviewRouteState => ({
@@ -621,6 +623,15 @@ export function Overview(props: OverviewProps) {
     }
   };
 
+  const pastedFiles = (clipboard: DataTransfer | null): File[] => {
+    if (!clipboard) return [];
+    const itemFiles = [...clipboard.items].flatMap((item) => {
+      const file = item.kind === "file" ? item.getAsFile() : null;
+      return file ? [file] : [];
+    });
+    return itemFiles.length > 0 ? itemFiles : [...clipboard.files];
+  };
+
   const removeDraftAttachment = async (localId: string) => {
     const item = draftAttachments().find((candidate) => candidate.localId === localId);
     if (!item || item.state === "removing") return;
@@ -820,8 +831,46 @@ export function Overview(props: OverviewProps) {
         setProfileMenuOpen(false);
       }
     };
+    const carriesFiles = (event: DragEvent) =>
+      [...(event.dataTransfer?.types ?? [])].includes("Files");
+    const onFileDragEnter = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      fileDragDepth += 1;
+      setFileDropActive(true);
+    };
+    const onFileDragOver = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      setFileDropActive(true);
+    };
+    const onFileDragLeave = (event: DragEvent) => {
+      if (!fileDropActive()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      fileDragDepth = Math.max(0, fileDragDepth - 1);
+      if (fileDragDepth === 0 || event.relatedTarget === null) {
+        fileDragDepth = 0;
+        setFileDropActive(false);
+      }
+    };
+    const onFileDrop = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      fileDragDepth = 0;
+      setFileDropActive(false);
+      addFiles([...(event.dataTransfer?.files ?? [])]);
+    };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("dragenter", onFileDragEnter, true);
+    window.addEventListener("dragover", onFileDragOver, true);
+    window.addEventListener("dragleave", onFileDragLeave, true);
+    window.addEventListener("drop", onFileDrop, true);
     void (async () => {
       try {
         const [connected, session] = await Promise.all([
@@ -884,6 +933,10 @@ export function Overview(props: OverviewProps) {
       window.history.scrollRestoration = previousScrollRestoration;
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("dragenter", onFileDragEnter, true);
+      window.removeEventListener("dragover", onFileDragOver, true);
+      window.removeEventListener("dragleave", onFileDragLeave, true);
+      window.removeEventListener("drop", onFileDrop, true);
     });
   });
 
@@ -914,6 +967,15 @@ export function Overview(props: OverviewProps) {
 
   return (
     <main class="app-page">
+      <Show when={fileDropActive()}>
+        <div class="file-drop-zone" role="status" aria-live="polite">
+          <div class="file-drop-zone__message">
+            <span class="file-drop-zone__icon" aria-hidden="true">+</span>
+            <strong>Drop to attach</strong>
+            <span>Add files to your new issue</span>
+          </div>
+        </div>
+      </Show>
       <header class="app-header">
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
         <div class="header-menu">
@@ -1030,14 +1092,6 @@ export function Overview(props: OverviewProps) {
           <section
             class="composer"
             aria-label="Add something"
-            onDragOver={(event) => {
-              if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
-            }}
-            onDrop={(event) => {
-              if (!event.dataTransfer?.files.length) return;
-              event.preventDefault();
-              addFiles([...event.dataTransfer.files]);
-            }}
           >
             <textarea
               class="composer__input"
@@ -1048,7 +1102,7 @@ export function Overview(props: OverviewProps) {
                 setSubmissionKey(crypto.randomUUID());
               }}
               onPaste={(event) => {
-                const files = [...(event.clipboardData?.files ?? [])];
+                const files = pastedFiles(event.clipboardData);
                 if (files.length) addFiles(files);
               }}
               onKeyDown={(event) => {

@@ -8,6 +8,45 @@
   background: var(--bg);
 }
 
+.file-drop-zone {
+  position: fixed;
+  z-index: 300;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--amber);
+  background: rgb(8 8 10 / 0.9);
+  pointer-events: none;
+}
+
+.file-drop-zone__message {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 15px;
+  text-align: center;
+}
+
+.file-drop-zone__message strong {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.file-drop-zone__icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 28px;
+}
+
 .app-header {
   display: flex;
   min-height: 56px;
