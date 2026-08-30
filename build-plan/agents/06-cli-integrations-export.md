@@ -5,7 +5,7 @@
 Provide the first-party terminal surface and reliable local repository behavior:
 
 ```text
-Dongo CLI
+dongo CLI
   -> OAuth Device Authorization
   -> shared typed client
   -> /api/agent/v1

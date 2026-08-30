@@ -5,8 +5,8 @@ const page = String.raw`<!doctype html>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0b0b0c">
     <meta name="color-scheme" content="dark">
-    <meta name="description" content="Dongo is an agent-first work tracker where humans provide intent and judgment, and local coding agents provide structure and execution.">
-    <meta property="og:title" content="Dongo — agent-first work tracking">
+    <meta name="description" content="dongo is an agent-first work tracker where humans provide intent and judgment, and local coding agents provide structure and execution.">
+    <meta property="og:title" content="dongo — agent-first work tracking">
     <meta property="og:description" content="A quiet shared workspace for humans and local coding agents. Coming soon.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://dongo.so/">
@@ -15,7 +15,7 @@ const page = String.raw`<!doctype html>
     <link href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600&amp;display=swap" rel="stylesheet">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="canonical" href="https://dongo.so/">
-    <title>Dongo — agent-first work tracking</title>
+    <title>dongo — agent-first work tracking</title>
     <style>
       :root {
         color-scheme: dark;
@@ -273,7 +273,7 @@ const page = String.raw`<!doctype html>
   <body>
     <div class="screen">
       <header class="topbar">
-        <div class="identity" aria-label="Dongo">
+        <div class="identity" aria-label="dongo">
           <span class="mark" aria-hidden="true"></span>
           <span>dongo</span>
         </div>
@@ -282,12 +282,12 @@ const page = String.raw`<!doctype html>
 
       <main>
         <p class="path"><span>~</span> / dongo / overview</p>
-        <h1>Work moves.<br>Dongo keeps the thread.</h1>
+        <h1>Work moves.<br>dongo keeps the thread.</h1>
         <p class="lede">
           A quiet shared workspace where humans leave intent, local coding agents shape it into work, and everyone can see what needs attention.
         </p>
 
-        <section class="session" aria-label="Dongo workflow">
+        <section class="session" aria-label="dongo workflow">
           <div class="session-head">
             <span class="chevron" aria-hidden="true">›</span>
             <span>dongo status</span>

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://dongo.so/schemas/agent-api-v1.json",
-  "title": "Dongo Agent API v1 schema catalog",
+  "title": "dongo Agent API v1 schema catalog",
   "description": "Transport-neutral input, output, envelope, and operation metadata generated from @dongo/contracts.",
   "type": "object",
   "additionalProperties": false,

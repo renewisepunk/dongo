@@ -7,7 +7,7 @@ Use a TypeScript monorepo with a Convex modular monolith, a small public gateway
 ```text
 apps/
   web/                  SolidStart application deployed to Cloudflare
-  cli/                  published Dongo CLI entry point
+  cli/                  published dongo CLI entry point
   mcp/                  remote Streamable HTTP MCP resource server/gateway
   ios/                  created only when the native wave starts
   android/              created only when the native wave starts
@@ -150,7 +150,7 @@ Agent 10 maps each operation to a namespaced tool such as `dongo_session_start`,
 ### Public transport topology
 
 ```text
-Dongo CLI
+dongo CLI
   -> OAuth Device Authorization (browser approval, terminal polling)
   -> /api/agent/v1
   -> shared operation handlers

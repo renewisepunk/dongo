@@ -19,7 +19,7 @@ human signs in through the minimal web auth surface
   -> creates or selects a project
   -> runs `dongo connect`
   -> follows one browser link and returns to an authenticated terminal
-  -> connects the remote Dongo MCP server in Codex and Claude
+  -> connects the remote dongo MCP server in Codex and Claude
   -> submits text intake through the minimal web surface
   -> CLI, Codex MCP, and Claude MCP each pull and triage the same fixture flow
   -> work appears in Overview

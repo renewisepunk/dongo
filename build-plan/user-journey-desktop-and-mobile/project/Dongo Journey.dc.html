@@ -873,8 +873,8 @@ class Component extends DCLogic {
 
     const hostLabel = s.host;
     const instruction = s.host === 'AGENTS.md'
-      ? `Read AGENTS.md, install the Dongo adapter in this repo and pair with code ${this.pairCode || 'K7F-2QX'}.`
-      : `Install Dongo in this repository and pair with code ${this.pairCode || 'K7F-2QX'}.`;
+      ? `Read AGENTS.md, install the dongo adapter in this repo and pair with code ${this.pairCode || 'K7F-2QX'}.`
+      : `Install dongo in this repository and pair with code ${this.pairCode || 'K7F-2QX'}.`;
     const connMap = {
       waiting: { t: 'Waiting for pairing', b: 'Run the instruction above in your repository. This screen updates as soon as the agent pairs.', c: AMBER },
       verifying: { t: 'Verifying', b: 'Checking the pairing code and repository match.', c: AMBER },

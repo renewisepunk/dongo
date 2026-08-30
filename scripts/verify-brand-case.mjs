@@ -4,9 +4,10 @@ import { parse } from "@babel/parser";
 
 const root = process.cwd();
 const write = process.argv.includes("--write");
-const sourceRoots = ["apps", "packages", "convex", "integrations", "scripts"];
+const sourceRoots = ["src", "apps", "packages", "convex", "integrations", "scripts"];
 const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
 const proseExtensions = new Set([".md", ".mdx", ".html"]);
+const structuredTextExtensions = new Set([".json", ".jsonc", ".svg", ".xml"]);
 const ignoredDirectories = new Set([".agent-work", ".git", "node_modules", "dist", ".wrangler", "coverage", "test-results", "playwright-report"]);
 const ignoredFiles = new Set(["dongo-prd.md", "scripts/verify-brand-case.mjs"]);
 const uppercaseBrand = /\bDongo\b/g;
@@ -88,7 +89,10 @@ for (const sourceRoot of sourceRoots) {
   for (const file of await filesUnder(path.join(root, sourceRoot))) candidates.add(file);
 }
 for (const file of await filesUnder(root)) {
-  if (proseExtensions.has(path.extname(file))) candidates.add(file);
+  const extension = path.extname(file);
+  if (proseExtensions.has(extension) || structuredTextExtensions.has(extension)) {
+    candidates.add(file);
+  }
 }
 
 const violations = [];
@@ -96,11 +100,21 @@ for (const file of candidates) {
   const relative = path.relative(root, file);
   if (ignoredFiles.has(relative)) continue;
   const extension = path.extname(file);
-  if (!sourceExtensions.has(extension) && !proseExtensions.has(extension)) continue;
+  if (
+    !sourceExtensions.has(extension) &&
+    !proseExtensions.has(extension) &&
+    !structuredTextExtensions.has(extension)
+  ) continue;
   const value = await readFile(file, "utf8");
   const result = sourceExtensions.has(extension)
     ? sourceText(value, file)
-    : markdownText(value);
+    : extension === ".md" || extension === ".mdx"
+      ? markdownText(value)
+      : {
+          output: value.replaceAll("Dongo", "dongo"),
+          ranges: uppercaseBrand.test(value) ? [{}] : [],
+        };
+  uppercaseBrand.lastIndex = 0;
   if (result.output === value) continue;
   violations.push(relative);
   if (write) await writeFile(file, result.output);

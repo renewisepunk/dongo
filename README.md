@@ -15,7 +15,7 @@ Development runs at [dev.dongo.so](https://dev.dongo.so) against Convex deployme
 
 ```text
 apps/web             SolidStart human product
-apps/cli             self-contained Dongo CLI package
+apps/cli             self-contained dongo CLI package
 apps/auth            isolated OAuth/device authorization Worker
 apps/api             typed HTTPS agent resource server
 apps/mcp             remote MCP Worker composition

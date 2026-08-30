@@ -11,7 +11,7 @@
     "ALLOWED_HOSTNAMES": "dev.dongo.so",
     "PUBLIC_ORIGIN": "https://dev.dongo.so",
     "RESEND_FROM_EMAIL": "notifications@dev.dongo.so",
-    "RESEND_FROM_NAME": "Dongo"
+    "RESEND_FROM_NAME": "dongo"
   },
   "secrets": {
     "required": [

@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.1",
   "info": {
-    "title": "Dongo Agent API",
+    "title": "dongo Agent API",
     "version": "1.0.0",
-    "description": "The versioned HTTPS operation contract shared by the Dongo CLI and MCP gateway."
+    "description": "The versioned HTTPS operation contract shared by the dongo CLI and MCP gateway."
   },
   "servers": [
     {
@@ -11,7 +11,7 @@
       "variables": {
         "host": {
           "default": "dev.dongo.so",
-          "description": "Use the Dongo environment host assigned to the installation."
+          "description": "Use the dongo environment host assigned to the installation."
         }
       }
     }
@@ -20,7 +20,7 @@
     "/api/agent/v1/session_start": {
       "post": {
         "operationId": "session_start",
-        "summary": "Dongo session start",
+        "summary": "dongo session start",
         "security": [
           {
             "bearerAuth": [
@@ -30,7 +30,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -40,7 +40,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -72,7 +72,7 @@
     "/api/agent/v1/get_overview": {
       "get": {
         "operationId": "get_overview",
-        "summary": "Dongo get overview",
+        "summary": "dongo get overview",
         "security": [
           {
             "bearerAuth": [
@@ -82,7 +82,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -92,7 +92,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -115,7 +115,7 @@
     "/api/agent/v1/get_intake": {
       "get": {
         "operationId": "get_intake",
-        "summary": "Dongo get intake",
+        "summary": "dongo get intake",
         "security": [
           {
             "bearerAuth": [
@@ -125,7 +125,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -135,7 +135,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -169,7 +169,7 @@
     "/api/agent/v1/claim_intake": {
       "post": {
         "operationId": "claim_intake",
-        "summary": "Dongo claim intake",
+        "summary": "dongo claim intake",
         "security": [
           {
             "bearerAuth": [
@@ -179,7 +179,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -189,7 +189,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -221,7 +221,7 @@
     "/api/agent/v1/renew_intake_claim": {
       "post": {
         "operationId": "renew_intake_claim",
-        "summary": "Dongo renew intake claim",
+        "summary": "dongo renew intake claim",
         "security": [
           {
             "bearerAuth": [
@@ -231,7 +231,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -241,7 +241,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -273,7 +273,7 @@
     "/api/agent/v1/complete_triage": {
       "post": {
         "operationId": "complete_triage",
-        "summary": "Dongo complete triage",
+        "summary": "dongo complete triage",
         "security": [
           {
             "bearerAuth": [
@@ -283,7 +283,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -293,7 +293,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -325,7 +325,7 @@
     "/api/agent/v1/create_work": {
       "post": {
         "operationId": "create_work",
-        "summary": "Dongo create work",
+        "summary": "dongo create work",
         "security": [
           {
             "bearerAuth": [
@@ -335,7 +335,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -345,7 +345,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -377,7 +377,7 @@
     "/api/agent/v1/get_work": {
       "get": {
         "operationId": "get_work",
-        "summary": "Dongo get work",
+        "summary": "dongo get work",
         "security": [
           {
             "bearerAuth": [
@@ -387,7 +387,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -397,7 +397,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -441,7 +441,7 @@
     "/api/agent/v1/start_work": {
       "post": {
         "operationId": "start_work",
-        "summary": "Dongo start work",
+        "summary": "dongo start work",
         "security": [
           {
             "bearerAuth": [
@@ -451,7 +451,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -461,7 +461,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -493,7 +493,7 @@
     "/api/agent/v1/update_work": {
       "post": {
         "operationId": "update_work",
-        "summary": "Dongo update work",
+        "summary": "dongo update work",
         "security": [
           {
             "bearerAuth": [
@@ -503,7 +503,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -513,7 +513,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -545,7 +545,7 @@
     "/api/agent/v1/renew_claim": {
       "post": {
         "operationId": "renew_claim",
-        "summary": "Dongo renew claim",
+        "summary": "dongo renew claim",
         "security": [
           {
             "bearerAuth": [
@@ -555,7 +555,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -565,7 +565,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -597,7 +597,7 @@
     "/api/agent/v1/finish_work": {
       "post": {
         "operationId": "finish_work",
-        "summary": "Dongo finish work",
+        "summary": "dongo finish work",
         "security": [
           {
             "bearerAuth": [
@@ -607,7 +607,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -617,7 +617,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -649,7 +649,7 @@
     "/api/agent/v1/add_comment": {
       "post": {
         "operationId": "add_comment",
-        "summary": "Dongo add comment",
+        "summary": "dongo add comment",
         "security": [
           {
             "bearerAuth": [
@@ -659,7 +659,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -669,7 +669,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -701,7 +701,7 @@
     "/api/agent/v1/request_attention": {
       "post": {
         "operationId": "request_attention",
-        "summary": "Dongo request attention",
+        "summary": "dongo request attention",
         "security": [
           {
             "bearerAuth": [
@@ -711,7 +711,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -721,7 +721,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -753,7 +753,7 @@
     "/api/agent/v1/get_attention": {
       "get": {
         "operationId": "get_attention",
-        "summary": "Dongo get attention",
+        "summary": "dongo get attention",
         "security": [
           {
             "bearerAuth": [
@@ -763,7 +763,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -773,7 +773,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -807,7 +807,7 @@
     "/api/agent/v1/resolve_attention": {
       "post": {
         "operationId": "resolve_attention",
-        "summary": "Dongo resolve attention",
+        "summary": "dongo resolve attention",
         "security": [
           {
             "bearerAuth": [
@@ -817,7 +817,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -827,7 +827,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -859,7 +859,7 @@
     "/api/agent/v1/get_attachment": {
       "get": {
         "operationId": "get_attachment",
-        "summary": "Dongo get attachment",
+        "summary": "dongo get attachment",
         "security": [
           {
             "bearerAuth": [
@@ -870,7 +870,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -880,7 +880,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -915,7 +915,7 @@
     "/api/agent/v1/sync_snapshot": {
       "get": {
         "operationId": "sync_snapshot",
-        "summary": "Dongo sync snapshot",
+        "summary": "dongo sync snapshot",
         "security": [
           {
             "bearerAuth": [
@@ -925,7 +925,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Dongo operation",
+            "description": "Successful dongo operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -935,7 +935,7 @@
             }
           },
           "default": {
-            "description": "Dongo operation error",
+            "description": "dongo operation error",
             "content": {
               "application/json": {
                 "schema": {

@@ -171,7 +171,7 @@ Node documents that POSIX owner/group/other mode distinctions are not implemente
 
 Windows persistent interactive login remains release-blocked until one of these is implemented and tested on a clean Windows host:
 
-- an owner-only ACL created and then independently verified for `%LOCALAPPDATA%\Dongo\credentials`; or
+- an owner-only ACL created and then independently verified for `%LOCALAPPDATA%\dongo\credentials`; or
 - a stable, signed dongo Credential Manager helper.
 
 WSL follows the POSIX contract only when the credential directory is on the Linux filesystem, not a broadly mounted Windows path. `DONGO_TOKEN` remains available for externally managed non-interactive environments, but is not a substitute for an interactive Windows design.
