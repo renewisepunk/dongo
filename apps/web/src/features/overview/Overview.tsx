@@ -88,6 +88,10 @@ export function Overview(props: OverviewProps) {
   let unsubscribeWork: (() => void) | undefined;
   let unsubscribeIntake: (() => void) | undefined;
   let fileInput: HTMLInputElement | undefined;
+  let projectMenuButton: HTMLButtonElement | undefined;
+  let projectMenu: HTMLDivElement | undefined;
+  let profileMenuButton: HTMLButtonElement | undefined;
+  let profileMenu: HTMLDivElement | undefined;
   const uploadControllers = new Map<string, AbortController>();
   const pendingUploads = new Map<string, Promise<void>>();
   let disposed = false;
@@ -217,6 +221,43 @@ export function Overview(props: OverviewProps) {
     navigate(
       `/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/settings?tab=${encodeURIComponent(tab)}`,
     );
+  };
+
+  const menuItems = (menu: HTMLElement): HTMLElement[] =>
+    [...menu.querySelectorAll<HTMLElement>(
+      '[role="menuitem"], [role="menuitemradio"]',
+    )].filter((item) => !item.hasAttribute("disabled"));
+
+  const focusFirstMenuItem = (menu: HTMLElement | undefined) => {
+    queueMicrotask(() => menu && menuItems(menu)[0]?.focus());
+  };
+
+  const handleMenuKeyDown = (
+    event: KeyboardEvent,
+    menu: HTMLElement,
+    close: () => void,
+    trigger: HTMLElement | undefined,
+  ) => {
+    const items = menuItems(menu);
+    const current = items.indexOf(document.activeElement as HTMLElement);
+    let next: number | undefined;
+    if (event.key === "ArrowDown") next = current < 0 ? 0 : (current + 1) % items.length;
+    if (event.key === "ArrowUp") next = current < 0 ? items.length - 1 : (current - 1 + items.length) % items.length;
+    if (event.key === "Home") next = 0;
+    if (event.key === "End") next = items.length - 1;
+    if (next !== undefined && items[next]) {
+      event.preventDefault();
+      items[next].focus();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      queueMicrotask(() => trigger?.focus());
+    } else if (event.key === "Tab") {
+      window.setTimeout(close, 0);
+    }
   };
 
   const closeDetail = (updateRoute = true) => {
@@ -532,8 +573,12 @@ export function Overview(props: OverviewProps) {
       if (event.key === "Escape") {
         if (projectMenuOpen() || profileMenuOpen()) {
           event.preventDefault();
+          const trigger = projectMenuOpen()
+            ? projectMenuButton
+            : profileMenuButton;
           setProjectMenuOpen(false);
           setProfileMenuOpen(false);
+          queueMicrotask(() => trigger?.focus());
           return;
         }
         if (searchOpen()) {
@@ -642,20 +687,34 @@ export function Overview(props: OverviewProps) {
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
         <div class="header-menu">
           <button
+            ref={projectMenuButton}
             class="project-button"
             type="button"
             aria-label="Select organization or project"
             aria-haspopup="menu"
             aria-expanded={projectMenuOpen()}
             onClick={() => {
-              setProjectMenuOpen((open) => !open);
+              const next = !projectMenuOpen();
+              setProjectMenuOpen(next);
               setProfileMenuOpen(false);
+              if (next) focusFirstMenuItem(projectMenu);
             }}
           >
             <span>{projectName()}</span><span style={{ color: "var(--text-faint)" }}>▾</span>
           </button>
           <Show when={projectMenuOpen()}>
-            <div class="menu-popover project-menu-popover" role="menu" aria-label="Organizations and projects">
+            <div
+              ref={projectMenu}
+              class="menu-popover project-menu-popover"
+              role="menu"
+              aria-label="Organizations and projects"
+              onKeyDown={(event) => handleMenuKeyDown(
+                event,
+                event.currentTarget,
+                () => setProjectMenuOpen(false),
+                projectMenuButton,
+              )}
+            >
               <For each={projectGroups()}>{(group) => (
                 <div class="menu-group">
                   <div class="menu-label">{group.name}</div>
@@ -693,20 +752,34 @@ export function Overview(props: OverviewProps) {
         </button>
         <div class="header-menu header-menu--right">
           <button
+            ref={profileMenuButton}
             class="avatar-button"
             type="button"
             aria-label="Profile and settings"
             aria-haspopup="menu"
             aria-expanded={profileMenuOpen()}
             onClick={() => {
-              setProfileMenuOpen((open) => !open);
+              const next = !profileMenuOpen();
+              setProfileMenuOpen(next);
               setProjectMenuOpen(false);
+              if (next) focusFirstMenuItem(profileMenu);
             }}
           >
             {viewerInitials()}
           </button>
           <Show when={profileMenuOpen()}>
-            <div class="menu-popover profile-menu-popover" role="menu" aria-label="Profile and settings">
+            <div
+              ref={profileMenu}
+              class="menu-popover profile-menu-popover"
+              role="menu"
+              aria-label="Profile and settings"
+              onKeyDown={(event) => handleMenuKeyDown(
+                event,
+                event.currentTarget,
+                () => setProfileMenuOpen(false),
+                profileMenuButton,
+              )}
+            >
               <div class="profile-summary" role="presentation">
                 <strong>{viewer()?.name ?? "Dongo user"}</strong>
                 <span>{viewer()?.email ?? ""}</span>
