@@ -52,12 +52,21 @@ export const commentsForHuman = query({
   handler: async (ctx, args) => {
     await requireHumanProject(ctx, args.projectId, { allowArchived: true });
     const term = requireString(args.term, "term", 200);
-    return await ctx.db
+    const page = await ctx.db
       .query("comments")
       .withSearchIndex("search_body", (q) =>
         q.search("body", term).eq("projectId", args.projectId),
       )
       .paginate(args.paginationOpts);
+    return {
+      ...page,
+      page: await Promise.all(
+        page.page.map(async (comment) => ({
+          comment,
+          work: await ctx.db.get(comment.workItemId),
+        })),
+      ),
+    };
   },
 });
 

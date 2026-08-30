@@ -149,12 +149,67 @@ export type ProjectOverview = {
   intakes: Intake[];
 };
 
+type SearchSourceCursor = {
+  cursor: string | null;
+  done: boolean;
+};
+
+export type ProjectSearchCursor = {
+  work: SearchSourceCursor;
+  intakes: SearchSourceCursor;
+  comments: SearchSourceCursor;
+};
+
+export type ProjectSearchResult = {
+  kind: "work" | "intake" | "comment";
+  id: string;
+  targetKind: "work" | "intake";
+  targetId: string;
+  title: string;
+  excerpt: string;
+  identifier?: string;
+  state?: string;
+  age: string;
+  createdAt: number;
+};
+
+export type ProjectSearchPage = {
+  results: ProjectSearchResult[];
+  nextCursor?: ProjectSearchCursor;
+};
+
+type SearchPage<T> = {
+  page: T[];
+  isDone: boolean;
+  continueCursor: string;
+};
+
+type SearchPagination = {
+  numItems: number;
+  cursor: string | null;
+};
+
 const listProjectsReference = makeFunctionReference<"query", Record<string, never>, ProjectGroup[]>(
   "domains/projects/index:listMine",
 );
 const overviewReference = makeFunctionReference<"query", { projectId: string }, OverviewSnapshot>(
   "domains/overview/index:getForHuman",
 );
+const searchWorkReference = makeFunctionReference<
+  "query",
+  { projectId: string; term: string; paginationOpts: SearchPagination },
+  SearchPage<WorkDoc>
+>("domains/search/index:workForHuman");
+const searchIntakesReference = makeFunctionReference<
+  "query",
+  { projectId: string; term: string; paginationOpts: SearchPagination },
+  SearchPage<IntakeDoc>
+>("domains/search/index:intakesForHuman");
+const searchCommentsReference = makeFunctionReference<
+  "query",
+  { projectId: string; term: string; paginationOpts: SearchPagination },
+  SearchPage<{ comment: CommentDoc; work: WorkDoc | null }>
+>("domains/search/index:commentsForHuman");
 const workDetailReference = makeFunctionReference<"query", { workItemId: string }, WorkDetailSnapshot>(
   "domains/work/index:getDetailForHuman",
 );
@@ -491,6 +546,103 @@ export class ProjectDataConnection {
       (detail) => onUpdate(mapWorkDetail(workItem, detail)),
       onError,
     );
+  }
+
+  async searchProject(
+    term: string,
+    cursor?: ProjectSearchCursor,
+  ): Promise<ProjectSearchPage> {
+    const initial: SearchSourceCursor = { cursor: null, done: false };
+    const position = cursor ?? {
+      work: initial,
+      intakes: initial,
+      comments: initial,
+    };
+    const empty = <T>(): SearchPage<T> => ({
+      page: [],
+      isDone: true,
+      continueCursor: "",
+    });
+    const args = (source: SearchSourceCursor) => ({
+      projectId: this.projectId,
+      term,
+      paginationOpts: { numItems: 8, cursor: source.cursor },
+    });
+    const [workPage, intakePage, commentPage] = await Promise.all([
+      position.work.done
+        ? Promise.resolve(empty<WorkDoc>())
+        : this.#client.query(searchWorkReference, args(position.work)),
+      position.intakes.done
+        ? Promise.resolve(empty<IntakeDoc>())
+        : this.#client.query(searchIntakesReference, args(position.intakes)),
+      position.comments.done
+        ? Promise.resolve(empty<{ comment: CommentDoc; work: WorkDoc | null }>())
+        : this.#client.query(searchCommentsReference, args(position.comments)),
+    ]);
+    const now = Date.now();
+    const results: ProjectSearchResult[] = [
+      ...workPage.page.map((work) => ({
+        kind: "work" as const,
+        id: work._id,
+        targetKind: "work" as const,
+        targetId: work._id,
+        title: work.title,
+        excerpt: work.description || work.title,
+        identifier: work.identifier,
+        state: work.state,
+        age: relativeTime(work.updatedAt, now) || "now",
+        createdAt: work.updatedAt,
+      })),
+      ...intakePage.page.map((intake) => ({
+        kind: "intake" as const,
+        id: intake._id,
+        targetKind: "intake" as const,
+        targetId: intake._id,
+        title: intake.text || "Intake",
+        excerpt: intake.text || "Intake",
+        state: intake.status,
+        age: relativeTime(intake.createdAt, now) || "now",
+        createdAt: intake.createdAt,
+      })),
+      ...commentPage.page.flatMap(({ comment, work }) =>
+        work
+          ? [{
+              kind: "comment" as const,
+              id: comment._id,
+              targetKind: "work" as const,
+              targetId: work._id,
+              title: work.title,
+              excerpt: comment.body,
+              identifier: work.identifier,
+              state: work.state,
+              age: relativeTime(comment.createdAt, now) || "now",
+              createdAt: comment.createdAt,
+            }]
+          : [],
+      ),
+    ].sort((left, right) => right.createdAt - left.createdAt);
+    const nextCursor: ProjectSearchCursor = {
+      work: {
+        cursor: workPage.isDone ? null : workPage.continueCursor,
+        done: workPage.isDone,
+      },
+      intakes: {
+        cursor: intakePage.isDone ? null : intakePage.continueCursor,
+        done: intakePage.isDone,
+      },
+      comments: {
+        cursor: commentPage.isDone ? null : commentPage.continueCursor,
+        done: commentPage.isDone,
+      },
+    };
+    return {
+      results,
+      ...(
+        nextCursor.work.done && nextCursor.intakes.done && nextCursor.comments.done
+          ? {}
+          : { nextCursor }
+      ),
+    };
   }
 
   async createIntake(

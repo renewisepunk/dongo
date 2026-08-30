@@ -1,5 +1,5 @@
 import { useNavigate } from "@solidjs/router";
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
 import { humanSession } from "../../lib/auth-client";
 import {
@@ -13,19 +13,17 @@ import {
   mergeOptimisticIntakes,
 } from "../../lib/optimistic-intake";
 import { ProjectDataConnection } from "../../lib/project-data";
+import type {
+  ProjectSearchCursor,
+  ProjectSearchResult,
+} from "../../lib/project-data";
+import { searchHighlightSegments } from "../../lib/search-highlight";
 import type { Intake, WorkItem } from "./model";
 import "./overview.css";
 
 type OverviewProps = {
   orgSlug: string;
   projectSlug: string;
-};
-
-type SearchResult = {
-  kind: "work" | "intake";
-  id: string;
-  identifier: string;
-  title: string;
 };
 
 type DraftAttachment = {
@@ -37,6 +35,16 @@ type DraftAttachment = {
   attachmentId?: string;
   error?: string;
 };
+
+function HighlightedSearchText(props: { text: string; query: string }) {
+  return (
+    <For each={searchHighlightSegments(props.text, props.query)}>{(segment) => (
+      <Show when={segment.match} fallback={segment.text}>
+        <mark>{segment.text}</mark>
+      </Show>
+    )}</For>
+  );
+}
 
 export function Overview(props: OverviewProps) {
   const navigate = useNavigate();
@@ -51,6 +59,11 @@ export function Overview(props: OverviewProps) {
   const [selectedIntakeId, setSelectedIntakeId] = createSignal<string>();
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [query, setQuery] = createSignal("");
+  const [searchResults, setSearchResults] = createSignal<ProjectSearchResult[]>([]);
+  const [searchCursor, setSearchCursor] = createSignal<ProjectSearchCursor>();
+  const [searchLoading, setSearchLoading] = createSignal(false);
+  const [searchError, setSearchError] = createSignal("");
+  const [searchRetry, setSearchRetry] = createSignal(0);
   const [toast, setToast] = createSignal("");
   const [loading, setLoading] = createSignal(true);
   const [loadError, setLoadError] = createSignal("");
@@ -64,6 +77,7 @@ export function Overview(props: OverviewProps) {
   const uploadControllers = new Map<string, AbortController>();
   const pendingUploads = new Map<string, Promise<void>>();
   let disposed = false;
+  let searchGeneration = 0;
 
   const needs = createMemo(() => work().filter((item) => item.state === "needs"));
   const working = createMemo(() => work().filter((item) => item.state === "working"));
@@ -97,17 +111,35 @@ export function Overview(props: OverviewProps) {
     visibleIntakes().find((item) => item.id === selectedIntakeId()),
   );
 
-  const results = createMemo<SearchResult[]>(() => {
-    const value = query().trim().toLowerCase();
-    if (value.length < 2) return [];
-    return [
-      ...work()
-        .filter((item) => `${item.title} ${item.goal} ${item.identifier}`.toLowerCase().includes(value))
-        .map((item) => ({ kind: "work" as const, id: item.id, identifier: item.identifier, title: item.title })),
-      ...visibleIntakes()
-        .filter((item) => item.text.toLowerCase().includes(value))
-        .map((item) => ({ kind: "intake" as const, id: item.id, identifier: "inbox", title: item.text })),
-    ];
+  createEffect(() => {
+    const open = searchOpen();
+    const term = query().trim();
+    void searchRetry();
+    const generation = ++searchGeneration;
+    setSearchResults([]);
+    setSearchCursor(undefined);
+    setSearchError("");
+    if (!open || term.length < 2 || !connection) {
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    const timer = window.setTimeout(() => {
+      void connection!.searchProject(term).then(
+        (page) => {
+          if (generation !== searchGeneration) return;
+          setSearchResults(page.results);
+          setSearchCursor(page.nextCursor);
+          setSearchLoading(false);
+        },
+        () => {
+          if (generation !== searchGeneration) return;
+          setSearchError("Search is temporarily unavailable.");
+          setSearchLoading(false);
+        },
+      );
+    }, 220);
+    onCleanup(() => window.clearTimeout(timer));
   });
 
   const announce = (message: string) => {
@@ -330,18 +362,45 @@ export function Overview(props: OverviewProps) {
     }
   };
 
-  const selectSearchResult = (result: SearchResult) => {
+  const loadMoreSearch = async () => {
+    const cursor = searchCursor();
+    const term = query().trim();
+    if (!cursor || !connection || searchLoading() || term.length < 2) return;
+    const generation = searchGeneration;
+    setSearchLoading(true);
+    setSearchError("");
+    try {
+      const page = await connection.searchProject(term, cursor);
+      if (generation !== searchGeneration) return;
+      setSearchResults((items) => {
+        const seen = new Set(items.map((item) => `${item.kind}:${item.id}`));
+        return [
+          ...items,
+          ...page.results.filter((item) => !seen.has(`${item.kind}:${item.id}`)),
+        ];
+      });
+      setSearchCursor(page.nextCursor);
+    } catch {
+      if (generation === searchGeneration) {
+        setSearchError("More results could not be loaded.");
+      }
+    } finally {
+      if (generation === searchGeneration) setSearchLoading(false);
+    }
+  };
+
+  const selectSearchResult = (result: ProjectSearchResult) => {
     setSearchOpen(false);
     setQuery("");
-    if (result.kind === "work") openWork(result.id);
-    else openIntake(result.id);
+    if (result.targetKind === "work") openWork(result.targetId);
+    else openIntake(result.targetId);
   };
 
   onMount(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setSearchOpen(true);
+        if (!loading() && !loadError()) setSearchOpen(true);
       }
       if (event.key === "Escape") {
         if (searchOpen()) {
@@ -435,7 +494,7 @@ export function Overview(props: OverviewProps) {
           <span>{projectName()}</span><span style={{ color: "var(--text-faint)" }}>▾</span>
         </button>
         <div class="header-spacer" />
-        <button class="search-button" type="button" onClick={() => setSearchOpen(true)} aria-label="Search this project">
+        <button class="search-button" type="button" disabled={loading() || Boolean(loadError())} onClick={() => setSearchOpen(true)} aria-label="Search this project">
           <span>search</span><span class="shortcut">⌘K</span>
         </button>
         <button class="avatar-button" type="button" aria-label="Profile and settings" onClick={() => navigate(`/app/${props.orgSlug}/${props.projectSlug}/settings`)}>
@@ -758,21 +817,53 @@ export function Overview(props: OverviewProps) {
                 onInput={(event) => setQuery(event.currentTarget.value)}
                 placeholder="Search work, comments and intake…"
               />
+              <Show when={query()}>
+                <button class="icon-button mono" type="button" aria-label="Clear search" onClick={() => setQuery("")}>clear</button>
+              </Show>
               <button class="icon-button mono" type="button" onClick={() => setSearchOpen(false)}>esc</button>
             </div>
             <div class="search-box__results">
-              <div class="search-scope">scope · {props.projectSlug} · work, comments, intake</div>
+              <div class="search-scope">
+                scope · {props.projectSlug} · work, comments, intake
+                <Show when={searchResults().length}> · {searchResults().length} result{searchResults().length === 1 ? "" : "s"}</Show>
+              </div>
               <Show when={query().trim().length < 2}>
                 <div class="search-empty">Type at least two characters to search this project.</div>
               </Show>
-              <For each={results()}>{(result) => (
+              <For each={searchResults()}>{(result) => (
                 <button class="search-result" type="button" onClick={() => selectSearchResult(result)}>
-                  <span class="search-result__meta"><span>{result.kind}</span><span>{result.identifier}</span></span>
-                  <span class="search-result__title">{result.title}</span>
+                  <span class="search-result__meta">
+                    <span>{result.kind}</span>
+                    <Show when={result.identifier}><span>{result.identifier}</span></Show>
+                    <Show when={result.state}><span>{result.state}</span></Show>
+                    <span>{result.age}</span>
+                  </span>
+                  <span class="search-result__title">
+                    <HighlightedSearchText text={result.title} query={query()} />
+                  </span>
+                  <Show when={result.excerpt !== result.title}>
+                    <span class="search-result__excerpt">
+                      <HighlightedSearchText text={result.excerpt} query={query()} />
+                    </span>
+                  </Show>
                 </button>
               )}</For>
-              <Show when={query().trim().length >= 2 && results().length === 0}>
+              <Show when={searchLoading()}>
+                <div class="search-empty" role="status">Searching this project…</div>
+              </Show>
+              <Show when={searchError()}>
+                <div class="search-empty" role="alert">
+                  <span>{searchError()}</span>{" "}
+                  <button class="search-retry" type="button" onClick={() => setSearchRetry((value) => value + 1)}>Retry</button>
+                </div>
+              </Show>
+              <Show when={query().trim().length >= 2 && !searchLoading() && !searchError() && searchResults().length === 0}>
                 <div class="search-empty">Nothing found in this project.</div>
+              </Show>
+              <Show when={searchCursor() && !searchError()}>
+                <button class="search-load-more" type="button" disabled={searchLoading()} onClick={() => void loadMoreSearch()}>
+                  {searchLoading() ? "loading…" : "load more"}
+                </button>
               </Show>
             </div>
           </div>
