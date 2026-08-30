@@ -40,18 +40,28 @@ test("fallback must be explicitly supplied", async () => {
 });
 
 test("macOS keychain receives the secret on stdin, never argv", async () => {
-  const calls: Array<{ args: string[]; input?: string }> = [];
+  const calls: Array<{
+    command: string;
+    args: string[];
+    input?: string;
+    environment?: NodeJS.ProcessEnv;
+  }> = [];
   const runner: CommandRunner = {
-    run: async (_command, args, input) => {
-      calls.push({ args, input });
+    run: async (command, args, input, environment) => {
+      calls.push({ command, args, input, environment });
       return { code: 0, stdout: "", stderr: "" };
     },
   };
   const store = new MacOSKeychainStore({ runner });
   await store.set("profile", "refresh-secret");
-  assert.equal(calls[0]?.input, "refresh-secret\n");
+  assert.equal(calls[0]?.command, "/usr/bin/swift");
+  assert.equal(calls[0]?.input, "refresh-secret");
   assert.ok(!calls[0]?.args.includes("refresh-secret"));
-  assert.equal(calls[0]?.args.at(-1), "-w");
+  assert.ok(!Object.values(calls[0]?.environment ?? {}).includes("refresh-secret"));
+  assert.deepEqual(calls[0]?.environment, {
+    DONGO_KEYCHAIN_ACCOUNT: "profile",
+    DONGO_KEYCHAIN_SERVICE: "so.dongo.cli",
+  });
 });
 
 test("missing OS tooling produces a stable error or uses only an explicit fallback", async () => {

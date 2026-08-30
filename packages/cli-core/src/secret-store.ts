@@ -21,14 +21,24 @@ export interface CommandResult {
 }
 
 export interface CommandRunner {
-  run(command: string, args: string[], input?: string): Promise<CommandResult>;
+  run(
+    command: string,
+    args: string[],
+    input?: string,
+    environment?: NodeJS.ProcessEnv,
+  ): Promise<CommandResult>;
 }
 
 export class SpawnCommandRunner implements CommandRunner {
-  run(command: string, args: string[], input = ""): Promise<CommandResult> {
+  run(
+    command: string,
+    args: string[],
+    input = "",
+    environment: NodeJS.ProcessEnv = {},
+  ): Promise<CommandResult> {
     return new Promise((resolve, reject) => {
       const child = spawn(command, args, {
-        env: sanitizedChildEnvironment(),
+        env: sanitizedChildEnvironment(environment),
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
       });
@@ -42,6 +52,55 @@ export class SpawnCommandRunner implements CommandRunner {
     });
   }
 }
+
+const MACOS_KEYCHAIN_SET_SCRIPT = String.raw`
+import Darwin
+import Foundation
+import Security
+
+let environment = ProcessInfo.processInfo.environment
+guard let account = environment["DONGO_KEYCHAIN_ACCOUNT"],
+      let service = environment["DONGO_KEYCHAIN_SERVICE"] else {
+  exit(2)
+}
+let value = FileHandle.standardInput.readDataToEndOfFile()
+guard !value.isEmpty else { exit(2) }
+
+let identity: [CFString: Any] = [
+  kSecClass: kSecClassGenericPassword,
+  kSecAttrAccount: account,
+  kSecAttrService: service,
+]
+let updateStatus = SecItemUpdate(
+  identity as CFDictionary,
+  [kSecValueData: value] as CFDictionary
+)
+if updateStatus == errSecSuccess { exit(0) }
+guard updateStatus == errSecItemNotFound else { exit(1) }
+
+var trustedApplication: SecTrustedApplication?
+guard SecTrustedApplicationCreateFromPath(
+  "/usr/bin/security",
+  &trustedApplication
+) == errSecSuccess,
+let trustedApplication else {
+  exit(1)
+}
+var access: SecAccess?
+guard SecAccessCreate(
+  service as CFString,
+  [trustedApplication] as CFArray,
+  &access
+) == errSecSuccess,
+let access else {
+  exit(1)
+}
+
+var item = identity
+item[kSecValueData] = value
+item[kSecAttrAccess] = access
+exit(SecItemAdd(item as CFDictionary, nil) == errSecSuccess ? 0 : 1)
+`;
 
 export class MemorySecretStore implements SecretStore {
   readonly kind = "memory";
@@ -86,9 +145,13 @@ export class MacOSKeychainStore implements SecretStore {
 
   async set(key: string, value: string): Promise<void> {
     const result = await this.#runner.run(
-      "/usr/bin/security",
-      ["add-generic-password", "-U", "-a", key, "-s", this.#service, "-w"],
-      `${value}\n`,
+      "/usr/bin/swift",
+      ["-e", MACOS_KEYCHAIN_SET_SCRIPT],
+      value,
+      {
+        DONGO_KEYCHAIN_ACCOUNT: key,
+        DONGO_KEYCHAIN_SERVICE: this.#service,
+      },
     );
     if (result.code !== 0) throw this.#unavailable();
   }
