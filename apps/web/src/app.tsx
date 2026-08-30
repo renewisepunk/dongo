@@ -32,6 +32,9 @@ export default function App() {
           <Title>Dongo — agent work, without the project management</Title>
           <Meta name="color-scheme" content="dark" />
           <Meta name="theme-color" content="#08080a" />
+          <Link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+          <Link rel="icon" href="/favicon.ico" sizes="32x32" />
+          <Link rel="apple-touch-icon" href="/apple-touch-icon.png" />
           <Meta
             name="description"
             content="Give coding agents work, see what they are doing, and answer when they need you."
