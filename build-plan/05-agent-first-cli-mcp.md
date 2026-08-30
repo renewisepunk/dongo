@@ -21,6 +21,7 @@ The fixed product/auth origins are `https://dev.dongo.so` for development and `h
 
 - [OpenAI Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp): Codex supports local stdio and remote Streamable HTTP MCP, OAuth with CIMD/DCR, server initialization instructions, project-scoped configuration, and `codex mcp login`.
 - [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp): remote HTTP is the recommended cloud transport; Claude supports project configuration, browser OAuth, secure token refresh, `/mcp`, and `claude mcp login`.
+- [RFC 8252, sections 7.3 and 8.3](https://www.rfc-editor.org/rfc/rfc8252#section-7.3): native loopback callbacks use an ephemeral port; IP literals are preferred over `localhost`, and public native clients require PKCE.
 - [MCP 2026-07-28 specification release](https://blog.modelcontextprotocol.io/posts/2026-07-28/) and [authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization): the modern era is stateless, uses `server/discover` and per-request routing/protocol metadata, prefers CIMD over deprecated DCR, and requires OAuth discovery, PKCE, resource indicators, audience validation, scope challenges, and secure refresh-token handling.
 - [Better Auth MCP documentation](https://better-auth.com/docs/beta/plugins/mcp): the MCP/OAuth provider can compose protected-resource metadata, OAuth endpoints, CIMD, and resource-bound tokens, but the current package line is beta and must be pinned and tested.
 - [Better Auth Device Authorization documentation](https://better-auth.com/docs/plugins/device-authorization): a registered public CLI can open `verification_uri_complete`, poll the token endpoint, and receive an audience-bound OAuth token without a local callback listener.
@@ -37,7 +38,7 @@ The fixed product/auth origins are `https://dev.dongo.so` for development and `h
               HTTPS adapter              MCP adapter
              /api/agent/v1          remote Streamable HTTP
                     |                       |
-                Dongo CLI       Codex / Claude / generic hosts
+                dongo CLI       Codex / Claude / generic hosts
                     |
       private user credential file + local .agent-work export
 
@@ -67,17 +68,17 @@ dongo connect
 Expected flow:
 
 ```text
-CLI requests device authorization for the Dongo agent API
+CLI requests device authorization for the dongo agent API
   -> resolves the project from an explicit ref, repository marker, repository URL, unique name/slug, or sole active project
   -> prints and opens verification_uri_complete
   -> terminal displays the short code for visual confirmation
   -> browser signs the human in if required
-  -> browser shows the fixed agent-selected project, Dongo CLI, machine label, and requested scopes
+  -> browser shows the fixed agent-selected project, dongo CLI, machine label, and requested scopes
   -> human explicitly approves or denies
   -> browser says “Approved — you can close this window” and points back to the terminal
   -> CLI polls at the server-provided interval
   -> CLI receives short-lived access + rotated refresh credentials
-  -> credential is atomically stored in the private Dongo user config, never the repository
+  -> credential is atomically stored in the private dongo user config, never the repository
   -> non-secret project marker is written
   -> doctor runs and reports the authenticated project/Actor
 ```
@@ -121,6 +122,8 @@ host connects without a token
 ```
 
 For native hosts such as Codex and Claude Code, the final callback is an HTTP loopback listener owned by the host. dongo must perform a normal top-level redirect to that exact `redirect_uri`; it must never fetch, frame, proxy, or otherwise contact the loopback listener from `dev.dongo.so`. Those alternatives trigger browser Private Network Access/device-access prompts and make a legitimate OAuth flow look suspicious. The callback page styling and its “safe to close” copy are therefore host-owned. A branded dongo completion page is possible only when the host explicitly supports a post-callback return URL or serves branded callback HTML itself.
+
+Claude Code's current CIMD declares the portless `http://localhost/callback` URI but its CLI normally chooses an available port and requests `http://localhost:<port>/callback`. The compatibility layer may add only that exact port-bearing URI to Claude's freshly fetched metadata for the current authorization request. It must first verify the exact Claude metadata client ID, authorization endpoint, `http` scheme, `localhost` host, numeric port `1-65535`, `/callback` path, absence of credentials/query/fragment, and the metadata document's original portless callback. This does not create a wildcard registration or weaken PKCE, state, resource, scope, consent, expiry, or audience validation. RFC 8252's loopback guidance explains the ephemeral-port requirement and recommends IP literals over `localhost`; the exception remains pinned to Claude until the client changes.
 
 Host setup targets:
 

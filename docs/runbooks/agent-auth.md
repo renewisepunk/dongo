@@ -85,6 +85,22 @@ After host-native OAuth, call one read-only session-start tool. Then verify one 
 
 Native host loopback callbacks must remain top-level redirects to the host-provided `redirect_uri`. Never embed or fetch a localhost callback from the dongo web app: Chrome and other browsers may show a device/private-network access prompt. The plain final localhost page is served by the host, not dongo, and can only be branded when the host offers an explicit post-callback redirect or customizable callback response.
 
+### Claude Code CIMD loopback compatibility
+
+Claude Code currently identifies itself with the exact Client ID Metadata Document `https://claude.ai/oauth/claude-code-client-metadata`. That document declares `http://localhost/callback`, while the native CLI binds an available ephemeral port and sends `http://localhost:<port>/callback` in the authorization request. Claude's documented default is a random callback port, and RFC 8252 requires native loopback clients to be able to use an ephemeral port. RFC 8252 recommends an IP literal over `localhost`; this is a compatibility exception for Claude's current behavior, not a general localhost policy.
+
+The authorization Worker may admit the port-bearing URI only when all of these conditions are true:
+
+- the request is for `/api/auth/oauth2/authorize`;
+- `client_id` is the exact Claude Code metadata URL above;
+- `redirect_uri` is exactly `http://localhost:<1-65535>/callback` with no credentials, query, or fragment;
+- the freshly fetched, redirect-free, size-bounded metadata document has the same `client_id` and already declares the portless `http://localhost/callback` URI;
+- the normal authorization-code, S256 PKCE, state, resource, scope, consent, expiry, and token-audience checks still pass.
+
+Only that one requested URI is added to the in-memory metadata used for the current authorization server instance. It is not persisted as a wildcard, does not apply to DCR clients or any other CIMD client, and does not permit another host, scheme, path, or portless request. Unit tests must keep every negative case above. If a future Claude release publishes the exact runtime callback or switches to a loopback IP literal, remove this exception after the pinned-host compatibility gate passes.
+
+When Claude reports `invalid_client`, verify that its metadata fetch returned `200 application/json` without redirects. When it reports a redirect mismatch, compare the requested callback shape to the exact rule above; do not add a wildcard or disable exact redirect validation. Complete login with `claude mcp login <name>`, verify `claude mcp get <name>` reports connected, then prove one read and one idempotent write tool. Do not print or retain the authorization URL because it contains short-lived OAuth request material.
+
 ## Human/agent auth isolation
 
 Human sign-in runs in the Convex-integrated Better Auth instance. CLI/MCP OAuth runs in the isolated Cloudflare authorization Worker. A signed, short-lived, single-use bridge assertion is the only session handoff. Human browser cookies are not agent credentials, and agent access/refresh tokens are never sent to Convex.
