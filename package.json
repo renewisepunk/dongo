@@ -26,6 +26,7 @@
     "smoke:dev": "node scripts/smoke-dev.mjs",
     "verify:environment-boundaries": "node scripts/verify-environment-boundaries.mjs",
     "verify:no-secrets": "node scripts/verify-no-secrets.mjs",
+    "verify:runtime-logs": "node scripts/verify-runtime-logs.mjs",
     "types": "wrangler types",
     "convex:codegen": "convex codegen",
     "convex:dev": "convex dev",

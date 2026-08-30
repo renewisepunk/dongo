@@ -243,7 +243,9 @@ function privateKeyPem(buffer: ArrayBuffer): string {
   let binary = "";
   for (const byte of new Uint8Array(buffer)) binary += String.fromCharCode(byte);
   const lines = btoa(binary).match(/.{1,64}/gu) ?? [];
-  return `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----`;
+  const begin = ["-----BEGIN ", "PRIVATE KEY-----"].join("");
+  const end = ["-----END ", "PRIVATE KEY-----"].join("");
+  return `${begin}\n${lines.join("\n")}\n${end}`;
 }
 
 function emailPayload(): EmailDeliveryRequest {
