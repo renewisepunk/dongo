@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { convexTest } from "convex-test";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import schema from "../schema";
 import { modules } from "../test.setup";
 
@@ -30,7 +30,7 @@ describe("project administration", () => {
       api.domains.projects.index.createPersonalOrganization,
       { name: "Admin Test", slug: `admin-${crypto.randomUUID()}` },
     );
-    const project = await owner.mutation(api.domains.projects.index.createProject, {
+    const project = await owner.mutation(internal.domains.projects.index.createProject, {
       organizationId: organization.organizationId,
       name: "Admin Test",
       slug: "admin",
@@ -190,7 +190,7 @@ describe("project administration", () => {
       api.domains.projects.index.createPersonalOrganization,
       { name: "Archive Test", slug: `archive-${crypto.randomUUID()}` },
     );
-    const project = await owner.mutation(api.domains.projects.index.createProject, {
+    const project = await owner.mutation(internal.domains.projects.index.createProject, {
       organizationId: organization.organizationId,
       name: "Archive Test",
       slug: "archive",

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { action } from "../../_generated/server";
-import { api } from "../../_generated/api";
+import { internal } from "../../_generated/api";
 import { provisionAuthResource } from "../../gateway/outbound";
 import type { Id } from "../../_generated/dataModel";
 
@@ -26,7 +26,7 @@ export const createAndProvisionResource = action({
       publicRef: string;
       created: boolean;
     } = await ctx.runMutation(
-      api.domains.projects.index.createProject,
+      internal.domains.projects.index.createProject,
       args,
     );
     await provisionAuthResource({
@@ -41,7 +41,7 @@ export const provisionExistingResource = action({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args): Promise<{ resourceProvisioned: true }> => {
     const project = await ctx.runQuery(
-      api.domains.projects.index.provisioningInfo,
+      internal.domains.projects.index.provisioningInfo,
       args,
     );
     await provisionAuthResource(project);

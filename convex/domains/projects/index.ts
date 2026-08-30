@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { mutation, query } from "../../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "../../_generated/server";
 import {
   requireCurrentProfile,
   requireHumanActor,
@@ -108,7 +113,7 @@ export const createPersonalOrganization = mutation({
   },
 });
 
-export const createProject = mutation({
+export const createProject = internalMutation({
   args: {
     organizationId: v.id("organizations"),
     name: v.string(),
@@ -199,7 +204,7 @@ export const createProject = mutation({
   },
 });
 
-export const provisioningInfo = query({
+export const provisioningInfo = internalQuery({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
     const principal = await requireHumanProject(ctx, args.projectId, {

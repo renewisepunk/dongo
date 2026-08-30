@@ -31,7 +31,7 @@ describe("attachment edge contract", () => {
       api.domains.projects.index.createPersonalOrganization,
       { name: "Attachment Test", slug },
     );
-    const project = await t.mutation(api.domains.projects.index.createProject, {
+    const project = await t.mutation(internal.domains.projects.index.createProject, {
       organizationId: organization.organizationId,
       name: "Attachment Test",
       slug: "attachments",
@@ -229,7 +229,7 @@ describe("attachment edge contract", () => {
       api.domains.projects.index.createPersonalOrganization,
       { name: "Discard Test", slug },
     );
-    const project = await t.mutation(api.domains.projects.index.createProject, {
+    const project = await t.mutation(internal.domains.projects.index.createProject, {
       organizationId: organization.organizationId,
       name: "Discard Test",
       slug: "discard",

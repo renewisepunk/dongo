@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { convexTest } from "convex-test";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import schema from "../schema";
 import { modules } from "../test.setup";
 
@@ -21,7 +21,7 @@ describe("completed Work history", () => {
       api.domains.projects.index.createPersonalOrganization,
       { name: "History Test", slug: `history-${crypto.randomUUID()}` },
     );
-    const project = await t.mutation(api.domains.projects.index.createProject, {
+    const project = await t.mutation(internal.domains.projects.index.createProject, {
       organizationId: organization.organizationId,
       name: "History Test",
       slug: "history",
