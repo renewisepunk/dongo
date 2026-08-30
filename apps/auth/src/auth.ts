@@ -7,6 +7,7 @@ import {
   type SchemaClient,
 } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
 import { dongoHumanBridge } from "./bridge-plugin";
 import type { AuthWorkerEnv } from "./env";
 import {
@@ -251,6 +252,7 @@ export function createAuthorizationServer(env: AuthWorkerEnv) {
     basePath: "/api/auth",
     secret: env.BETTER_AUTH_SECRET,
     database: env.AUTH_DB,
+    disabledPaths: ["/token"],
     trustedOrigins: [env.PUBLIC_ORIGIN],
     user: {
       additionalFields: {
@@ -277,8 +279,8 @@ export function createAuthorizationServer(env: AuthWorkerEnv) {
       database: { joins: false },
     },
     plugins: [
+      jwt({ disableSettingJwtHeader: true }),
       oauthProvider({
-        disableJwtPlugin: true,
         // Resource-server credentials are high-entropy, one-way secrets. Hashing
         // keeps the Auth database unable to recover them while still supporting
         // RFC 7662 client authentication.

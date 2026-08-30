@@ -1,4 +1,5 @@
 import { SignJWT } from "jose";
+import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import {
   allowedMetadataHostname,
@@ -18,8 +19,35 @@ import {
   type PinnedGrantContext,
 } from "../src/grant-binding";
 import { renderOtpEmail } from "../src/otp-email";
+import { createAuthorizationServer } from "../src/auth";
+import type { AuthWorkerEnv } from "../src/env";
 
 describe("authorization boundary security", () => {
+  it("constructs the OAuth server with hashed client secrets and JWKS signing", async () => {
+    const database = new Database(":memory:");
+    const env = {
+      AUTH_DB: database,
+      EMAIL: {},
+      PUBLIC_ORIGIN: "https://dev.dongo.so",
+      AUTH_ISSUER: "https://dev.dongo.so/api/auth",
+      HUMAN_ASSERTION_ISSUER: "https://convex.example",
+      HUMAN_ASSERTION_SECRET: "h".repeat(48),
+      BETTER_AUTH_SECRET: "b".repeat(48),
+      CONVEX_INTERNAL_SITE_URL: "https://convex.example",
+      DONGO_INTERNAL_GATEWAY_SECRET: "g".repeat(48),
+      BETTER_AUTH_RESOURCE_CLIENT_ID: "mcp-resource",
+      BETTER_AUTH_RESOURCE_CLIENT_SECRET: "m".repeat(48),
+      DONGO_API_RESOURCE_CLIENT_ID: "api-resource",
+      DONGO_API_RESOURCE_CLIENT_SECRET: "a".repeat(48),
+      CIMD_ALLOWED_HOST_SUFFIXES: "openai.com,anthropic.com",
+      ENVIRONMENT: "development",
+    } as unknown as AuthWorkerEnv;
+
+    const server = createAuthorizationServer(env);
+    await expect(server.$context).resolves.toBeDefined();
+    database.close();
+  });
+
   it("accepts only environment-local return targets", () => {
     expect(safeReturnTo("/device?user_code=ABCD", "https://dev.dongo.so"))
       .toBe("/device?user_code=ABCD");

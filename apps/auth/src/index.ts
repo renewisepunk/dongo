@@ -87,7 +87,14 @@ export default {
       }
       const auth = createAuthorizationServer(env);
       return securityHeaders(await auth.handler(request), requestId);
-    } catch {
+    } catch (error) {
+      console.error(JSON.stringify({
+        event: "authorization_server_failure",
+        requestId,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        errorMessage:
+          error instanceof Error ? error.message : "Non-Error rejection",
+      }));
       return securityHeaders(
         json({ error: "authorization_server_failure", requestId }, 500),
         requestId,

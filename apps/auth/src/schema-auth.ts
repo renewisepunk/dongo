@@ -14,6 +14,7 @@ export const auth = betterAuth({
   basePath: "/api/auth",
   secret: "schema-generation-only-secret-not-used-at-runtime",
   database: new Database(":memory:"),
+  disabledPaths: ["/token"],
   user: {
     additionalFields: {
       convexProfileId: { type: "string", required: false, input: false },
@@ -27,7 +28,7 @@ export const auth = betterAuth({
     max: 100,
   },
   plugins: [
-    jwt(),
+    jwt({ disableSettingJwtHeader: true }),
     oauthProvider({
       loginPage: "/login",
       consentPage: "/oauth/consent",
