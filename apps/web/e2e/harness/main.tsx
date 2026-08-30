@@ -2,6 +2,8 @@ import { Route, Router } from "@solidjs/router";
 import { render } from "solid-js/web";
 import { Overview } from "../../src/features/overview/Overview";
 import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
+import type { WorkItem } from "../../src/features/overview/model";
+import { CompletedWork } from "../../src/routes/app/[orgSlug]/[projectSlug]/done";
 import AuthCallbackRoute from "../../src/routes/auth/callback";
 import EmailCodeRoute from "../../src/routes/auth/code";
 import ConnectRoute from "../../src/routes/connect";
@@ -498,6 +500,76 @@ const settingsDependencies = {
   },
 };
 
+const firstCompletedPage: WorkItem[] = [
+  {
+    id: "work-done",
+    identifier: "DONGO-6",
+    title: "Complete the agent golden journey",
+    state: "done",
+    agent: "Codex",
+    completedAt: "1h",
+    goal: "Prove the live agent-first workflow.",
+    rank: 100,
+    revision: 7,
+  },
+  {
+    id: "work-completed-1",
+    identifier: "DONGO-5",
+    title: "Freeze the operation contract",
+    state: "done",
+    agent: "Claude",
+    completedAt: "2h",
+    goal: "Keep every agent surface on one contract.",
+    rank: 200,
+    revision: 4,
+  },
+];
+
+const secondCompletedPage: WorkItem[] = [
+  firstCompletedPage[1]!,
+  {
+    id: "work-completed-2",
+    identifier: "DONGO-4",
+    title: "Verify tenant isolation",
+    state: "done",
+    agent: "Codex",
+    completedAt: "3h",
+    goal: "Prove cross-project access fails closed.",
+    rank: 300,
+    revision: 5,
+  },
+];
+
+const completedDependencies = {
+  async connect(orgSlug: string, projectSlug: string) {
+    document.documentElement.dataset.fixtureCompletedTarget = `${orgSlug}/${projectSlug}`;
+    if (oauthScenario() === "completed-connect-error") {
+      throw new Error("fixture completed connection detail must stay hidden");
+    }
+    let listCalls = 0;
+    return {
+      async listCompleted(cursor: string | null = null) {
+        listCalls += 1;
+        if (oauthScenario() === "completed-retry" && listCalls === 1) {
+          throw new Error("fixture completed retry detail must stay hidden");
+        }
+        if (cursor && oauthScenario() === "completed-more-error") {
+          throw new Error("fixture completed pagination detail must stay hidden");
+        }
+        if (oauthScenario() === "completed-empty") {
+          return { items: [] };
+        }
+        return cursor
+          ? { items: structuredClone(secondCompletedPage) }
+          : { items: structuredClone(firstCompletedPage), nextCursor: "completed-next" };
+      },
+      async close() {
+        document.documentElement.dataset.fixtureCompletedClosed = "true";
+      },
+    };
+  },
+};
+
 function FixtureOverview() {
   return (
     <Overview
@@ -542,6 +614,16 @@ render(
             orgSlug="fixture-studio"
             projectSlug="dongo"
             dependencies={settingsDependencies}
+          />
+        )}
+      />
+      <Route
+        path="/app/:orgSlug/:projectSlug/done"
+        component={() => (
+          <CompletedWork
+            orgSlug="fixture-studio"
+            projectSlug="dongo"
+            dependencies={completedDependencies}
           />
         )}
       />
