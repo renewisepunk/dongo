@@ -13,17 +13,18 @@ import {
 } from "../../lib/authz";
 import { fail, requireString } from "../../lib/errors";
 import { runIdempotent } from "../../lib/idempotency";
+import {
+  MAX_ATTACHMENT_BYTES,
+  organizationStorageLimit,
+} from "../../lib/plans";
 
-const MAX_FILE_BYTES = 250 * 1_024 * 1_024;
-const FREE_ORGANIZATION_BYTES = 1 * 1_024 * 1_024 * 1_024;
-const PAID_ORGANIZATION_BYTES = 20 * 1_024 * 1_024 * 1_024;
 const RESERVATION_TTL_MS = 15 * 60 * 1_000;
 
 function assertByteSize(byteSize: number): number {
   if (!Number.isSafeInteger(byteSize) || byteSize <= 0) {
     fail("validation", "byteSize must be a positive integer");
   }
-  if (byteSize > MAX_FILE_BYTES) {
+  if (byteSize > MAX_ATTACHMENT_BYTES) {
     fail("quota_exceeded", "Individual uploads may not exceed 250 MB");
   }
   return byteSize;
@@ -72,10 +73,7 @@ export const reserve = mutation({
             q.eq("organizationId", organization._id),
           )
           .unique();
-        const limit =
-          organization.plan === "free"
-            ? FREE_ORGANIZATION_BYTES
-            : PAID_ORGANIZATION_BYTES;
+        const limit = organizationStorageLimit(organization.plan);
         const used = (ledger?.reservedBytes ?? 0) + (ledger?.activeBytes ?? 0);
         if (used + byteSize > limit) {
           fail("quota_exceeded", "Organization media storage quota exceeded", {

@@ -20,6 +20,7 @@ type ProjectGroup = {
     name: string;
     slug: string;
     repositoryUrl?: string;
+    identifierPrefix: string;
     executionMode: "manual" | "autonomous";
     archivedAt?: number;
   }>;
@@ -35,7 +36,45 @@ export type ProjectInfo = {
   membershipRole: "owner" | "member";
   activeProjectCount: number;
   repositoryUrl?: string;
+  identifierPrefix: string;
   executionMode: "manual" | "autonomous";
+  archivedAt?: number;
+};
+
+export type ProjectMember = {
+  membershipId: string;
+  profileId: string;
+  name: string;
+  email?: string;
+  avatarUrl?: string;
+  role: "owner" | "member";
+  joinedAt: number;
+  current: boolean;
+};
+
+export type ProjectAdministration = {
+  project: {
+    name: string;
+    slug: string;
+    repositoryUrl?: string;
+    identifierPrefix: string;
+    executionMode: "manual" | "autonomous";
+    archivedAt?: number;
+  };
+  organization: {
+    name: string;
+    slug: string;
+    plan: "free" | "paid";
+  };
+  membershipRole: "owner" | "member";
+  members: ProjectMember[];
+  activeProjectCount: number;
+  storage: {
+    activeBytes: number;
+    reservedBytes: number;
+    limitBytes: number;
+    maximumAttachmentBytes: number;
+  };
 };
 
 export type ProjectInstallation = {
@@ -287,6 +326,40 @@ const archiveProjectReference = makeFunctionReference<
   { projectId: string },
   { archived: true }
 >("domains/projects/index:archiveProject");
+const unarchiveProjectReference = makeFunctionReference<
+  "mutation",
+  { projectId: string },
+  { unarchived: true }
+>("domains/projects/index:unarchiveProject");
+const administrationReference = makeFunctionReference<
+  "query",
+  { projectId: string },
+  ProjectAdministration
+>("domains/projects/index:administration");
+const updateProjectReference = makeFunctionReference<
+  "mutation",
+  {
+    projectId: string;
+    name: string;
+    repositoryUrl?: string;
+    executionMode: "manual" | "autonomous";
+  },
+  {
+    name: string;
+    repositoryUrl?: string;
+    executionMode: "manual" | "autonomous";
+  }
+>("domains/projects/index:updateProject");
+const updateOrganizationReference = makeFunctionReference<
+  "mutation",
+  { projectId: string; name: string },
+  { name: string }
+>("domains/projects/index:updateOrganization");
+const removeMemberReference = makeFunctionReference<
+  "mutation",
+  { projectId: string; membershipId: string },
+  { removed: true }
+>("domains/projects/index:removeMember");
 const reserveUploadReference = makeFunctionReference<
   "action",
   {
@@ -503,13 +576,17 @@ export class ProjectDataConnection {
 
   static async #resolve(
     select: (groups: ProjectGroup[]) => { group: ProjectGroup; project: ProjectGroup["projects"][number] } | undefined,
+    allowArchived = false,
   ): Promise<ProjectDataConnection> {
     const client = new ConvexClient(convexDeploymentUrl);
     client.setAuth(async () => await convexAccessToken());
     try {
       const groups = await client.query(listProjectsReference, {});
       const selected = select(groups);
-      if (!selected?.group.organization || selected.project.archivedAt !== undefined) {
+      if (
+        !selected?.group.organization ||
+        (selected.project.archivedAt !== undefined && !allowArchived)
+      ) {
         throw new Error("Project not found");
       }
       return new ProjectDataConnection(client, {
@@ -524,7 +601,9 @@ export class ProjectDataConnection {
           (project) => project.archivedAt === undefined,
         ).length,
         repositoryUrl: selected.project.repositoryUrl,
+        identifierPrefix: selected.project.identifierPrefix,
         executionMode: selected.project.executionMode,
+        archivedAt: selected.project.archivedAt,
       });
     } catch (error) {
       await client.close();
@@ -540,6 +619,19 @@ export class ProjectDataConnection {
       );
       return group && project ? { group, project } : undefined;
     });
+  }
+
+  static async connectForSettings(
+    orgSlug: string,
+    projectSlug: string,
+  ): Promise<ProjectDataConnection> {
+    return await ProjectDataConnection.#resolve((groups) => {
+      const group = groups.find((candidate) => candidate.organization?.slug === orgSlug);
+      const project = group?.projects.find(
+        (candidate) => candidate.slug === projectSlug,
+      );
+      return group && project ? { group, project } : undefined;
+    }, true);
   }
 
   static async connectFirst(preferredProjectId?: string): Promise<ProjectDataConnection> {
@@ -852,8 +944,48 @@ export class ProjectDataConnection {
     await this.#client.mutation(revokeInstallationReference, { installationId });
   }
 
+  async getAdministration(): Promise<ProjectAdministration> {
+    return await this.#client.query(administrationReference, {
+      projectId: this.projectId,
+    });
+  }
+
+  async updateProject(input: {
+    name: string;
+    repositoryUrl?: string;
+    executionMode: "manual" | "autonomous";
+  }): Promise<void> {
+    const updated = await this.#client.mutation(updateProjectReference, {
+      projectId: this.projectId,
+      ...input,
+    });
+    Object.assign(this.project, updated);
+  }
+
+  async updateOrganization(name: string): Promise<void> {
+    const updated = await this.#client.mutation(updateOrganizationReference, {
+      projectId: this.projectId,
+      name,
+    });
+    this.project.organizationName = updated.name;
+  }
+
+  async removeMember(membershipId: string): Promise<void> {
+    await this.#client.mutation(removeMemberReference, {
+      projectId: this.projectId,
+      membershipId,
+    });
+  }
+
   async archive(): Promise<void> {
     await this.#client.mutation(archiveProjectReference, { projectId: this.projectId });
+  }
+
+  async unarchive(): Promise<void> {
+    await this.#client.mutation(unarchiveProjectReference, {
+      projectId: this.projectId,
+    });
+    this.project.archivedAt = undefined;
   }
 
   async close(): Promise<void> {

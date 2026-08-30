@@ -1,10 +1,11 @@
 import { A, useNavigate } from "@solidjs/router";
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
 import { SignOutButton } from "../../components/SignOutButton";
-import { humanSession } from "../../lib/auth-client";
+import { dongoPublicOrigin } from "../../lib/auth-config";
 import {
   ProjectDataConnection,
+  type ProjectAdministration,
   type ProjectInfo,
   type ProjectInstallation,
 } from "../../lib/project-data";
@@ -16,7 +17,6 @@ type ProjectSettingsProps = {
 };
 
 type Tab = "General" | "Agent access" | "Members" | "Plan & storage";
-type Viewer = { name: string; email: string };
 
 function relativeTime(timestamp: number | undefined): string {
   if (!timestamp) return "never used";
@@ -35,46 +35,93 @@ function installationType(installation: ProjectInstallation): string {
   return [host, installation.machineLabel].filter(Boolean).join(" · ");
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1_024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1_024;
+  let unit = 0;
+  while (value >= 1_024 && unit < units.length - 1) {
+    value /= 1_024;
+    unit += 1;
+  }
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[unit]}`;
+}
+
+function normalizedRepositoryUrl(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+  if (
+    (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+    parsed.username ||
+    parsed.password
+  ) {
+    throw new Error("invalid repository URL");
+  }
+  return parsed.toString();
+}
+
 export function ProjectSettings(props: ProjectSettingsProps) {
   const navigate = useNavigate();
   const [tab, setTab] = createSignal<Tab>("General");
   const [project, setProject] = createSignal<ProjectInfo>();
-  const [viewer, setViewer] = createSignal<Viewer>();
+  const [administration, setAdministration] = createSignal<ProjectAdministration>();
   const [installations, setInstallations] = createSignal<ProjectInstallation[]>([]);
+  const [projectName, setProjectName] = createSignal("");
+  const [repositoryUrl, setRepositoryUrl] = createSignal("");
+  const [executionMode, setExecutionMode] = createSignal<"manual" | "autonomous">("manual");
+  const [organizationName, setOrganizationName] = createSignal("");
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal("");
+  const [status, setStatus] = createSignal("");
+  const [savingProject, setSavingProject] = createSignal(false);
+  const [savingOrganization, setSavingOrganization] = createSignal(false);
   const [confirmRevoke, setConfirmRevoke] = createSignal<string>();
   const [revoking, setRevoking] = createSignal<string>();
+  const [confirmRemove, setConfirmRemove] = createSignal<string>();
+  const [removing, setRemoving] = createSignal<string>();
   const [confirmArchive, setConfirmArchive] = createSignal(false);
   const [archiving, setArchiving] = createSignal(false);
+  const [unarchiving, setUnarchiving] = createSignal(false);
   let connection: ProjectDataConnection | undefined;
   let unsubscribe: (() => void) | undefined;
   let disposed = false;
 
+  const owner = createMemo(() => administration()?.membershipRole === "owner");
+
+  const applyAdministration = (next: ProjectAdministration) => {
+    setAdministration(next);
+    setProjectName(next.project.name);
+    setRepositoryUrl(next.project.repositoryUrl ?? "");
+    setExecutionMode(next.project.executionMode);
+    setOrganizationName(next.organization.name);
+  };
+
+  const refreshAdministration = async () => {
+    if (!connection) return;
+    const next = await connection.getAdministration();
+    if (!disposed) applyAdministration(next);
+  };
+
   onMount(() => {
-    void Promise.all([
-      ProjectDataConnection.connect(props.orgSlug, props.projectSlug),
-      humanSession(),
-    ])
-      .then(([connected, session]) => {
+    void ProjectDataConnection.connectForSettings(props.orgSlug, props.projectSlug)
+      .then(async (connected) => {
         if (disposed) {
-          void connected.close();
+          await connected.close();
           return;
         }
         connection = connected;
         setProject(connected.project);
-        if (session) setViewer({ name: session.user.name, email: session.user.email });
-        unsubscribe = connected.subscribeInstallations(
-          (next) => {
-            setInstallations(next);
-            setError("");
-            setLoading(false);
-          },
-          () => {
-            setError("Agent access is available to project owners.");
-            setLoading(false);
-          },
-        );
+        const next = await connected.getAdministration();
+        if (disposed) return;
+        applyAdministration(next);
+        if (next.membershipRole === "owner") {
+          unsubscribe = connected.subscribeInstallations(
+            setInstallations,
+            () => setError("Agent installations are temporarily unavailable."),
+          );
+        }
+        setLoading(false);
       })
       .catch(() => {
         setError("This project could not be loaded for your account.");
@@ -88,6 +135,63 @@ export function ProjectSettings(props: ProjectSettingsProps) {
     void connection?.close();
   });
 
+  const saveProject = async (event: SubmitEvent) => {
+    event.preventDefault();
+    if (!connection || savingProject() || !owner()) return;
+    const name = projectName().trim();
+    if (!name) {
+      setError("Enter a project name.");
+      return;
+    }
+    let repository: string | undefined;
+    try {
+      repository = normalizedRepositoryUrl(repositoryUrl());
+    } catch {
+      setError("Enter a credential-free HTTP or HTTPS repository URL.");
+      return;
+    }
+    setSavingProject(true);
+    setError("");
+    setStatus("");
+    try {
+      await connection.updateProject({
+        name,
+        repositoryUrl: repository,
+        executionMode: executionMode(),
+      });
+      setProject({ ...connection.project });
+      await refreshAdministration();
+      setStatus("Project settings saved.");
+    } catch {
+      setError("Project settings could not be saved. Try again.");
+    } finally {
+      setSavingProject(false);
+    }
+  };
+
+  const saveOrganization = async (event: SubmitEvent) => {
+    event.preventDefault();
+    if (!connection || savingOrganization() || !owner()) return;
+    const name = organizationName().trim();
+    if (!name) {
+      setError("Enter an organization name.");
+      return;
+    }
+    setSavingOrganization(true);
+    setError("");
+    setStatus("");
+    try {
+      await connection.updateOrganization(name);
+      setProject({ ...connection.project });
+      await refreshAdministration();
+      setStatus("Organization settings saved.");
+    } catch {
+      setError("Organization settings could not be saved. Try again.");
+    } finally {
+      setSavingOrganization(false);
+    }
+  };
+
   const revoke = async (installationId: string) => {
     if (!connection || revoking()) return;
     setRevoking(installationId);
@@ -95,10 +199,27 @@ export function ProjectSettings(props: ProjectSettingsProps) {
     try {
       await connection.revokeInstallation(installationId);
       setConfirmRevoke(undefined);
+      setStatus("Agent access revoked.");
     } catch {
       setError("The installation could not be revoked. Try again.");
     } finally {
       setRevoking(undefined);
+    }
+  };
+
+  const removeMember = async (membershipId: string) => {
+    if (!connection || removing()) return;
+    setRemoving(membershipId);
+    setError("");
+    try {
+      await connection.removeMember(membershipId);
+      setConfirmRemove(undefined);
+      await refreshAdministration();
+      setStatus("Member access removed.");
+    } catch {
+      setError("The member could not be removed. Try again.");
+    } finally {
+      setRemoving(undefined);
     }
   };
 
@@ -115,97 +236,143 @@ export function ProjectSettings(props: ProjectSettingsProps) {
     }
   };
 
+  const unarchive = async () => {
+    if (!connection || unarchiving()) return;
+    setUnarchiving(true);
+    setError("");
+    try {
+      await connection.unarchive();
+      setProject({ ...connection.project });
+      await refreshAdministration();
+      setStatus("Project restored. Existing agent installations remain revoked.");
+    } catch {
+      setError("The project could not be restored. Archive any other active free-plan project first.");
+    } finally {
+      setUnarchiving(false);
+    }
+  };
+
   return (
     <main class="settings-page">
       <header class="settings-header">
-        <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
+        <Brand compact href={project()?.archivedAt ? "/" : `/app/${props.orgSlug}/${props.projectSlug}`} />
         <div class="settings-header__title">/ {props.projectSlug} / settings</div>
         <div style={{ flex: 1 }} />
-        <A class="button button--quiet" href={`/app/${props.orgSlug}/${props.projectSlug}`}>← Overview</A>
+        <Show when={!project()?.archivedAt}>
+          <A class="button button--quiet" href={`/app/${props.orgSlug}/${props.projectSlug}`}>← Overview</A>
+        </Show>
         <SignOutButton />
       </header>
       <div class="settings-layout">
         <nav class="settings-nav" aria-label="Project settings">
           <For each={(["General", "Agent access", "Members", "Plan & storage"] as Tab[])}>{(item) => (
-            <button class="settings-nav__link" data-selected={tab() === item} type="button" onClick={() => setTab(item)}>{item}</button>
+            <button class="settings-nav__link" data-selected={tab() === item} type="button" onClick={() => { setTab(item); setError(""); setStatus(""); }}>{item}</button>
           )}</For>
         </nav>
 
         <div class="settings-content">
           <Show when={loading()}><div class="note" role="status">Loading project settings…</div></Show>
           <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
+          <Show when={status()}><div class="success" role="status">{status()}</div></Show>
+          <Show when={project()?.archivedAt}>
+            <div class="archived-banner" role="status">
+              <div><strong>This project is archived.</strong><span> Existing work is retained, and agent access is revoked.</span></div>
+              <Show when={owner()}><button class="button" type="button" disabled={unarchiving()} onClick={() => void unarchive()}>{unarchiving() ? "Restoring…" : "Restore project"}</button></Show>
+            </div>
+          </Show>
 
-          <Show when={!loading() && project() && tab() === "General"}>
+          <Show when={!loading() && tab() === "General" ? administration() : undefined}>{(admin) => (
             <>
               <div class="settings-title-group"><div class="eyebrow">Project settings</div><h1 class="settings-title">General</h1><p class="auth-lede">Project identity and agent execution behavior.</p></div>
-              <section class="settings-section">
+              <form class="settings-section" onSubmit={saveProject}>
                 <div class="settings-grid">
-                  <div class="field-group"><label class="field-label" for="settings-name">Project name</label><input class="input" id="settings-name" value={project()!.name} disabled /></div>
-                  <div class="field-group"><label class="field-label" for="settings-slug">Project slug</label><input class="input mono" id="settings-slug" value={project()!.slug} disabled /></div>
+                  <div class="field-group"><label class="field-label" for="settings-name">Project name</label><input class="input" id="settings-name" value={projectName()} disabled={!owner()} onInput={(event) => setProjectName(event.currentTarget.value)} /></div>
+                  <div class="field-group"><label class="field-label" for="settings-slug">Project slug</label><input class="input mono" id="settings-slug" value={admin().project.slug} disabled /></div>
                 </div>
-                <div class="field-group"><label class="field-label" for="settings-repo">Repository URL</label><input class="input mono" id="settings-repo" value={project()!.repositoryUrl || "Not configured"} disabled /></div>
-                <p class="security-note">Project metadata editing is not exposed in this build.</p>
-              </section>
-              <section class="settings-section">
-                <div class="settings-section__title">Agent execution mode</div>
-                <div class="choice-list">
-                  <div class="choice" data-selected={project()!.executionMode === "manual"}><span class="choice__dot" /><span class="choice__copy"><span class="choice__title">Manual</span><span class="choice__body">Agents triage and suggest work, then wait for you.</span></span></div>
-                  <div class="choice" data-selected={project()!.executionMode === "autonomous"}><span class="choice__dot" /><span class="choice__copy"><span class="choice__title">Autonomous</span><span class="choice__body">Agents may claim and begin the highest suitable Ready work.</span></span></div>
+                <div class="settings-grid">
+                  <div class="field-group"><label class="field-label" for="settings-repo">Repository URL</label><input class="input mono" id="settings-repo" value={repositoryUrl()} disabled={!owner()} onInput={(event) => setRepositoryUrl(event.currentTarget.value)} placeholder="https://github.com/owner/repository" /></div>
+                  <div class="field-group"><label class="field-label" for="settings-prefix">Identifier prefix</label><input class="input mono" id="settings-prefix" value={admin().project.identifierPrefix} disabled /></div>
                 </div>
-              </section>
-              <section class="settings-section danger-zone">
-                <div class="settings-section__title">Archive project</div>
-                <p class="note">Archiving revokes every active agent installation. Existing project data remains stored.</p>
-                <Show when={confirmArchive()} fallback={<button class="button button--danger" type="button" style={{ "align-self": "flex-start" }} onClick={() => setConfirmArchive(true)}>Archive {project()!.name}</button>}>
-                  <div class="confirmation-row">
-                    <span class="note">Archive this project and revoke agent access?</span>
-                    <button class="button button--danger" type="button" disabled={archiving()} onClick={() => void archive()}>{archiving() ? "Archiving…" : "Yes, archive"}</button>
-                    <button class="button button--quiet" type="button" disabled={archiving()} onClick={() => setConfirmArchive(false)}>Cancel</button>
-                  </div>
-                </Show>
-              </section>
-            </>
-          </Show>
-
-          <Show when={!loading() && project() && tab() === "Agent access"}>
-            <div class="settings-title-group"><div class="eyebrow">Project settings</div><h1 class="settings-title">Agent access</h1><p class="auth-lede">Each CLI or MCP host has its own revocable grant and installation identity.</p></div>
-            <div class="settings-actions"><A class="button button--primary" href="/connect">Connect an agent</A><A class="button" href="/device">Authorize a terminal</A></div>
-            <div class="installation-list">
-              <For each={installations()}>{(installation) => (
-                <div class="installation-row">
-                  <div class="installation-row__name"><span>{installation.label}</span><span class="installation-row__meta">{installationType(installation)}</span></div>
-                  <div class="installation-row__meta">{relativeTime(installation.lastUsedAt)} · {installation.status}</div>
-                  <Show when={installation.status !== "revoked"} fallback={<span class="installation-row__meta">revoked</span>}>
-                    <Show when={confirmRevoke() === installation.id} fallback={<button class="button button--quiet button--danger" type="button" onClick={() => setConfirmRevoke(installation.id)}>Revoke</button>}>
-                      <div class="installation-row__actions"><button class="button button--danger" type="button" disabled={Boolean(revoking())} onClick={() => void revoke(installation.id)}>{revoking() === installation.id ? "Revoking…" : "Confirm"}</button><button class="button button--quiet" type="button" disabled={Boolean(revoking())} onClick={() => setConfirmRevoke(undefined)}>Cancel</button></div>
-                    </Show>
+                <div class="field-label" id="settings-mode">Agent execution mode</div>
+                <div class="choice-list" role="radiogroup" aria-labelledby="settings-mode">
+                  <button class="choice" data-selected={executionMode() === "manual"} type="button" role="radio" aria-checked={executionMode() === "manual"} disabled={!owner()} onClick={() => setExecutionMode("manual")}><span class="choice__dot" /><span class="choice__copy"><span class="choice__title">Manual</span><span class="choice__body">Agents triage and suggest work, then wait for you.</span></span></button>
+                  <button class="choice" data-selected={executionMode() === "autonomous"} type="button" role="radio" aria-checked={executionMode() === "autonomous"} disabled={!owner()} onClick={() => setExecutionMode("autonomous")}><span class="choice__dot" /><span class="choice__copy"><span class="choice__title">Autonomous</span><span class="choice__body">Agents may claim and begin the highest suitable Ready work.</span></span></button>
+                </div>
+                <Show when={owner()}><button class="button button--primary" type="submit" disabled={savingProject()} style={{ "align-self": "flex-start" }}>{savingProject() ? "Saving…" : "Save project"}</button></Show>
+              </form>
+              <Show when={owner() && !admin().project.archivedAt}>
+                <section class="settings-section danger-zone">
+                  <div class="settings-section__title">Archive project</div>
+                  <p class="note">Archiving revokes every active agent installation. Existing project data remains stored.</p>
+                  <Show when={confirmArchive()} fallback={<button class="button button--danger" type="button" style={{ "align-self": "flex-start" }} onClick={() => setConfirmArchive(true)}>Archive {admin().project.name}</button>}>
+                    <div class="confirmation-row"><span class="note">Archive {admin().project.name} and revoke agent access?</span><button class="button button--danger" type="button" disabled={archiving()} onClick={() => void archive()}>{archiving() ? "Archiving…" : "Yes, archive"}</button><button class="button button--quiet" type="button" disabled={archiving()} onClick={() => setConfirmArchive(false)}>Cancel</button></div>
                   </Show>
+                </section>
+              </Show>
+            </>
+          )}</Show>
+
+          <Show when={!loading() && tab() === "Agent access" ? administration() : undefined}>{(_admin) => (
+            <>
+              <div class="settings-title-group"><div class="eyebrow">Project settings</div><h1 class="settings-title">Agent access</h1><p class="auth-lede">Each CLI or MCP host has its own revocable grant and installation identity.</p></div>
+              <Show when={owner()} fallback={<div class="security-note">Only an organization owner can view or manage agent installations.</div>}>
+                <div class="settings-actions"><A class="button button--primary" href="/connect">Connect an agent</A><span class="mono installation-row__meta">{`${dongoPublicOrigin}/p/${project()!.publicRef}/mcp`}</span></div>
+                <div class="installation-list">
+                  <For each={installations()}>{(installation) => (
+                    <div class="installation-row">
+                      <div class="installation-row__name"><span>{installation.label}</span><span class="installation-row__meta">{installationType(installation)} · {installation.scopes.join(", ")}</span></div>
+                      <div class="installation-row__meta">{relativeTime(installation.lastUsedAt)} · {installation.status}</div>
+                      <Show when={installation.status !== "revoked"} fallback={<span class="installation-row__meta">revoked</span>}>
+                        <Show when={confirmRevoke() === installation.id} fallback={<button class="button button--quiet button--danger" type="button" onClick={() => setConfirmRevoke(installation.id)}>Revoke</button>}>
+                          <div class="installation-row__actions"><button class="button button--danger" type="button" disabled={Boolean(revoking())} onClick={() => void revoke(installation.id)}>{revoking() === installation.id ? "Revoking…" : "Confirm"}</button><button class="button button--quiet" type="button" disabled={Boolean(revoking())} onClick={() => setConfirmRevoke(undefined)}>Cancel</button></div>
+                        </Show>
+                      </Show>
+                    </div>
+                  )}</For>
+                  <Show when={installations().length === 0}><div class="note" style={{ padding: "16px" }}>No agent installations yet.</div></Show>
                 </div>
-              )}</For>
-              <Show when={installations().length === 0}><div class="note" style={{ padding: "16px" }}>No agent installations yet.</div></Show>
-            </div>
-            <p class="security-note">Token material is never shown here. Revocation blocks the installation’s next authenticated request.</p>
-          </Show>
+                <p class="security-note">Token material is never shown here. Revocation blocks the installation’s next authenticated request; local host configuration must be removed separately.</p>
+              </Show>
+            </>
+          )}</Show>
 
-          <Show when={!loading() && project() && tab() === "Members"}>
+          <Show when={!loading() && tab() === "Members" ? administration() : undefined}>{(admin) => (
             <>
-              <div class="settings-title-group"><div class="eyebrow">Organization</div><h1 class="settings-title">Members</h1><p class="auth-lede">People with access to {project()!.organizationName}.</p></div>
+              <div class="settings-title-group"><div class="eyebrow">Organization</div><h1 class="settings-title">Members</h1><p class="auth-lede">People with access to {admin().organization.name}.</p></div>
+              <form class="settings-section" onSubmit={saveOrganization}>
+                <div class="settings-grid">
+                  <div class="field-group"><label class="field-label" for="organization-name">Organization name</label><input class="input" id="organization-name" value={organizationName()} disabled={!owner()} onInput={(event) => setOrganizationName(event.currentTarget.value)} /></div>
+                  <div class="field-group"><label class="field-label" for="organization-slug">Organization slug</label><input class="input mono" id="organization-slug" value={admin().organization.slug} disabled /></div>
+                </div>
+                <Show when={owner()}><button class="button" type="submit" disabled={savingOrganization()} style={{ "align-self": "flex-start" }}>{savingOrganization() ? "Saving…" : "Save organization"}</button></Show>
+              </form>
               <div class="installation-list">
-                <Show when={viewer()} fallback={<div class="note" style={{ padding: "16px" }}>Signed-in member details are unavailable.</div>}>
-                  {(account) => <div class="installation-row"><div class="installation-row__name"><span>{account().name}</span><span class="installation-row__meta">{account().email}</span></div><div class="installation-row__meta">{project()!.membershipRole}</div><span /></div>}
-                </Show>
+                <For each={admin().members}>{(member) => (
+                  <div class="installation-row">
+                    <div class="installation-row__name"><span>{member.name}{member.current ? " (you)" : ""}</span><span class="installation-row__meta">{member.email ?? "Email unavailable"}</span></div>
+                    <div class="installation-row__meta">{member.role}</div>
+                    <Show when={owner() && !member.current && member.role === "member"}>
+                      <Show when={confirmRemove() === member.membershipId} fallback={<button class="button button--quiet button--danger" type="button" onClick={() => setConfirmRemove(member.membershipId)}>Remove</button>}>
+                        <div class="installation-row__actions"><button class="button button--danger" type="button" disabled={Boolean(removing())} onClick={() => void removeMember(member.membershipId)}>{removing() === member.membershipId ? "Removing…" : "Confirm"}</button><button class="button button--quiet" type="button" disabled={Boolean(removing())} onClick={() => setConfirmRemove(undefined)}>Cancel</button></div>
+                      </Show>
+                    </Show>
+                  </div>
+                )}</For>
               </div>
-              <p class="security-note">Organization member invitations are not exposed in this build.</p>
+              <p class="security-note">Owners manage organization and agent access. Members can capture Intake, comment, and respond to Attention.</p>
             </>
-          </Show>
+          )}</Show>
 
-          <Show when={!loading() && project() && tab() === "Plan & storage"}>
+          <Show when={!loading() && tab() === "Plan & storage" ? administration() : undefined}>{(admin) => (
             <>
-              <div class="settings-title-group"><div class="eyebrow">Organization</div><h1 class="settings-title">Plan & storage</h1><p class="auth-lede">Current limits for {project()!.organizationName}.</p></div>
-              <div class="plan-card"><div class="plan-stat"><span class="plan-stat__value">{project()!.activeProjectCount} / 1</span><span class="plan-stat__label">active projects</span></div><div class="plan-stat"><span class="plan-stat__value">Not reported</span><span class="plan-stat__label">media usage</span></div></div>
-              <section class="settings-section"><div class="settings-section__title">Free plan</div><p class="note">Individual uploads are limited to 250 MB. Storage usage reporting and billing are not enabled in this development environment.</p></section>
+              <div class="settings-title-group"><div class="eyebrow">Organization</div><h1 class="settings-title">Plan & storage</h1><p class="auth-lede">Current limits for {admin().organization.name}.</p></div>
+              <div class="plan-card">
+                <div class="plan-stat"><span class="plan-stat__value">{admin().activeProjectCount} / {admin().organization.plan === "free" ? "1" : "∞"}</span><span class="plan-stat__label">active projects</span></div>
+                <div class="plan-stat"><span class="plan-stat__value">{formatBytes(admin().storage.activeBytes + admin().storage.reservedBytes)} / {formatBytes(admin().storage.limitBytes)}</span><span class="plan-stat__label">media storage</span></div>
+              </div>
+              <section class="settings-section"><div class="settings-section__title">{admin().organization.plan === "free" ? "Free" : "Paid"} plan</div><p class="note">Individual uploads are limited to {formatBytes(admin().storage.maximumAttachmentBytes)}. Dongo does not meter people, agents, or WorkItems.</p><Show when={admin().organization.plan === "free"}><p class="security-note">Billing checkout is not configured in this development environment.</p></Show></section>
             </>
-          </Show>
+          )}</Show>
         </div>
       </div>
     </main>

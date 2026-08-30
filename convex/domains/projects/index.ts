@@ -9,6 +9,7 @@ import {
 } from "../../lib/authz";
 import { appendEvent } from "../../lib/events";
 import { fail, optionalString, requireString } from "../../lib/errors";
+import { MAX_ATTACHMENT_BYTES, organizationStorageLimit } from "../../lib/plans";
 
 function normalizeSlug(value: string): string {
   const slug = value.trim().toLowerCase();
@@ -24,6 +25,25 @@ function normalizePrefix(value: string): string {
     fail("validation", "identifierPrefix must be 2-8 uppercase letters or numbers");
   }
   return prefix;
+}
+
+function normalizeRepositoryUrl(value: string | undefined): string | undefined {
+  const normalized = optionalString(value, "repositoryUrl", 2_048);
+  if (!normalized) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    fail("validation", "repositoryUrl must be an absolute HTTP or HTTPS URL");
+  }
+  if (
+    (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+    parsed.username ||
+    parsed.password
+  ) {
+    fail("validation", "repositoryUrl must be a credential-free HTTP or HTTPS URL");
+  }
+  return parsed.toString();
 }
 
 export const createPersonalOrganization = mutation({
@@ -106,11 +126,7 @@ export const createProject = mutation({
     const name = requireString(args.name, "name", 240);
     const slug = normalizeSlug(args.slug);
     const identifierPrefix = normalizePrefix(args.identifierPrefix);
-    const repositoryUrl = optionalString(
-      args.repositoryUrl,
-      "repositoryUrl",
-      2_048,
-    );
+    const repositoryUrl = normalizeRepositoryUrl(args.repositoryUrl);
     const existingProject = await ctx.db
       .query("projects")
       .withIndex("by_organization_slug", (q) =>
@@ -220,6 +236,170 @@ export const listMine = query({
   },
 });
 
+export const administration = query({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    const principal = await requireHumanProject(ctx, args.projectId, {
+      allowArchived: true,
+    });
+    const project = principal.project!;
+    const organization = await ctx.db.get(project.organizationId);
+    if (!organization) fail("not_found", "Organization or project not found");
+    const memberships = await ctx.db
+      .query("memberships")
+      .withIndex("by_organization", (q) =>
+        q.eq("organizationId", organization._id),
+      )
+      .take(100);
+    const members = (await Promise.all(
+      memberships.map(async (membership) => ({
+        membership,
+        profile: await ctx.db.get(membership.profileId),
+      })),
+    )).flatMap(({ membership, profile }) =>
+      profile
+        ? [{
+            membershipId: membership._id,
+            profileId: profile._id,
+            name: profile.name,
+            email: profile.email,
+            avatarUrl: profile.avatarUrl,
+            role: membership.role,
+            joinedAt: membership.createdAt,
+            current: profile._id === principal.profile._id,
+          }]
+        : [],
+    );
+    const projects = await ctx.db
+      .query("projects")
+      .withIndex("by_organization", (q) =>
+        q.eq("organizationId", organization._id),
+      )
+      .take(100);
+    const ledger = await ctx.db
+      .query("storageLedgers")
+      .withIndex("by_organization", (q) =>
+        q.eq("organizationId", organization._id),
+      )
+      .unique();
+    return {
+      project,
+      organization,
+      membershipRole: principal.membership.role,
+      members,
+      activeProjectCount: projects.filter(
+        (candidate) => candidate.archivedAt === undefined,
+      ).length,
+      storage: {
+        activeBytes: ledger?.activeBytes ?? 0,
+        reservedBytes: ledger?.reservedBytes ?? 0,
+        limitBytes: organizationStorageLimit(organization.plan),
+        maximumAttachmentBytes: MAX_ATTACHMENT_BYTES,
+      },
+    };
+  },
+});
+
+export const updateProject = mutation({
+  args: {
+    projectId: v.id("projects"),
+    name: v.string(),
+    repositoryUrl: v.optional(v.string()),
+    executionMode: v.union(v.literal("manual"), v.literal("autonomous")),
+  },
+  handler: async (ctx, args) => {
+    const principal = await requireHumanProject(ctx, args.projectId, {
+      owner: true,
+      allowArchived: true,
+    });
+    const name = requireString(args.name, "name", 240);
+    const repositoryUrl = normalizeRepositoryUrl(args.repositoryUrl);
+    const project = principal.project!;
+    if (
+      project.name === name &&
+      project.repositoryUrl === repositoryUrl &&
+      project.executionMode === args.executionMode
+    ) {
+      return { name, repositoryUrl, executionMode: args.executionMode };
+    }
+    const now = Date.now();
+    await ctx.db.patch(project._id, {
+      name,
+      repositoryUrl,
+      executionMode: args.executionMode,
+      updatedAt: now,
+    });
+    await appendEvent(ctx, {
+      organizationId: project.organizationId,
+      projectId: project._id,
+      actorId: principal.actor._id,
+      type: "project.updated",
+      data: { name, repositoryUrl: repositoryUrl ?? null, executionMode: args.executionMode },
+      createdAt: now,
+    });
+    return { name, repositoryUrl, executionMode: args.executionMode };
+  },
+});
+
+export const updateOrganization = mutation({
+  args: { projectId: v.id("projects"), name: v.string() },
+  handler: async (ctx, args) => {
+    const principal = await requireHumanProject(ctx, args.projectId, {
+      owner: true,
+      allowArchived: true,
+    });
+    const organization = await ctx.db.get(principal.project!.organizationId);
+    if (!organization) fail("not_found", "Organization or project not found");
+    const name = requireString(args.name, "name", 240);
+    if (organization.name === name) return { name };
+    const now = Date.now();
+    await ctx.db.patch(organization._id, { name, updatedAt: now });
+    await appendEvent(ctx, {
+      organizationId: organization._id,
+      projectId: principal.project!._id,
+      actorId: principal.actor._id,
+      type: "organization.updated",
+      data: { name },
+      createdAt: now,
+    });
+    return { name };
+  },
+});
+
+export const removeMember = mutation({
+  args: {
+    projectId: v.id("projects"),
+    membershipId: v.id("memberships"),
+  },
+  handler: async (ctx, args) => {
+    const principal = await requireHumanProject(ctx, args.projectId, {
+      owner: true,
+      allowArchived: true,
+    });
+    const membership = await ctx.db.get(args.membershipId);
+    if (
+      !membership ||
+      membership.organizationId !== principal.project!.organizationId
+    ) {
+      fail("not_found", "Organization member not found");
+    }
+    if (membership.role === "owner") {
+      fail("forbidden", "The organization owner cannot be removed");
+    }
+    const now = Date.now();
+    await ctx.db.delete(membership._id);
+    await appendEvent(ctx, {
+      organizationId: membership.organizationId,
+      projectId: principal.project!._id,
+      actorId: principal.actor._id,
+      type: "membership.removed",
+      data: { profileId: membership.profileId },
+      createdAt: now,
+    });
+    return { removed: true as const };
+  },
+});
+
 export const archiveProject = mutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
@@ -251,5 +431,40 @@ export const archiveProject = mutation({
       createdAt: now,
     });
     return { archived: true };
+  },
+});
+
+export const unarchiveProject = mutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    const principal = await requireHumanProject(ctx, args.projectId, {
+      owner: true,
+      allowArchived: true,
+    });
+    const project = principal.project!;
+    if (project.archivedAt === undefined) return { unarchived: true as const };
+    const organization = await ctx.db.get(project.organizationId);
+    if (!organization) fail("not_found", "Organization or project not found");
+    if (organization.plan === "free") {
+      const active = await ctx.db
+        .query("projects")
+        .withIndex("by_organization_archived", (q) =>
+          q.eq("organizationId", organization._id).eq("archivedAt", undefined),
+        )
+        .take(1);
+      if (active.length > 0) {
+        fail("forbidden", "Archive the active project before restoring this one");
+      }
+    }
+    const now = Date.now();
+    await ctx.db.patch(project._id, { archivedAt: undefined, updatedAt: now });
+    await appendEvent(ctx, {
+      organizationId: project.organizationId,
+      projectId: project._id,
+      actorId: principal.actor._id,
+      type: "project.unarchived",
+      createdAt: now,
+    });
+    return { unarchived: true as const };
   },
 });

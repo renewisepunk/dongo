@@ -22,12 +22,17 @@ export const convexDeploymentUrl = configuredUrl(
 const publicEnvironment = import.meta.env.VITE_DONGO_ENVIRONMENT || "development";
 const googleCapabilityFlag = import.meta.env.VITE_DONGO_GOOGLE_AUTH_CONFIGURED;
 
+export const dongoPublicOrigin = configuredUrl(
+  import.meta.env.VITE_DONGO_PUBLIC_ORIGIN,
+  "https://dev.dongo.so",
+);
+
 export const googleAuthConfigured = googleCapabilityFlag === "true" ||
   (googleCapabilityFlag === undefined && publicEnvironment === "development");
 
 export function authWorkerUrl(pathname: string): string {
   const origin = typeof window === "undefined"
-    ? (import.meta.env.VITE_DONGO_PUBLIC_ORIGIN || "https://dev.dongo.so")
+    ? dongoPublicOrigin
     : window.location.origin;
   return new URL(`/api/auth${pathname}`, origin).toString();
 }
