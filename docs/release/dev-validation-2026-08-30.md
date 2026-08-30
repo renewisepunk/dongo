@@ -15,7 +15,7 @@ This is a living evidence ledger for the development stack. It is not a producti
 
 | Gate | Evidence |
 |---|---|
-| Local unit/integration suite | `npm test`: 224 tests passed across Workers, CLI, local storage, web, MCP, contracts, and Convex on the current candidate. |
+| Local unit/integration suite | `npm test`: 226 tests passed across Workers, CLI, local storage, web, MCP, contracts, and Convex on the current candidate. |
 | Web browser matrix | Playwright: 183/183 passed across Chromium, Firefox, and WebKit, including auth states, onboarding, first-project device approval, MCP consent, paste image, full-page drop, upload retry/cancel, overview, detail, responsive, and settings. |
 | Static/type/build checks | `npm run check`, contract generation, lowercase brand verification, six-Worker development isolation, the 347-file secret scan, and the 171-file safe-runtime-log scan passed on the current candidate. Both production-only and full dependency audits reported zero vulnerabilities. |
 | Development runtime | Web version `11156c20-8a3f-4e24-8a84-0543964ff576` is deployed only to development. `npm run smoke:dev -- --project-ref p58de816-dongo`: 14/14 passed after deployment. Notification readiness explicitly requires dispatch plus Resend for Web Beta and still reports APNs/FCM as disabled. |
