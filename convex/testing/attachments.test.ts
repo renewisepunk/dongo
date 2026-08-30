@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { convexTest } from "convex-test";
 import schema from "../schema";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { modules } from "../test.setup";
 
 const gatewaySecret = "test-gateway-secret-with-at-least-32-characters";
@@ -51,6 +51,7 @@ describe("attachment edge contract", () => {
       },
     );
     expect(reserved.transport).toBe("single");
+    expect(reserved).not.toHaveProperty("storageKey");
     if (reserved.transport !== "single") throw new Error("Expected single upload");
     const uploadUrl = new URL(reserved.uploadUrl);
     expect(uploadUrl.origin).toBe("https://dev.dongo.so");
@@ -127,6 +128,11 @@ describe("attachment edge contract", () => {
       api.domains.attachments.actions.downloadForHuman,
       { attachmentId: reserved.attachmentId },
     );
+    const storageKey = await t.run(async (ctx) => {
+      const attachment = await ctx.db.get(reserved.attachmentId);
+      if (!attachment) throw new Error("Expected attachment metadata");
+      return attachment.storageKey;
+    });
     const downloadUrl = new URL(download.downloadUrl);
     expect(downloadUrl.origin).toBe("https://dev.dongo.so");
     expect(downloadUrl.pathname).toBe(
@@ -141,7 +147,7 @@ describe("attachment edge contract", () => {
     expect(downloadUrl.searchParams.get("signature")).toBe(
       await hmacBase64Url(
         gatewaySecret,
-        `${reserved.attachmentId}\n${reserved.storageKey}\n${download.expiresAt}`,
+        `${reserved.attachmentId}\n${storageKey}\n${download.expiresAt}`,
       ),
     );
     const publicAttachment = await t.query(
@@ -230,7 +236,7 @@ describe("attachment edge contract", () => {
       identifierPrefix: "DSC",
       executionMode: "manual",
     });
-    const reserved = await t.mutation(api.domains.attachments.index.reserve, {
+    const reserved = await t.mutation(internal.domains.attachments.index.reserve, {
       projectId: project.projectId,
       filename: "cancelled.mov",
       mimeType: "video/quicktime",
@@ -238,7 +244,7 @@ describe("attachment edge contract", () => {
       idempotencyKey: crypto.randomUUID(),
     });
     await expect(
-      t.mutation(api.domains.attachments.index.discard, {
+      t.mutation(internal.domains.attachments.index.discard, {
         attachmentId: reserved.attachmentId,
       }),
     ).resolves.toMatchObject({

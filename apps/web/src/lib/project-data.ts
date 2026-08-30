@@ -430,7 +430,6 @@ const reserveUploadReference = makeFunctionReference<
   },
   AttachmentUploadReservation & {
     expiresAt: number;
-    storageKey: string;
   }
 >("domains/attachments/actions:reserveUpload");
 const discardUploadReference = makeFunctionReference<

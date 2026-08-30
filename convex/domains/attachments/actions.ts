@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { action } from "../../_generated/server";
-import { api, internal } from "../../_generated/api";
+import { internal } from "../../_generated/api";
 import type { Id } from "../../_generated/dataModel";
 import { fail } from "../../lib/errors";
 
@@ -24,7 +24,6 @@ export const reserveUpload = action({
     | {
         transport: "single";
         attachmentId: Id<"attachments">;
-        storageKey: string;
         expiresAt: number;
         maximumBytes: number;
         uploadUrl: string;
@@ -34,7 +33,6 @@ export const reserveUpload = action({
     | {
         transport: "multipart";
         attachmentId: Id<"attachments">;
-        storageKey: string;
         expiresAt: number;
         maximumBytes: number;
         createUrl: string;
@@ -70,7 +68,7 @@ export const reserveUpload = action({
       );
     }
     const reservation = await ctx.runMutation(
-      api.domains.attachments.index.reserve,
+      internal.domains.attachments.index.reserve,
       args,
     );
     if (reservation.maximumBytes > SINGLE_UPLOAD_MAX_BYTES) {
@@ -102,8 +100,10 @@ export const reserveUpload = action({
       url.searchParams.set("partCount", String(partCount));
       url.searchParams.set("signature", signature);
       return {
-        ...reservation,
         transport: "multipart",
+        attachmentId: reservation.attachmentId,
+        expiresAt: reservation.expiresAt,
+        maximumBytes: reservation.maximumBytes,
         createUrl: url.toString(),
         method: "POST",
         partSize,
@@ -140,8 +140,10 @@ export const reserveUpload = action({
     };
     if (checksum) requiredHeaders["x-dongo-content-sha256"] = checksum;
     return {
-      ...reservation,
       transport: "single",
+      attachmentId: reservation.attachmentId,
+      expiresAt: reservation.expiresAt,
+      maximumBytes: reservation.maximumBytes,
       uploadUrl: url.toString(),
       method: "PUT",
       requiredHeaders,
@@ -172,7 +174,7 @@ export const discardUpload = action({
       fail("internal", "Attachment cleanup origin is invalid");
     }
     const discarded = await ctx.runMutation(
-      api.domains.attachments.index.discard,
+      internal.domains.attachments.index.discard,
       args,
     );
     const expiresAt = Date.now() + DISCARD_TTL_MS;

@@ -2,7 +2,6 @@ import { v } from "convex/values";
 import {
   internalMutation,
   internalQuery,
-  mutation,
   query,
 } from "../../_generated/server";
 import { agentContextValidator } from "../../lib/validators";
@@ -31,7 +30,7 @@ function assertByteSize(byteSize: number): number {
   return byteSize;
 }
 
-export const reserve = mutation({
+export const reserve = internalMutation({
   args: {
     projectId: v.id("projects"),
     filename: v.string(),
@@ -188,7 +187,7 @@ export const finalize = internalMutation({
   },
 });
 
-export const abandon = mutation({
+export const abandon = internalMutation({
   args: { attachmentId: v.id("attachments") },
   handler: async (ctx, args) => {
     const attachment = await ctx.db.get(args.attachmentId);
@@ -218,7 +217,7 @@ export const abandon = mutation({
   },
 });
 
-export const discard = mutation({
+export const discard = internalMutation({
   args: { attachmentId: v.id("attachments") },
   handler: async (ctx, args) => {
     const attachment = await ctx.db.get(args.attachmentId);
