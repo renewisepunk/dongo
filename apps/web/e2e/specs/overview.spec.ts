@@ -23,6 +23,29 @@ test("renders every live work lane without browser errors", async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+test("switches projects through an accessible keyboard menu", async ({ page }) => {
+  const trigger = page.getByRole("button", { name: "Select organization or project" });
+  await trigger.click();
+  const menu = page.getByRole("menu", { name: "Organizations and projects" });
+  const current = menu.getByRole("menuitemradio", { name: "Dongo" });
+  const companion = menu.getByRole("menuitemradio", { name: "Companion" });
+  await expect(current).toHaveAttribute("aria-checked", "true");
+  await expect(current).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(companion).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/app\/fixture-studio\/companion$/);
+});
+
+test("restores focus when project navigation is dismissed", async ({ page }) => {
+  const trigger = page.getByRole("button", { name: "Select organization or project" });
+  await trigger.click();
+  await expect(page.getByRole("menuitemradio", { name: "Dongo" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu", { name: "Organizations and projects" })).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
 test("responds to Attention and reconciles the work lane", async ({ page }) => {
   const row = page.locator('[data-work-id="work-needs"]');
   await row.click();
