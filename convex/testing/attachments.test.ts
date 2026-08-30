@@ -47,6 +47,8 @@ describe("attachment edge contract", () => {
         idempotencyKey: crypto.randomUUID(),
       },
     );
+    expect(reserved.transport).toBe("single");
+    if (reserved.transport !== "single") throw new Error("Expected single upload");
     const uploadUrl = new URL(reserved.uploadUrl);
     expect(uploadUrl.origin).toBe("https://dev.dongo.so");
     expect(uploadUrl.pathname).toBe(
@@ -56,6 +58,41 @@ describe("attachment edge contract", () => {
     expect(reserved.requiredHeaders).toMatchObject({
       "content-type": "text/plain",
     });
+
+    const large = await t.action(
+      api.domains.attachments.actions.reserveUpload,
+      {
+        projectId: project.projectId,
+        filename: "walkthrough.mov",
+        mimeType: "video/quicktime",
+        byteSize: 33 * 1_024 * 1_024,
+        idempotencyKey: crypto.randomUUID(),
+      },
+    );
+    expect(large.transport).toBe("multipart");
+    if (large.transport !== "multipart") throw new Error("Expected multipart upload");
+    const createUrl = new URL(large.createUrl);
+    expect(createUrl.origin).toBe("https://dev.dongo.so");
+    expect(createUrl.pathname).toBe(
+      `/api/files/multipart/${large.attachmentId}`,
+    );
+    expect(large.partSize).toBe(8 * 1_024 * 1_024);
+    expect(large.partCount).toBe(5);
+    expect(createUrl.searchParams.get("partSize")).toBe(String(large.partSize));
+    expect(createUrl.searchParams.get("partCount")).toBe(String(large.partCount));
+
+    await expect(t.action(
+      api.domains.attachments.actions.reserveUpload,
+      {
+        projectId: project.projectId,
+        filename: "checksummed.mov",
+        mimeType: "video/quicktime",
+        byteSize: 33 * 1_024 * 1_024,
+        checksumSha256:
+          "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+        idempotencyKey: crypto.randomUUID(),
+      },
+    )).rejects.toThrow("Checksummed uploads larger than 32 MB are not supported");
 
     const body = JSON.stringify({
       version: 1,

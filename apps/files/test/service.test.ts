@@ -5,10 +5,13 @@ import {
   createFilesWorker,
   verifyDeleteLink,
   verifyDownloadLink,
+  verifyMultipartCreateLink,
+  verifyMultipartSessionLink,
   verifyUploadLink,
   type AttachmentFinalizeInput,
   type AttachmentFinalizer,
   type AttachmentObjectStore,
+  type MultipartUploadedPart,
   type StoreUploadOptions,
   type StoredAttachment,
   type StoredUpload,
@@ -21,6 +24,10 @@ const STORAGE_KEY =
   `organizations/org_123/projects/project_123/attachments/${ATTACHMENT_ID}`;
 const CHECKSUM =
   "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+const MULTIPART_SIZE = 10 * 1_024 * 1_024 + 3;
+const MULTIPART_PART_SIZE = 5 * 1_024 * 1_024;
+const MULTIPART_PART_COUNT = 3;
+const MULTIPART_UPLOAD_ID = "multipart_upload_123";
 
 function base64Url(value: string): string {
   return Buffer.from(value).toString("base64url");
@@ -96,6 +103,75 @@ function deleteUrl(
   return url;
 }
 
+function multipartCreateUrl(
+  overrides?: Readonly<Record<string, string>>,
+): URL {
+  const expires = overrides?.expires ?? String(NOW + 60 * 60_000);
+  const key = overrides?.key ?? base64Url(STORAGE_KEY);
+  const maxBytes = overrides?.maxBytes ?? String(MULTIPART_SIZE);
+  const mimeType = overrides?.mimeType ?? "video/quicktime";
+  const mime = overrides?.mime ?? base64Url(mimeType);
+  const partSize = overrides?.partSize ?? String(MULTIPART_PART_SIZE);
+  const partCount = overrides?.partCount ?? String(MULTIPART_PART_COUNT);
+  const signature = overrides?.signature ?? sign([
+    "MULTIPART_CREATE",
+    ATTACHMENT_ID,
+    STORAGE_KEY,
+    expires,
+    maxBytes,
+    mimeType,
+    partSize,
+    partCount,
+  ].join("\n"));
+  const url = new URL(
+    `https://dev.dongo.so/api/files/multipart/${ATTACHMENT_ID}`,
+  );
+  url.searchParams.set("expires", expires);
+  url.searchParams.set("key", key);
+  url.searchParams.set("maxBytes", maxBytes);
+  url.searchParams.set("mime", mime);
+  url.searchParams.set("partSize", partSize);
+  url.searchParams.set("partCount", partCount);
+  url.searchParams.set("signature", signature);
+  return url;
+}
+
+function multipartSessionUrl(
+  overrides?: Readonly<Record<string, string>>,
+): URL {
+  const expires = overrides?.expires ?? String(NOW + 60 * 60_000);
+  const key = overrides?.key ?? base64Url(STORAGE_KEY);
+  const uploadId = overrides?.uploadId ?? MULTIPART_UPLOAD_ID;
+  const maxBytes = overrides?.maxBytes ?? String(MULTIPART_SIZE);
+  const mimeType = overrides?.mimeType ?? "video/quicktime";
+  const mime = overrides?.mime ?? base64Url(mimeType);
+  const partSize = overrides?.partSize ?? String(MULTIPART_PART_SIZE);
+  const partCount = overrides?.partCount ?? String(MULTIPART_PART_COUNT);
+  const signature = overrides?.signature ?? sign([
+    "MULTIPART_SESSION",
+    ATTACHMENT_ID,
+    STORAGE_KEY,
+    uploadId,
+    expires,
+    maxBytes,
+    mimeType,
+    partSize,
+    partCount,
+  ].join("\n"));
+  const url = new URL(
+    `https://dev.dongo.so/api/files/multipart/${ATTACHMENT_ID}`,
+  );
+  url.searchParams.set("expires", expires);
+  url.searchParams.set("key", key);
+  url.searchParams.set("uploadId", uploadId);
+  url.searchParams.set("maxBytes", maxBytes);
+  url.searchParams.set("mime", mime);
+  url.searchParams.set("partSize", partSize);
+  url.searchParams.set("partCount", partCount);
+  url.searchParams.set("signature", signature);
+  return url;
+}
+
 class FakeStore implements AttachmentObjectStore {
   readonly gets: string[] = [];
   readonly puts: Array<{
@@ -104,6 +180,21 @@ class FakeStore implements AttachmentObjectStore {
     options: StoreUploadOptions;
   }> = [];
   readonly deletes: string[] = [];
+  readonly multipartCreates: Array<{ key: string; options: StoreUploadOptions }> = [];
+  readonly multipartParts: Array<{
+    key: string;
+    uploadId: string;
+    partNumber: number;
+    size: number;
+  }> = [];
+  readonly multipartCompletes: Array<{
+    key: string;
+    uploadId: string;
+    parts: readonly MultipartUploadedPart[];
+  }> = [];
+  readonly multipartAborts: Array<{ key: string; uploadId: string }> = [];
+  completedObject: StoredUpload | null = null;
+  failCompletedMultipartReplay = false;
   readyCalls = 0;
   object: StoredAttachment | null = {
     body: new Response("hello").body!,
@@ -116,6 +207,12 @@ class FakeStore implements AttachmentObjectStore {
   async get(key: string): Promise<StoredAttachment | null> {
     this.gets.push(key);
     return this.object;
+  }
+
+  async head(key: string, attachmentId: string): Promise<StoredUpload | null> {
+    return key === STORAGE_KEY && attachmentId === ATTACHMENT_ID
+      ? this.completedObject
+      : null;
   }
 
   async put(
@@ -131,6 +228,45 @@ class FakeStore implements AttachmentObjectStore {
         ? {}
         : { checksumSha256: options.checksumSha256 }),
     };
+  }
+
+  async createMultipart(
+    key: string,
+    options: StoreUploadOptions,
+  ): Promise<{ uploadId: string }> {
+    this.multipartCreates.push({ key, options });
+    return { uploadId: MULTIPART_UPLOAD_ID };
+  }
+
+  async uploadPart(
+    key: string,
+    uploadId: string,
+    partNumber: number,
+    body: ReadableStream<Uint8Array>,
+  ): Promise<MultipartUploadedPart> {
+    const size = (await new Response(body).arrayBuffer()).byteLength;
+    this.multipartParts.push({ key, uploadId, partNumber, size });
+    return { partNumber, etag: `etag-${partNumber}` };
+  }
+
+  async completeMultipart(
+    key: string,
+    uploadId: string,
+    parts: readonly MultipartUploadedPart[],
+  ): Promise<StoredUpload> {
+    this.multipartCompletes.push({ key, uploadId, parts });
+    if (this.completedObject !== null && this.failCompletedMultipartReplay) {
+      throw new Error("Multipart upload no longer exists");
+    }
+    this.completedObject = {
+      size: MULTIPART_SIZE,
+      httpEtag: '"multipart-etag"',
+    };
+    return this.completedObject;
+  }
+
+  async abortMultipart(key: string, uploadId: string): Promise<void> {
+    this.multipartAborts.push({ key, uploadId });
   }
 
   async delete(key: string): Promise<void> {
@@ -207,6 +343,51 @@ describe("signed attachment link parity", () => {
     tampered.searchParams.set("expires", String(NOW + 61_000));
     assert.equal(
       await verifyDeleteLink(tampered, ATTACHMENT_ID, SECRET, NOW),
+      undefined,
+    );
+  });
+
+  it("verifies create and session capabilities for the exact multipart shape", async () => {
+    assert.deepEqual(
+      await verifyMultipartCreateLink(
+        multipartCreateUrl(),
+        ATTACHMENT_ID,
+        SECRET,
+        NOW,
+      ),
+      {
+        attachmentId: ATTACHMENT_ID,
+        storageKey: STORAGE_KEY,
+        expiresAt: NOW + 60 * 60_000,
+        maximumBytes: MULTIPART_SIZE,
+        mimeType: "video/quicktime",
+        partSize: MULTIPART_PART_SIZE,
+        partCount: MULTIPART_PART_COUNT,
+      },
+    );
+    assert.deepEqual(
+      await verifyMultipartSessionLink(
+        multipartSessionUrl(),
+        ATTACHMENT_ID,
+        SECRET,
+        NOW,
+      ),
+      {
+        attachmentId: ATTACHMENT_ID,
+        storageKey: STORAGE_KEY,
+        uploadId: MULTIPART_UPLOAD_ID,
+        expiresAt: NOW + 60 * 60_000,
+        maximumBytes: MULTIPART_SIZE,
+        mimeType: "video/quicktime",
+        partSize: MULTIPART_PART_SIZE,
+        partCount: MULTIPART_PART_COUNT,
+      },
+    );
+
+    const tampered = multipartSessionUrl();
+    tampered.searchParams.set("partCount", "4");
+    assert.equal(
+      await verifyMultipartSessionLink(tampered, ATTACHMENT_ID, SECRET, NOW),
       undefined,
     );
   });
@@ -321,6 +502,138 @@ describe("attachment edge routes", () => {
       contentType: "text/plain",
     });
     assert.equal((finalizer as FakeFinalizer).calls[0]?.observedChecksumSha256, undefined);
+  });
+
+  it("creates, uploads, and completes a bounded multipart object", async () => {
+    const { worker, store, finalizer } = fixture();
+    const created = await worker.fetch(new Request(multipartCreateUrl(), {
+      method: "POST",
+      headers: { origin: "https://dev.dongo.so" },
+    }));
+    assert.equal(created.status, 201);
+    const creation = await created.json() as {
+      sessionUrl: string;
+      partSize: number;
+      partCount: number;
+    };
+    assert.equal(creation.partSize, MULTIPART_PART_SIZE);
+    assert.equal(creation.partCount, MULTIPART_PART_COUNT);
+    assert.deepEqual(store.multipartCreates, [{
+      key: STORAGE_KEY,
+      options: {
+        attachmentId: ATTACHMENT_ID,
+        size: MULTIPART_SIZE,
+        contentType: "video/quicktime",
+      },
+    }]);
+    assert.deepEqual(
+      await verifyMultipartSessionLink(
+        new URL(creation.sessionUrl),
+        ATTACHMENT_ID,
+        SECRET,
+        NOW,
+      ),
+      {
+        attachmentId: ATTACHMENT_ID,
+        storageKey: STORAGE_KEY,
+        uploadId: MULTIPART_UPLOAD_ID,
+        expiresAt: NOW + 60 * 60_000,
+        maximumBytes: MULTIPART_SIZE,
+        mimeType: "video/quicktime",
+        partSize: MULTIPART_PART_SIZE,
+        partCount: MULTIPART_PART_COUNT,
+      },
+    );
+
+    const parts: MultipartUploadedPart[] = [];
+    for (let partNumber = 1; partNumber <= MULTIPART_PART_COUNT; partNumber += 1) {
+      const size = partNumber < MULTIPART_PART_COUNT ? MULTIPART_PART_SIZE : 3;
+      const partUrl = new URL(creation.sessionUrl);
+      partUrl.pathname += `/parts/${partNumber}`;
+      const response = await worker.fetch(new Request(partUrl, {
+        method: "PUT",
+        headers: {
+          "content-length": String(size),
+          "content-type": "application/octet-stream",
+          origin: "https://dev.dongo.so",
+        },
+        body: new Uint8Array(size),
+      }));
+      assert.equal(response.status, 200);
+      const uploaded = await response.json() as MultipartUploadedPart;
+      parts.push({
+        partNumber: uploaded.partNumber,
+        etag: uploaded.etag,
+      });
+    }
+    assert.deepEqual(store.multipartParts.map(({ partNumber, size }) => ({
+      partNumber,
+      size,
+    })), [
+      { partNumber: 1, size: MULTIPART_PART_SIZE },
+      { partNumber: 2, size: MULTIPART_PART_SIZE },
+      { partNumber: 3, size: 3 },
+    ]);
+
+    const completeUrl = new URL(creation.sessionUrl);
+    completeUrl.pathname += "/complete";
+    const completed = await worker.fetch(new Request(completeUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://dev.dongo.so",
+      },
+      body: JSON.stringify({ parts }),
+    }));
+    assert.equal(completed.status, 201);
+    assert.deepEqual(await completed.json(), {
+      ok: true,
+      attachmentId: ATTACHMENT_ID,
+      byteSize: MULTIPART_SIZE,
+      etag: '"multipart-etag"',
+    });
+    assert.equal(store.multipartCompletes.length, 1);
+    assert.equal(finalizer instanceof FakeFinalizer, true);
+    assert.deepEqual((finalizer as FakeFinalizer).calls[0], {
+      requestId: completed.headers.get("x-request-id"),
+      attachmentId: ATTACHMENT_ID,
+      observedByteSize: MULTIPART_SIZE,
+      observedMimeType: "video/quicktime",
+    });
+
+    store.failCompletedMultipartReplay = true;
+    const replay = await worker.fetch(new Request(completeUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ parts }),
+    }));
+    assert.equal(replay.status, 201);
+    assert.equal(store.multipartCompletes.length, 2);
+    assert.equal((finalizer as FakeFinalizer).calls.length, 2);
+  });
+
+  it("aborts only the signed multipart upload and rejects malformed completion", async () => {
+    const { worker, store } = fixture();
+    const session = multipartSessionUrl();
+    const malformedComplete = new URL(session);
+    malformedComplete.pathname += "/complete";
+    const malformed = await worker.fetch(new Request(malformedComplete, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ parts: [{ partNumber: 2, etag: "wrong-order" }] }),
+    }));
+    assert.equal(malformed.status, 400);
+    assert.equal(store.multipartCompletes.length, 0);
+
+    const aborted = await worker.fetch(new Request(session, {
+      method: "DELETE",
+    }));
+    assert.equal(aborted.status, 200);
+    assert.deepEqual(store.multipartAborts, [{
+      key: STORAGE_KEY,
+      uploadId: MULTIPART_UPLOAD_ID,
+    }]);
+    assert.deepEqual(store.deletes, [STORAGE_KEY]);
   });
 
   it("deletes only the exact object selected by a signed discard", async () => {

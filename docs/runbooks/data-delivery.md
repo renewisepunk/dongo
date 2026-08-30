@@ -34,9 +34,10 @@ Uploads reserve quota before the browser/native client writes directly to R2. Co
 2. Identify the safe request ID and attachment ID; do not record the signed URL or file contents.
 3. Determine whether the reservation is pending, available, abandoned, or expired.
 4. For an expired signature, request a new upload/download operation. Never extend or edit a signed URL.
-5. For interrupted multipart upload, resume only the same reservation when the client supports it; otherwise abandon it and start a new reservation.
-6. If upload reached R2 but finalization failed, the Worker should remove that exact object. Verify cleanup by attachment/storage metadata, not bucket listing exposed to a client.
-7. Quota, MIME, size, checksum, or ownership rejection is not retryable until the input is corrected.
+5. Files through 32 MiB use one signed stream. Larger files use signed 8 MiB multipart parts. The web client retries a failed part against the same upload ID and retries completion safely; an explicit cancel aborts that upload before releasing the reservation.
+6. If a browser loses the create response before learning the upload ID, it cannot resume that opaque R2 session. Abandon the Convex reservation and start a new one; the reservation expires after one hour and R2's incomplete-upload lifecycle performs the remaining cleanup.
+7. If upload reached R2 but finalization failed, the Worker should remove that exact object. Verify cleanup by attachment/storage metadata, not bucket listing exposed to a client.
+8. Quota, MIME, size, checksum, or ownership rejection is not retryable until the input is corrected. Checksummed browser uploads above 32 MiB are rejected until end-to-end multipart checksum verification is available.
 
 Do not proxy large bytes through Convex or the app Worker, attach an unfinalized object, or grant a cross-project signed link.
 

@@ -10,6 +10,10 @@ import type {
 } from "../features/overview/model";
 import { convexAccessToken } from "./auth-client";
 import { convexDeploymentUrl } from "./auth-config";
+import {
+  deliverAttachment,
+  type AttachmentUploadReservation,
+} from "./attachment-upload";
 
 type ProjectGroup = {
   membership: { organizationId: string; role: "owner" | "member" };
@@ -375,13 +379,9 @@ const reserveUploadReference = makeFunctionReference<
     byteSize: number;
     idempotencyKey: string;
   },
-  {
-    attachmentId: string;
+  AttachmentUploadReservation & {
     expiresAt: number;
-    maximumBytes: number;
-    uploadUrl: string;
-    method: "PUT";
-    requiredHeaders: Record<string, string>;
+    storageKey: string;
   }
 >("domains/attachments/actions:reserveUpload");
 const discardUploadReference = makeFunctionReference<
@@ -871,18 +871,7 @@ export class ProjectDataConnection {
       throw new DOMException("Upload cancelled", "AbortError");
     }
     try {
-      onProgress(30, "uploading");
-      const response = await fetch(reservation.uploadUrl, {
-        method: reservation.method,
-        headers: reservation.requiredHeaders,
-        body: file,
-        credentials: "omit",
-        cache: "no-store",
-        referrerPolicy: "no-referrer",
-        signal,
-      });
-      if (!response.ok) throw new Error(`Attachment upload failed with HTTP ${response.status}`);
-      onProgress(100, "available");
+      await deliverAttachment(file, reservation, onProgress, signal);
       return reservation.attachmentId;
     } catch (error) {
       await discard().catch(() => undefined);

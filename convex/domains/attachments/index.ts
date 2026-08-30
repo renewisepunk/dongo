@@ -18,7 +18,7 @@ import {
   organizationStorageLimit,
 } from "../../lib/plans";
 
-const RESERVATION_TTL_MS = 15 * 60 * 1_000;
+const RESERVATION_TTL_MS = 60 * 60 * 1_000;
 
 function assertByteSize(byteSize: number): number {
   if (!Number.isSafeInteger(byteSize) || byteSize <= 0) {

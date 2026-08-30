@@ -14,6 +14,12 @@ public listing or public R2 domain; objects are reachable only through the
 - `PUT /api/files/upload/{attachmentId}` verifies the method-, key-, expiry-,
   size-, MIME-, and optional SHA-256-bound Convex signature, streams directly
   to R2, and finalizes the reservation through the private Convex gateway.
+- `POST /api/files/multipart/{attachmentId}` exchanges a signed create
+  capability for one short-lived, upload-ID-bound multipart session.
+- `PUT /api/files/multipart/{attachmentId}/parts/{partNumber}` accepts only
+  the exact signed part geometry; `POST .../complete` validates the ordered
+  part list and finalizes; `DELETE /api/files/multipart/{attachmentId}` aborts
+  that exact R2 upload and removes any completed object.
 
 There is deliberately no object listing route and no browser-callable finalize
 route. Browser CORS is restricted to `https://dev.dongo.so`.
@@ -68,6 +74,23 @@ signature={base64url(HMAC-SHA256(secret,
 The upload rejects absent/chunked `Content-Length` and requires it to equal the
 signed byte count. When a checksum is signed, the browser must send the exact
 `x-dongo-content-sha256` value and R2 independently verifies the object bytes.
+
+Files through 32 MiB use the single-upload contract. Larger files use 8 MiB
+R2 multipart parts (the final part may be smaller), keeping every Worker
+request below the normal account request-size limit while supporting retry of
+an individual part. The signed create capability binds the storage key, exact
+total bytes, MIME type, part size, part count, and one-hour expiry. The Worker
+then issues a second HMAC capability additionally bound to R2's opaque upload
+ID. Completion is retry-safe: if R2 already completed the upload, the Worker
+accepts only an exact attachment-owned object with the signed byte size before
+replaying the idempotent Convex finalizer.
+
+An explicit client cancel aborts the R2 multipart upload before releasing its
+Convex reservation. If the create response is lost before the client learns
+the upload ID, Convex releases the quota reservation after one hour and R2
+automatically aborts the empty/incomplete multipart upload under its lifecycle
+policy. No session capability is persisted in the repository or application
+logs.
 
 After R2 accepts the stream, the Worker signs a one-time `POST` to
 `/internal/attachments/v1/finalize` using `DONGO_INTERNAL_GATEWAY_SECRET` and

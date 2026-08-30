@@ -1,6 +1,8 @@
 import {
   createFilesWorker,
   type AttachmentObjectStore,
+  type MultipartUploadedPart,
+  type MultipartUploadHandle,
   type StoreUploadOptions,
   type StoredAttachment,
   type StoredUpload,
@@ -45,6 +47,23 @@ class R2AttachmentObjectStore implements AttachmentObjectStore {
     };
   }
 
+  async head(
+    storageKey: string,
+    attachmentId: string,
+  ): Promise<StoredUpload | null> {
+    const object = await this.bucket.head(storageKey);
+    if (
+      object === null ||
+      object.customMetadata?.attachmentId !== attachmentId
+    ) return null;
+    const checksumSha256 = hex(object.checksums.sha256);
+    return {
+      size: object.size,
+      httpEtag: object.httpEtag,
+      ...(checksumSha256 === undefined ? {} : { checksumSha256 }),
+    };
+  }
+
   async put(
     storageKey: string,
     body: ReadableStream<Uint8Array>,
@@ -71,6 +90,52 @@ class R2AttachmentObjectStore implements AttachmentObjectStore {
       httpEtag: object.httpEtag,
       ...(checksumSha256 === undefined ? {} : { checksumSha256 }),
     };
+  }
+
+  async createMultipart(
+    storageKey: string,
+    options: StoreUploadOptions,
+  ): Promise<MultipartUploadHandle> {
+    const upload = await this.bucket.createMultipartUpload(storageKey, {
+      httpMetadata: {
+        contentType: options.contentType,
+        cacheControl: "private, no-store, max-age=0",
+      },
+      customMetadata: {
+        attachmentId: options.attachmentId,
+        expectedByteSize: String(options.size),
+      },
+    });
+    return { uploadId: upload.uploadId };
+  }
+
+  async uploadPart(
+    storageKey: string,
+    uploadId: string,
+    partNumber: number,
+    body: ReadableStream<Uint8Array>,
+  ): Promise<MultipartUploadedPart> {
+    const upload = this.bucket.resumeMultipartUpload(storageKey, uploadId);
+    return await upload.uploadPart(partNumber, body);
+  }
+
+  async completeMultipart(
+    storageKey: string,
+    uploadId: string,
+    parts: readonly MultipartUploadedPart[],
+  ): Promise<StoredUpload> {
+    const upload = this.bucket.resumeMultipartUpload(storageKey, uploadId);
+    const object = await upload.complete([...parts]);
+    const checksumSha256 = hex(object.checksums.sha256);
+    return {
+      size: object.size,
+      httpEtag: object.httpEtag,
+      ...(checksumSha256 === undefined ? {} : { checksumSha256 }),
+    };
+  }
+
+  async abortMultipart(storageKey: string, uploadId: string): Promise<void> {
+    await this.bucket.resumeMultipartUpload(storageKey, uploadId).abort();
   }
 
   async delete(storageKey: string): Promise<void> {
@@ -106,6 +171,8 @@ export {
   createFilesWorker,
   verifyDeleteLink,
   verifyDownloadLink,
+  verifyMultipartCreateLink,
+  verifyMultipartSessionLink,
   verifyUploadLink,
 } from "./service.js";
 export { ConvexAttachmentFinalizer } from "./convex-finalizer.js";

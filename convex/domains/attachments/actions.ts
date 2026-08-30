@@ -5,7 +5,10 @@ import type { Id } from "../../_generated/dataModel";
 import { fail } from "../../lib/errors";
 
 const UPLOAD_PATH = "/api/files/upload";
+const MULTIPART_PATH = "/api/files/multipart";
 const DISCARD_TTL_MS = 60 * 1_000;
+const SINGLE_UPLOAD_MAX_BYTES = 32 * 1_024 * 1_024;
+const MULTIPART_PART_BYTES = 8 * 1_024 * 1_024;
 
 export const reserveUpload = action({
   args: {
@@ -16,15 +19,29 @@ export const reserveUpload = action({
     checksumSha256: v.optional(v.string()),
     idempotencyKey: v.string(),
   },
-  handler: async (ctx, args): Promise<{
-    attachmentId: Id<"attachments">;
-    storageKey: string;
-    expiresAt: number;
-    maximumBytes: number;
-    uploadUrl: string;
-    method: "PUT";
-    requiredHeaders: Record<string, string>;
-  }> => {
+  handler: async (ctx, args): Promise<
+    | {
+        transport: "single";
+        attachmentId: Id<"attachments">;
+        storageKey: string;
+        expiresAt: number;
+        maximumBytes: number;
+        uploadUrl: string;
+        method: "PUT";
+        requiredHeaders: Record<string, string>;
+      }
+    | {
+        transport: "multipart";
+        attachmentId: Id<"attachments">;
+        storageKey: string;
+        expiresAt: number;
+        maximumBytes: number;
+        createUrl: string;
+        method: "POST";
+        partSize: number;
+        partCount: number;
+      }
+  > => {
     const baseUrl = process.env.DONGO_ATTACHMENT_UPLOAD_BASE_URL;
     const secret = process.env.DONGO_ATTACHMENT_URL_SIGNING_SECRET;
     if (!baseUrl || !secret || secret.length < 32) {
@@ -42,10 +59,56 @@ export const reserveUpload = action({
     } catch {
       fail("internal", "Attachment upload origin is invalid");
     }
+    if (
+      args.byteSize > SINGLE_UPLOAD_MAX_BYTES &&
+      args.checksumSha256 !== undefined
+    ) {
+      fail(
+        "validation",
+        "Checksummed uploads larger than 32 MB are not supported",
+      );
+    }
     const reservation = await ctx.runMutation(
       api.domains.attachments.index.reserve,
       args,
     );
+    if (reservation.maximumBytes > SINGLE_UPLOAD_MAX_BYTES) {
+      url.pathname = `${MULTIPART_PATH}/${encodeURIComponent(reservation.attachmentId)}`;
+      const partSize = MULTIPART_PART_BYTES;
+      const partCount = Math.ceil(reservation.maximumBytes / partSize);
+      const key = base64UrlEncode(
+        new TextEncoder().encode(reservation.storageKey),
+      );
+      const mime = base64UrlEncode(new TextEncoder().encode(args.mimeType.trim()));
+      const signature = await hmacBase64Url(
+        secret,
+        [
+          "MULTIPART_CREATE",
+          reservation.attachmentId,
+          reservation.storageKey,
+          String(reservation.expiresAt),
+          String(reservation.maximumBytes),
+          args.mimeType.trim(),
+          String(partSize),
+          String(partCount),
+        ].join("\n"),
+      );
+      url.searchParams.set("expires", String(reservation.expiresAt));
+      url.searchParams.set("key", key);
+      url.searchParams.set("maxBytes", String(reservation.maximumBytes));
+      url.searchParams.set("mime", mime);
+      url.searchParams.set("partSize", String(partSize));
+      url.searchParams.set("partCount", String(partCount));
+      url.searchParams.set("signature", signature);
+      return {
+        ...reservation,
+        transport: "multipart",
+        createUrl: url.toString(),
+        method: "POST",
+        partSize,
+        partCount,
+      };
+    }
     url.pathname = `${UPLOAD_PATH}/${encodeURIComponent(reservation.attachmentId)}`;
     const key = base64UrlEncode(
       new TextEncoder().encode(reservation.storageKey),
@@ -77,6 +140,7 @@ export const reserveUpload = action({
     if (checksum) requiredHeaders["x-dongo-content-sha256"] = checksum;
     return {
       ...reservation,
+      transport: "single",
       uploadUrl: url.toString(),
       method: "PUT",
       requiredHeaders,
