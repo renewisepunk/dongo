@@ -10,7 +10,7 @@ const PRESENTATION = {
   session_start: {
     title: "Start dongo session",
     description:
-      "Fetch startup context. This starts no work and should be the first dongo call in a coding session.",
+      "Fetch startup context. This starts no work and should be the first dongo call in a coding session. Supply a caller-chosen externalSessionId that remains stable for this host session.",
   },
   get_overview: {
     title: "Get project overview",
