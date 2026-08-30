@@ -84,19 +84,6 @@ test("denies MCP access without selecting or binding a project", async ({ page }
   expect(JSON.parse(decision ?? "null")).toMatchObject({ accept: false });
 });
 
-test("keeps a branded confirmation visible while completing a loopback callback", async ({ page }) => {
-  await page.goto(`/oauth/consent?${signedConsentQuery}&scenario=loopback`);
-  await page.getByRole("button", { name: "Allow access" }).click();
-
-  await expect(page.getByText("Approved — return to your terminal", { exact: true })).toBeVisible();
-  await expect(page.getByText("You can safely close this window.", { exact: true })).toBeVisible();
-  await expect(page.locator('iframe[title="OAuth loopback callback"]')).toHaveAttribute(
-    "src",
-    "http://127.0.0.1:9/callback?code=fixture-code",
-  );
-  await expect(page).toHaveURL(/\/oauth\/consent/);
-});
-
 test("fails MCP consent closed for missing client, project, session, or backend", async ({ page }) => {
   await page.goto("/oauth/consent");
   await expect(page.getByRole("heading", { name: "This request can’t be authorized" })).toBeVisible();

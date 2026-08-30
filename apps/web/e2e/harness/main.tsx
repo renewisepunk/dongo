@@ -252,9 +252,6 @@ const oauthConsentDependencies = {
   },
   async decideOAuthConsent(search: string, accept: boolean) {
     document.documentElement.dataset.fixtureConsentDecision = JSON.stringify({ search, accept });
-    if (oauthScenario() === "loopback") {
-      return { redirect: true, url: "http://127.0.0.1:9/callback?code=fixture-code" };
-    }
     return { redirect: true, url: "/fixture/oauth-complete" };
   },
   followOAuthResult(result: { redirect?: boolean; url?: string }) {

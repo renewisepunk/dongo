@@ -35,7 +35,7 @@ export type OAuthClientSummary = {
   uri?: string;
 };
 
-export type OAuthResult = { redirect?: boolean; url?: string };
+type OAuthResult = { redirect?: boolean; url?: string };
 
 type ProjectGroup = {
   membership: { organizationId: string; role: "owner" | "member" };
@@ -306,26 +306,6 @@ export async function decideOAuthConsent(search: string, accept: boolean): Promi
     method: "POST",
     body: JSON.stringify({ accept, oauth_query: signedOAuthQuery(search) }),
   });
-}
-
-export function loopbackOAuthCallback(result: OAuthResult): string | undefined {
-  if (!result.redirect || !result.url) return undefined;
-  let callback: URL;
-  try {
-    callback = new URL(result.url);
-  } catch {
-    return undefined;
-  }
-  if (
-    callback.protocol !== "http:" ||
-    callback.username ||
-    callback.password ||
-    !["127.0.0.1", "localhost", "[::1]"].includes(callback.hostname) ||
-    !callback.port
-  ) {
-    return undefined;
-  }
-  return callback.toString();
 }
 
 export function followOAuthResult(result: OAuthResult): void {

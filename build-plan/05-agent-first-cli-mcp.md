@@ -120,6 +120,8 @@ host connects without a token
   -> MCP server validates issuer, audience, expiry, scopes, and revocation
 ```
 
+For native hosts such as Codex and Claude Code, the final callback is an HTTP loopback listener owned by the host. dongo must perform a normal top-level redirect to that exact `redirect_uri`; it must never fetch, frame, proxy, or otherwise contact the loopback listener from `dev.dongo.so`. Those alternatives trigger browser Private Network Access/device-access prompts and make a legitimate OAuth flow look suspicious. The callback page styling and its “safe to close” copy are therefore host-owned. A branded dongo completion page is possible only when the host explicitly supports a post-callback return URL or serves branded callback HTML itself.
+
 Host setup targets:
 
 - Codex: add the remote URL in user or trusted-project configuration, then run `codex mcp login dongo`.

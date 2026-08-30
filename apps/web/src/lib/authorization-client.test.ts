@@ -34,7 +34,6 @@ import {
   decideOAuthConsent,
   getDeviceRequest,
   listAuthorizableProjects,
-  loopbackOAuthCallback,
 } from "./authorization-client";
 
 afterEach(() => {
@@ -43,16 +42,6 @@ afterEach(() => {
 });
 
 describe("isolated authorization worker client", () => {
-  it("accepts only explicit HTTP loopback OAuth callbacks", () => {
-    expect(loopbackOAuthCallback({ redirect: true, url: "http://127.0.0.1:49152/callback?code=secret" }))
-      .toBe("http://127.0.0.1:49152/callback?code=secret");
-    expect(loopbackOAuthCallback({ redirect: true, url: "http://localhost:49152/callback" }))
-      .toBe("http://localhost:49152/callback");
-    expect(loopbackOAuthCallback({ redirect: true, url: "https://attacker.test/callback" })).toBeUndefined();
-    expect(loopbackOAuthCallback({ redirect: true, url: "http://127.0.0.1.attacker.test:49152/callback" })).toBeUndefined();
-    expect(loopbackOAuthCallback({ redirect: true, url: "http://127.0.0.1/callback" })).toBeUndefined();
-  });
-
   it("bootstraps the current profile before listMine", async () => {
     await expect(bootstrapHumanIdentity()).resolves.toEqual({ profileId: "profile_1", created: false });
     convexCalls.length = 0;

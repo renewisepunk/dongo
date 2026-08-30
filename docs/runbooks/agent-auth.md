@@ -83,6 +83,8 @@ The installer may alter only its named MCP entry and versioned dongo instruction
 
 After host-native OAuth, call one read-only session-start tool. Then verify one idempotent write using a fresh test work item. If login succeeds but tools fail, compare the exact resource URL and approved scopes before reauthorizing.
 
+Native host loopback callbacks must remain top-level redirects to the host-provided `redirect_uri`. Never embed or fetch a localhost callback from the dongo web app: Chrome and other browsers may show a device/private-network access prompt. The plain final localhost page is served by the host, not dongo, and can only be branded when the host offers an explicit post-callback redirect or customizable callback response.
+
 ## Human/agent auth isolation
 
 Human sign-in runs in the Convex-integrated Better Auth instance. CLI/MCP OAuth runs in the isolated Cloudflare authorization Worker. A signed, short-lived, single-use bridge assertion is the only session handoff. Human browser cookies are not agent credentials, and agent access/refresh tokens are never sent to Convex.
