@@ -143,6 +143,7 @@ type IntakeListener = (item: Intake) => void;
 const overviewListeners = new Set<(overview: ProjectOverview) => void>();
 const workListeners = new Map<string, Set<WorkListener>>();
 const intakeListeners = new Map<string, Set<IntakeListener>>();
+const uploadAttempts = new Map<string, number>();
 
 function overview(): ProjectOverview {
   return {
@@ -277,9 +278,14 @@ const connection: OverviewConnection = {
   },
   async uploadAttachment(file, onProgress, signal) {
     if (signal.aborted) throw new DOMException("Upload cancelled", "AbortError");
+    const attempt = (uploadAttempts.get(file.name) ?? 0) + 1;
+    uploadAttempts.set(file.name, attempt);
     onProgress(42, "uploading");
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, file.name.startsWith("slow-") ? 250 : 10));
     if (signal.aborted) throw new DOMException("Upload cancelled", "AbortError");
+    if (file.name.startsWith("retry-") && attempt === 1) {
+      throw new Error("fixture upload interruption");
+    }
     onProgress(100, "available");
     return `attachment-${file.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
   },

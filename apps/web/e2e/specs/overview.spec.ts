@@ -88,6 +88,45 @@ test("uploads a browser-selected file before Intake submission", async ({ page }
   await expect(page.getByText("Intake with an attachment", { exact: true })).toHaveCount(1);
 });
 
+test("accepts a desktop file drop", async ({ page }) => {
+  const dataTransfer = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["Dropped fixture"], "dropped-fixture.txt", { type: "text/plain" }));
+    return transfer;
+  });
+  await page.getByRole("region", { name: "Add something" }).dispatchEvent("drop", { dataTransfer });
+  await expect(page.getByText("dropped-fixture.txt", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Add something" }).getByText("ready", { exact: true }),
+  ).toBeVisible();
+});
+
+test("retries an interrupted upload without duplicating the draft", async ({ page }) => {
+  const composer = page.getByRole("region", { name: "Add something" });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "retry-fixture.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Retry fixture"),
+  });
+  await expect(composer.getByText("Upload interrupted. Retry when you are online.")).toBeVisible();
+  await composer.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(composer.getByText("ready", { exact: true })).toBeVisible();
+  await expect(composer.getByText("retry-fixture.txt", { exact: true })).toHaveCount(1);
+});
+
+test("cancels an in-flight upload and removes its draft", async ({ page }) => {
+  const composer = page.getByRole("region", { name: "Add something" });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "slow-fixture.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Slow fixture"),
+  });
+  await expect(composer.getByRole("progressbar", { name: "Uploading slow-fixture.txt" })).toBeVisible();
+  await composer.getByRole("button", { name: "Remove slow-fixture.txt" }).click();
+  await expect(composer.getByText("slow-fixture.txt", { exact: true })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Submit to Inbox" })).toBeDisabled();
+});
+
 test("opens search by keyboard and restores focus after detail close", async ({ page }) => {
   const searchButton = page.getByRole("button", { name: "Search this project" });
   await searchButton.focus();
