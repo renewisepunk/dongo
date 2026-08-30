@@ -13,7 +13,7 @@ Dongo launches with two first-class agent surfaces:
 
 The source of truth is a transport-neutral operation registry plus Convex domain invariants. HTTPS and MCP are adapters over that registry. The CLI does not become the MCP server's production backend, and the MCP server does not own repository files.
 
-Full product UI work follows the agent protocol gate. The only early web surfaces are those required to authenticate, authorize installations, select a project, revoke access, submit text Intake, show minimal status, and answer Attention.
+Full product UI work follows the agent protocol gate. The only early web surfaces are those required to authenticate, confirm the agent-selected project while authorizing installations, revoke access, submit text Intake, show minimal status, and answer Attention.
 
 The fixed product/auth origins are `https://dev.dongo.so` for development and `https://dongo.so` for production. Project-specific MCP resources use `/p/{publicProjectRef}/mcp` on the matching origin. Convex `wandering-camel-662` is the development deployment. Web, auth, API, and MCP may remain separate services behind the Cloudflare entry layer, but no environment credential crosses origins.
 
@@ -68,10 +68,11 @@ Expected flow:
 
 ```text
 CLI requests device authorization for the Dongo agent API
+  -> resolves the project from an explicit ref, repository marker, repository URL, unique name/slug, or sole active project
   -> prints and opens verification_uri_complete
   -> terminal displays the short code for visual confirmation
   -> browser signs the human in if required
-  -> browser shows Dongo CLI, project, machine label, and requested scopes
+  -> browser shows the fixed agent-selected project, Dongo CLI, machine label, and requested scopes
   -> human explicitly approves or denies
   -> browser says “Approved — you can close this window” and points back to the terminal
   -> CLI polls at the server-provided interval
@@ -84,6 +85,7 @@ CLI requests device authorization for the Dongo agent API
 Requirements:
 
 - Prefer `verification_uri_complete` so no code entry is required.
+- Project choice belongs to the agent/CLI. The browser is a non-editable confirmation surface; ambiguous matches fail closed and `--project-ref` is the explicit recovery path.
 - Show the same short code in terminal and browser to resist cross-device phishing.
 - If a browser cannot be opened, print the complete URL; the CLI continues polling and works over SSH.
 - Follow `authorization_pending`, `slow_down`, `access_denied`, and expiry semantics exactly.

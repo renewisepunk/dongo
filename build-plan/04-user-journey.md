@@ -249,7 +249,8 @@ Visible elements:
 - Authorizing account and organization.
 - Verified client name: Dongo CLI.
 - Repository/machine label when safely supplied.
-- Project selector limited to projects the user may authorize.
+- Fixed project selected by the CLI/agent from an exact reference, the repository marker, repository URL, unique name/slug, or the account's only active project. The human confirms this binding but does not choose it on the consent page.
+- If an account has multiple projects and repository context does not resolve exactly one, show “No unambiguous project match,” disable approval, and tell the agent to reconnect with an exact public project reference.
 - When no project exists and the current official CLI link contains a valid proposal: a clearly labeled CLI project proposal showing name, repository URL when present, and Manual/Autonomous mode; Requested access explicitly includes creating that first project; the primary action reads “Create & approve.”
 - When no project exists and the request has no valid proposal: approval stays disabled and the web Create project fallback is available.
 - Requested access in plain language, including read/write and offline renewal where applicable.
@@ -990,7 +991,7 @@ The V1 journey is complete when the following feels continuous:
 1. In the repository, René runs `dongo connect`; the CLI detects the Dongo repository, proposes the Dongo project, opens one complete browser link, and displays a matching confirmation code.
 2. René signs in with Google or an email code if needed. No pre-existing project is required to reach the authorization review.
 3. The browser shows the exact CLI proposal, scopes, account, resource, and comparison code. René chooses Create & approve; Dongo creates the personal organization and first project, binds that project to the pending device request, and approves it.
-4. René returns to the polling terminal. The CLI receives only the new project-scoped grant, securely stores it, writes only a non-secret marker, and passes doctor. If the project already existed, the same journey uses project selection and Approve without creating anything.
+4. René returns to the polling terminal. The CLI receives only the new project-scoped grant, securely stores it, writes only a non-secret marker, and passes doctor. If the project already existed, the agent selects it from repository context before opening the link; the browser shows that fixed binding for confirmation and Approve without creating anything.
 5. René connects Codex or Claude to the project-specific remote MCP endpoint. The host opens a separate OAuth consent request; René approves that host for the same project, and a read-only `dongo_session_start` verifies it.
 6. René enters Overview and types “checkout gets stuck here,” attaches a screen recording, and submits.
 7. The Intake appears immediately under Inbox as Waiting for local agent.
