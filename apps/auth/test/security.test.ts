@@ -3,6 +3,7 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   allowedMetadataHostname,
+  claudeLoopbackRedirectForFlow,
   claudeLoopbackRedirectForRequest,
   createMetadataFetcher,
   safeReturnTo,
@@ -141,6 +142,62 @@ describe("authorization boundary security", () => {
       expect(claudeLoopbackRedirectForRequest(authorize(clientId!, redirectUri!)))
         .toBeUndefined();
     }
+
+    const duplicate = new URL(authorize(
+      "https://claude.ai/oauth/claude-code-client-metadata",
+      "http://localhost:3118/callback",
+    ).url);
+    duplicate.searchParams.append("redirect_uri", "http://localhost:3118/callback");
+    expect(claudeLoopbackRedirectForRequest(new Request(duplicate))).toBeUndefined();
+  });
+
+  it("keeps Claude's validated loopback callback through consent and continuation", async () => {
+    const oauthQuery = new URLSearchParams({
+      client_id: "https://claude.ai/oauth/claude-code-client-metadata",
+      redirect_uri: "http://localhost:3118/callback",
+      response_type: "code",
+    }).toString();
+    const continuation = (path: string, query = oauthQuery) => new Request(
+      `https://dev.dongo.so${path}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: JSON.stringify({ accept: true, oauth_query: query }),
+      },
+    );
+
+    await expect(claudeLoopbackRedirectForFlow(
+      continuation("/api/auth/oauth2/consent"),
+    )).resolves.toBe("http://localhost:3118/callback");
+    await expect(claudeLoopbackRedirectForFlow(
+      continuation("/api/auth/oauth2/continue"),
+    )).resolves.toBe("http://localhost:3118/callback");
+
+    const duplicate = `${oauthQuery}&redirect_uri=${encodeURIComponent(
+      "http://localhost:3118/callback",
+    )}`;
+    await expect(claudeLoopbackRedirectForFlow(
+      continuation("/api/auth/oauth2/consent", duplicate),
+    )).resolves.toBeUndefined();
+    await expect(claudeLoopbackRedirectForFlow(new Request(
+      "https://dev.dongo.so/api/auth/oauth2/consent",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{",
+      },
+    ))).resolves.toBeUndefined();
+    await expect(claudeLoopbackRedirectForFlow(
+      continuation("/api/auth/oauth2/consent", "x".repeat(16 * 1024 + 1)),
+    )).resolves.toBeUndefined();
+    await expect(claudeLoopbackRedirectForFlow(new Request(
+      "https://dev.dongo.so/api/auth/oauth2/consent",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ oauth_query: oauthQuery, padding: "x".repeat(32 * 1024) }),
+      },
+    ))).resolves.toBeUndefined();
   });
 
   it("adds only the validated Claude callback to Claude's fetched metadata", async () => {

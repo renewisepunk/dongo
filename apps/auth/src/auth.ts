@@ -24,7 +24,6 @@ import {
   type PinnedGrantContext,
 } from "./grant-binding";
 import {
-  claudeLoopbackRedirectForRequest,
   createMetadataFetcher,
 } from "./security";
 
@@ -265,10 +264,9 @@ function parseSuffixes(value: string): string[] {
 
 export function createAuthorizationServer(
   env: AuthWorkerEnv,
-  request?: Request,
+  claudeLoopbackRedirect?: string,
 ) {
   const metadataSuffixes = parseSuffixes(env.CIMD_ALLOWED_HOST_SUFFIXES);
-  const claudeLoopbackRedirect = claudeLoopbackRedirectForRequest(request);
   const staticClient = staticCliDiscovery();
   const pinning = tokenPinning(env);
   return betterAuth({

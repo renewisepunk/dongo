@@ -152,7 +152,9 @@ export function claudeLoopbackRedirectForRequest(
   const authorizationUrl = new URL(request.url);
   if (
     authorizationUrl.pathname !== "/api/auth/oauth2/authorize" ||
-    authorizationUrl.searchParams.get("client_id") !== CLAUDE_CODE_CLIENT_ID
+    authorizationUrl.searchParams.getAll("client_id").length !== 1 ||
+    authorizationUrl.searchParams.get("client_id") !== CLAUDE_CODE_CLIENT_ID ||
+    authorizationUrl.searchParams.getAll("redirect_uri").length !== 1
   ) {
     return undefined;
   }
@@ -181,6 +183,71 @@ export function claudeLoopbackRedirectForRequest(
     return undefined;
   }
   return redirect.toString();
+}
+
+const OAUTH_CONTINUATION_PATHS = new Set([
+  "/api/auth/oauth2/consent",
+  "/api/auth/oauth2/continue",
+]);
+const MAX_OAUTH_CONTINUATION_BODY_BYTES = 32 * 1024;
+const MAX_OAUTH_QUERY_BYTES = 16 * 1024;
+
+/**
+ * Better Auth resolves CIMD metadata again when it handles consent and
+ * post-login continuation. Those POST requests carry the original, signed
+ * OAuth query in their JSON body rather than in the request URL. Recover only
+ * Claude Code's narrowly validated random-port loopback callback so every
+ * phase validates the same redirect metadata.
+ */
+export async function claudeLoopbackRedirectForFlow(
+  request: Request,
+): Promise<string | undefined> {
+  const direct = claudeLoopbackRedirectForRequest(request);
+  if (direct) return direct;
+
+  const requestUrl = new URL(request.url);
+  if (
+    request.method !== "POST" ||
+    !OAUTH_CONTINUATION_PATHS.has(requestUrl.pathname) ||
+    request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !==
+      "application/json"
+  ) {
+    return undefined;
+  }
+
+  let bodyText: string;
+  try {
+    bodyText = await request.clone().text();
+  } catch {
+    return undefined;
+  }
+  if (encoder.encode(bodyText).byteLength > MAX_OAUTH_CONTINUATION_BODY_BYTES) {
+    return undefined;
+  }
+
+  let body: unknown;
+  try {
+    body = JSON.parse(bodyText);
+  } catch {
+    return undefined;
+  }
+  const oauthQuery =
+    body && typeof body === "object" && "oauth_query" in body
+      ? (body as { oauth_query?: unknown }).oauth_query
+      : undefined;
+  if (
+    typeof oauthQuery !== "string" ||
+    oauthQuery.length === 0 ||
+    encoder.encode(oauthQuery).byteLength > MAX_OAUTH_QUERY_BYTES
+  ) {
+    return undefined;
+  }
+
+  const authorizationUrl = new URL("/api/auth/oauth2/authorize", requestUrl.origin);
+  authorizationUrl.search = oauthQuery.startsWith("?")
+    ? oauthQuery.slice(1)
+    : oauthQuery;
+  return claudeLoopbackRedirectForRequest(new Request(authorizationUrl));
 }
 
 function addClaudeLoopbackRedirect(

@@ -95,13 +95,16 @@ The authorization Worker may admit the port-bearing URI only when all of these c
 
 - the request is for `/api/auth/oauth2/authorize`;
 - `client_id` is the exact Claude Code metadata URL above;
+- `client_id` and `redirect_uri` each occur exactly once;
 - `redirect_uri` is exactly `http://localhost:<1-65535>/callback` with no credentials, query, or fragment;
 - the freshly fetched, redirect-free, size-bounded metadata document has the same `client_id` and already declares the portless `http://localhost/callback` URI;
 - the normal authorization-code, S256 PKCE, state, resource, scope, consent, expiry, and token-audience checks still pass.
 
-Only that one requested URI is added to the in-memory metadata used for the current authorization server instance. It is not persisted as a wildcard, does not apply to DCR clients or any other CIMD client, and does not permit another host, scheme, path, or portless request. Unit tests must keep every negative case above. If a future Claude release publishes the exact runtime callback or switches to a loopback IP literal, remove this exception after the pinned-host compatibility gate passes.
+Better Auth resolves CIMD metadata on the initial authorize request and again on the consent and post-login continuation POSTs. Those POSTs do not carry the original parameters in their URL; they carry the provider-signed `oauth_query` in a bounded JSON body. The Worker must recover the exact Claude callback from that query for `/api/auth/oauth2/consent` and `/api/auth/oauth2/continue`, re-run every check above, and pass it only to that request's in-memory metadata fetcher. It must not trust `Referer`, a custom browser header, an unsigned project parameter, or a previously cached random port. The provider still validates the signed query before issuing a code.
 
-When Claude reports `invalid_client`, verify that its metadata fetch returned `200 application/json` without redirects. When it reports a redirect mismatch, compare the requested callback shape to the exact rule above; do not add a wildcard or disable exact redirect validation. Complete login with `claude mcp login <name>`, verify `claude mcp get <name>` reports connected, then prove one read and one idempotent write tool. Do not print or retain the authorization URL because it contains short-lived OAuth request material.
+Only that one requested URI is added to the in-memory metadata used for each phase of the same authorization transaction. It is not persisted as a wildcard, does not apply to DCR clients or any other CIMD client, and does not permit another host, scheme, path, or portless request. Unit tests must cover authorize, consent, continuation, duplicate parameters, malformed or oversized bodies, and every negative callback case above. If a future Claude release publishes the exact runtime callback or switches to a loopback IP literal, remove this exception after the pinned-host compatibility gate passes.
+
+When Claude reports `invalid_client`, verify that its metadata fetch returned `200 application/json` without redirects. When it reaches consent but fails with `invalid_redirect` after approval, verify that consent/continuation recovered the same callback from `oauth_query`; this phase-context loss must not be worked around with a wildcard, a persisted ephemeral port, or disabled redirect validation. Complete login with `claude mcp login <name>`, verify `claude mcp get <name>` reports connected, then prove one read and one idempotent write tool. Do not print or retain the authorization URL because it contains short-lived OAuth request material.
 
 ## Human/agent auth isolation
 

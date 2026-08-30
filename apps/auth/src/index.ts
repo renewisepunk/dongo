@@ -3,6 +3,7 @@ import type { AuthWorkerEnv } from "./env";
 import { provisionProjectResource } from "./resource-provisioning";
 import { sendOtpEmail } from "./otp-email";
 import { resourceIntrospection } from "./resource-introspection";
+import { claudeLoopbackRedirectForFlow } from "./security";
 
 function securityHeaders(response: Response, requestId: string): Response {
   const headers = new Headers(response.headers);
@@ -85,7 +86,8 @@ export default {
           requestId,
         );
       }
-      const auth = createAuthorizationServer(env, request);
+      const claudeLoopbackRedirect = await claudeLoopbackRedirectForFlow(request);
+      const auth = createAuthorizationServer(env, claudeLoopbackRedirect);
       return securityHeaders(await auth.handler(request), requestId);
     } catch (error) {
       console.error(JSON.stringify({
