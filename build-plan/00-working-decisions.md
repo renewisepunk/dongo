@@ -47,7 +47,10 @@ Recommended: every CLI or MCP authorization grant is linked to one stable instal
 
 Recommended:
 
-- `dongo connect` uses the OAuth Device Authorization Grant. The CLI opens `verification_uri_complete`, the browser authenticates the human and shows explicit project/client/scope approval, and the CLI polls until it receives its audience-bound tokens. No code copy/paste or localhost callback is required.
+- `dongo connect` uses the OAuth Device Authorization Grant. Before opening `verification_uri_complete`, the CLI detects the repository and prepares a bounded, non-secret first-project proposal: name, safe repository URL when available, and execution mode. The proposal travels only as visible browser-link parameters; it is never treated as trusted token data.
+- The browser authenticates the human and shows explicit client, comparison code, project proposal/selection, scopes, resource, and Approve/Deny controls. If the account has no project, one explicit **Create & approve** action creates the personal organization and proposed first project, selects it for the pending device grant, and then approves. If a project already exists, authorization remains a normal project selection and never creates or switches projects silently.
+- The token issued after approval remains project-bound. Dongo does not introduce an account-wide work token or let callers choose `organizationId`, `projectId`, or `actorId`; the browser-backed human identity creates the project and the authorization server binds the resulting stable project reference before token issuance.
+- The CLI infers the first-project proposal by default and accepts `--project-name`, `--repository-url`, and `--execution-mode manual|autonomous` overrides so agents and headless workflows can prepare the exact proposal before the human consent step. No code copy/paste or localhost callback is required.
 - Remote MCP clients use the MCP OAuth authorization-code flow with S256 PKCE and the client registration mechanism negotiated from discovery. Prefer Client ID Metadata Documents (CIMD); retain Dynamic Client Registration only for supported-client compatibility.
 - CLI, Codex, Claude, and other MCP hosts receive separate grants and token families. Tokens are never copied between clients.
 - The CLI stores refresh material in the OS credential store. A user-scoped `0600` file is a documented fallback only when the OS store is unavailable. MCP hosts own their credential storage.
@@ -57,7 +60,7 @@ Recommended:
 
 ### D-08 — First-login tenancy
 
-Recommended: first login creates a personal organization with an editable name, then requires creation of the first project before Overview. The subscription belongs to the organization. The free entitlement allows one active project; archived projects do not consume the active-project allowance.
+Recommended: first login creates the human profile but does not force a UI-first project form. The primary agent-first path starts in a repository with `dongo connect`; the CLI proposes the first project and the authenticated human creates and authorizes it in one consent action. The web project form remains a fallback for a legacy/manual device link or a human who starts in the web app. Project creation also creates the personal organization when needed. The subscription belongs to the organization. The free entitlement allows one active project; archived projects do not consume the active-project allowance.
 
 ### D-09 — Upload architecture
 

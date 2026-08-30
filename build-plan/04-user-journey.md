@@ -160,11 +160,11 @@ The screen never flashes Overview data before the Convex identity is authenticat
 
 When authentication was initiated by `/device` or `/oauth/consent`, the callback preserves the pending authorization transaction and returns to it. The user is never forced to restart the terminal or MCP login flow after authenticating.
 
-### Screen 4 — Create the first project
+### Screen 4 — Create the first project (web fallback)
 
 Purpose: establish the repository/codebase the user will coordinate.
 
-The default planning behavior creates a personal organization automatically. Its name can be changed later; the user is taken directly to project creation.
+This is the web-started fallback, not a mandatory gate before an agent can authenticate. The canonical agent-first path is Screen 5B → Screen 5C, where `dongo connect` proposes the repository as the first project and the human creates and approves it in one consent action. The fallback creates a personal organization automatically; its name can be changed later.
 
 Visible elements:
 
@@ -190,7 +190,7 @@ Validation and error states:
 - Project entitlement reached, with an explanation rather than silent failure.
 - Creation failure preserves every entered value and offers Retry.
 
-Next screen: Screen 5. When project creation occurred during a pending CLI/MCP authorization, the new project remains selected and the user returns to that approval request.
+Next screen: Screen 5. When this fallback was opened from a legacy pending CLI/MCP authorization, the exact pending request remains in `returnTo`; the new project stays selected when the user returns.
 
 ### Screen 5A — Web: connect a coding agent
 
@@ -217,6 +217,8 @@ Entry: the user runs `dongo connect` from the repository.
 Visible terminal elements:
 
 - Detected repository path and environment.
+- Inferred first-project proposal: repository-derived project name, safe Git origin URL when available, and Manual execution mode by default.
+- Optional deterministic overrides: `--project-name`, `--repository-url`, and `--execution-mode manual|autonomous`.
 - “Requesting secure authorization…” status.
 - One complete clickable authorization URL, opened automatically when possible.
 - Short confirmation code shown for comparison with the browser.
@@ -234,6 +236,7 @@ Terminal error/recovery states:
 - Denied or expired: explain the result and offer a fresh authorization.
 - Network interrupted: retry safely until expiry.
 - Cancelled: stop polling and leave no partial credential.
+- Unsafe or credential-bearing repository origin: omit the repository URL from the proposal rather than placing it in browser history; an explicitly supplied unsafe URL fails before authorization starts.
 
 ### Screen 5C — Browser: approve Dongo CLI
 
@@ -246,7 +249,9 @@ Visible elements:
 - Authorizing account and organization.
 - Verified client name: Dongo CLI.
 - Repository/machine label when safely supplied.
-- Project selector limited to projects the user may authorize, plus Create project when permitted.
+- Project selector limited to projects the user may authorize.
+- When no project exists and the current official CLI link contains a valid proposal: a clearly labeled CLI project proposal showing name, repository URL when present, and Manual/Autonomous mode; Requested access explicitly includes creating that first project; the primary action reads “Create & approve.”
+- When no project exists and the request has no valid proposal: approval stays disabled and the web Create project fallback is available.
 - Requested access in plain language, including read/write and offline renewal where applicable.
 - Exact API resource/environment.
 - Approve and Deny buttons.
@@ -259,7 +264,7 @@ States:
 - No available project/entitlement reached: explain the limitation and allow project management in a separate tab.
 - Invalid, already used, denied, or expired request: show a terminal retry instruction.
 
-Approval creates a separate project-scoped installation Actor and grant. It never reveals token material.
+For a first project, Create & approve provisions the personal organization/project through the authenticated Convex identity, binds its resulting public project reference to the authorization-server user, and only then approves the device request. Approval creates a separate project-scoped installation Actor and grant. It never issues an account-wide work token and never reveals token material.
 
 ### Screen 5D — Browser: authorization complete
 
@@ -982,10 +987,10 @@ Visible elements:
 
 The V1 journey is complete when the following feels continuous:
 
-1. René signs in with Google or an email code.
-2. Dongo creates a personal organization and René creates the Dongo project.
-3. In the repository, René runs `dongo connect`; the terminal opens one complete browser link and displays a matching confirmation code.
-4. René signs in if needed, selects the Dongo project, reviews the CLI access, approves it, and returns to the polling terminal. The CLI securely stores its independent grant, writes only a non-secret marker, and passes doctor.
+1. In the repository, René runs `dongo connect`; the CLI detects the Dongo repository, proposes the Dongo project, opens one complete browser link, and displays a matching confirmation code.
+2. René signs in with Google or an email code if needed. No pre-existing project is required to reach the authorization review.
+3. The browser shows the exact CLI proposal, scopes, account, resource, and comparison code. René chooses Create & approve; Dongo creates the personal organization and first project, binds that project to the pending device request, and approves it.
+4. René returns to the polling terminal. The CLI receives only the new project-scoped grant, securely stores it, writes only a non-secret marker, and passes doctor. If the project already existed, the same journey uses project selection and Approve without creating anything.
 5. René connects Codex or Claude to the project-specific remote MCP endpoint. The host opens a separate OAuth consent request; René approves that host for the same project, and a read-only `dongo_session_start` verifies it.
 6. René enters Overview and types “checkout gets stuck here,” attaches a screen recording, and submits.
 7. The Intake appears immediately under Inbox as Waiting for local agent.

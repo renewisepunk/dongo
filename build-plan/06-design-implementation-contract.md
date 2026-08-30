@@ -51,10 +51,11 @@ The prototype predates the accepted OAuth plan and displays a pairing code. Keep
 ### CLI
 
 1. The instruction asks the host to install Dongo or run `dongo connect`.
-2. The CLI requests an OAuth Device Authorization Grant and opens `verification_uri_complete`.
-3. The browser route shows the requesting client, selected project, requested scopes, short comparison code, expiry, and Approve/Deny actions.
-4. After approval the browser says “Approved — return to your terminal.” It never displays access or refresh tokens.
-5. The connection status updates when the CLI has stored credentials, written the non-secret project marker, and passed its connection check.
+2. The CLI detects the current repository and prepares a first-project proposal (name, safe repository URL when available, Manual/Autonomous mode), then requests an OAuth Device Authorization Grant and opens `verification_uri_complete` with that visible non-secret proposal.
+3. The browser route shows the requesting client, account, selected project or CLI first-project proposal, requested scopes, exact resource, short comparison code, and Approve/Deny actions.
+4. If no project exists, the primary action is “Create & approve.” It creates the proposed first project through the authenticated human identity, binds its stable public reference to the pending grant, and then approves. A missing or invalid proposal leaves approval disabled and offers the web fallback.
+5. After approval the browser says “Approved — return to your terminal.” It never displays access or refresh tokens, and the issued token is still project-bound.
+6. The connection status updates when the CLI has stored credentials, written the non-secret project marker, and passed its connection check.
 
 The complete URL is the normal one-link path. The short code exists for terminal/browser comparison and SSH recovery; users do not normally copy or enter it.
 
