@@ -25,7 +25,7 @@ import {
   type PinnedGrantContext,
 } from "../src/grant-binding";
 import { renderOtpEmail } from "../src/otp-email";
-import { createAuthorizationServer } from "../src/auth";
+import { createAuthorizationServer, oauthClientLabel } from "../src/auth";
 import type { AuthWorkerEnv } from "../src/env";
 
 describe("authorization boundary security", () => {
@@ -56,6 +56,26 @@ describe("authorization boundary security", () => {
     const server = createAuthorizationServer(env);
     await expect(server.$context).resolves.toBeDefined();
     database.close();
+  });
+
+  it("labels OAuth installations from validated metadata or the client registry", async () => {
+    const first = vi.fn(async () => ({ name: "Claude Code" }));
+    const bind = vi.fn(() => ({ first }));
+    const prepare = vi.fn(() => ({ bind }));
+    const database = { prepare } as unknown as AuthWorkerEnv["AUTH_DB"];
+
+    await expect(oauthClientLabel(database, "claude-client", {
+      client_name: "Metadata Client",
+    })).resolves.toBe("Metadata Client");
+    expect(prepare).not.toHaveBeenCalled();
+
+    await expect(oauthClientLabel(database, "claude-client"))
+      .resolves.toBe("Claude Code");
+    expect(bind).toHaveBeenCalledWith("claude-client");
+
+    first.mockResolvedValueOnce({ name: "\u0000unsafe" });
+    await expect(oauthClientLabel(database, "unknown-client"))
+      .resolves.toBe("MCP host");
   });
 
   it("accepts only environment-local return targets", () => {

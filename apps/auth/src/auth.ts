@@ -93,6 +93,37 @@ type TokenResponseInfo = {
   };
 };
 
+function safeClientLabel(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const label = value.trim();
+  return label.length > 0 && label.length <= 240 && !/[\u0000-\u001f\u007f]/.test(label)
+    ? label
+    : undefined;
+}
+
+export async function oauthClientLabel(
+  database: AuthWorkerEnv["AUTH_DB"],
+  clientId: string,
+  metadata?: Record<string, unknown>,
+): Promise<string> {
+  const metadataLabel = safeClientLabel(metadata?.client_name ?? metadata?.name);
+  if (metadataLabel) return metadataLabel;
+  try {
+    const client = await database.prepare(
+      "SELECT name FROM oauthClient WHERE clientId = ? LIMIT 1",
+    )
+      .bind(clientId)
+      .first<{ name: unknown }>();
+    return safeClientLabel(client?.name) ?? "MCP host";
+  } catch {
+    console.warn(JSON.stringify({
+      event: "oauth_client_label_lookup_failure",
+      clientIdKnown: clientId.length > 0,
+    }));
+    return "MCP host";
+  }
+}
+
 function tokenPinning(env: AuthWorkerEnv) {
   let currentGrant: PinnedGrantContext | undefined;
   const refreshTokens = pinnedRefreshTokenHandlers(env.BETTER_AUTH_SECRET, {
@@ -182,9 +213,7 @@ function tokenPinning(env: AuthWorkerEnv) {
     const kind: BindGrantInput["kind"] = deviceCode ? "cli" : "mcp";
     const label = deviceCode
       ? "dongo CLI"
-      : typeof info.metadata?.client_name === "string"
-        ? info.metadata.client_name
-        : "MCP host";
+      : await oauthClientLabel(env.AUTH_DB, clientId, info.metadata);
     const grantInput: BindGrantInput = {
       providerIssuer: env.AUTH_ISSUER,
       providerGrantId: providerId,

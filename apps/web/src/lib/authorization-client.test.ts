@@ -43,6 +43,7 @@ import {
   decideDeviceRequest,
   decideOAuthConsent,
   getDeviceRequest,
+  getOAuthClientSummary,
   listAuthorizableProjects,
 } from "./authorization-client";
 
@@ -85,6 +86,31 @@ describe("isolated authorization worker client", () => {
       scopes: ["dongo:work:read", "dongo:work:write", "offline_access"],
       resources: ["https://dev.dongo.so/api/agent/v1"],
     });
+  });
+
+  it("maps the OAuth public-client response without losing the host identity", async () => {
+    const clientId = "https://claude.ai/oauth/claude-code-client-metadata";
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({
+      client_id: clientId,
+      client_name: "Claude Code",
+      client_uri: "https://claude.ai",
+    })));
+
+    await expect(getOAuthClientSummary(clientId)).resolves.toEqual({
+      clientId,
+      name: "Claude Code",
+      uri: "https://claude.ai",
+    });
+  });
+
+  it("rejects a public-client identity mismatch", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({
+      client_id: "different-client",
+      client_name: "Different client",
+    })));
+
+    await expect(getOAuthClientSummary("expected-client"))
+      .rejects.toMatchObject({ code: "invalid" });
   });
 
   it("replaces a valid authorization-worker session that belongs to another human profile", async () => {

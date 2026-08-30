@@ -301,10 +301,24 @@ export async function decideDeviceRequest(userCode: string, accept: boolean): Pr
 }
 
 export async function getOAuthClientSummary(clientId: string): Promise<OAuthClientSummary> {
-  const client = await workerRequest<{ clientId: string; name?: string; uri?: string }>(
+  const client = await workerRequest<{
+    client_id?: string;
+    client_name?: string;
+    client_uri?: string;
+  }>(
     `/oauth2/public-client?${new URLSearchParams({ client_id: clientId })}`,
   );
-  return { clientId: client.clientId, name: client.name || "MCP host", uri: client.uri };
+  if (client.client_id !== clientId) {
+    throw new AuthorizationFlowError(
+      "invalid",
+      "The authorization server returned a different OAuth client.",
+    );
+  }
+  return {
+    clientId: client.client_id,
+    name: client.client_name || "MCP host",
+    uri: client.client_uri,
+  };
 }
 
 export async function continueOAuthAfterProject(search: string): Promise<OAuthResult> {
