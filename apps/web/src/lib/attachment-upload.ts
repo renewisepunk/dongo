@@ -133,33 +133,36 @@ function retryableStatus(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
-async function uploadPartWithRetry(
+async function uploadBlobWithRetry(
   request: typeof fetch,
   url: URL,
+  method: "PUT",
+  headers: Record<string, string>,
   body: Blob,
   signal: AbortSignal,
+  attempts = MULTIPART_RETRY_ATTEMPTS,
 ): Promise<Response> {
   let lastError: unknown;
-  for (let attempt = 0; attempt < MULTIPART_RETRY_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     assertActive(signal);
     try {
       const response = await request(url, {
-        method: "PUT",
-        headers: { "content-type": "application/octet-stream" },
+        method,
+        headers,
         body,
         credentials: "omit",
         cache: "no-store",
         referrerPolicy: "no-referrer",
         signal,
       });
-      if (!retryableStatus(response.status) || attempt === MULTIPART_RETRY_ATTEMPTS - 1) {
+      if (!retryableStatus(response.status) || attempt === attempts - 1) {
         return response;
       }
       await response.body?.cancel();
     } catch (error) {
       if (signal.aborted) throw abortError();
       lastError = error;
-      if (attempt === MULTIPART_RETRY_ATTEMPTS - 1) throw error;
+      if (attempt === attempts - 1) throw error;
     }
     await new Promise<void>((resolve, reject) => {
       const onAbort = () => {
@@ -239,7 +242,14 @@ async function uploadMultipart(
           reservation.attachmentId,
           `/parts/${partNumber}`,
         );
-        const response = await uploadPartWithRetry(request, url, body, uploadSignal);
+        const response = await uploadBlobWithRetry(
+          request,
+          url,
+          "PUT",
+          { "content-type": "application/octet-stream" },
+          body,
+          uploadSignal,
+        );
         if (!response.ok) {
           await response.body?.cancel();
           throw new Error(`Attachment part upload failed with HTTP ${response.status}`);
@@ -324,15 +334,14 @@ export async function deliverAttachment(
       reservation.uploadUrl,
       `/api/files/upload/${encodeURIComponent(reservation.attachmentId)}`,
     );
-    const response = await request(uploadUrl, {
-      method: reservation.method,
-      headers: reservation.requiredHeaders,
-      body: file,
-      credentials: "omit",
-      cache: "no-store",
-      referrerPolicy: "no-referrer",
+    const response = await uploadBlobWithRetry(
+      request,
+      uploadUrl,
+      reservation.method,
+      reservation.requiredHeaders,
+      file,
       signal,
-    });
+    );
     if (!response.ok) {
       await response.body?.cancel();
       throw new Error(`Attachment upload failed with HTTP ${response.status}`);

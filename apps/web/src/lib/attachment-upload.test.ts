@@ -28,6 +28,49 @@ describe("attachment upload presentation", () => {
 });
 
 describe("attachment delivery", () => {
+  it("retries a transient direct upload with the same signed request", async () => {
+    const file = new File(["hello"], "notes.txt", { type: "text/plain" });
+    const uploadUrl = "https://dev.dongo.so/api/files/upload/attachment_123?upload=capability";
+    const requests: Array<{ url: string; method: string | undefined; authorization: string | null }> = [];
+    let attempt = 0;
+    const request = async (input: URL | RequestInfo, init?: RequestInit): Promise<Response> => {
+      attempt += 1;
+      requests.push({
+        url: String(input),
+        method: init?.method,
+        authorization: new Headers(init?.headers).get("x-dongo-upload-authorization"),
+      });
+      return attempt === 1
+        ? Response.json({ error: "temporarily_unavailable" }, { status: 503 })
+        : Response.json({ ok: true });
+    };
+    const progress: Array<{ value: number; phase: string }> = [];
+
+    await deliverAttachment(
+      file,
+      {
+        transport: "single",
+        attachmentId: "attachment_123",
+        maximumBytes: file.size,
+        uploadUrl,
+        method: "PUT",
+        requiredHeaders: { "x-dongo-upload-authorization": "signed-capability" },
+      },
+      (value, phase) => progress.push({ value, phase }),
+      new AbortController().signal,
+      request as typeof fetch,
+    );
+
+    expect(requests).toEqual([
+      { url: uploadUrl, method: "PUT", authorization: "signed-capability" },
+      { url: uploadUrl, method: "PUT", authorization: "signed-capability" },
+    ]);
+    expect(progress).toEqual([
+      { value: 30, phase: "uploading" },
+      { value: 100, phase: "available" },
+    ]);
+  });
+
   it("uploads multipart files in bounded parts and completes in order", async () => {
     const file = new File(["hello world"], "demo.mov", {
       type: "video/quicktime",
@@ -120,5 +163,52 @@ describe("attachment delivery", () => {
       request as typeof fetch,
     )).rejects.toThrow("invalid multipart session");
     expect(evilRequests).toBe(0);
+  });
+
+  it("aborts the remote multipart session when the user cancels", async () => {
+    const file = new File(["hello world"], "demo.mov");
+    const controller = new AbortController();
+    const createUrl = "https://dev.dongo.so/api/files/multipart/attachment_123?create=capability";
+    const sessionUrl = "https://dev.dongo.so/api/files/multipart/attachment_123?session=capability";
+    let aborts = 0;
+    let completions = 0;
+    const request = async (input: URL | RequestInfo, init?: RequestInit): Promise<Response> => {
+      const url = new URL(String(input));
+      if (url.toString() === createUrl) {
+        return Response.json({ sessionUrl, partSize: 5, partCount: 3 }, { status: 201 });
+      }
+      if (init?.method === "DELETE") {
+        aborts += 1;
+        return Response.json({ ok: true });
+      }
+      if (url.pathname.endsWith("/complete")) {
+        completions += 1;
+        return Response.json({ ok: true });
+      }
+      if (/\/parts\/\d+$/u.test(url.pathname)) {
+        controller.abort();
+        throw new DOMException("cancelled", "AbortError");
+      }
+      throw new Error(`Unexpected request ${url.pathname}`);
+    };
+
+    await expect(deliverAttachment(
+      file,
+      {
+        transport: "multipart",
+        attachmentId: "attachment_123",
+        maximumBytes: file.size,
+        createUrl,
+        method: "POST",
+        partSize: 5,
+        partCount: 3,
+      },
+      () => undefined,
+      controller.signal,
+      request as typeof fetch,
+    )).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(aborts).toBe(1);
+    expect(completions).toBe(0);
   });
 });
