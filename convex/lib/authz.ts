@@ -218,6 +218,17 @@ export async function resolveAgentPrincipal(
     }
     scopes = credential.scopes;
     authorizedByProfileId = installation.authorizedByProfileId;
+    if (!authorizedByProfileId) {
+      fail("unauthorized", "Service credential authorizer is missing");
+    }
+    const membership = await requireMembership(
+      ctx,
+      project.organizationId,
+      authorizedByProfileId,
+    );
+    if (membership.role !== "owner") {
+      fail("unauthorized", "Service credential is not active");
+    }
   } else {
     if (process.env.DONGO_ENABLE_DEV_BOOTSTRAP !== "true") {
       fail("development_bootstrap_disabled", "Development bootstrap is disabled");

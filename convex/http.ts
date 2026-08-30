@@ -4,6 +4,7 @@ import {
   executeAgent,
   finalizeAttachment,
   resolveOAuth,
+  resolveServiceCredential,
 } from "./gateway/httpActions";
 import { authComponent, createAuth } from "./auth";
 
@@ -33,6 +34,11 @@ http.route({
   path: "/internal/attachments/v1/finalize",
   method: "POST",
   handler: finalizeAttachment,
+});
+http.route({
+  path: "/internal/service-credentials/v1/resolve",
+  method: "POST",
+  handler: resolveServiceCredential,
 });
 
 export default http;

@@ -9,10 +9,16 @@ import type { Id } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
 import { httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
+import {
+  serviceCredentialTokenPrefix,
+  verifyServiceCredentialToken,
+} from "../domains/installations/serviceCredentialSecurity";
 
 const AGENT_PATH = "/internal/agent/v1/execute";
 const OAUTH_BIND_PATH = "/internal/oauth/v1/bind";
 const OAUTH_RESOLVE_PATH = "/internal/oauth/v1/resolve";
+const SERVICE_CREDENTIAL_RESOLVE_PATH =
+  "/internal/service-credentials/v1/resolve";
 const ATTACHMENT_FINALIZE_PATH = "/internal/attachments/v1/finalize";
 const MAX_BODY_BYTES = 256 * 1_024;
 const MAX_RESPONSE_BYTES = 1 * 1_024 * 1_024;
@@ -141,6 +147,26 @@ const oauthResolveOutputSchema = z
     scopes: z.array(z.string()).min(1).max(4),
     kind: z.enum(["cli", "mcp"]),
     expiresAt: z.number().int().positive().optional(),
+  })
+  .strict();
+const serviceCredentialResolveEnvelopeSchema = z
+  .object({
+    version: z.literal(1),
+    requestId: z.string().min(1).max(200),
+    input: z.object({ token: z.string().min(1).max(256) }).strict(),
+  })
+  .strict();
+const serviceCredentialResolveOutputSchema = z
+  .object({
+    installationId: identifier,
+    serviceCredentialId: identifier,
+    actorId: identifier,
+    organizationId: identifier,
+    projectId: identifier,
+    projectRef: z.string().min(3).max(128),
+    clientId: z.string().min(1).max(500),
+    resource: z.string().min(1).max(2_048),
+    scopes: z.array(z.string()).min(1).max(3),
   })
   .strict();
 
@@ -1001,6 +1027,68 @@ export const resolveOAuth = httpAction(async (ctx, request) => {
       throw new GatewayError(
         "internal",
         "OAuth resolution produced an invalid response",
+        500,
+        { issues: issue(output.error) },
+      );
+    }
+    return jsonResponse(
+      { ok: true, data: output.data, requestId, apiVersion: "v1" },
+      200,
+      requestId,
+    );
+  } catch (error) {
+    return errorResponse(error, requestId);
+  }
+});
+
+export const resolveServiceCredential = httpAction(async (ctx, request) => {
+  let requestId = "unknown";
+  try {
+    const verified = await readAndVerify(
+      ctx,
+      request,
+      SERVICE_CREDENTIAL_RESOLVE_PATH,
+    );
+    const envelope = serviceCredentialResolveEnvelopeSchema.safeParse(
+      verified.body,
+    );
+    if (!envelope.success) {
+      throw new GatewayError(
+        "validation",
+        "Service credential envelope is invalid",
+        400,
+        { issues: issue(envelope.error) },
+      );
+    }
+    requestId = envelope.data.requestId;
+    await consumeNonce(ctx, verified, requestId);
+    const token = envelope.data.input.token;
+    const tokenPrefix = serviceCredentialTokenPrefix(token);
+    const candidate = tokenPrefix
+      ? await ctx.runQuery(
+          internal.domains.installations.index.serviceCredentialForVerification,
+          { tokenPrefix },
+        )
+      : null;
+    if (
+      !candidate ||
+      !(await verifyServiceCredentialToken(token, candidate.tokenHash))
+    ) {
+      throw new GatewayError(
+        "unauthorized",
+        "Service credential is not active",
+        401,
+      );
+    }
+    const result = await ctx.runMutation(
+      internal.domains.installations.index.activateServiceCredential,
+      { serviceCredentialId: candidate.serviceCredentialId },
+    );
+    const output = serviceCredentialResolveOutputSchema.safeParse(result);
+    if (!output.success) {
+      throw new GatewayError(
+        "internal",
+        "Service credential resolution produced an invalid response",
         500,
         { issues: issue(output.error) },
       );

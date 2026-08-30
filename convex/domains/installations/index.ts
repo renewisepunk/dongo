@@ -28,6 +28,14 @@ function validateScopes(scopes: string[]): string[] {
   return unique.sort();
 }
 
+function validateServiceScopes(scopes: string[]): string[] {
+  const validated = validateScopes(scopes);
+  if (validated.includes("offline_access")) {
+    fail("validation", "Service credentials cannot request offline access");
+  }
+  return validated;
+}
+
 export const registerOAuthGrant = internalMutation({
   args: {
     projectId: v.optional(v.id("projects")),
@@ -337,6 +345,160 @@ export const resolveOAuthGrant = internalQuery({
       scopes: binding.scopes,
       kind: installation.kind,
       expiresAt: binding.expiresAt,
+    };
+  },
+});
+
+export const persistServiceCredential = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    label: v.string(),
+    resource: v.string(),
+    scopes: v.array(v.string()),
+    tokenPrefix: v.string(),
+    tokenHash: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const principal = await requireHumanProject(ctx, args.projectId, {
+      owner: true,
+    });
+    const label = requireString(args.label, "label", 240);
+    const resource = requireString(args.resource, "resource", 2_048);
+    const scopes = validateServiceScopes(args.scopes);
+    if (!/^[A-Za-z0-9_-]{11}$/u.test(args.tokenPrefix)) {
+      fail("validation", "Service credential prefix is invalid");
+    }
+    if (!/^[a-f0-9]{64}$/u.test(args.tokenHash)) {
+      fail("validation", "Service credential hash is invalid");
+    }
+    const prefixCollision = await ctx.db
+      .query("serviceCredentials")
+      .withIndex("by_token_prefix", (query) =>
+        query.eq("tokenPrefix", args.tokenPrefix),
+      )
+      .first();
+    if (prefixCollision) {
+      fail("internal", "Service credential could not be created", {
+        retryable: true,
+      });
+    }
+    const now = Date.now();
+    const actorId = await ctx.db.insert("actors", {
+      organizationId: principal.project!.organizationId,
+      type: "agent",
+      name: label,
+      agentType: "service",
+      createdAt: now,
+    });
+    const installationId = await ctx.db.insert("installations", {
+      organizationId: principal.project!.organizationId,
+      projectId: principal.project!._id,
+      actorId,
+      kind: "service",
+      status: "active",
+      clientId: "dongo-service-v1",
+      label,
+      resource,
+      scopes,
+      authorizedByProfileId: principal.profile._id,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.patch(actorId, { installationId });
+    const serviceCredentialId = await ctx.db.insert("serviceCredentials", {
+      organizationId: principal.project!.organizationId,
+      projectId: principal.project!._id,
+      installationId,
+      tokenPrefix: args.tokenPrefix,
+      tokenHash: args.tokenHash,
+      scopes,
+      createdAt: now,
+    });
+    await appendEvent(ctx, {
+      organizationId: principal.project!.organizationId,
+      projectId: principal.project!._id,
+      actorId,
+      type: "installation.authorized",
+      data: { clientId: "dongo-service-v1", kind: "service", scopes },
+      createdAt: now,
+    });
+    return { installationId, serviceCredentialId };
+  },
+});
+
+export const serviceCredentialForVerification = internalQuery({
+  args: { tokenPrefix: v.string() },
+  handler: async (ctx, args) => {
+    if (!/^[A-Za-z0-9_-]{11}$/u.test(args.tokenPrefix)) return null;
+    const credentials = await ctx.db
+      .query("serviceCredentials")
+      .withIndex("by_token_prefix", (query) =>
+        query.eq("tokenPrefix", args.tokenPrefix),
+      )
+      .take(2);
+    if (credentials.length !== 1) return null;
+    const credential = credentials[0]!;
+    return {
+      serviceCredentialId: credential._id,
+      tokenHash: credential.tokenHash,
+    };
+  },
+});
+
+export const activateServiceCredential = internalMutation({
+  args: { serviceCredentialId: v.id("serviceCredentials") },
+  handler: async (ctx, args) => {
+    const credential = await ctx.db.get(args.serviceCredentialId);
+    const installation = credential
+      ? await ctx.db.get(credential.installationId)
+      : null;
+    const project = credential ? await ctx.db.get(credential.projectId) : null;
+    if (
+      !credential ||
+      credential.revokedAt !== undefined ||
+      !installation ||
+      installation.kind !== "service" ||
+      installation.status !== "active" ||
+      installation.projectId !== credential.projectId ||
+      installation.organizationId !== credential.organizationId ||
+      installation.resource.length === 0 ||
+      !project ||
+      project.organizationId !== credential.organizationId ||
+      project.archivedAt !== undefined ||
+      !installation.authorizedByProfileId
+    ) {
+      fail("unauthorized", "Service credential is not active");
+    }
+    const membership = await requireMembership(
+      ctx,
+      project.organizationId,
+      installation.authorizedByProfileId,
+    );
+    if (membership.role !== "owner") {
+      fail("unauthorized", "Service credential is not active");
+    }
+    const actor = await ctx.db.get(installation.actorId);
+    if (
+      !actor ||
+      actor.type !== "agent" ||
+      actor.organizationId !== project.organizationId
+    ) {
+      fail("unauthorized", "Service credential is not active");
+    }
+    const now = Date.now();
+    await ctx.db.patch(credential._id, { lastUsedAt: now });
+    await ctx.db.patch(installation._id, { lastUsedAt: now, updatedAt: now });
+    await ctx.db.patch(actor._id, { lastSeenAt: now });
+    return {
+      installationId: installation._id,
+      serviceCredentialId: credential._id,
+      actorId: actor._id,
+      organizationId: project.organizationId,
+      projectId: project._id,
+      projectRef: project.publicRef,
+      clientId: installation.clientId,
+      resource: installation.resource,
+      scopes: credential.scopes,
     };
   },
 });
