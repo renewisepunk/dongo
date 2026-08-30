@@ -228,8 +228,11 @@ export function Overview(props: OverviewProps) {
       '[role="menuitem"], [role="menuitemradio"]',
     )].filter((item) => !item.hasAttribute("disabled"));
 
-  const focusFirstMenuItem = (menu: HTMLElement | undefined) => {
-    queueMicrotask(() => menu && menuItems(menu)[0]?.focus());
+  const focusFirstMenuItem = (getMenu: () => HTMLElement | undefined) => {
+    queueMicrotask(() => {
+      const menu = getMenu();
+      if (menu) menuItems(menu)[0]?.focus();
+    });
   };
 
   const handleMenuKeyDown = (
@@ -697,7 +700,7 @@ export function Overview(props: OverviewProps) {
               const next = !projectMenuOpen();
               setProjectMenuOpen(next);
               setProfileMenuOpen(false);
-              if (next) focusFirstMenuItem(projectMenu);
+              if (next) focusFirstMenuItem(() => projectMenu);
             }}
           >
             <span>{projectName()}</span><span style={{ color: "var(--text-faint)" }}>▾</span>
@@ -762,7 +765,7 @@ export function Overview(props: OverviewProps) {
               const next = !profileMenuOpen();
               setProfileMenuOpen(next);
               setProjectMenuOpen(false);
-              if (next) focusFirstMenuItem(profileMenu);
+              if (next) focusFirstMenuItem(() => profileMenu);
             }}
           >
             {viewerInitials()}
