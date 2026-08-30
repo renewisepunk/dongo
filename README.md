@@ -63,7 +63,7 @@ dongo connect --environment development --origin https://dev.dongo.so
 dongo doctor
 ```
 
-`dongo connect` opens one complete browser link. The browser shows the terminal comparison code, account, project, resource, and scopes; the terminal polls until explicit approval, stores its own grant in the OS credential store, writes only a non-secret repository marker, and runs diagnostics. SSH/headless environments can add `--no-browser` and open the same complete link elsewhere—no token is copied into the CLI.
+`dongo connect` opens one complete browser link. The browser shows the terminal comparison code, account, fixed agent-selected project, resource, and scopes; the terminal polls until explicit approval, stores its own grant in a private user credential file outside the repository, writes only a non-secret repository marker, and runs diagnostics. It never invokes Keychain or asks the user to approve a credential helper. SSH/headless environments can add `--no-browser` and open the same complete link elsewhere—no token is copied into the CLI. The threat model and exact storage contract are in [build-plan/07-cli-credential-storage.md](build-plan/07-cli-credential-storage.md).
 
 ## Connect an MCP host
 

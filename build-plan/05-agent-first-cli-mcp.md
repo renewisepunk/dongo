@@ -39,7 +39,7 @@ The fixed product/auth origins are `https://dev.dongo.so` for development and `h
                     |                       |
                 Dongo CLI       Codex / Claude / generic hosts
                     |
-      OS credential store + local .agent-work export
+      private user credential file + local .agent-work export
 
 Human web/native operations call the same domain invariants through
 human-authenticated adapters; they do not call the MCP server.
@@ -77,7 +77,7 @@ CLI requests device authorization for the Dongo agent API
   -> browser says “Approved — you can close this window” and points back to the terminal
   -> CLI polls at the server-provided interval
   -> CLI receives short-lived access + rotated refresh credentials
-  -> refresh material is stored in the OS credential store
+  -> credential is atomically stored in the private Dongo user config, never the repository
   -> non-secret project marker is written
   -> doctor runs and reports the authenticated project/Actor
 ```
@@ -92,6 +92,7 @@ Requirements:
 - Register the CLI as a public client with no client secret.
 - Request only the API audience and approved scopes; use `offline_access` only when refresh is required.
 - Never put tokens or device codes in argv, repository files, shell history, analytics, logs, or support bundles.
+- Never invoke Keychain, Secret Service, an installer, or a generic helper from the npm CLI. POSIX credentials use a Dongo-owned `0700` directory and `0600` file with the threat model and Windows gate in `build-plan/07-cli-credential-storage.md`.
 - `dongo auth status`, `dongo auth logout`, and server-side Revoke are required. Logout clears local material; Revoke invalidates the server grant. The UI explains the difference.
 
 ## 5. MCP authentication
@@ -244,7 +245,7 @@ Test the exact release artifacts against:
 
 | Surface | Required cases |
 |---|---|
-| Dongo CLI | browser opens, complete URL fallback, approve, deny, expire, `slow_down`, refresh, logout, revoke, OS-store unavailable fallback, SSH/headless |
+| Dongo CLI | browser opens, complete URL fallback, approve, deny, expire, `slow_down`, refresh, logout, revoke, local-file ownership/mode/symlink/corruption failures, zero Keychain/helper prompts, SSH/headless, native Windows storage blocked until ACL gate |
 | Codex | remote HTTP add, OAuth login, CIMD/DCR selection, read/write tools, instructions, project config trust, token refresh, revoke/reauth |
 | Claude Code | remote HTTP add, shell login and `/mcp`, project approval, read/write tools, token refresh, revoke/reauth, no-browser/paste fallback where supported |
 | Generic MCP | modern `server/discover`, stateless per-request metadata/headers, discovery, registration, PKCE, metadata challenge, deterministic tool list/call, JSON-RPC errors, tested legacy negotiation if admitted |

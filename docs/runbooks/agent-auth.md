@@ -22,9 +22,11 @@ For SSH/headless use, add `--no-browser` and open the printed complete link on a
 - `authorization_expired` stores nothing. Run `dongo connect` again; never reuse the old code.
 - If the browser says Approved but the terminal fails, run `dongo auth status --json` and `dongo doctor --json`. Do not approve a second installation until the first result is understood.
 
-### Secure-store or marker failure
+### Credential-file or marker failure
 
-The default interactive flow requires the OS credential store. The documented `0600` file fallback is available only with `--allow-file-secret-store`; do not enable it merely to hide a Keychain/tooling problem.
+The npm CLI uses only its Dongo-owned user credential directory. On macOS/Linux it requires an owner-only `0700` directory and owner-only `0600` regular file outside the repository. It does not use Keychain, Secret Service, an installer, or a generic helper; any such prompt is unexpected and must be denied and reported as a release-blocking regression.
+
+Do not move the credential into the repository, relax permissions, follow a symlink, edit token JSON, restore an older credential from backup, or substitute a copied token. A wrong owner, broad mode, non-regular file, symlink, malformed schema, issuer/resource mismatch, or repository-profile mismatch fails closed. Follow the migration and threat model in `build-plan/07-cli-credential-storage.md`.
 
 `.agent-work/project.json` is non-secret and may be recreated by a new successful `dongo connect`. Before replacing it, verify the repository root and remove only the Dongo-owned marker. Never remove `.git`, unrelated `.agent-work` data, or credential-store entries by hand. Use:
 

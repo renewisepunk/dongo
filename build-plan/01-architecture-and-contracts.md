@@ -187,7 +187,7 @@ The MCP gateway targets protocol revision `2026-07-28` using the official TypeSc
 ### Security model
 
 - Interactive CLI and MCP access uses short-lived audience-bound OAuth access tokens and independently revocable refresh-token families linked to installation Actors.
-- The CLI stores refresh material in the OS credential store; MCP clients own their secure token storage. No interactive token is displayed to the user or written to a repository.
+- The npm CLI stores its project-scoped rotating credential in its owner-only user configuration directory, outside every repository. POSIX directory/file modes are `0700`/`0600`, writes are atomic, and unsafe ownership/type/symlink/permission/binding fails closed. The CLI invokes no Keychain/helper process; a signed native helper is a separately gated future option. MCP clients own their token storage. No interactive token is displayed to the user or written to a repository. See `build-plan/07-cli-credential-storage.md`.
 - Static project credentials remain a non-interactive CI/service boundary only. They are random, hashed at rest, shown once, scoped, and individually revocable.
 - Pairing codes are outside the planned interactive V1 flow; OAuth retry/reauthorize is the recovery path.
 - All queries/mutations explicitly validate organization and project access.

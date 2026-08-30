@@ -50,7 +50,7 @@ Acceptance:
 
 - Find the Git root and `.agent-work/project.json` from nested directories.
 - Validate environment, issuer, API resource, project reference, and API origin. Resolve the project from `--project-ref`, the valid repository marker, repository URL, unique name/slug, or sole-project context; require the agent to provide an exact public reference when ambiguous. The browser confirms but never selects the CLI project.
-- Keep access tokens in memory or an explicitly bounded secure cache. Store rotating refresh material in the OS credential store, with a documented user-scoped `0600` fallback only when the OS store is unavailable.
+- Store the bounded access/rotating refresh credential in the Dongo-owned user configuration directory outside the repository. On POSIX enforce `0700` directory and `0600` regular file, current ownership, no symlinks, no-follow reads, atomic replacement, and exact environment/profile binding. Spawn no Keychain/Secret Service/helper process. Follow `build-plan/07-cli-credential-storage.md`; native Windows persistence stays blocked until its owner-only ACL gate passes.
 - Prevent symlink/path escape and serialize refresh so concurrent commands cannot race token rotation.
 
 Acceptance:

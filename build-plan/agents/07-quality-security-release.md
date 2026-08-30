@@ -70,7 +70,7 @@ Acceptance:
 ### Q-05 — Security suite
 
 - OAuth issuer/audience/resource substitution, PKCE downgrade, state/redirect/authorization-code replay, device phishing and poll flooding, refresh replay/family revocation, JWKS rollover, token-in-query rejection, cross-environment tokens, DCR abuse, and SSRF/rebinding/redirect/size/rate controls for CIMD metadata fetches.
-- Static service credential entropy/hash/constant-time verification, local file permissions, secret redaction, rate limits, signed URL expiry, MIME/size/checksum, malicious filenames, Markdown/XSS, unsafe URLs, terminal escapes, SSRF-safe origins, traversal/symlinks, dependency and secret scanning.
+- Static service credential entropy/hash/constant-time verification; the complete `build-plan/07-cli-credential-storage.md` matrix including packed-artifact helper absence, owner-only files, symlinked config/repository escape, atomic replacement, rotation concurrency, clean-host no-prompt proof, and the native Windows release block; secret redaction, rate limits, signed URL expiry, MIME/size/checksum, malicious filenames, Markdown/XSS, unsafe URLs, terminal escapes, SSRF-safe origins, traversal/symlinks, dependency and secret scanning.
 
 Acceptance:
 

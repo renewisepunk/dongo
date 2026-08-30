@@ -50,8 +50,9 @@ The implementation pod is designed for four concurrent slots:
 4. [`03-release-gates.md`](03-release-gates.md) — definitions of done from walking skeleton through V1.
 5. [`04-user-journey.md`](04-user-journey.md) — human, terminal, and MCP-host journeys screen by screen.
 6. [`05-agent-first-cli-mcp.md`](05-agent-first-cli-mcp.md) — researched agent-first architecture, authentication flows, MCP surface, and compatibility matrix.
-7. [`agents/`](agents/) — the mission, ownership, tasks, and acceptance criteria for each agent.
-8. [`06-design-implementation-contract.md`](06-design-implementation-contract.md) — the visual source of truth, responsive behavior, and the approved device-auth adaptation.
+7. [`06-design-implementation-contract.md`](06-design-implementation-contract.md) — the visual source of truth, responsive behavior, and the approved device-auth adaptation.
+8. [`07-cli-credential-storage.md`](07-cli-credential-storage.md) — the accepted npm CLI credential architecture, precedent research, threat model, lifecycle, migration, and release gates.
+9. [`agents/`](agents/) — the mission, ownership, tasks, and acceptance criteria for each agent.
 
 ## Agent roster
 

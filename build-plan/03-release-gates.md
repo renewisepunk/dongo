@@ -13,8 +13,8 @@
 ## Agent protocol and authentication gate
 
 - The exact pinned Better Auth + Convex human session still authenticates Convex after the chosen OAuth/MCP/device composition is installed.
-- `dongo connect` opens `verification_uri_complete`, shows matching terminal/browser code, requires explicit project/scopes approval, resumes by polling, and stores no secret outside the OS credential store or documented `0600` fallback.
-- CLI approve, deny, expiry, `slow_down`, refresh rotation, logout, server revocation, OS-store failure, and SSH/headless flows pass.
+- `dongo connect` opens `verification_uri_complete`, shows matching terminal/browser code, requires explicit fixed-project/scopes approval, resumes by polling, and stores its credential only in the documented Dongo user credential file outside the repository.
+- CLI approve, deny, expiry, `slow_down`, refresh rotation, logout, server revocation, local-file ownership/mode/type/symlink/corruption failure, interrupted atomic write, and SSH/headless flows pass. Clean macOS/Linux tests prove no Keychain, Secret Service, installer, helper process, or OS credential prompt occurs.
 - MCP Protected Resource Metadata and authorization-server discovery are standards-compliant.
 - MCP `2026-07-28` `server/discover`, per-request protocol metadata, method/tool routing headers, stateless handling, and cacheable deterministic list results pass. Any legacy era remains enabled only for a pinned supported host and uses the same tools/auth rules.
 - Authorization code with S256 PKCE, issuer validation, exact redirect handling, resource/audience binding, scope enforcement, refresh rotation, and revocation pass adversarial tests.
