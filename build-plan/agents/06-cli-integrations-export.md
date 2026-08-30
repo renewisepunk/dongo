@@ -83,7 +83,7 @@ Acceptance:
 - The normal path requires no code or token copy/paste.
 - Browser-open failure prints one complete URL and keeps polling, so authorization works over SSH or from another device.
 - Pending, denial, expiry, invalid client/grant, `slow_down`, Ctrl-C, polling network loss, and token-response loss have deterministic recovery.
-- The browser says “Approved—return to your terminal”; only the terminal reports Connected after storage, marker, and doctor succeed.
+- The browser says “Approved—you can close this window” and points back to the terminal; only the terminal reports Connected after storage, marker, and doctor succeed.
 - `auth logout` revokes the CLI grant/token family and clears local material. Server-side Revoke also blocks the next request.
 - Doctor reports safe issuer, resource, scopes, expiry, project, installation, and connectivity metadata without secrets.
 
@@ -135,4 +135,3 @@ Acceptance:
 - Do not duplicate MCP tool definitions or server instructions owned by Agent 10.
 - Do not let host-login/configuration failure prevent ordinary CLI use.
 - Do not keep working after claim/lease loss without a successful refetch/reclaim.
-

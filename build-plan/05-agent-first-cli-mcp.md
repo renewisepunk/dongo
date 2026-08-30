@@ -73,7 +73,7 @@ CLI requests device authorization for the Dongo agent API
   -> browser signs the human in if required
   -> browser shows Dongo CLI, project, machine label, and requested scopes
   -> human explicitly approves or denies
-  -> browser says “Approved — return to your terminal”
+  -> browser says “Approved — you can close this window” and points back to the terminal
   -> CLI polls at the server-provided interval
   -> CLI receives short-lived access + rotated refresh credentials
   -> refresh material is stored in the OS credential store

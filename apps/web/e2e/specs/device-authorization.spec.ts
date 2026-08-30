@@ -12,7 +12,7 @@ test("reviews and approves the exact terminal, project, resource, and scopes", a
 
   await page.getByLabel("project").selectOption("companion-project");
   await page.getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByText("Approved — return to your terminal", { exact: true })).toBeVisible();
+  await expect(page.getByText("Approved — you can close this window", { exact: true })).toBeVisible();
   await expect(page.getByText("This page never displays access or refresh tokens.")).toBeVisible();
 
   await expect(page.locator("html")).toHaveAttribute(
@@ -65,7 +65,7 @@ test("creates the CLI-proposed first project and approves the same terminal requ
   await expect(page.getByText("Create “Dongo” as this account’s first project and bind this terminal to it.")).toBeVisible();
 
   await page.getByRole("button", { name: "Create & approve" }).click();
-  await expect(page.getByText("Approved — return to your terminal", { exact: true })).toBeVisible();
+  await expect(page.getByText("Approved — you can close this window", { exact: true })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute(
     "data-fixture-device-created-project",
     JSON.stringify({
