@@ -338,26 +338,52 @@ export default defineSchema({
     .index("by_work_status", ["workItemId", "status"])
     .index("by_project_status_created", ["projectId", "status", "createdAt"]),
 
+  devices: defineTable({
+    profileId: v.id("humanProfiles"),
+    platform: v.union(v.literal("ios"), v.literal("android")),
+    appInstallationId: v.string(),
+    pushToken: v.string(),
+    pushTokenHash: v.string(),
+    enabled: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastSeenAt: v.number(),
+    disabledAt: v.optional(v.number()),
+  })
+    .index("by_profile_enabled", ["profileId", "enabled"])
+    .index("by_profile_installation", ["profileId", "appInstallationId"])
+    .index("by_push_token_hash", ["pushTokenHash"]),
+
   notificationOutbox: defineTable({
     organizationId: v.id("organizations"),
     projectId: v.id("projects"),
     attentionRequestId: v.id("attentionRequests"),
     recipientProfileId: v.id("humanProfiles"),
     eventType: v.literal("attention.requested"),
+    channel: v.optional(v.union(v.literal("push"), v.literal("email"))),
+    deviceId: v.optional(v.id("devices")),
+    dedupeKey: v.optional(v.string()),
     status: v.union(
       v.literal("pending"),
       v.literal("delivering"),
       v.literal("delivered"),
       v.literal("failed"),
+      v.literal("cancelled"),
     ),
     attemptCount: v.number(),
     availableAt: v.number(),
     createdAt: v.number(),
+    deliveryAttemptId: v.optional(v.string()),
     deliveredAt: v.optional(v.number()),
+    failedAt: v.optional(v.number()),
+    cancelledAt: v.optional(v.number()),
+    providerMessageId: v.optional(v.string()),
     lastErrorCode: v.optional(v.string()),
   })
     .index("by_status_available", ["status", "availableAt"])
-    .index("by_attention", ["attentionRequestId"]),
+    .index("by_attention", ["attentionRequestId"])
+    .index("by_dedupe", ["dedupeKey"])
+    .index("by_device_status", ["deviceId", "status"]),
 
   agentSyncCursors: defineTable({
     organizationId: v.id("organizations"),

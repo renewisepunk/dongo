@@ -27,6 +27,7 @@ import {
 } from "../../lib/errors";
 import { runIdempotent } from "../../lib/idempotency";
 import { pauseRunForAttention } from "../work/service";
+import { enqueueAttentionNotifications } from "../notifications/service";
 
 export const request = internalMutation({
   args: {
@@ -135,16 +136,9 @@ export const request = internalMutation({
           requestId: principal.requestId,
           createdAt: now,
         });
-        await ctx.db.insert("notificationOutbox", {
-          organizationId: work.organizationId,
-          projectId: work.projectId,
+        await enqueueAttentionNotifications(ctx, {
           attentionRequestId,
-          recipientProfileId,
-          eventType: "attention.requested",
-          status: "pending",
-          attemptCount: 0,
-          availableAt: now,
-          createdAt: now,
+          now,
         });
         return { attentionRequestId, runId: run._id, revision };
       },
