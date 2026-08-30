@@ -1,0 +1,40 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "dongo-auth-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    { "pattern": "dev.dongo.so/api/auth/*", "zone_name": "dongo.so" },
+    { "pattern": "dev.dongo.so/.well-known/oauth-authorization-server*", "zone_name": "dongo.so" },
+    { "pattern": "dev.dongo.so/.well-known/openid-configuration*", "zone_name": "dongo.so" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "AUTH_DB",
+      "database_name": "dongo-auth-dev",
+      "database_id": "bf231628-4e8b-4ed8-8f5e-d3d7322e49b5",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["auth@dev.dongo.so"]
+    }
+  ],
+  "vars": {
+    "PUBLIC_ORIGIN": "https://dev.dongo.so",
+    "AUTH_ISSUER": "https://dev.dongo.so/api/auth",
+    "HUMAN_ASSERTION_ISSUER": "https://wandering-camel-662.convex.site",
+    "CONVEX_INTERNAL_SITE_URL": "https://wandering-camel-662.convex.site",
+    "BETTER_AUTH_RESOURCE_CLIENT_ID": "dongo-mcp-resource-dev",
+    "DONGO_API_RESOURCE_CLIENT_ID": "dongo-api-resource-dev",
+    "CIMD_ALLOWED_HOST_SUFFIXES": "openai.com,chatgpt.com,anthropic.com,claude.ai",
+    "ENVIRONMENT": "development"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": true }
+  }
+}

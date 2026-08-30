@@ -1,0 +1,17 @@
+export interface AuthWorkerEnv {
+  AUTH_DB: D1Database;
+  EMAIL: SendEmail;
+  PUBLIC_ORIGIN: string;
+  AUTH_ISSUER: string;
+  HUMAN_ASSERTION_ISSUER: string;
+  HUMAN_ASSERTION_SECRET: string;
+  BETTER_AUTH_SECRET: string;
+  CONVEX_INTERNAL_SITE_URL: string;
+  DONGO_INTERNAL_GATEWAY_SECRET: string;
+  BETTER_AUTH_RESOURCE_CLIENT_ID: string;
+  BETTER_AUTH_RESOURCE_CLIENT_SECRET: string;
+  DONGO_API_RESOURCE_CLIENT_ID: string;
+  DONGO_API_RESOURCE_CLIENT_SECRET: string;
+  CIMD_ALLOWED_HOST_SUFFIXES: string;
+  ENVIRONMENT: "development" | "staging" | "production";
+}

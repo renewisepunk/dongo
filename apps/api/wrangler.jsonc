@@ -1,0 +1,40 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "dongo-api-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    { "pattern": "dev.dongo.so/api/agent/v1/*", "zone_name": "dongo.so" }
+  ],
+  "vars": {
+    "API_RESOURCE": "https://dev.dongo.so/api/agent/v1",
+    "ALLOWED_HOSTNAMES": "dev.dongo.so",
+    "AUTHORIZATION_SERVER_ISSUER": "https://dev.dongo.so/api/auth",
+    "BETTER_AUTH_INTROSPECTION_URL": "https://dev.dongo.so/api/auth/oauth2/introspect",
+    "BETTER_AUTH_RESOURCE_CLIENT_ID": "dongo-api-resource-dev",
+    "CONVEX_SITE_URL": "https://wandering-camel-662.convex.site"
+  },
+  "ratelimits": [
+    {
+      "name": "API_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    }
+  }
+}

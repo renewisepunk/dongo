@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "integrationVersion": "0.1.0",
+  "transport": "streamable-http",
+  "endpointTemplate": "{{origin}}/p/{{publicProjectRef}}/mcp",
+  "serverNameTemplate": "dongo-{{shortProjectRef}}",
+  "authentication": {
+    "kind": "oauth-discovery",
+    "grantFamily": "host-specific",
+    "staticCredentials": false,
+    "cliCredentialReuse": false
+  },
+  "managedBlock": {
+    "start": "<!-- dongo-managed:v1:start -->",
+    "end": "<!-- dongo-managed:v1:end -->"
+  },
+  "files": {
+    "codex": ["config.toml", "AGENTS.managed.md"],
+    "claudeCode": ["mcp.json", "CLAUDE.managed.md"],
+    "generic": ["mcp.json", "AGENTS.managed.md"]
+  },
+  "hooks": []
+}

@@ -1,0 +1,417 @@
+import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+
+import { DongoClient, DongoClientError } from "@dongo/client";
+import type { OverviewData, SessionStartData, SyncSnapshotData } from "@dongo/client";
+import { agentScopes } from "@dongo/contracts";
+import type { OperationInput, OperationName, OperationOutput } from "@dongo/contracts";
+import { exportSnapshot } from "@dongo/repo-export";
+import type { ExportResult } from "@dongo/repo-export";
+import { fetchAttachmentFile } from "./attachments.ts";
+import type { AttachmentFetchResult } from "./attachments.ts";
+import type { BrowserOpener } from "./browser.ts";
+import { SystemBrowserOpener } from "./browser.ts";
+import { DeviceAuthorizationClient } from "./device-auth.ts";
+import type { DeviceAuthorizationEvents, DeviceAuthClock } from "./device-auth.ts";
+import type { DongoEnvironment, EnvironmentConfig } from "./environment.ts";
+import { resolveEnvironment } from "./environment.ts";
+import { CliCoreError } from "./errors.ts";
+import { configureIntegration } from "./integrations.ts";
+import type { IntegrationHost, IntegrationResult } from "./integrations.ts";
+import type { ProjectMarker } from "./marker.ts";
+import { readProjectMarker, writeProjectMarker } from "./marker.ts";
+import { credentialProfile, findRepositoryRoot } from "./repository.ts";
+import type { SecretStore } from "./secret-store.ts";
+import { createDefaultSecretStore, defaultConfigDirectory } from "./secret-store.ts";
+import type { StoredCredential } from "./token-manager.ts";
+import { TokenManager } from "./token-manager.ts";
+
+export interface CoreServiceOptions {
+  cwd?: string;
+  fetch?: typeof globalThis.fetch;
+  browserOpener?: BrowserOpener;
+  deviceClock?: DeviceAuthClock;
+  now?: () => number;
+  secretStore?: SecretStore;
+  configDirectory?: string;
+  allowFileFallback?: boolean;
+}
+
+export interface ConnectOptions {
+  environment?: DongoEnvironment;
+  origin?: string;
+  noBrowser?: boolean;
+  events?: DeviceAuthorizationEvents;
+  signal?: AbortSignal;
+}
+
+export interface ConnectResult {
+  repositoryRoot: string;
+  markerPath: string;
+  project: SessionStartData["project"];
+  installation: SessionStartData["installation"];
+  scopes: string[];
+  credentialStore: string;
+}
+
+export interface DoctorResult {
+  ok: boolean;
+  checks: Array<{ name: string; ok: boolean; detail: string }>;
+  project?: SessionStartData["project"];
+  installation?: SessionStartData["installation"];
+}
+
+export class CoreService {
+  readonly #cwd: string;
+  readonly #fetch: typeof globalThis.fetch;
+  readonly #browserOpener: BrowserOpener;
+  readonly #deviceClock?: DeviceAuthClock;
+  readonly #now: () => number;
+  readonly #providedStore?: SecretStore;
+  readonly #configDirectory: string;
+  readonly #allowFileFallback: boolean;
+
+  constructor(options: CoreServiceOptions = {}) {
+    this.#cwd = options.cwd ?? process.cwd();
+    this.#fetch = options.fetch ?? globalThis.fetch;
+    this.#browserOpener = options.browserOpener ?? new SystemBrowserOpener();
+    this.#deviceClock = options.deviceClock;
+    this.#now = options.now ?? Date.now;
+    this.#providedStore = options.secretStore;
+    this.#configDirectory = options.configDirectory ?? defaultConfigDirectory();
+    this.#allowFileFallback = options.allowFileFallback ?? false;
+  }
+
+  async connect(options: ConnectOptions = {}): Promise<ConnectResult> {
+    if (process.env.DONGO_TOKEN) {
+      throw new CliCoreError({
+        code: "validation",
+        message: "Unset DONGO_TOKEN before interactive dongo connect; it is only a non-interactive CI/service override.",
+        exitCode: 2,
+      });
+    }
+    const repositoryRoot = await findRepositoryRoot(this.#cwd);
+    const environment = resolveEnvironment({ environment: options.environment, origin: options.origin });
+    const profile = credentialProfile(environment.productOrigin, repositoryRoot);
+    const store = this.#secretStore();
+    const auth = new DeviceAuthorizationClient({
+      deviceAuthorizationEndpoint: environment.deviceAuthorizationEndpoint,
+      tokenEndpoint: environment.tokenEndpoint,
+      clientId: environment.cliClientId,
+      resource: environment.apiResource,
+      scopes: [...agentScopes],
+      fetch: this.#fetch,
+      clock: this.#deviceClock,
+      browserOpener: this.#browserOpener,
+      noBrowser: options.noBrowser,
+      events: options.events,
+      signal: options.signal,
+    });
+    const tokenSet = await auth.authorize();
+    if (options.signal?.aborted) throw this.#cancellationError();
+    await mkdir(this.#configDirectory, { recursive: true, mode: 0o700 });
+    const manager = this.#tokenManager(profile, store);
+    const credential: StoredCredential = {
+      schemaVersion: 1,
+      clientId: environment.cliClientId,
+      issuer: environment.issuer,
+      resource: environment.apiResource,
+      tokenEndpoint: environment.tokenEndpoint,
+      revocationEndpoint: environment.revocationEndpoint,
+      accessToken: tokenSet.accessToken,
+      accessTokenExpiresAt: tokenSet.expiresAt,
+      refreshToken: tokenSet.refreshToken,
+      tokenType: tokenSet.tokenType,
+      scopes: tokenSet.scope,
+    };
+    const bootstrapClient = new DongoClient({
+      baseUrl: environment.apiBaseUrl,
+      tokenProvider: { getAccessToken: async () => tokenSet.accessToken },
+      fetch: this.#fetch,
+    });
+    const session = await bootstrapClient.sessionStart(
+      { externalSessionId: randomUUID() },
+      { signal: options.signal },
+    );
+    if (options.signal?.aborted) throw this.#cancellationError();
+    this.#validateSession(session);
+    await manager.save(credential);
+    const marker: ProjectMarker = {
+      schemaVersion: 1,
+      environment: environment.environment,
+      productOrigin: environment.productOrigin,
+      issuer: environment.issuer,
+      apiBaseUrl: environment.apiBaseUrl,
+      apiResource: environment.apiResource,
+      publicProjectRef: session.project.publicRef,
+      projectId: session.project.id,
+      projectName: session.project.name,
+      installationId: session.installation.id,
+      credentialProfile: profile,
+      connectedAt: new Date(this.#now()).toISOString(),
+    };
+    const writtenMarker = await writeProjectMarker(repositoryRoot, marker);
+    return {
+      repositoryRoot,
+      markerPath: writtenMarker,
+      project: session.project,
+      installation: session.installation,
+      scopes: tokenSet.scope,
+      credentialStore: store.kind,
+    };
+  }
+
+  async authStatus() {
+    const context = await this.#context(false);
+    if (!context) {
+      return { authenticated: false, repositoryRoot: await findRepositoryRoot(this.#cwd), marker: undefined, credential: undefined };
+    }
+    const credential = await context.manager.status();
+    return {
+      authenticated: credential.authenticated,
+      repositoryRoot: context.repositoryRoot,
+      marker: context.marker,
+      credential,
+    };
+  }
+
+  async logout(): Promise<{ revoked: true; repositoryRoot: string; installationId: string }> {
+    const context = await this.#context(true);
+    await context.manager.logout();
+    return { revoked: true, repositoryRoot: context.repositoryRoot, installationId: context.marker.installationId };
+  }
+
+  async doctor(signal?: AbortSignal): Promise<DoctorResult> {
+    const checks: DoctorResult["checks"] = [];
+    let context;
+    try {
+      context = await this.#context(true);
+      checks.push({ name: "repository", ok: true, detail: context.repositoryRoot });
+      checks.push({ name: "project-marker", ok: true, detail: `${context.marker.projectName} (${context.marker.publicProjectRef})` });
+      const status = await context.manager.status();
+      checks.push({ name: "authorization-server", ok: true, detail: context.environment.issuer });
+      checks.push({ name: "api-resource", ok: true, detail: context.environment.apiResource });
+      checks.push({
+        name: "credential-store",
+        ok: status.authenticated,
+        detail: status.authenticated
+          ? `${status.store}; ${status.scopes.join(", ") || "scope metadata unavailable"}; expires ${
+              status.accessTokenExpiresAt ? new Date(status.accessTokenExpiresAt).toISOString() : "on demand"
+            }`
+          : "not authenticated",
+      });
+      const session = await this.#client(context.environment.apiBaseUrl, context.manager).sessionStart({
+        externalSessionId: randomUUID(),
+      }, { signal });
+      this.#validateSession(session);
+      const matches = session.project.publicRef === context.marker.publicProjectRef && session.installation.id === context.marker.installationId;
+      checks.push({ name: "server-context", ok: matches, detail: matches ? "project and installation match" : "server context does not match marker" });
+      return { ok: checks.every((check) => check.ok), checks, project: session.project, installation: session.installation };
+    } catch (error) {
+      if (signal?.aborted) throw this.#cancellationError();
+      const detail =
+        error instanceof CliCoreError || error instanceof DongoClientError ? error.message : "Unexpected local failure.";
+      checks.push({ name: "connectivity", ok: false, detail });
+      return { ok: false, checks };
+    }
+  }
+
+  async sessionStart(signal?: AbortSignal): Promise<SessionStartData> {
+    const context = await this.#context(true);
+    return this.#client(context.environment.apiBaseUrl, context.manager).sessionStart({
+      externalSessionId: randomUUID(),
+    }, { signal });
+  }
+
+  async overview(signal?: AbortSignal): Promise<OverviewData> {
+    const context = await this.#context(true);
+    return this.#client(context.environment.apiBaseUrl, context.manager).getOverview({}, { signal });
+  }
+
+  async execute<Name extends OperationName>(
+    operation: Name,
+    input: OperationInput<Name>,
+    signal?: AbortSignal,
+  ): Promise<OperationOutput<Name>> {
+    const context = await this.#context(true);
+    return this.#client(context.environment.apiBaseUrl, context.manager).call(operation, input, { signal });
+  }
+
+  async attachmentInfo(attachmentId: string, signal?: AbortSignal): Promise<{
+    attachmentId: string;
+    filename: string;
+    contentType: string;
+    byteSize: number;
+    expiresAt: number;
+    downloadAvailable: true;
+  }> {
+    const { downloadUrl: _downloadUrl, ...access } = await this.execute("get_attachment", { attachmentId }, signal);
+    return { ...access, downloadAvailable: true };
+  }
+
+  async fetchAttachment(attachmentId: string, output?: string, signal?: AbortSignal): Promise<AttachmentFetchResult> {
+    const context = await this.#context(true);
+    const access = await this.#client(context.environment.apiBaseUrl, context.manager).getAttachment({ attachmentId }, { signal });
+    return fetchAttachmentFile({
+      repositoryRoot: context.repositoryRoot,
+      access,
+      output,
+      fetch: this.#fetch,
+      signal,
+    });
+  }
+
+  async integration(host: IntegrationHost, apply = false): Promise<IntegrationResult> {
+    const repositoryRoot = await findRepositoryRoot(this.#cwd);
+    const marker = await readProjectMarker(repositoryRoot);
+    if (!marker) {
+      throw new CliCoreError({ code: "authentication_required", message: "This repository is not connected. Run dongo connect.", exitCode: 3 });
+    }
+    this.#validateMarker(repositoryRoot, marker);
+    return configureIntegration({
+      repositoryRoot,
+      productOrigin: marker.productOrigin,
+      publicProjectRef: marker.publicProjectRef,
+      host,
+      apply,
+    });
+  }
+
+  async sync(signal?: AbortSignal): Promise<{ snapshot: SyncSnapshotData; export: ExportResult }> {
+    const context = await this.#context(true);
+    const snapshot = await this.#client(context.environment.apiBaseUrl, context.manager).syncSnapshot({}, { signal });
+    if (!snapshot || !Array.isArray(snapshot.workItems)) {
+      throw new CliCoreError({ code: "validation", message: "Dongo returned an invalid sync snapshot." });
+    }
+    if (signal?.aborted) throw this.#cancellationError();
+    return { snapshot, export: await exportSnapshot(context.repositoryRoot, snapshot) };
+  }
+
+  async #context(required: true): Promise<{
+    repositoryRoot: string;
+    marker: ProjectMarker;
+    environment: EnvironmentConfig;
+    store: SecretStore;
+    manager: TokenManager;
+  }>;
+  async #context(required: false): Promise<
+    | { repositoryRoot: string; marker: ProjectMarker; environment: EnvironmentConfig; store: SecretStore; manager: TokenManager }
+    | undefined
+  >;
+  async #context(required: boolean) {
+    const repositoryRoot = await findRepositoryRoot(this.#cwd);
+    const marker = await readProjectMarker(repositoryRoot);
+    if (!marker) {
+      if (!required) return undefined;
+      throw new CliCoreError({ code: "authentication_required", message: "This repository is not connected. Run dongo connect.", exitCode: 3 });
+    }
+    const environment = this.#validateMarker(repositoryRoot, marker);
+    const store = this.#secretStore();
+    const manager = this.#tokenManager(marker.credentialProfile, store);
+    if (process.env.DONGO_TOKEN && marker.environment === "custom") {
+      throw new CliCoreError({
+        code: "validation",
+        message: "DONGO_TOKEN cannot be sent to a custom origin from repository configuration.",
+        exitCode: 2,
+      });
+    }
+    const credential = process.env.DONGO_TOKEN ? undefined : await manager.load();
+    if (
+      credential &&
+      (credential.clientId !== environment.cliClientId ||
+        credential.issuer !== environment.issuer ||
+        credential.resource !== environment.apiResource ||
+        credential.tokenEndpoint !== environment.tokenEndpoint ||
+        credential.revocationEndpoint !== environment.revocationEndpoint)
+    ) {
+      throw new CliCoreError({
+        code: "authentication_required",
+        message: "Stored Dongo authorization does not match this repository marker. Run dongo connect again.",
+        exitCode: 3,
+      });
+    }
+    return { repositoryRoot, marker, environment, store, manager };
+  }
+
+  #secretStore(): SecretStore {
+    return (
+      this.#providedStore ??
+      createDefaultSecretStore({
+        allowFileFallback: this.#allowFileFallback,
+        configDirectory: this.#configDirectory,
+      })
+    );
+  }
+
+  #tokenManager(profile: string, store: SecretStore): TokenManager {
+    return new TokenManager({
+      profile,
+      store,
+      lockDirectory: this.#configDirectory,
+      fetch: this.#fetch,
+      now: this.#now,
+    });
+  }
+
+  #client(baseUrl: string, manager: TokenManager): DongoClient {
+    return new DongoClient({ baseUrl, tokenProvider: manager, fetch: this.#fetch });
+  }
+
+  #validateMarker(repositoryRoot: string, marker: ProjectMarker): EnvironmentConfig {
+    const environment =
+      marker.environment === "custom"
+        ? resolveEnvironment({ origin: marker.productOrigin })
+        : resolveEnvironment({ environment: marker.environment });
+    const expectedProfile = credentialProfile(environment.productOrigin, repositoryRoot);
+    const matches =
+      marker.productOrigin === environment.productOrigin &&
+      marker.issuer === environment.issuer &&
+      marker.apiBaseUrl === environment.apiBaseUrl &&
+      marker.apiResource === environment.apiResource &&
+      marker.credentialProfile === expectedProfile;
+    if (!matches) {
+      throw new CliCoreError({
+        code: "validation",
+        message: "Project marker origins or credential binding are inconsistent. Run dongo connect to repair it.",
+        exitCode: 2,
+      });
+    }
+    return environment;
+  }
+
+  #validateSession(session: SessionStartData): void {
+    if (!session?.project?.publicRef || !session.project.name || !session.installation?.id) {
+      throw new CliCoreError({ code: "validation", message: "Dongo returned an incomplete session context." });
+    }
+  }
+
+  #cancellationError(): CliCoreError {
+    return new CliCoreError({ code: "cancelled", message: "The Dongo command was cancelled.", exitCode: 130 });
+  }
+}
+
+export function mapClientError(error: unknown): never {
+  if (error instanceof DongoClientError) {
+    const conflict = error.code.includes("conflict") || error.code === "lease_expired";
+    throw new CliCoreError({
+      code: conflict ? "conflict" : error.code,
+      message: error.message,
+      retryable: error.retryable,
+      exitCode:
+        error.code === "cancelled"
+          ? 130
+          : error.code === "unauthorized"
+            ? 3
+            : error.code === "insufficient_scope"
+              ? 4
+              : conflict
+                ? 6
+                : error.retryable
+                  ? 5
+                  : 1,
+      details: { requestId: error.requestId },
+      cause: error,
+    });
+  }
+  throw error;
+}

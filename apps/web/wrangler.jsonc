@@ -1,0 +1,32 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "dongo-web-dev",
+  "main": "./src/entry-server.tsx",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "dev.dongo.so",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    }
+  },
+  "vars": {
+    "DONGO_ENVIRONMENT": "development",
+    "DONGO_PUBLIC_ORIGIN": "https://dev.dongo.so",
+    "CONVEX_DEPLOYMENT": "dev:wandering-camel-662",
+    "VITE_DONGO_ENVIRONMENT": "development",
+    "VITE_DONGO_GOOGLE_AUTH_CONFIGURED": "true"
+  }
+}

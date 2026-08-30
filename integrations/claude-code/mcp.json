@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dongo-{{shortProjectRef}}": {
+      "type": "http",
+      "url": "{{origin}}/p/{{publicProjectRef}}/mcp"
+    }
+  }
+}

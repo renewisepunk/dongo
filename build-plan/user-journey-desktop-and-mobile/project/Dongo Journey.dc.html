@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#08080a;color:#ececee;font-family:'Switzer',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:oklch(0.84 0.19 78);text-decoration:none}
+  a:hover{color:oklch(0.90 0.16 82)}
+  input,textarea,button{font-family:inherit;color:inherit}
+  button{cursor:pointer}
+  input:focus-visible,textarea:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:1px solid oklch(0.84 0.19 78);outline-offset:2px}
+  ::placeholder{color:#5a5a63}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:#25252c}
+  ::-webkit-scrollbar-track{background:transparent}
+  @keyframes dgspin{to{transform:rotate(360deg)}}
+  @keyframes dgblink{0%,49%{opacity:1}50%,100%{opacity:.18}}
+  @keyframes dgin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#08080a;display:flex;flex-direction:column;align-items:center;gap:14px;padding:22px 16px 40px">
+
+  <div style="display:flex;align-items:center;gap:14px;width:100%;max-width:1180px;flex-wrap:wrap">
+    <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.09em;text-transform:uppercase;color:#5a5a63">dongo · v1 core journey</div>
+    <div style="flex:1"></div>
+    <div style="display:flex;border:1px solid #1c1c21">
+      <button onClick="{{ setMobile }}" style="{{ tabMobile }}">Mobile</button>
+      <button onClick="{{ setDesktop }}" style="{{ tabDesktop }}">Desktop</button>
+    </div>
+    <button onClick="{{ restart }}" style="background:transparent;border:1px solid #1c1c21;color:#93939c;padding:9px 13px;font-size:12px;line-height:1.4;font-family:ui-monospace,Menlo,monospace;letter-spacing:.05em" style-hover="border-color:#33333c;color:#ececee">restart</button>
+  </div>
+
+  <div style="{{ frameStyle }}">
+
+    <sc-if value="{{ isAuth }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;background:#08080a;overflow:auto">
+        <div style="width:100%;max-width:376px;display:flex;flex-direction:column">
+
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:36px">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:22px;line-height:1;font-weight:700;color:oklch(0.84 0.19 78)">&#10095;</span>
+            <div style="font-size:20px;line-height:1.4;font-weight:600;letter-spacing:-.01em">dongo</div>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:18px;line-height:1;color:oklch(0.84 0.19 78);animation:dgblink 1.1s steps(1) infinite">&#9612;</span>
+          </div>
+
+          <sc-if value="{{ isSignin }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:26px">
+              <p style="margin:0;font-size:18px;line-height:1.5;color:#b9b9c1;text-wrap:pretty">See what your coding agents are doing, give them work, and answer when they need you.</p>
+              <button onClick="{{ signinGoogle }}" style="display:flex;align-items:center;justify-content:center;gap:10px;height:48px;background:#ececee;color:#08080a;border:0;font-size:16px;line-height:1.5;font-weight:500" style-hover="background:#ffffff">
+                <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600">G</span>
+                <span>Continue with Google</span>
+              </button>
+              <div style="display:flex;align-items:center;gap:12px;color:#5a5a63;font-size:12px;line-height:1.4;font-family:ui-monospace,Menlo,monospace">
+                <div style="flex:1;height:1px;background:#1c1c21"></div>
+                <span>or</span>
+                <div style="flex:1;height:1px;background:#1c1c21"></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <label for="dg-email" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.08em;text-transform:uppercase;color:#7d7d87">Email address</label>
+                <input id="dg-email" type="email" value="{{ email }}" onChange="{{ onEmail }}" placeholder="rene@studio.dev" style="height:48px;background:#0d0d10;border:1px solid #1c1c21;padding:0 14px;font-size:16px" />
+                <sc-if value="{{ emailError }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:14px;line-height:1.5;color:oklch(0.68 0.21 27)">{{ emailError }}</div>
+                </sc-if>
+                <button onClick="{{ submitEmail }}" style="height:48px;background:transparent;border:1px solid #33333c;font-size:16px;line-height:1.5;margin-top:2px" style-hover="border-color:#5a5a63;background:#0d0d10">Continue with email</button>
+              </div>
+              <p style="margin:0;font-size:14px;line-height:1.5;color:#6c6c76">Dongo sends a one-time code. There is no password to create or remember.</p>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isCodeStep }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:24px">
+              <button onClick="{{ backToSignin }}" style="align-self:flex-start;background:transparent;border:0;padding:0;color:#93939c;font-size:14px;line-height:1.5;font-family:ui-monospace,Menlo,monospace" style-hover="color:#ececee">← back to sign in</button>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <h1 style="margin:0;font-size:28px;line-height:1.2;font-weight:600;letter-spacing:-.02em">Check your email</h1>
+                <p style="margin:0;font-size:16px;line-height:1.5;color:#93939c">We sent a six-character code to <span style="color:#ececee">{{ email }}</span>.</p>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <label for="dg-code" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.08em;text-transform:uppercase;color:#7d7d87">One-time code</label>
+                <input id="dg-code" value="{{ codeInput }}" onChange="{{ onCode }}" placeholder="A4K2QP" maxLength="6" style="height:54px;background:#0d0d10;border:1px solid #1c1c21;padding:0 16px;font-size:22px;line-height:1.25;font-family:ui-monospace,Menlo,monospace;letter-spacing:.34em;text-transform:uppercase" />
+                <sc-if value="{{ codeError }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:14px;line-height:1.5;color:oklch(0.68 0.21 27)">{{ codeError }}</div>
+                </sc-if>
+                <button onClick="{{ verifyCode }}" style="height:48px;background:#ececee;color:#08080a;border:0;font-size:16px;line-height:1.5;font-weight:500;margin-top:2px" style-hover="background:#ffffff">{{ verifyLabel }}</button>
+              </div>
+              <div style="display:flex;gap:18px;font-size:14px;line-height:1.5">
+                <button onClick="{{ noop }}" style="background:transparent;border:0;padding:0;color:#93939c;font-size:14px" style-hover="color:#ececee">Resend code</button>
+                <button onClick="{{ backToSignin }}" style="background:transparent;border:0;padding:0;color:#93939c;font-size:14px" style-hover="color:#ececee">Change email</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isCallback }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:12px;color:#93939c;font-size:16px;line-height:1.5">
+              <div style="width:13px;height:13px;border:1.5px solid #33333c;border-top-color:oklch(0.84 0.19 78);border-radius:50%;animation:dgspin .8s linear infinite"></div>
+              <span>Signing you in…</span>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isProject }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:24px">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.09em;text-transform:uppercase;color:oklch(0.84 0.19 78)">Set up your workspace</div>
+                <h1 style="margin:0;font-size:28px;line-height:1.2;font-weight:600;letter-spacing:-.02em">Create your first project</h1>
+                <p style="margin:0;font-size:16px;line-height:1.5;color:#93939c">A project maps to one repository or codebase.</p>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <label for="dg-proj" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.08em;text-transform:uppercase;color:#7d7d87">Project name</label>
+                <input id="dg-proj" value="{{ projectName }}" onChange="{{ onProjectName }}" placeholder="Checkout service" style="height:48px;background:#0d0d10;border:1px solid #1c1c21;padding:0 14px;font-size:16px" />
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#6c6c76">dongo.app/{{ orgSlug }}/{{ projectSlug }}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <label for="dg-repo" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.08em;text-transform:uppercase;color:#7d7d87">Repository URL <span style="color:#4e4e57">optional</span></label>
+                <input id="dg-repo" value="{{ repoUrl }}" onChange="{{ onRepoUrl }}" placeholder="github.com/rene/checkout" style="height:48px;background:#0d0d10;border:1px solid #1c1c21;padding:0 14px;font-size:16px;font-family:ui-monospace,Menlo,monospace" />
+              </div>
+              <div style="display:flex;flex-direction:column;gap:9px">
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.08em;text-transform:uppercase;color:#7d7d87">Agent execution mode</div>
+                <button onClick="{{ setManual }}" style="{{ manualStyle }}">
+                  <div style="{{ manualDot }}"></div>
+                  <div style="display:flex;flex-direction:column;gap:3px;text-align:left">
+                    <div style="font-size:16px;line-height:1.5">Manual</div>
+                    <div style="font-size:14px;line-height:1.5;color:#7d7d87">Agents triage and suggest work, then wait for you.</div>
+                  </div>
+                </button>
+                <button onClick="{{ setAutonomous }}" style="{{ autoStyle }}">
+                  <div style="{{ autoDot }}"></div>
+                  <div style="display:flex;flex-direction:column;gap:3px;text-align:left">
+                    <div style="font-size:16px;line-height:1.5">Autonomous</div>
+                    <div style="font-size:14px;line-height:1.5;color:#7d7d87">Agents may claim and begin Ready work.</div>
+                  </div>
+                </button>
+              </div>
+              <button onClick="{{ createProject }}" style="height:48px;background:#ececee;color:#08080a;border:0;font-size:16px;line-height:1.5;font-weight:500" style-hover="background:#ffffff">Create project</button>
+              <p style="margin:0;font-size:14px;line-height:1.5;color:#6c6c76">Free plan includes one active project.</p>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isConnect }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:22px">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.09em;text-transform:uppercase;color:oklch(0.82 0.20 150)">Project created</div>
+                <h1 style="margin:0;font-size:28px;line-height:1.2;font-weight:600;letter-spacing:-.02em">Connect a coding agent</h1>
+                <p style="margin:0;font-size:16px;line-height:1.5;color:#93939c">Open your repository with your coding agent and tell it to install Dongo.</p>
+              </div>
+
+              <div style="display:flex;gap:0;border:1px solid #1c1c21">
+                <button onClick="{{ setHostCodex }}" style="{{ hostCodex }}">Codex</button>
+                <button onClick="{{ setHostClaude }}" style="{{ hostClaude }}">Claude Code</button>
+                <button onClick="{{ setHostGeneric }}" style="{{ hostGeneric }}">AGENTS.md</button>
+              </div>
+
+              <div style="border:1px solid #1c1c21;background:#0b0b0e">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 13px;border-bottom:1px solid #16161a">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.06em;text-transform:uppercase;color:#6c6c76">say this to {{ hostLabel }}</span>
+                  <button onClick="{{ copyInstruction }}" style="background:transparent;border:0;padding:0;color:oklch(0.84 0.19 78);font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4">{{ copyLabel }}</button>
+                </div>
+                <div style="padding:14px 13px;font-family:ui-monospace,Menlo,monospace;font-size:14px;line-height:1.5;color:#d6d6db;white-space:pre-wrap">{{ instruction }}</div>
+              </div>
+
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 13px;border:1px solid #1c1c21">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.06em;text-transform:uppercase;color:#6c6c76">pairing code</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:20px;line-height:1.4;letter-spacing:.16em">{{ pairCode }}</span>
+                </div>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#6c6c76">expires {{ pairExpiry }}</span>
+              </div>
+
+              <div style="{{ connCardStyle }}">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="{{ connDot }}"></div>
+                  <span style="font-size:16px;line-height:1.5">{{ connTitle }}</span>
+                </div>
+                <div style="font-size:14px;line-height:1.5;color:#93939c;text-wrap:pretty">{{ connBody }}</div>
+                <sc-if value="{{ agentConnected }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:5px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#7d7d87;padding-top:2px">
+                    <div>repo matched · {{ repoShort }}</div>
+                    <div>adapter · {{ adapter }}</div>
+                  </div>
+                </sc-if>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <button onClick="{{ goOverview }}" style="{{ continueStyle }}">{{ continueLabel }}</button>
+                <button onClick="{{ goOverview }}" style="align-self:center;background:transparent;border:0;color:#6c6c76;font-size:14px;line-height:1.5" style-hover="color:#ececee">Skip for now</button>
+              </div>
+              <p style="margin:0;font-size:12px;line-height:1.4;color:#5a5a63;font-family:ui-monospace,Menlo,monospace">credential stored locally · never committed</p>
+            </div>
+          </sc-if>
+
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isApp }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;background:#08080a">
+
+        <div style="{{ headerStyle }}">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:18px;line-height:1;font-weight:700;color:oklch(0.84 0.19 78)">&#10095;</span>
+            <span style="font-size:16px;line-height:1.5;font-weight:600;letter-spacing:-.01em">dongo</span>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;line-height:1;color:oklch(0.84 0.19 78);animation:dgblink 1.1s steps(1) infinite">&#9612;</span>
+          </div>
+          <button onClick="{{ noop }}" style="display:flex;align-items:center;gap:7px;background:transparent;border:1px solid #1c1c21;padding:7px 10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#b9b9c1;min-height:36px" style-hover="border-color:#33333c">
+            <span>{{ projectSlug }}</span>
+            <span style="color:#5a5a63">▾</span>
+          </button>
+          <div style="flex:1"></div>
+          <sc-if value="{{ syncing }}" hint-placeholder-val="{{ false }}">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:oklch(0.84 0.19 78)">reconnecting…</span>
+          </sc-if>
+          <button onClick="{{ openSearch }}" aria-label="Search this project" style="{{ searchBtnStyle }}">
+            <span>search</span>
+            <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ false }}">
+              <span style="color:#5a5a63;border:1px solid #26262d;padding:1px 5px">⌘K</span>
+            </sc-if>
+          </button>
+          <button onClick="{{ noop }}" aria-label="Profile and settings" style="width:36px;height:36px;min-width:36px;background:#1a1a1f;border:1px solid #26262d;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#b9b9c1">RB</button>
+        </div>
+
+        <div style="{{ scrollStyle }}">
+          <div style="{{ contentStyle }}">
+
+            <div style="{{ composerStyle }}">
+              <textarea value="{{ draft }}" onChange="{{ onDraft }}" onFocus="{{ noop }}" placeholder="Add something…" rows="{{ draftRows }}" style="width:100%;background:transparent;border:0;resize:none;font-size:18px;line-height:1.5;padding:0;margin:0"></textarea>
+              <sc-for list="{{ attachments }}" as="att" hint-placeholder-count="0">
+                <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border:1px solid #1c1c21;background:#0a0a0d">
+                  <div style="width:34px;height:34px;background:#16161b;border:1px solid #26262d;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#7d7d87">{{ att.kind }}</div>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:2px;min-width:0">
+                    <div style="font-size:14px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ att.name }}</div>
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#6c6c76">{{ att.status }}</div>
+                  </div>
+                  <button onClick="{{ removeAttachment }}" aria-label="Remove attachment" style="width:30px;height:30px;background:transparent;border:1px solid #1c1c21;color:#93939c;font-size:12px" style-hover="border-color:#33333c;color:#ececee">✕</button>
+                </div>
+              </sc-for>
+              <div style="display:flex;align-items:center;gap:12px">
+                <button onClick="{{ addAttachment }}" style="display:flex;align-items:center;gap:7px;background:transparent;border:1px solid #1c1c21;padding:0 11px;height:36px;font-size:14px;line-height:1.5;color:#b9b9c1" style-hover="border-color:#33333c;color:#ececee">
+                  <span style="font-family:ui-monospace,Menlo,monospace">+</span>
+                  <span>Attach</span>
+                </button>
+                <span style="font-size:14px;line-height:1.5;color:#5a5a63;flex:1">{{ composerHint }}</span>
+                <button onClick="{{ submitIntake }}" disabled="{{ submitDisabled }}" aria-label="Submit to Inbox" style="{{ submitStyle }}">↵</button>
+              </div>
+            </div>
+
+            <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:11px;padding:26px 0 0">
+                <div style="font-size:16px;line-height:1.5;color:#93939c;text-wrap:pretty">{{ emptyLine }}</div>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#4e4e57">bug · idea · screenshot · video · request</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ hasNeeds }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <div style="width:6px;height:6px;background:oklch(0.84 0.19 78);animation:dgblink 1.4s steps(1) infinite"></div>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;color:oklch(0.86 0.19 82)">needs you</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#6c6c76">{{ needsCount }}</span>
+                </div>
+                <sc-for list="{{ needsYou }}" as="it" hint-placeholder-count="1">
+                  <div role="button" tabIndex="0" onClick="{{ it.open }}" onKeyDown="{{ it.keyOpen }}" style="display:flex;flex-direction:column;gap:9px;padding:15px;border:1px solid oklch(0.84 0.19 78 / 0.55);background:#14100a;animation:dgin .28s ease both;cursor:pointer" style-hover="border-color:oklch(0.84 0.19 78 / 0.85);background:#17120b">
+                    <div style="display:flex;align-items:baseline;gap:10px">
+                      <span style="font-size:16px;line-height:1.5;font-weight:500;flex:1;text-wrap:pretty">{{ it.title }}</span>
+                      <sc-if value="{{ it.unseen }}" hint-placeholder-val="{{ true }}">
+                        <span style="width:7px;height:7px;background:oklch(0.84 0.19 78);flex:none;margin-top:6px"></span>
+                      </sc-if>
+                    </div>
+                    <div style="font-size:16px;line-height:1.5;color:#d6d6db;text-wrap:pretty">{{ it.attentionSummary }}</div>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#7d7d87">
+                      <span style="border:1px solid #33333c;padding:2px 6px;letter-spacing:.06em;text-transform:uppercase;color:oklch(0.86 0.19 82)">{{ it.attKind }}</span>
+                      <sc-if value="{{ it.important }}" hint-placeholder-val="{{ true }}">
+                        <span style="color:oklch(0.84 0.19 78)">important</span>
+                      </sc-if>
+                      <span>{{ it.agent }}</span>
+                      <span style="color:#4e4e57">·</span>
+                      <span>{{ it.age }}</span>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ hasWorking }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:28px">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;color:#93939c">working</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#6c6c76">{{ workingCount }}</span>
+                </div>
+                <sc-for list="{{ working }}" as="it" hint-placeholder-count="1">
+                  <div role="button" tabIndex="0" onClick="{{ it.open }}" onKeyDown="{{ it.keyOpen }}" style="display:flex;flex-direction:column;gap:8px;padding:14px 15px;border:1px solid #1c1c21;background:#0b0b0e;cursor:pointer" style-hover="border-color:#33333c;background:#0d0d11">
+                    <div style="display:flex;align-items:baseline;gap:10px">
+                      <span style="font-size:16px;line-height:1.5;flex:1;text-wrap:pretty">{{ it.title }}</span>
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#4e4e57">{{ it.ident }}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:9px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#7d7d87">
+                      <div style="{{ it.pulse }}"></div>
+                      <span>{{ it.agent }}</span>
+                      <span style="color:#4e4e57">·</span>
+                      <span>{{ it.elapsed }}</span>
+                    </div>
+                    <sc-if value="{{ it.latest }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:14px;line-height:1.5;color:#93939c;text-wrap:pretty">{{ it.latest }}</div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ hasReady }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:28px">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;color:#93939c">ready</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#6c6c76">{{ readyCount }}</span>
+                  <span style="flex:1"></span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#4e4e57">order = priority</span>
+                </div>
+                <sc-for list="{{ ready }}" as="it" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:stretch;border:1px solid #1c1c21;background:#0b0b0e" style-hover="border-color:#33333c">
+                    <div style="display:flex;flex-direction:column;border-right:1px solid #16161a">
+                      <button onClick="{{ it.moveUp }}" aria-label="Move up" style="width:38px;flex:1;min-height:23px;background:transparent;border:0;color:#5a5a63;font-size:12px" style-hover="color:#ececee;background:#121216">▲</button>
+                      <button onClick="{{ it.moveDown }}" aria-label="Move down" style="width:38px;flex:1;min-height:23px;background:transparent;border:0;border-top:1px solid #16161a;color:#5a5a63;font-size:12px" style-hover="color:#ececee;background:#121216">▼</button>
+                    </div>
+                    <div role="button" tabIndex="0" onClick="{{ it.open }}" onKeyDown="{{ it.keyOpen }}" style="flex:1;display:flex;align-items:center;gap:12px;padding:14px 15px;cursor:pointer;min-height:46px">
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#4e4e57;width:22px">{{ it.pos }}</span>
+                      <span style="font-size:16px;line-height:1.5;flex:1;text-wrap:pretty">{{ it.title }}</span>
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#4e4e57">{{ it.ident }}</span>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ hasInbox }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:28px">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;color:#93939c">inbox</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#6c6c76">{{ inboxCount }}</span>
+                </div>
+                <sc-for list="{{ inbox }}" as="it" hint-placeholder-count="1">
+                  <div role="button" tabIndex="0" onClick="{{ it.open }}" onKeyDown="{{ it.keyOpen }}" style="display:flex;flex-direction:column;gap:8px;padding:14px 15px;border:1px solid #1c1c21;background:#0b0b0e;cursor:pointer;animation:dgin .28s ease both" style-hover="border-color:#33333c;background:#0d0d11">
+                    <div style="font-size:16px;line-height:1.5;color:#d6d6db;text-wrap:pretty">{{ it.preview }}</div>
+                    <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#7d7d87">
+                      <span style="{{ it.statusStyle }}">{{ it.status }}</span>
+                      <span style="color:#4e4e57">·</span>
+                      <span>{{ it.attachLabel }}</span>
+                      <span style="color:#4e4e57">·</span>
+                      <span>{{ it.age }}</span>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ hasDone }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:28px">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;color:#93939c">recently done</span>
+                  <span style="flex:1"></span>
+                  <button onClick="{{ noop }}" style="background:transparent;border:0;padding:0;color:#6c6c76;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4" style-hover="color:#ececee">view all →</button>
+                </div>
+                <sc-for list="{{ done }}" as="it" hint-placeholder-count="1">
+                  <div role="button" tabIndex="0" onClick="{{ it.open }}" onKeyDown="{{ it.keyOpen }}" style="display:flex;align-items:center;gap:12px;padding:13px 15px;border:1px solid #16161a;background:transparent;cursor:pointer;animation:dgin .28s ease both" style-hover="border-color:#26262d;background:#0b0b0e">
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:oklch(0.82 0.20 150)">✓</span>
+                    <span style="font-size:16px;line-height:1.5;color:#b9b9c1;flex:1;text-wrap:pretty">{{ it.title }}</span>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#4e4e57">{{ it.completedAt }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <div style="height:40px"></div>
+          </div>
+        </div>
+
+        <sc-if value="{{ detailOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ detailStyle }}">
+            <div style="{{ detailHeadStyle }}">
+              <button onClick="{{ closeDetail }}" style="display:flex;align-items:center;gap:8px;background:transparent;border:0;padding:0;color:#93939c;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;min-height:36px" style-hover="color:#ececee">{{ closeLabel }}</button>
+              <div style="flex:1"></div>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#4e4e57">{{ d.ident }}</span>
+            </div>
+            <div style="flex:1;overflow:auto;padding:20px 20px 44px;display:flex;flex-direction:column;gap:24px">
+
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <h2 style="margin:0;font-size:22px;line-height:1.25;font-weight:500;letter-spacing:-.01em;text-wrap:pretty">{{ d.title }}</h2>
+                <div style="display:flex;align-items:center;gap:9px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#93939c">
+                  <div style="{{ d.stateDot }}"></div>
+                  <span>{{ d.stateLine }}</span>
+                </div>
+              </div>
+
+              <sc-if value="{{ d.hasAttention }}" hint-placeholder-val="{{ false }}">
+                <div style="{{ d.attCardStyle }}">
+                  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <span style="border:1px solid oklch(0.84 0.19 78 / 0.7);padding:2px 7px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.07em;text-transform:uppercase;color:oklch(0.86 0.19 82)">{{ d.attKind }}</span>
+                    <sc-if value="{{ d.attImportant }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:oklch(0.84 0.19 78)">important</span>
+                    </sc-if>
+                    <span style="flex:1"></span>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#7d7d87">{{ d.attWhen }}</span>
+                  </div>
+                  <div style="font-size:18px;line-height:1.5;font-weight:500;text-wrap:pretty">{{ d.attTitle }}</div>
+                  <div style="font-size:16px;line-height:1.5;color:#c6c6cd;text-wrap:pretty;white-space:pre-wrap">{{ d.attBody }}</div>
+
+                  <sc-if value="{{ d.attOpen }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:9px">
+                      <sc-for list="{{ d.options }}" as="opt" hint-placeholder-count="2">
+                        <button onClick="{{ opt.pick }}" style="{{ opt.style }}">
+                          <div style="{{ opt.dot }}"></div>
+                          <span style="font-size:16px;line-height:1.5;text-align:left">{{ opt.label }}</span>
+                        </button>
+                      </sc-for>
+                      <textarea value="{{ respondText }}" onChange="{{ onRespond }}" placeholder="Add anything the agent should know…" rows="3" style="width:100%;background:#0a0a0d;border:1px solid #1c1c21;padding:12px;font-size:16px;line-height:1.5;resize:none;margin-top:2px"></textarea>
+                      <div style="display:flex;align-items:center;gap:14px">
+                        <button onClick="{{ submitRespond }}" disabled="{{ respondDisabled }}" style="{{ respondStyle }}">Respond</button>
+                        <button onClick="{{ resolveNoResponse }}" style="background:transparent;border:0;padding:0;color:#6c6c76;font-size:14px;line-height:1.5" style-hover="color:#ececee">Resolve without response</button>
+                      </div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ d.attResolved }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:9px;padding-top:4px;border-top:1px solid #1c1c21">
+                      <div style="display:flex;align-items:center;gap:9px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:oklch(0.82 0.20 150);padding-top:12px">
+                        <span>✓</span><span>answered</span>
+                      </div>
+                      <div style="font-size:16px;line-height:1.5;color:#d6d6db;text-wrap:pretty">{{ d.attResponse }}</div>
+                      <div style="font-size:14px;line-height:1.5;color:#7d7d87">Your agent will see this on its next pull.</div>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ d.hasGoal }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:9px">
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;color:#6c6c76">goal</div>
+                  <div style="font-size:16px;line-height:1.5;color:#c6c6cd;text-wrap:pretty;white-space:pre-wrap">{{ d.goal }}</div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ d.hasRun }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:9px">
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;color:#6c6c76">latest from {{ d.runAgent }}</div>
+                  <div style="padding:13px 14px;border:1px solid #1c1c21;background:#0a0a0d;font-size:16px;line-height:1.5;color:#c6c6cd;text-wrap:pretty">{{ d.runLatest }}</div>
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#6c6c76">{{ d.runMeta }}</div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ d.hasArtifacts }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:9px">
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;color:#6c6c76">artifacts</div>
+                  <sc-for list="{{ d.artifacts }}" as="a" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px 13px;border:1px solid #16161a;background:#0a0a0d">
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.06em;text-transform:uppercase;color:#6c6c76;width:56px;flex:none">{{ a.kind }}</span>
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;line-height:1.5;color:#d6d6db;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ a.label }}</span>
+                      <span style="color:oklch(0.84 0.19 78);font-size:14px">↗</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ d.hasSource }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:9px">
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;color:#6c6c76">{{ d.sourceLabel }}</div>
+                  <div style="padding:13px 14px;border:1px solid #16161a;background:#0a0a0d;display:flex;flex-direction:column;gap:11px">
+                    <div style="font-size:16px;line-height:1.5;color:#c6c6cd;text-wrap:pretty">{{ d.sourceText }}</div>
+                    <div style="display:flex;align-items:center;gap:11px">
+                      <div style="width:52px;height:38px;background:#141419;border:1px solid #26262d;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#7d7d87">MOV</div>
+                      <div style="display:flex;flex-direction:column;gap:2px">
+                        <span style="font-size:14px;line-height:1.5">{{ d.attachName }}</span>
+                        <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#6c6c76">{{ d.attachMeta }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ d.hasLinked }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:9px">
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;color:#6c6c76">linked work</div>
+                  <sc-for list="{{ d.linked }}" as="l" hint-placeholder-count="3">
+                    <div role="button" tabIndex="0" onClick="{{ l.open }}" onKeyDown="{{ l.keyOpen }}" style="display:flex;align-items:center;gap:12px;padding:12px 13px;border:1px solid #16161a;background:#0a0a0d;cursor:pointer" style-hover="border-color:#33333c">
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#4e4e57">{{ l.ident }}</span>
+                      <span style="font-size:14px;line-height:1.5;color:#c6c6cd;flex:1;text-wrap:pretty">{{ l.title }}</span>
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#6c6c76">{{ l.state }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ d.hasConversation }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:14px">
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;color:#6c6c76">conversation</div>
+                  <sc-for list="{{ d.conversation }}" as="c" hint-placeholder-count="2">
+                    <div style="display:flex;flex-direction:column;gap:6px;padding-left:13px;border-left:1px solid #1c1c21">
+                      <div style="display:flex;align-items:center;gap:9px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4">
+                        <span style="{{ c.whoStyle }}">{{ c.who }}</span>
+                        <span style="color:#4e4e57">{{ c.when }}</span>
+                      </div>
+                      <div style="font-size:16px;line-height:1.5;color:#c6c6cd;text-wrap:pretty">{{ c.text }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">
+                <textarea value="{{ comment }}" onChange="{{ onComment }}" placeholder="Add a comment…" rows="2" style="width:100%;background:#0a0a0d;border:1px solid #1c1c21;padding:12px;font-size:16px;line-height:1.5;resize:none"></textarea>
+                <button onClick="{{ addComment }}" disabled="{{ commentDisabled }}" style="{{ commentStyle }}">Add comment</button>
+              </div>
+
+              <sc-if value="{{ d.isDone }}" hint-placeholder-val="{{ false }}">
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#5a5a63;padding-top:4px">synced to .agent-work/{{ d.ident }}.md</div>
+              </sc-if>
+
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ searchWrapStyle }}">
+            <div style="{{ searchBoxStyle }}">
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #16161a">
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#5a5a63">/</span>
+                <input value="{{ query }}" onChange="{{ onQuery }}" placeholder="Search work, comments and intake…" style="flex:1;background:transparent;border:0;font-size:18px;line-height:1.5" />
+                <button onClick="{{ closeSearch }}" style="background:transparent;border:1px solid #26262d;color:#7d7d87;padding:3px 7px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4">esc</button>
+              </div>
+              <div style="flex:1;overflow:auto;padding:10px 0">
+                <div style="padding:8px 16px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#4e4e57">{{ searchScope }}</div>
+                <sc-for list="{{ results }}" as="r" hint-placeholder-count="0">
+                  <div role="button" tabIndex="0" onClick="{{ r.open }}" onKeyDown="{{ r.keyOpen }}" style="display:flex;flex-direction:column;gap:5px;padding:12px 16px;cursor:pointer;border-left:2px solid transparent" style-hover="background:#0e0e12;border-left-color:oklch(0.84 0.19 78)">
+                    <div style="display:flex;align-items:center;gap:10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#6c6c76">
+                      <span style="letter-spacing:.07em;text-transform:uppercase">{{ r.kind }}</span>
+                      <span style="color:#4e4e57">{{ r.ident }}</span>
+                    </div>
+                    <div style="font-size:16px;line-height:1.5;color:#d6d6db;text-wrap:pretty">{{ r.title }}</div>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:14px 16px;font-size:16px;line-height:1.5;color:#6c6c76">Nothing found in this project.</div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;left:16px;right:16px;bottom:18px;display:flex;justify-content:center;pointer-events:none;z-index:40">
+            <div style="display:flex;align-items:center;gap:10px;background:#15151a;border:1px solid #2c2c34;padding:11px 15px;animation:dgin .2s ease both">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:oklch(0.82 0.20 150)">✓</span>
+              <span style="font-size:14px;line-height:1.5;color:#d6d6db">{{ toast }}</span>
+            </div>
+          </div>
+        </sc-if>
+
+      </div>
+    </sc-if>
+
+  </div>
+
+  <div style="width:100%;max-width:1180px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;color:#3f3f47">{{ hintLine }}</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1240,&quot;height&quot;:900},&quot;viewport&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;mobile&quot;,&quot;desktop&quot;],&quot;default&quot;:&quot;mobile&quot;,&quot;tsType&quot;:&quot;'mobile'|'desktop'&quot;},&quot;agentHost&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Claude Code&quot;,&quot;Codex&quot;,&quot;AGENTS.md&quot;],&quot;default&quot;:&quot;Claude Code&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;demoSpeed&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:0.5,&quot;max&quot;:3,&quot;step&quot;:0.5,&quot;default&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Prototype&quot;}}">
+const AMBER = 'oklch(0.84 0.19 78)';
+const GREEN = 'oklch(0.82 0.20 150)';
+const MONO = 'ui-monospace,Menlo,monospace';
+
+const INTAKE_TEXT = 'checkout gets stuck here — pressing Pay does nothing after the 3DS redirect, no error, order stays pending';
+
+class Component extends DCLogic {
+  state = {
+    mode: this.props.viewport === 'desktop' ? 'desktop' : 'mobile',
+    screen: 'signin',
+    email: '',
+    emailError: '',
+    codeInput: '',
+    codeError: '',
+    verifying: false,
+    projectName: 'Checkout service',
+    repoUrl: 'github.com/rene/checkout',
+    execMode: 'manual',
+    host: this.props.agentHost || 'Claude Code',
+    copied: false,
+    agentStatus: 'waiting',
+    pairSeconds: 596,
+    draft: '',
+    attachments: [],
+    items: [],
+    intakes: [],
+    detail: null,
+    respondText: '',
+    respondPick: null,
+    comment: '',
+    searchOpen: false,
+    query: '',
+    toast: '',
+    tick: 0,
+    now: Date.now(),
+  };
+
+  get speed() { return this.props.demoSpeed || 1; }
+
+  componentDidMount() {
+    this.timers = [];
+    this.iv = setInterval(() => this.setState(s => ({ tick: s.tick + 1, now: Date.now(), pairSeconds: Math.max(0, s.pairSeconds - 1) })), 1000);
+    this.onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.setState({ searchOpen: true }); }
+      if (e.key === 'Escape') this.setState({ searchOpen: false, detail: null });
+    };
+    document.addEventListener('keydown', this.onKey);
+  }
+  componentWillUnmount() {
+    clearInterval(this.iv);
+    (this.timers || []).forEach(clearTimeout);
+    document.removeEventListener('keydown', this.onKey);
+  }
+  after(ms, fn) { this.timers.push(setTimeout(fn, ms / this.speed)); }
+  flash(msg) {
+    this.setState({ toast: msg });
+    this.after(2600, () => this.setState({ toast: '' }));
+  }
+
+  slug(v) { return (v || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project'; }
+  ago(ts) {
+    const s = Math.max(1, Math.round((this.state.now - ts) / 1000));
+    if (s < 60) return s + 's ago';
+    const m = Math.floor(s / 60);
+    return m < 60 ? m + 'm ago' : Math.floor(m / 60) + 'h ago';
+  }
+  dur(ts) {
+    const s = Math.max(1, Math.round((this.state.now - ts) / 1000));
+    if (s < 60) return s + 's';
+    return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+  }
+
+  // ---- auth ----
+  signinGoogle = () => {
+    this.setState({ screen: 'callback', email: 'rene@studio.dev' });
+    this.after(1400, () => this.setState({ screen: 'project' }));
+  };
+  onEmail = (e) => this.setState({ email: e.target.value, emailError: '' });
+  submitEmail = () => {
+    const v = this.state.email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return this.setState({ emailError: 'Enter a valid email address.' });
+    this.setState({ screen: 'code', codeInput: '', codeError: '' });
+  };
+  backToSignin = () => this.setState({ screen: 'signin', codeError: '' });
+  onCode = (e) => this.setState({ codeInput: e.target.value.toUpperCase().slice(0, 6), codeError: '' });
+  verifyCode = () => {
+    if (this.state.codeInput.trim().length < 6) return this.setState({ codeError: 'Enter the six characters from your email.' });
+    this.setState({ verifying: true });
+    this.after(900, () => this.setState({ verifying: false, screen: 'project' }));
+  };
+  onProjectName = (e) => this.setState({ projectName: e.target.value });
+  onRepoUrl = (e) => this.setState({ repoUrl: e.target.value });
+  createProject = () => {
+    if (!this.state.projectName.trim()) return;
+    this.setState({ screen: 'connect', agentStatus: 'waiting' });
+    this.after(3200, () => this.setState({ agentStatus: 'verifying' }));
+    this.after(4600, () => this.setState({ agentStatus: 'connected' }));
+  };
+  goOverview = () => this.setState({ screen: 'app' });
+
+  // ---- intake ----
+  onDraft = (e) => this.setState({ draft: e.target.value });
+  addAttachment = () => {
+    if (this.state.attachments.length) return;
+    const att = { id: 'a1', name: 'checkout-stall.mov', kind: 'MOV', status: 'uploading · 0%' };
+    this.setState({ attachments: [att] });
+    this.after(700, () => this.setState({ attachments: [{ ...att, status: 'uploading · 64%' }] }));
+    this.after(1500, () => this.setState({ attachments: [{ ...att, status: '18.4 MB · ready' }] }));
+  };
+  removeAttachment = () => this.setState({ attachments: [] });
+
+  submitIntake = () => {
+    const text = this.state.draft.trim() || INTAKE_TEXT;
+    const atts = this.state.attachments.filter(a => a.status.indexOf('ready') > -1);
+    const intake = { id: 'in1', text, attachName: atts.length ? atts[0].name : '', attachMeta: '18.4 MB · screen recording', status: 'waiting', at: Date.now(), linked: [] };
+    this.setState({ draft: '', attachments: [], intakes: [intake] });
+    this.flash('Added to Inbox');
+    this.after(2600, () => this.patchIntake({ status: 'triaging' }));
+    this.after(6200, () => this.triage());
+    this.after(9600, () => this.startWork());
+    this.after(15000, () => this.raiseAttention());
+  };
+  patchIntake = (p) => this.setState(s => ({ intakes: s.intakes.map(i => ({ ...i, ...p })) }));
+  patchItem = (id, p) => this.setState(s => ({ items: s.items.map(i => i.id === id ? { ...i, ...p } : i) }));
+
+  triage() {
+    const items = [
+      { id: 'w1', ident: 'DGO-141', title: 'Checkout stalls after the 3DS redirect', state: 'ready',
+        goal: 'Payment confirm never fires when the customer returns from 3DS, so the order stays pending and no error surfaces. Find the broken return path and make confirm safe to replay.',
+        conversation: [{ who: 'Claude Code', kind: 'agent', when: 'just now', text: 'Created from Inbox. Reproduced the stall from the recording: the 3DS return calls /confirm twice and the second call throws before the order is updated.' }] },
+      { id: 'w2', ident: 'DGO-142', title: 'Add an idempotency key to the payment confirm mutation', state: 'ready',
+        goal: 'Confirm is not replay-safe. Key it on the payment intent so retries and duplicate returns converge on one order state.', conversation: [] },
+      { id: 'w3', ident: 'DGO-143', title: 'Surface Stripe webhook retry failures in the order timeline', state: 'ready',
+        goal: 'Retry failures are only visible in logs. Put them on the order so support can see why an order is stuck.', conversation: [] },
+    ];
+    this.setState({ items });
+    this.patchIntake({ status: 'processed', linked: items.map(i => i.id) });
+  }
+
+  startWork() {
+    this.patchItem('w1', { state: 'working', agent: 'Claude Code', startedAt: Date.now(), latest: 'Tracing the 3DS return handler. The second /confirm call fails on a unique constraint before the order transition runs.' });
+  }
+
+  raiseAttention() {
+    this.patchItem('w1', {
+      state: 'needs', unseen: true, attentionAt: Date.now(),
+      attentionSummary: 'Claude Code needs a decision before it migrates existing stuck orders.',
+      attKind: 'Decision', important: true,
+      attTitle: 'How should the 1,284 orders already stuck in pending be migrated?',
+      attBody: 'The fix makes confirm replay-safe, but the orders stuck by the old path still need to move. I can replay them through the repaired confirm path in place, or dual-write to a new order state machine and cut over once it matches. Replaying is faster and reversible per order; dual-write is safer if confirm is still wrong somewhere I have not found.',
+      options: ['Replay in place through the fixed confirm path', 'Dual-write to the new state machine, then cut over'],
+    });
+  }
+
+  // ---- detail ----
+  open = (kind, id) => () => {
+    if (kind === 'item') this.patchItem(id, { unseen: false });
+    this.setState({ detail: { kind, id }, respondText: '', respondPick: null, comment: '', searchOpen: false });
+  };
+  keyOpen = (kind, id) => (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.open(kind, id)(); } };
+  closeDetail = () => this.setState({ detail: null });
+
+  onRespond = (e) => this.setState({ respondText: e.target.value });
+  pick = (i) => () => this.setState({ respondPick: i });
+  submitRespond = () => {
+    const it = this.currentItem();
+    if (!it) return;
+    const picked = this.state.respondPick != null ? it.options[this.state.respondPick] : '';
+    const extra = this.state.respondText.trim();
+    const response = [picked, extra].filter(Boolean).join(' — ');
+    if (!response) return;
+    this.patchItem(it.id, {
+      state: 'working', attResolved: true, attResponse: response,
+      latest: 'Response received. Continuing with the chosen migration path.',
+      startedAt: it.startedAt || Date.now(),
+      conversation: (it.conversation || []).concat([{ who: 'René Bauer', kind: 'human', when: 'just now', text: response }]),
+    });
+    this.setState({ respondText: '', respondPick: null });
+    this.flash('Response recorded');
+    this.after(6000, () => this.complete(it.id));
+  };
+  resolveNoResponse = () => {
+    const it = this.currentItem();
+    if (!it) return;
+    this.patchItem(it.id, { state: 'working', attResolved: true, attResponse: 'Resolved without a response.' });
+  };
+  complete(id) {
+    this.patchItem(id, {
+      state: 'done', completedAt: Date.now(),
+      latest: 'Confirm is idempotent on the 3DS return and 1,284 pending orders were replayed successfully.',
+      artifacts: [
+        { kind: 'commit', label: '4c1e0ab fix(checkout): idempotent confirm on 3DS return' },
+        { kind: 'pr', label: '#218 Checkout confirm idempotency' },
+        { kind: 'preview', label: 'checkout-218.preview.dongo.app' },
+      ],
+    });
+    this.flash('DGO-141 is done');
+  }
+  onComment = (e) => this.setState({ comment: e.target.value });
+  addComment = () => {
+    const it = this.currentItem();
+    const txt = this.state.comment.trim();
+    if (!it || !txt) return;
+    this.patchItem(it.id, { conversation: (it.conversation || []).concat([{ who: 'René Bauer', kind: 'human', when: 'just now', text: txt }]) });
+    this.setState({ comment: '' });
+  };
+  currentItem() {
+    const d = this.state.detail;
+    if (!d || d.kind !== 'item') return null;
+    return this.state.items.find(i => i.id === d.id) || null;
+  }
+
+  openSearch = () => this.setState({ searchOpen: true });
+  closeSearch = () => this.setState({ searchOpen: false, query: '' });
+  onQuery = (e) => this.setState({ query: e.target.value });
+
+  restart = () => {
+    (this.timers || []).forEach(clearTimeout);
+    this.timers = [];
+    this.setState({ screen: 'signin', email: '', codeInput: '', items: [], intakes: [], detail: null, draft: '', attachments: [], agentStatus: 'waiting', searchOpen: false, query: '', toast: '', pairSeconds: 596 });
+  };
+
+  renderVals() {
+    const s = this.state;
+    const desktop = s.mode === 'desktop';
+    const tab = (on) => `background:${on ? '#ececee' : 'transparent'};color:${on ? '#08080a' : '#93939c'};border:0;padding:9px 15px;font-size:12px;line-height:1.4;font-family:${MONO};letter-spacing:.05em`;
+
+    const items = s.items;
+    const byState = (st) => items.filter(i => i.state === st);
+    const needsYou = byState('needs');
+    const working = byState('working');
+    const ready = byState('ready');
+    const doneItems = byState('done');
+
+    const rowFns = (it, extra) => ({ ...it, ...extra, open: this.open('item', it.id), keyOpen: this.keyOpen('item', it.id) });
+
+    const intakeRows = s.intakes.map(i => ({
+      ...i,
+      preview: i.text,
+      status: i.status === 'waiting' ? 'waiting for local agent' : i.status === 'triaging' ? 'agent is triaging' : 'processed',
+      statusStyle: `color:${i.status === 'processed' ? GREEN : AMBER}`,
+      attachLabel: i.attachName ? '1 attachment' : 'no attachment',
+      age: this.ago(i.at),
+      open: this.open('intake', i.id),
+      keyOpen: this.keyOpen('intake', i.id),
+    }));
+
+    // detail model
+    let d = {};
+    const det = s.detail;
+    if (det && det.kind === 'item') {
+      const it = items.find(x => x.id === det.id) || {};
+      const isNeeds = it.state === 'needs';
+      const stateLine = it.state === 'ready' ? 'Ready' : it.state === 'working' ? `Working · ${it.agent}` : isNeeds ? `Working · waiting for your ${(it.attKind || '').toLowerCase()}` : `Done · ${this.ago(it.completedAt || Date.now())}`;
+      const color = isNeeds ? AMBER : it.state === 'done' ? GREEN : it.state === 'working' ? AMBER : '#5a5a63';
+      d = {
+        ident: it.ident, title: it.title, stateLine,
+        stateDot: `width:6px;height:6px;background:${color};flex:none`,
+        hasAttention: isNeeds || !!it.attResolved,
+        attCardStyle: `display:flex;flex-direction:column;gap:13px;padding:16px;border:1px solid ${it.attResolved ? '#1c1c21' : 'oklch(0.84 0.19 78 / 0.55)'};background:${it.attResolved ? '#0a0a0d' : '#14100a'}`,
+        attKind: it.attKind, attTitle: it.attTitle, attBody: it.attBody,
+        attImportant: !!it.important && !it.attResolved,
+        attWhen: it.attentionAt ? this.ago(it.attentionAt) : '',
+        attOpen: isNeeds, attResolved: !!it.attResolved, attResponse: it.attResponse,
+        options: (it.options || []).map((label, i) => ({
+          label, pick: this.pick(i),
+          style: `display:flex;align-items:center;gap:11px;padding:13px;background:${s.respondPick === i ? '#1a1509' : 'transparent'};border:1px solid ${s.respondPick === i ? 'oklch(0.84 0.19 78 / 0.85)' : '#26262d'};min-height:46px;text-align:left`,
+          dot: `width:9px;height:9px;flex:none;border:1px solid ${s.respondPick === i ? AMBER : '#3f3f47'};background:${s.respondPick === i ? AMBER : 'transparent'}`,
+        })),
+        hasGoal: !!it.goal, goal: it.goal,
+        hasRun: !!it.latest, runAgent: it.agent || 'Claude Code', runLatest: it.latest,
+        runMeta: it.state === 'done' ? `run finished · ${it.artifacts ? it.artifacts.length : 0} artifacts` : it.startedAt ? `started ${this.ago(it.startedAt)} · active ${this.dur(it.startedAt)}` : '',
+        hasArtifacts: !!(it.artifacts && it.artifacts.length), artifacts: it.artifacts || [],
+        hasSource: it.id === 'w1' && s.intakes.length > 0, sourceLabel: 'source intake',
+        sourceText: s.intakes[0] ? s.intakes[0].text : '', attachName: 'checkout-stall.mov', attachMeta: '18.4 MB · screen recording',
+        hasLinked: false, linked: [],
+        hasConversation: !!(it.conversation && it.conversation.length),
+        conversation: (it.conversation || []).map(c => ({ ...c, whoStyle: `color:${c.kind === 'human' ? '#ececee' : AMBER}` })),
+        isDone: it.state === 'done',
+      };
+    } else if (det && det.kind === 'intake') {
+      const i = s.intakes[0] || {};
+      d = {
+        ident: 'inbox', title: i.text || '', stateLine: i.status === 'processed' ? 'Processed · 3 work items created' : i.status === 'triaging' ? 'Claimed by Claude Code' : 'Waiting for local agent',
+        stateDot: `width:6px;height:6px;background:${i.status === 'processed' ? GREEN : AMBER};flex:none`,
+        hasAttention: false, hasGoal: false, hasRun: false, hasArtifacts: false,
+        hasSource: true, sourceLabel: 'submitted', sourceText: `René Bauer · ${this.ago(i.at || Date.now())}`,
+        attachName: i.attachName || 'checkout-stall.mov', attachMeta: i.attachMeta || '18.4 MB',
+        hasLinked: (i.linked || []).length > 0,
+        linked: (i.linked || []).map(id => {
+          const it = items.find(x => x.id === id) || {};
+          return { ident: it.ident, title: it.title, state: it.state, open: this.open('item', id), keyOpen: this.keyOpen('item', id) };
+        }),
+        hasConversation: false, isDone: false, options: [], artifacts: [], conversation: [],
+      };
+    }
+
+    const q = s.query.trim().toLowerCase();
+    const results = q.length < 2 ? [] : []
+      .concat(items.filter(i => (i.title + ' ' + (i.goal || '')).toLowerCase().includes(q)).map(i => ({ kind: 'work', ident: i.ident, title: i.title, open: this.open('item', i.id), keyOpen: this.keyOpen('item', i.id) })))
+      .concat(s.intakes.filter(i => i.text.toLowerCase().includes(q)).map(i => ({ kind: 'intake', ident: 'inbox', title: i.text, open: this.open('intake', i.id), keyOpen: this.keyOpen('intake', i.id) })));
+
+    const hostLabel = s.host;
+    const instruction = s.host === 'AGENTS.md'
+      ? `Read AGENTS.md, install the Dongo adapter in this repo and pair with code ${this.pairCode || 'K7F-2QX'}.`
+      : `Install Dongo in this repository and pair with code ${this.pairCode || 'K7F-2QX'}.`;
+    const connMap = {
+      waiting: { t: 'Waiting for pairing', b: 'Run the instruction above in your repository. This screen updates as soon as the agent pairs.', c: AMBER },
+      verifying: { t: 'Verifying', b: 'Checking the pairing code and repository match.', c: AMBER },
+      connected: { t: 'Agent connected', b: `${s.host} paired from macbook-rene · just now.`, c: GREEN },
+    };
+    const conn = connMap[s.agentStatus];
+    const hostBtn = (on) => `flex:1;background:${on ? '#15151a' : 'transparent'};border:0;border-right:1px solid #1c1c21;color:${on ? '#ececee' : '#7d7d87'};padding:11px 8px;font-size:14px;line-height:1.5;min-height:44px`;
+    const pm = Math.floor(s.pairSeconds / 60), ps = s.pairSeconds % 60;
+
+    const anyContent = items.length > 0 || s.intakes.length > 0;
+    const draftReady = s.draft.trim().length > 0 || s.attachments.some(a => a.status.indexOf('ready') > -1);
+    const pendingUpload = s.attachments.some(a => a.status.indexOf('uploading') > -1);
+
+    return {
+      // shell
+      setMobile: () => this.setState({ mode: 'mobile' }),
+      setDesktop: () => this.setState({ mode: 'desktop' }),
+      restart: this.restart,
+      noop: () => {},
+      isDesktop: desktop,
+      tabMobile: tab(!desktop), tabDesktop: tab(desktop),
+      frameStyle: `position:relative;width:100%;max-width:${desktop ? 1180 : 402}px;height:${desktop ? 760 : 812}px;border:1px solid #1c1c21;background:#08080a;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.5)`,
+      hintLine: desktop ? 'desktop · work detail opens as a side panel over Overview · ⌘K for search' : 'mobile web · work detail opens as a full-screen sheet',
+
+      // auth
+      isAuth: s.screen !== 'app',
+      isSignin: s.screen === 'signin',
+      isCodeStep: s.screen === 'code',
+      isCallback: s.screen === 'callback',
+      isProject: s.screen === 'project',
+      isConnect: s.screen === 'connect',
+      isApp: s.screen === 'app',
+      email: s.email, emailError: s.emailError, onEmail: this.onEmail, submitEmail: this.submitEmail, signinGoogle: this.signinGoogle,
+      codeInput: s.codeInput, codeError: s.codeError, onCode: this.onCode, verifyCode: this.verifyCode, backToSignin: this.backToSignin,
+      verifyLabel: s.verifying ? 'Verifying…' : 'Verify',
+      projectName: s.projectName, onProjectName: this.onProjectName, repoUrl: s.repoUrl, onRepoUrl: this.onRepoUrl,
+      orgSlug: 'rene', projectSlug: this.slug(s.projectName),
+      setManual: () => this.setState({ execMode: 'manual' }),
+      setAutonomous: () => this.setState({ execMode: 'autonomous' }),
+      manualStyle: `display:flex;gap:12px;align-items:flex-start;padding:14px;background:${s.execMode === 'manual' ? '#0e0e12' : 'transparent'};border:1px solid ${s.execMode === 'manual' ? '#3f3f47' : '#1c1c21'};text-align:left`,
+      autoStyle: `display:flex;gap:12px;align-items:flex-start;padding:14px;background:${s.execMode === 'autonomous' ? '#0e0e12' : 'transparent'};border:1px solid ${s.execMode === 'autonomous' ? '#3f3f47' : '#1c1c21'};text-align:left`,
+      manualDot: `width:9px;height:9px;margin-top:6px;flex:none;border:1px solid ${s.execMode === 'manual' ? AMBER : '#3f3f47'};background:${s.execMode === 'manual' ? AMBER : 'transparent'}`,
+      autoDot: `width:9px;height:9px;margin-top:6px;flex:none;border:1px solid ${s.execMode === 'autonomous' ? AMBER : '#3f3f47'};background:${s.execMode === 'autonomous' ? AMBER : 'transparent'}`,
+      createProject: this.createProject,
+      setHostCodex: () => this.setState({ host: 'Codex' }),
+      setHostClaude: () => this.setState({ host: 'Claude Code' }),
+      setHostGeneric: () => this.setState({ host: 'AGENTS.md' }),
+      hostCodex: hostBtn(s.host === 'Codex'), hostClaude: hostBtn(s.host === 'Claude Code'), hostGeneric: hostBtn(s.host === 'AGENTS.md'),
+      hostLabel, instruction,
+      copyInstruction: () => { this.setState({ copied: true }); this.after(1600, () => this.setState({ copied: false })); },
+      copyLabel: s.copied ? 'copied' : 'copy',
+      pairCode: 'K7F-2QX',
+      pairExpiry: `in ${pm}:${String(ps).padStart(2, '0')}`,
+      connTitle: conn.t, connBody: conn.b,
+      connDot: s.agentStatus === 'connected'
+        ? `width:8px;height:8px;background:${GREEN};flex:none`
+        : `width:11px;height:11px;border:1.5px solid #33333c;border-top-color:${AMBER};border-radius:50%;animation:dgspin .8s linear infinite;flex:none`,
+      connCardStyle: `display:flex;flex-direction:column;gap:9px;padding:14px;border:1px solid ${s.agentStatus === 'connected' ? 'oklch(0.82 0.20 150 / 0.6)' : '#1c1c21'};background:#0a0a0d`,
+      agentConnected: s.agentStatus === 'connected',
+      repoShort: s.repoUrl || 'local repository',
+      adapter: s.host === 'AGENTS.md' ? 'generic AGENTS.md' : s.host.toLowerCase().replace(' ', '-'),
+      continueStyle: `height:48px;border:0;font-size:16px;line-height:1.5;font-weight:500;background:${s.agentStatus === 'connected' ? '#ececee' : '#1a1a1f'};color:${s.agentStatus === 'connected' ? '#08080a' : '#93939c'}`,
+      continueLabel: s.agentStatus === 'connected' ? 'Continue to Overview' : 'Go to Overview',
+      goOverview: this.goOverview,
+
+      // app shell
+      headerStyle: `display:flex;align-items:center;gap:${desktop ? 14 : 10}px;padding:${desktop ? '12px 22px' : '10px 14px'};border-bottom:1px solid #16161a;background:#08080a;flex:none;min-height:56px`,
+      searchBtnStyle: `display:flex;align-items:center;gap:9px;background:transparent;border:1px solid #1c1c21;padding:0 11px;height:36px;font-family:${MONO};font-size:12px;line-height:1.4;color:#7d7d87`,
+      openSearch: this.openSearch,
+      syncing: false,
+      scrollStyle: 'flex:1;overflow:auto;padding:' + (desktop ? '26px 22px' : '16px 14px'),
+      contentStyle: `width:100%;max-width:${desktop ? 780 : 9999}px;margin:0 auto;display:flex;flex-direction:column`,
+
+      // composer
+      draft: s.draft, onDraft: this.onDraft, draftRows: s.draft.length > 60 ? 4 : 2,
+      composerStyle: `display:flex;flex-direction:column;gap:13px;padding:15px;border:1px solid ${s.draft ? '#33333c' : '#1c1c21'};background:#0b0b0e`,
+      attachments: s.attachments, addAttachment: this.addAttachment, removeAttachment: this.removeAttachment,
+      composerHint: pendingUpload ? 'attachment still finalizing' : 'no categories, no fields',
+      submitDisabled: !draftReady,
+      submitStyle: `width:40px;height:36px;border:0;background:${draftReady ? '#ececee' : '#15151a'};color:${draftReady ? '#08080a' : '#4e4e57'};font-family:${MONO};font-size:14px`,
+      submitIntake: this.submitIntake,
+
+      isEmpty: !anyContent,
+      emptyLine: s.agentStatus === 'connected' ? 'Add anything you want the agent to look at.' : 'New Intake will wait for your local agent.',
+
+      // sections
+      hasNeeds: needsYou.length > 0, needsCount: needsYou.length,
+      needsYou: needsYou.map(it => rowFns(it, { age: this.ago(it.attentionAt || Date.now()) })),
+      hasWorking: working.length > 0, workingCount: working.length,
+      working: working.map(it => rowFns(it, {
+        elapsed: it.startedAt ? `active ${this.dur(it.startedAt)}` : 'starting',
+        pulse: `width:6px;height:6px;background:${AMBER};animation:dgblink 1.4s steps(1) infinite;flex:none`,
+      })),
+      hasReady: ready.length > 0, readyCount: ready.length,
+      ready: ready.map((it, idx) => rowFns(it, {
+        pos: String(idx + 1).padStart(2, '0'),
+        moveUp: () => this.move(it.id, -1),
+        moveDown: () => this.move(it.id, 1),
+      })),
+      hasInbox: intakeRows.length > 0, inboxCount: intakeRows.length, inbox: intakeRows,
+      hasDone: doneItems.length > 0,
+      done: doneItems.map(it => rowFns(it, { completedAt: this.ago(it.completedAt || Date.now()) })),
+
+      // detail
+      detailOpen: !!det,
+      d,
+      closeLabel: desktop ? '✕  close' : '←  back',
+      closeDetail: this.closeDetail,
+      detailStyle: desktop
+        ? 'position:absolute;top:0;right:0;bottom:0;width:470px;background:#0a0a0c;border-left:1px solid #1c1c21;display:flex;flex-direction:column;z-index:30;animation:dgin .22s ease both'
+        : 'position:absolute;inset:0;background:#08080a;display:flex;flex-direction:column;z-index:30;animation:dgin .22s ease both',
+      detailHeadStyle: 'display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid #16161a;flex:none;min-height:52px',
+      respondText: s.respondText, onRespond: this.onRespond,
+      respondDisabled: s.respondPick == null && !s.respondText.trim(),
+      respondStyle: `height:44px;padding:0 20px;border:0;font-size:16px;line-height:1.5;font-weight:500;background:${s.respondPick != null || s.respondText.trim() ? '#ececee' : '#15151a'};color:${s.respondPick != null || s.respondText.trim() ? '#08080a' : '#4e4e57'}`,
+      submitRespond: this.submitRespond, resolveNoResponse: this.resolveNoResponse,
+      comment: s.comment, onComment: this.onComment, addComment: this.addComment,
+      commentDisabled: !s.comment.trim(),
+      commentStyle: `align-self:flex-start;height:40px;padding:0 16px;background:transparent;border:1px solid ${s.comment.trim() ? '#3f3f47' : '#1c1c21'};font-size:14px;line-height:1.5;color:${s.comment.trim() ? '#ececee' : '#4e4e57'}`,
+
+      // search
+      searchOpen: s.searchOpen, closeSearch: this.closeSearch, query: s.query, onQuery: this.onQuery,
+      searchWrapStyle: desktop
+        ? 'position:absolute;inset:0;background:rgba(4,4,6,.72);display:flex;justify-content:center;padding-top:72px;z-index:40'
+        : 'position:absolute;inset:0;background:#08080a;z-index:40;display:flex',
+      searchBoxStyle: desktop
+        ? 'width:640px;max-height:440px;background:#0b0b0e;border:1px solid #26262d;display:flex;flex-direction:column;animation:dgin .18s ease both'
+        : 'flex:1;display:flex;flex-direction:column',
+      searchScope: `scope · ${this.slug(s.projectName)} · work, comments, intake`,
+      results,
+      noResults: s.query.trim().length >= 2 && results.length === 0,
+      toast: s.toast,
+    };
+  }
+
+  move(id, dir) {
+    this.setState(s => {
+      const ready = s.items.filter(i => i.state === 'ready');
+      const idx = ready.findIndex(i => i.id === id);
+      const t = idx + dir;
+      if (idx < 0 || t < 0 || t >= ready.length) return null;
+      const order = ready.map(i => i.id);
+      order.splice(t, 0, order.splice(idx, 1)[0]);
+      const others = s.items.filter(i => i.state !== 'ready');
+      const reordered = order.map(oid => s.items.find(i => i.id === oid));
+      return { items: others.concat(reordered) };
+    });
+  }
+}
+
+</script>
+</body>
+</html>

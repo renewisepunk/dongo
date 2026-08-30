@@ -1,0 +1,174 @@
+import { SignJWT } from "jose";
+import { describe, expect, it } from "vitest";
+import {
+  allowedMetadataHostname,
+  safeReturnTo,
+  signInternalRequest,
+  verifyInternalRequest,
+  verifyHumanBridgeAssertion,
+} from "../src/security";
+import {
+  ACCESS_TOKEN_PREFIX,
+  decodePinnedAccessToken,
+  decodePinnedRefreshToken,
+  encodePinnedAccessToken,
+  encodePinnedRefreshToken,
+  projectRefForGrant,
+  providerGrantId,
+  type PinnedGrantContext,
+} from "../src/grant-binding";
+import { renderOtpEmail } from "../src/otp-email";
+
+describe("authorization boundary security", () => {
+  it("accepts only environment-local return targets", () => {
+    expect(safeReturnTo("/device?user_code=ABCD", "https://dev.dongo.so"))
+      .toBe("/device?user_code=ABCD");
+    expect(safeReturnTo("https://attacker.example/x", "https://dev.dongo.so"))
+      .toBe("/app");
+  });
+
+  it("allowlists metadata hosts without suffix confusion or IP literals", () => {
+    expect(allowedMetadataHostname("clients.openai.com", ["openai.com"])).toBe(true);
+    expect(allowedMetadataHostname("openai.com.attacker.test", ["openai.com"])).toBe(false);
+    expect(allowedMetadataHostname("127.0.0.1", ["openai.com"])).toBe(false);
+  });
+
+  it("verifies short-lived issuer and audience-bound human assertions", async () => {
+    const secret = "s".repeat(48);
+    const token = await new SignJWT({
+      email: "rene@example.com",
+      name: "Rene",
+      profileId: "profile_1",
+    })
+      .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+      .setIssuer("https://convex.example")
+      .setAudience("https://dev.dongo.so/api/auth/dongo/bridge")
+      .setSubject("profile_1")
+      .setJti("assertion_1")
+      .setIssuedAt()
+      .setExpirationTime("90s")
+      .sign(new TextEncoder().encode(secret));
+    const claims = await verifyHumanBridgeAssertion({
+      token,
+      secret,
+      issuer: "https://convex.example",
+      audience: "https://dev.dongo.so/api/auth/dongo/bridge",
+    });
+    expect(claims.profileId).toBe("profile_1");
+  });
+
+  it("signs the frozen internal HMAC canonical form deterministically", async () => {
+    const body = new TextEncoder().encode('{"operation":"get_overview"}');
+    const first = await signInternalRequest({
+      secret: "g".repeat(48),
+      timestamp: "1700000000000",
+      nonce: "ad1f22bf-33c2-47d6-99f0-0d4f16ad9e1b",
+      method: "POST",
+      pathname: "/internal/agent/v1/execute",
+      body,
+    });
+    const second = await signInternalRequest({
+      secret: "g".repeat(48),
+      timestamp: "1700000000000",
+      nonce: "ad1f22bf-33c2-47d6-99f0-0d4f16ad9e1b",
+      method: "POST",
+      pathname: "/internal/agent/v1/execute",
+      body,
+    });
+    expect(first).toBe(second);
+    expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    await expect(verifyInternalRequest({
+      secret: "g".repeat(48),
+      keyId: "v1",
+      timestamp: "1700000000000",
+      nonce: "ad1f22bf-33c2-47d6-99f0-0d4f16ad9e1b",
+      signature: first,
+      method: "POST",
+      pathname: "/internal/agent/v1/execute",
+      body,
+      now: 1700000000000,
+    })).resolves.toEqual({
+      timestamp: 1700000000000,
+      nonce: "ad1f22bf-33c2-47d6-99f0-0d4f16ad9e1b",
+    });
+    await expect(verifyInternalRequest({
+      secret: "g".repeat(48),
+      keyId: "v1",
+      timestamp: "1700000000000",
+      nonce: "ad1f22bf-33c2-47d6-99f0-0d4f16ad9e1b",
+      signature: first,
+      method: "POST",
+      pathname: "/internal/agent/v1/execute",
+      body,
+      now: 1700000060001,
+    })).rejects.toThrow("outside the accepted window");
+  });
+
+  it("pins project selection to an exact MCP resource", async () => {
+    const projectRef = projectRefForGrant({
+      publicOrigin: "https://dev.dongo.so",
+      resources: ["https://dev.dongo.so/p/project_123/mcp"],
+      activeProjectRef: "project_123",
+      referenceId: "dongo-grant:project_123:550e8400-e29b-41d4-a716-446655440000",
+    });
+    expect(projectRef).toBe("project_123");
+    await expect(providerGrantId({
+      issuer: "https://dev.dongo.so/api/auth",
+      subject: "profile_1",
+      clientId: "dongo-cli",
+      projectRef,
+      resource: "https://dev.dongo.so/api/agent/v1",
+    })).resolves.toMatch(/^dongo-device:[0-9a-f]{64}$/);
+  });
+
+  it("renders matching plain-text and HTML OTP messages", () => {
+    const message = renderOtpEmail("482913");
+    expect(message.subject).toContain("482913");
+    expect(message.text).toContain("482913");
+    expect(message.html).toContain("482913");
+  });
+
+  it("cryptographically pins opaque access and refresh tokens to one grant", async () => {
+    const secret = "p".repeat(48);
+    const grant: PinnedGrantContext = {
+      providerIssuer: "https://dev.dongo.so/api/auth",
+      providerGrantId: "dongo-device:abc123",
+      subject: "oauth-user-1",
+      clientId: "dongo-cli",
+      label: "Dongo CLI",
+      resource: "https://dev.dongo.so/api/agent/v1",
+      scopes: ["dongo:work:read", "offline_access"],
+      kind: "cli",
+      profileId: "profile-1",
+      projectRef: "project-1",
+      binding: {
+        installationId: "installation-1",
+        oauthBindingId: "binding-1",
+        installationActorId: "actor-1",
+        organizationId: "organization-1",
+        projectId: "project-id-1",
+        projectRef: "project-1",
+      },
+    };
+    const access = await encodePinnedAccessToken(secret, grant);
+    await expect(
+      decodePinnedAccessToken(secret, `${ACCESS_TOKEN_PREFIX}${access}`),
+    ).resolves.toEqual(grant);
+    const tampered = `${access.slice(0, -1)}${access.endsWith("0") ? "1" : "0"}`;
+    await expect(
+      decodePinnedAccessToken(secret, `${ACCESS_TOKEN_PREFIX}${tampered}`),
+    ).rejects.toThrow();
+
+    const refresh = await encodePinnedRefreshToken({
+      secret,
+      token: "raw-refresh-token-value-123456789",
+      sessionId: "session-1",
+      grant,
+    });
+    await expect(decodePinnedRefreshToken(secret, refresh)).resolves.toEqual({
+      token: "raw-refresh-token-value-123456789",
+      sessionId: "session-1",
+      grant,
+    });
+  });
+});

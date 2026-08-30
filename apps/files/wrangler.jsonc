@@ -1,0 +1,33 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "dongo-files-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    { "pattern": "dev.dongo.so/api/files/*", "zone_name": "dongo.so" }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ATTACHMENTS",
+      "bucket_name": "dongo-dev-attachments"
+    }
+  ],
+  "vars": {
+    "PUBLIC_ORIGIN": "https://dev.dongo.so",
+    "ALLOWED_BROWSER_ORIGIN": "https://dev.dongo.so",
+    "CONVEX_SITE_URL": "https://wandering-camel-662.convex.site"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.05
+    }
+  }
+}

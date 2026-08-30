@@ -1,0 +1,17 @@
+{
+  "name": "@dongo/cli-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@dongo/client": "0.1.0",
+    "@dongo/contracts": "0.1.0",
+    "@dongo/mcp": "0.1.0",
+    "@dongo/repo-export": "0.1.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.ts"
+  }
+}

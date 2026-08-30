@@ -1,0 +1,13 @@
+node_modules/
+.wrangler/
+.output/
+dist/
+coverage/
+.vinxi/
+.solid/
+.dev.vars
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store

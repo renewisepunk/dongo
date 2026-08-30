@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "dongo-coming-soon",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  // These Custom Domains are applied on the first deploy after the zone is Active.
+  // Cloudflare then creates the DNS records and certificates automatically.
+  "routes": [
+    {
+      "pattern": "dongo.so",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.dongo.so",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    }
+  }
+}

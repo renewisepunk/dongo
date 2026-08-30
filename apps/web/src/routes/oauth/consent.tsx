@@ -1,0 +1,130 @@
+import { useLocation, useNavigate, useSearchParams } from "@solidjs/router";
+import { createMemo, createSignal, For, onMount, Show } from "solid-js";
+
+import { AuthFrame } from "../../components/AuthFrame";
+import { humanSession } from "../../lib/auth-client";
+import {
+  AuthorizationFlowError,
+  bridgeAuthorizationSession,
+  decideOAuthConsent,
+  followOAuthResult,
+  getOAuthClientSummary,
+  listAuthorizableProjects,
+  selectAuthorizationProject,
+  type AuthorizableProject,
+  type OAuthClientSummary,
+} from "../../lib/authorization-client";
+import { loginHref, signedOAuthQuery } from "../../lib/auth-flow";
+
+const scopeCopy: Record<string, string> = {
+  "dongo:work:read": "Read project context, work, comments, and attachment metadata.",
+  "dongo:work:write": "Create, claim, update, and finish work for this project.",
+  "dongo:attachments:read": "Download project attachments when explicitly requested.",
+  offline_access: "Keep this host authorized until its grant is revoked.",
+};
+
+export default function OAuthConsentRoute() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams<{ client_id?: string; scope?: string; resource?: string | string[] }>();
+  const [client, setClient] = createSignal<OAuthClientSummary>();
+  const [projects, setProjects] = createSignal<AuthorizableProject[]>([]);
+  const [projectRef, setProjectRef] = createSignal("");
+  const [account, setAccount] = createSignal("");
+  const [state, setState] = createSignal<"loading" | "review" | "submitting" | "error">("loading");
+  const [error, setError] = createSignal("");
+  const returnTo = () => `${location.pathname}${location.search}`;
+  const selectedProject = createMemo(() => projects().find((project) => project.publicRef === projectRef()));
+  const requestParameters = createMemo(() => {
+    const signed = signedOAuthQuery(location.search);
+    return new URLSearchParams(signed ?? location.search);
+  });
+  const clientId = createMemo(() => requestParameters().get("client_id") ?? searchParams.client_id);
+  const scopes = createMemo(() => requestParameters().get("scope")?.split(/\s+/).filter(Boolean) ?? []);
+  const resources = createMemo(() => requestParameters().getAll("resource"));
+
+  onMount(async () => {
+    try {
+      const session = await humanSession();
+      if (!session) {
+        navigate(loginHref(returnTo()), { replace: true });
+        return;
+      }
+      setAccount(session.user.email || session.user.name);
+      await bridgeAuthorizationSession(returnTo());
+      if (!clientId()) throw new AuthorizationFlowError("invalid", "This request does not identify an OAuth client.");
+      const [summary, availableProjects] = await Promise.all([
+        getOAuthClientSummary(clientId()!),
+        listAuthorizableProjects(),
+      ]);
+      setClient(summary);
+      setProjects(availableProjects);
+      setProjectRef(availableProjects[0]?.publicRef ?? "");
+      setState("review");
+    } catch (cause) {
+      if (cause instanceof AuthorizationFlowError && cause.code === "authentication_required") {
+        navigate(loginHref(returnTo()), { replace: true });
+        return;
+      }
+      setError(cause instanceof AuthorizationFlowError ? cause.message : "This OAuth request could not be loaded.");
+      setState("error");
+    }
+  });
+
+  const decide = async (accept: boolean) => {
+    if (accept && !projectRef()) {
+      setError("Choose a project before allowing access.");
+      return;
+    }
+    setState("submitting");
+    setError("");
+    try {
+      if (accept) await selectAuthorizationProject(projectRef(), returnTo());
+      followOAuthResult(await decideOAuthConsent(location.search, accept));
+    } catch (cause) {
+      setError(cause instanceof AuthorizationFlowError ? cause.message : "The authorization decision could not be saved.");
+      setState("review");
+    }
+  };
+
+  return (
+    <AuthFrame>
+      <Show when={state() !== "loading" && state() !== "submitting"} fallback={<div class="callback" role="status"><span class="spinner" aria-hidden="true" /><span>{state() === "submitting" ? "Saving your decision…" : "Checking the OAuth request…"}</span></div>}>
+        <Show when={state() === "review" && client()} fallback={
+          <div class="auth-stack">
+            <div class="title-group"><h1 class="auth-title">This request can’t be authorized</h1><p class="auth-lede">{error()}</p></div>
+            <button class="button button--primary button--full" type="button" onClick={() => window.location.reload()}>Try again</button>
+            <p class="note">Return to your MCP host and restart login if the request expired.</p>
+          </div>
+        }>{(loadedClient) => (
+          <div class="auth-stack">
+            <div class="title-group">
+              <div class="eyebrow eyebrow--amber">MCP authorization</div>
+              <h1 class="auth-title">Allow {loadedClient().name} to use Dongo?</h1>
+              <p class="auth-lede">This creates a separate installation for one Dongo project.</p>
+            </div>
+            <div class="consent-summary">
+              <div class="consent-summary__row"><span class="consent-summary__key">client</span><span class="consent-summary__value">{loadedClient().name}</span></div>
+              <div class="consent-summary__row"><span class="consent-summary__key">account</span><span class="consent-summary__value">{account()}</span></div>
+              <div class="consent-summary__row">
+                <label class="consent-summary__key" for="oauth-project">project</label>
+                <select class="input consent-summary__select" id="oauth-project" value={projectRef()} onChange={(event) => setProjectRef(event.currentTarget.value)}>
+                  <For each={projects()}>{(project) => <option value={project.publicRef}>{project.organizationName} / {project.name}</option>}</For>
+                </select>
+              </div>
+              <div class="consent-summary__row"><span class="consent-summary__key">resource</span><span class="consent-summary__value mono">{resources().join(", ") || "Dongo project MCP resource"}</span></div>
+            </div>
+            <ul class="scope-list"><For each={scopes()}>{(scope) => <li>{scopeCopy[scope] || scope}</li>}</For></ul>
+            <Show when={projects().length === 0}><div class="error" role="alert">You do not have an active project available for this request.</div></Show>
+            <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
+            <p class="note">{loadedClient().name} cannot use a CLI token, access another project, or choose its own Dongo actor identity.</p>
+            <div class="consent-actions">
+              <button class="button" type="button" onClick={() => void decide(false)}>Deny</button>
+              <button class="button button--primary" type="button" disabled={!selectedProject()} onClick={() => void decide(true)}>Allow access</button>
+            </div>
+          </div>
+        )}</Show>
+      </Show>
+    </AuthFrame>
+  );
+}

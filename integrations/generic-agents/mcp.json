@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dongo-{{shortProjectRef}}": {
+      "type": "streamable-http",
+      "url": "{{origin}}/p/{{publicProjectRef}}/mcp"
+    }
+  }
+}

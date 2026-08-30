@@ -1,0 +1,35 @@
+{
+  "name": "@dongo/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "vite build",
+    "check": "tsc --noEmit",
+    "deploy": "npm run build && wrangler deploy --config dist/server/wrangler.json",
+    "dev": "vite dev",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cloudflare/vite-plugin": "1.54.2",
+    "@convex-dev/better-auth": "0.12.5",
+    "@solidjs/meta": "0.29.4",
+    "@solidjs/router": "1.0.0",
+    "@solidjs/start": "2.0.4",
+    "better-auth": "1.6.30",
+    "convex": "1.45.0",
+    "solid-js": "1.9.15",
+    "vite": "8.2.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260830.1",
+    "@types/node": "26.4.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11",
+    "wrangler": "4.127.1"
+  }
+}
