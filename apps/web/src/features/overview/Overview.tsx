@@ -416,7 +416,6 @@ export function Overview(props: OverviewProps) {
     updateRoute = true,
     returnFocus?: HTMLElement,
   ) => {
-    if (updateRoute) applyRouteUpdate({ work: id, intake: undefined });
     if (!selectedWorkId() && !selectedIntakeId()) {
       const resolvedReturnFocus = returnFocus ?? (
         document.activeElement instanceof HTMLElement
@@ -428,6 +427,7 @@ export function Overview(props: OverviewProps) {
         resolvedReturnFocus?.classList.contains("search-button") === true;
       detailReturnScroll = { x: window.scrollX, y: window.scrollY };
     }
+    if (updateRoute) applyRouteUpdate({ work: id, intake: undefined });
     unsubscribeWork?.();
     unsubscribeWork = undefined;
     unsubscribeIntake?.();
@@ -467,7 +467,6 @@ export function Overview(props: OverviewProps) {
     updateRoute = true,
     returnFocus?: HTMLElement,
   ) => {
-    if (updateRoute) applyRouteUpdate({ work: undefined, intake: id });
     if (!selectedWorkId() && !selectedIntakeId()) {
       const resolvedReturnFocus = returnFocus ?? (
         document.activeElement instanceof HTMLElement
@@ -479,6 +478,7 @@ export function Overview(props: OverviewProps) {
         resolvedReturnFocus?.classList.contains("search-button") === true;
       detailReturnScroll = { x: window.scrollX, y: window.scrollY };
     }
+    if (updateRoute) applyRouteUpdate({ work: undefined, intake: id });
     unsubscribeWork?.();
     unsubscribeWork = undefined;
     unsubscribeIntake?.();
@@ -788,6 +788,8 @@ export function Overview(props: OverviewProps) {
   };
 
   onMount(() => {
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -879,6 +881,7 @@ export function Overview(props: OverviewProps) {
       }
     })();
     onCleanup(() => {
+      window.history.scrollRestoration = previousScrollRestoration;
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("pointerdown", onPointerDown);
     });
