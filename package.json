@@ -23,6 +23,7 @@
     "test": "npm run test:workspaces && npm run test:convex",
     "test:workspaces": "npm run test --workspaces --if-present",
     "test:convex": "vitest run convex/testing",
+    "verify:no-secrets": "node scripts/verify-no-secrets.mjs",
     "types": "wrangler types",
     "convex:codegen": "convex codegen",
     "convex:dev": "convex dev",
