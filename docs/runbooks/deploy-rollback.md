@@ -42,6 +42,14 @@ npm run deploy --workspace @dongo/web
 
 Verify all health/readiness routes from the [runbook index](README.md), then repeat email OTP, CLI device authorization, MCP discovery/login, one read, one idempotent write, web Intake/Attention, attachment, notification, and sync journeys.
 
+Run the public unauthenticated smoke gate with a real development project reference:
+
+```sh
+npm run smoke:dev -- --project-ref <public-project-ref>
+```
+
+Every check must pass. In particular, notification readiness is a release blocker even when its separate health endpoint is live.
+
 ## Worker rollback
 
 List recent deployments for the affected Worker:
