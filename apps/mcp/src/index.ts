@@ -201,8 +201,6 @@ function configuredWorker(env: DongoWorkerEnv): DongoMcpWorker {
             JSON.stringify({
               event: "auth_service_binding_failure",
               errorName: error instanceof Error ? error.name : "unknown",
-              errorMessage:
-                error instanceof Error ? error.message : "Non-Error rejection",
             }),
           );
           throw error;

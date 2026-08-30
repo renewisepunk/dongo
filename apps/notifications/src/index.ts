@@ -197,10 +197,10 @@ export default {
     } catch (error) {
       console.error(
         JSON.stringify({
-          message: "notification delivery failed unexpectedly",
+          event: "notification_delivery_failure",
           path: url.pathname,
           ray: request.headers.get("cf-ray"),
-          error: error instanceof Error ? error.message : "unknown",
+          errorName: error instanceof Error ? error.name : "UnknownError",
         }),
       );
       return json(

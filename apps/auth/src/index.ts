@@ -92,8 +92,6 @@ export default {
         event: "authorization_server_failure",
         requestId,
         errorName: error instanceof Error ? error.name : "UnknownError",
-        errorMessage:
-          error instanceof Error ? error.message : "Non-Error rejection",
       }));
       return securityHeaders(
         json({ error: "authorization_server_failure", requestId }, 500),

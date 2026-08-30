@@ -130,18 +130,6 @@ function json(
   });
 }
 
-function safeDiagnosticMessage(error: unknown): string {
-  const source =
-    error instanceof Error && error.cause instanceof Error
-      ? error.cause
-      : error;
-  if (!(source instanceof Error)) return "Non-error failure";
-  return source.message
-    .replace(/https?:\/\/[^\s"']+/giu, "<url>")
-    .replace(/[A-Za-z0-9_-]{32,}/gu, "<opaque>")
-    .slice(0, 240);
-}
-
 function secureResponse(
   response: Response,
   request: Request,
@@ -1205,7 +1193,6 @@ export function createFilesWorker(options: FilesWorkerOptions): {
               requestId,
               attachmentId: multipart.attachmentId,
               errorName: error instanceof Error ? error.name : "UnknownError",
-              errorMessage: safeDiagnosticMessage(error),
             }));
             await options.store.delete(verified.storageKey).catch(() => undefined);
             throw error;
@@ -1358,7 +1345,6 @@ export function createFilesWorker(options: FilesWorkerOptions): {
               requestId,
               attachmentId: uploadId,
               errorName: error instanceof Error ? error.name : "UnknownError",
-              errorMessage: safeDiagnosticMessage(error),
             }));
             try {
               await options.store.delete(verified.storageKey);

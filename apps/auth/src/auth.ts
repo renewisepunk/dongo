@@ -105,8 +105,6 @@ function tokenPinning(env: AuthWorkerEnv) {
         event: "oauth_token_issuance_failure",
         phase,
         errorName: error instanceof Error ? error.name : "UnknownError",
-        errorMessage:
-          error instanceof Error ? error.message : "Non-Error rejection",
       }));
       throw error;
     }

@@ -661,25 +661,39 @@ describe("attachment edge routes", () => {
   });
 
   it("deletes the exact R2 object when post-upload finalization fails", async () => {
+    const privateFailure =
+      "finalization unavailable for owner@example.test with token short-secret";
     const finalizer: AttachmentFinalizer = {
       async finalize() {
-        throw new Error("finalization unavailable");
+        throw new Error(privateFailure);
       },
     };
     const { worker, store } = fixture({ finalizer });
-    const response = await worker.fetch(new Request(uploadUrl(), {
-      method: "PUT",
-      headers: {
-        "content-length": "5",
-        "content-type": "text/plain",
-        "x-dongo-content-sha256": CHECKSUM,
-      },
-      body: new TextEncoder().encode("hello"),
-    }));
+    const logs: string[] = [];
+    const originalConsoleError = console.error;
+    console.error = (...values: unknown[]) => {
+      logs.push(values.map(String).join(" "));
+    };
+    let response: Response;
+    try {
+      response = await worker.fetch(new Request(uploadUrl(), {
+        method: "PUT",
+        headers: {
+          "content-length": "5",
+          "content-type": "text/plain",
+          "x-dongo-content-sha256": CHECKSUM,
+        },
+        body: new TextEncoder().encode("hello"),
+      }));
+    } finally {
+      console.error = originalConsoleError;
+    }
 
     assert.equal(response.status, 500);
     assert.equal(store.puts.length, 1);
     assert.deepEqual(store.deletes, [STORAGE_KEY]);
+    assert.equal(logs.some((line) => line.includes(privateFailure)), false);
+    assert.ok(logs.some((line) => line.includes("attachment_upload_finalize_failed")));
   });
 
   it("does not touch R2 when upload headers or the URL signature mismatch", async () => {
