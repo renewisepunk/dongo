@@ -336,6 +336,12 @@ export function createAuthorizationServer(env: AuthWorkerEnv) {
         refreshTokenExpiresIn: 30 * 24 * 60 * 60,
         refreshTokenReuseInterval: 0,
         codeExpiresIn: 300,
+        rateLimit: {
+          // A device client polls every five seconds. Keep the token endpoint
+          // bounded while leaving room for the independently authenticated
+          // CLI, Codex, Claude, and inspector flows in the compatibility gate.
+          token: { window: 60, max: 60 },
+        },
         grantTypes: [
           "authorization_code",
           "refresh_token",

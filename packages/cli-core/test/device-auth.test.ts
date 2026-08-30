@@ -164,6 +164,48 @@ test("temporary non-JSON polling failures retry until approval", async () => {
   assert.equal((await client.authorize()).accessToken, "access-secret");
 });
 
+test("provider throttling without an OAuth error body backs off like slow_down", async () => {
+  let now = 0;
+  const sleeps: number[] = [];
+  const slowDowns: number[] = [];
+  const responses = [
+    Response.json({
+      device_code: "device-secret",
+      user_code: "ABCD-EFGH",
+      verification_uri: "https://dev.dongo.so/device",
+      verification_uri_complete: "https://dev.dongo.so/device?user_code=ABCD-EFGH",
+      expires_in: 60,
+      interval: 1,
+    }),
+    new Response(JSON.stringify({ message: "Too many requests" }), {
+      status: 429,
+      headers: { "content-type": "text/plain" },
+    }),
+    Response.json({ access_token: "access-secret", expires_in: 900 }),
+  ];
+  const client = new DeviceAuthorizationClient({
+    deviceAuthorizationEndpoint: "https://dev.dongo.so/api/auth/device/code",
+    tokenEndpoint: "https://dev.dongo.so/api/auth/oauth2/token",
+    clientId: "dongo-cli",
+    resource: "https://dev.dongo.so/api/agent/v1",
+    scopes: ["dongo:work:read"],
+    browserOpener: { open: async () => true },
+    events: { onSlowDown: (seconds) => slowDowns.push(seconds) },
+    clock: {
+      now: () => now,
+      sleep: async (milliseconds) => {
+        sleeps.push(milliseconds);
+        now += milliseconds;
+      },
+    },
+    fetch: async () => responses.shift() ?? new Response(null, { status: 500 }),
+  });
+
+  assert.equal((await client.authorize()).accessToken, "access-secret");
+  assert.deepEqual(sleeps, [1_000, 6_000]);
+  assert.deepEqual(slowDowns, [6]);
+});
+
 test("cancellation is deterministic and never stores a credential", async () => {
   const controller = new AbortController();
   const client = new DeviceAuthorizationClient({

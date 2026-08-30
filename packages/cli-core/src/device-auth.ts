@@ -245,7 +245,16 @@ export class DeviceAuthorizationClient {
       try {
         body = await parseJson(response);
       } catch (error) {
-        if (response.status >= 500 || response.status === 429) {
+        if (response.status === 429) {
+          const retryAfter = Number(response.headers.get("retry-after"));
+          intervalSeconds = Math.max(
+            intervalSeconds + 5,
+            Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 0,
+          );
+          this.#options.events?.onSlowDown?.(intervalSeconds);
+          continue;
+        }
+        if (response.status >= 500) {
           this.#options.events?.onNetworkRetry?.("Authorization server is temporarily unavailable; retrying until the request expires.");
           continue;
         }
@@ -253,7 +262,16 @@ export class DeviceAuthorizationClient {
       }
       const error = oauthError(body);
       if (response.ok && !error) return this.#parseToken(body);
-      if (!error && (response.status >= 500 || response.status === 429)) {
+      if (response.status === 429 && error?.code !== "slow_down") {
+        const retryAfter = Number(response.headers.get("retry-after"));
+        intervalSeconds = Math.max(
+          intervalSeconds + 5,
+          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 0,
+        );
+        this.#options.events?.onSlowDown?.(intervalSeconds);
+        continue;
+      }
+      if (!error && response.status >= 500) {
         this.#options.events?.onNetworkRetry?.("Authorization server is temporarily unavailable; retrying until the request expires.");
         continue;
       }

@@ -10,8 +10,11 @@
   ],
   "scripts": {
     "build": "npm run build --workspace @dongo/web",
-    "check": "npm run check:landing && npm run check --workspaces --if-present",
+    "check": "npm run check:landing && npm run check:workspaces && npm run typecheck:workspaces && npm run check:convex",
     "check:landing": "tsc --noEmit && wrangler deploy --dry-run",
+    "check:workspaces": "npm run check --workspaces --if-present",
+    "typecheck:workspaces": "npm run typecheck --workspaces --if-present",
+    "check:convex": "tsc -p convex/tsconfig.json --noEmit",
     "deploy": "npm run deploy:landing",
     "deploy:dev": "npm run deploy --workspace @dongo/web",
     "deploy:landing": "wrangler deploy",
