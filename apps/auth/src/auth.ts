@@ -11,6 +11,7 @@ import { dongoHumanBridge } from "./bridge-plugin";
 import type { AuthWorkerEnv } from "./env";
 import {
   bindOAuthGrant,
+  consentReferenceIdForProject,
   decodePinnedAccessToken,
   encodePinnedAccessToken,
   ACCESS_TOKEN_PREFIX,
@@ -367,7 +368,11 @@ export function createAuthorizationServer(env: AuthWorkerEnv) {
             ) {
               throw new Error("Select a Dongo project before authorizing");
             }
-            return `dongo-grant:${projectRef}:${crypto.randomUUID()}`;
+            // Better Auth invokes this callback once when it stores consent and
+            // again when it immediately checks that consent. The reference must
+            // therefore be stable for this user/client/project tuple. The
+            // provider grant ID separately includes the client identity.
+            return consentReferenceIdForProject(projectRef);
           },
         },
         extensions: [

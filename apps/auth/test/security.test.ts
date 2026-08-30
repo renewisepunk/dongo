@@ -10,6 +10,7 @@ import {
 } from "../src/security";
 import {
   ACCESS_TOKEN_PREFIX,
+  consentReferenceIdForProject,
   decodePinnedAccessToken,
   decodePinnedRefreshToken,
   encodePinnedAccessToken,
@@ -135,6 +136,9 @@ describe("authorization boundary security", () => {
   });
 
   it("pins project selection to an exact MCP resource", async () => {
+    const consentReference = consentReferenceIdForProject("project_123");
+    expect(consentReferenceIdForProject("project_123")).toBe(consentReference);
+    expect(consentReference).toBe("dongo-consent:project_123");
     const projectRef = projectRefForGrant({
       publicOrigin: "https://dev.dongo.so",
       resources: ["https://dev.dongo.so/p/project_123/mcp"],
@@ -149,6 +153,26 @@ describe("authorization boundary security", () => {
       projectRef,
       resource: "https://dev.dongo.so/api/agent/v1",
     })).resolves.toMatch(/^dongo-device:[0-9a-f]{64}$/);
+
+    const firstClientGrant = await providerGrantId({
+      issuer: "https://dev.dongo.so/api/auth",
+      subject: "profile_1",
+      clientId: "codex-client",
+      projectRef,
+      resource: "https://dev.dongo.so/p/project_123/mcp",
+      referenceId: consentReference,
+    });
+    const secondClientGrant = await providerGrantId({
+      issuer: "https://dev.dongo.so/api/auth",
+      subject: "profile_1",
+      clientId: "claude-client",
+      projectRef,
+      resource: "https://dev.dongo.so/p/project_123/mcp",
+      referenceId: consentReference,
+    });
+    expect(firstClientGrant).toMatch(/^dongo-oauth:[0-9a-f]{64}$/);
+    expect(secondClientGrant).toMatch(/^dongo-oauth:[0-9a-f]{64}$/);
+    expect(firstClientGrant).not.toBe(secondClientGrant);
   });
 
   it("renders matching plain-text and HTML OTP messages", () => {

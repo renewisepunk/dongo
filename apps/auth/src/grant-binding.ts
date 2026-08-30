@@ -5,7 +5,8 @@ import { z } from "zod";
 
 const encoder = new TextEncoder();
 const MCP_RESOURCE = /^\/p\/([A-Za-z0-9][A-Za-z0-9_-]{2,127})\/mcp$/;
-const REFERENCE_ID = /^dongo-grant:([A-Za-z0-9][A-Za-z0-9_-]{2,127}):([0-9a-f-]{36})$/;
+const LEGACY_GRANT_REFERENCE = /^dongo-grant:([A-Za-z0-9][A-Za-z0-9_-]{2,127}):([0-9a-f-]{36})$/;
+const CONSENT_REFERENCE = /^dongo-consent:([A-Za-z0-9][A-Za-z0-9_-]{2,127})$/;
 export const ACCESS_TOKEN_PREFIX = "dgo_at_";
 export const REFRESH_TOKEN_PREFIX = "dgo_rt_";
 
@@ -44,6 +45,19 @@ export interface BindGrantInput {
 
 export interface PinnedGrantContext extends BindGrantInput {
   binding: GrantBinding;
+}
+
+export function consentReferenceIdForProject(projectRef: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/.test(projectRef)) {
+    throw new Error("Invalid project reference for OAuth consent");
+  }
+  return `dongo-consent:${projectRef}`;
+}
+
+function referencedProject(referenceId: string | undefined): string | undefined {
+  if (!referenceId) return undefined;
+  return CONSENT_REFERENCE.exec(referenceId)?.[1]
+    ?? LEGACY_GRANT_REFERENCE.exec(referenceId)?.[1];
 }
 
 const bindingSchema = z.object({
@@ -106,11 +120,9 @@ export function projectRefForGrant(input: {
   }
 
   const mcpProject = MCP_RESOURCE.exec(resource.pathname)?.[1];
-  const referencedProject = input.referenceId
-    ? REFERENCE_ID.exec(input.referenceId)?.[1]
-    : undefined;
+  const consentProject = referencedProject(input.referenceId);
   if (mcpProject !== undefined) {
-    if (referencedProject !== undefined && referencedProject !== mcpProject) {
+    if (consentProject !== undefined && consentProject !== mcpProject) {
       throw new Error("OAuth consent project does not match the MCP resource");
     }
     if (input.activeProjectRef !== undefined && input.activeProjectRef !== mcpProject) {
@@ -134,18 +146,23 @@ export async function providerGrantId(input: {
   resource: string;
 }): Promise<string> {
   if (input.referenceId) {
-    const match = REFERENCE_ID.exec(input.referenceId);
-    if (!match || match[1] !== input.projectRef) {
+    if (referencedProject(input.referenceId) !== input.projectRef) {
       throw new Error("OAuth grant reference is invalid");
     }
-    return input.referenceId;
   }
   const digest = await sha256Hex(
     encoder.encode(
-      [input.issuer, input.subject, input.clientId, input.projectRef, input.resource].join("\0"),
+      [
+        input.issuer,
+        input.subject,
+        input.clientId,
+        input.projectRef,
+        input.resource,
+        input.referenceId ?? "device",
+      ].join("\0"),
     ),
   );
-  return `dongo-device:${digest}`;
+  return `${input.referenceId ? "dongo-oauth" : "dongo-device"}:${digest}`;
 }
 
 function isBinding(value: unknown): value is GrantBindingWire {
