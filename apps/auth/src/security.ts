@@ -4,6 +4,9 @@ const encoder = new TextEncoder();
 const MAX_METADATA_BYTES = 5 * 1_024;
 const METADATA_TIMEOUT_MS = 5_000;
 const INTERNAL_REQUEST_WINDOW_MS = 60_000;
+const CLAUDE_CODE_CLIENT_ID =
+  "https://claude.ai/oauth/claude-code-client-metadata";
+const CLAUDE_CODE_BASE_REDIRECT = "http://localhost/callback";
 
 function ownedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);
@@ -142,7 +145,84 @@ function metadataResponseHeaders(source: Headers): Headers {
   return headers;
 }
 
-export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
+export function claudeLoopbackRedirectForRequest(
+  request: Request | undefined,
+): string | undefined {
+  if (!request) return undefined;
+  const authorizationUrl = new URL(request.url);
+  if (
+    authorizationUrl.pathname !== "/api/auth/oauth2/authorize" ||
+    authorizationUrl.searchParams.get("client_id") !== CLAUDE_CODE_CLIENT_ID
+  ) {
+    return undefined;
+  }
+  const requested = authorizationUrl.searchParams.get("redirect_uri");
+  if (!requested) return undefined;
+  let redirect: URL;
+  try {
+    redirect = new URL(requested);
+  } catch {
+    return undefined;
+  }
+  const port = Number(redirect.port);
+  if (
+    redirect.protocol !== "http:" ||
+    redirect.hostname !== "localhost" ||
+    redirect.pathname !== "/callback" ||
+    redirect.port === "" ||
+    !Number.isInteger(port) ||
+    port < 1 ||
+    port > 65_535 ||
+    redirect.username !== "" ||
+    redirect.password !== "" ||
+    redirect.search !== "" ||
+    redirect.hash !== ""
+  ) {
+    return undefined;
+  }
+  return redirect.toString();
+}
+
+function addClaudeLoopbackRedirect(
+  bytes: Uint8Array,
+  clientId: string,
+  requestedRedirect: string | undefined,
+): Uint8Array {
+  if (clientId !== CLAUDE_CODE_CLIENT_ID || !requestedRedirect) return bytes;
+  let metadata: unknown;
+  try {
+    metadata = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return bytes;
+  }
+  if (!metadata || typeof metadata !== "object") return bytes;
+  const record = metadata as {
+    client_id?: unknown;
+    redirect_uris?: unknown;
+  };
+  if (
+    record.client_id !== CLAUDE_CODE_CLIENT_ID ||
+    !Array.isArray(record.redirect_uris) ||
+    !record.redirect_uris.every((value) => typeof value === "string") ||
+    !record.redirect_uris.includes(CLAUDE_CODE_BASE_REDIRECT) ||
+    record.redirect_uris.includes(requestedRedirect)
+  ) {
+    return bytes;
+  }
+  const adjusted = encoder.encode(JSON.stringify({
+    ...record,
+    redirect_uris: [...record.redirect_uris, requestedRedirect],
+  }));
+  if (adjusted.byteLength > MAX_METADATA_BYTES) {
+    throw new Error("Client metadata response is too large");
+  }
+  return adjusted;
+}
+
+export function createMetadataFetcher(
+  allowedSuffixes: readonly string[],
+  claudeLoopbackRedirect?: string,
+) {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const sourceRequest = input instanceof Request ? input : undefined;
     const rawUrl = sourceRequest
@@ -225,7 +305,11 @@ export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
     let body: ArrayBuffer | null = null;
     if (method !== "HEAD") {
       try {
-        body = ownedArrayBuffer(await readBoundedMetadataBody(response));
+        body = ownedArrayBuffer(addClaudeLoopbackRedirect(
+          await readBoundedMetadataBody(response),
+          url.toString(),
+          claudeLoopbackRedirect,
+        ));
       } catch (error) {
         console.warn(JSON.stringify({
           event: "cimd_metadata_body_failure",

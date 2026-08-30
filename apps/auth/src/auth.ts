@@ -23,7 +23,10 @@ import {
   type BindGrantInput,
   type PinnedGrantContext,
 } from "./grant-binding";
-import { createMetadataFetcher } from "./security";
+import {
+  claudeLoopbackRedirectForRequest,
+  createMetadataFetcher,
+} from "./security";
 
 const AGENT_SCOPES = [
   "dongo:work:read",
@@ -260,8 +263,12 @@ function parseSuffixes(value: string): string[] {
     .filter(Boolean);
 }
 
-export function createAuthorizationServer(env: AuthWorkerEnv) {
+export function createAuthorizationServer(
+  env: AuthWorkerEnv,
+  request?: Request,
+) {
   const metadataSuffixes = parseSuffixes(env.CIMD_ALLOWED_HOST_SUFFIXES);
+  const claudeLoopbackRedirect = claudeLoopbackRedirectForRequest(request);
   const staticClient = staticCliDiscovery();
   const pinning = tokenPinning(env);
   return betterAuth({
@@ -388,7 +395,10 @@ export function createAuthorizationServer(env: AuthWorkerEnv) {
         deviceCodeLength: 48,
       }),
       cimd({
-        fetchClientMetadataResource: createMetadataFetcher(metadataSuffixes),
+        fetchClientMetadataResource: createMetadataFetcher(
+          metadataSuffixes,
+          claudeLoopbackRedirect,
+        ),
         metadataProfile: "mcp-2026-07-28",
         metadataRevalidationInterval: "10m",
         maxCacheEntries: 1_000,

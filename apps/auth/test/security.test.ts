@@ -3,6 +3,7 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   allowedMetadataHostname,
+  claudeLoopbackRedirectForRequest,
   createMetadataFetcher,
   safeReturnTo,
   signInternalRequest,
@@ -118,6 +119,53 @@ describe("authorization boundary security", () => {
     await expect(
       fetchMetadata("https://claude.ai/oauth/claude-code-client-metadata"),
     ).rejects.toThrow("redirects are not allowed");
+  });
+
+  it("admits only Claude Code's exact port-bearing localhost callback", () => {
+    const authorize = (clientId: string, redirectUri: string) =>
+      new Request(`https://dev.dongo.so/api/auth/oauth2/authorize?${new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+      })}`);
+    expect(claudeLoopbackRedirectForRequest(authorize(
+      "https://claude.ai/oauth/claude-code-client-metadata",
+      "http://localhost:3118/callback",
+    ))).toBe("http://localhost:3118/callback");
+    for (const [clientId, redirectUri] of [
+      ["https://attacker.example/client.json", "http://localhost:3118/callback"],
+      ["https://claude.ai/oauth/claude-code-client-metadata", "http://localhost/callback"],
+      ["https://claude.ai/oauth/claude-code-client-metadata", "http://localhost:3118/other"],
+      ["https://claude.ai/oauth/claude-code-client-metadata", "http://localhost:3118/callback?x=1"],
+      ["https://claude.ai/oauth/claude-code-client-metadata", "https://localhost:3118/callback"],
+    ]) {
+      expect(claudeLoopbackRedirectForRequest(authorize(clientId!, redirectUri!)))
+        .toBeUndefined();
+    }
+  });
+
+  it("adds only the validated Claude callback to Claude's fetched metadata", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({
+      client_id: "https://claude.ai/oauth/claude-code-client-metadata",
+      client_name: "Claude Code",
+      redirect_uris: [
+        "http://localhost/callback",
+        "http://127.0.0.1/callback",
+      ],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    })));
+    const response = await createMetadataFetcher(
+      ["claude.ai"],
+      "http://localhost:3118/callback",
+    )("https://claude.ai/oauth/claude-code-client-metadata");
+    await expect(response.json()).resolves.toMatchObject({
+      redirect_uris: [
+        "http://localhost/callback",
+        "http://127.0.0.1/callback",
+        "http://localhost:3118/callback",
+      ],
+    });
   });
 
   it("verifies short-lived issuer and audience-bound human assertions", async () => {

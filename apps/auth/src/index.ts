@@ -85,7 +85,7 @@ export default {
           requestId,
         );
       }
-      const auth = createAuthorizationServer(env);
+      const auth = createAuthorizationServer(env, request);
       return securityHeaders(await auth.handler(request), requestId);
     } catch (error) {
       console.error(JSON.stringify({
