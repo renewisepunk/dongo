@@ -24,7 +24,22 @@ const scopeCopy: Record<string, string> = {
   offline_access: "Stay signed in securely until you revoke this installation.",
 };
 
-export default function DeviceAuthorizationRoute() {
+export type DeviceAuthorizationRouteDependencies = {
+  humanSession: () => Promise<{
+    user: { email?: string; name: string };
+  } | null>;
+  bridgeAuthorizationSession: typeof bridgeAuthorizationSession;
+  getDeviceRequest: typeof getDeviceRequest;
+  listAuthorizableProjects: typeof listAuthorizableProjects;
+  selectAuthorizationProject: typeof selectAuthorizationProject;
+  decideDeviceRequest: typeof decideDeviceRequest;
+};
+
+export type DeviceAuthorizationRouteProps = {
+  dependencies?: Partial<DeviceAuthorizationRouteDependencies>;
+};
+
+export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRouteProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams<{ user_code?: string }>();
@@ -36,6 +51,12 @@ export default function DeviceAuthorizationRoute() {
   const [projectRef, setProjectRef] = createSignal("");
   const [account, setAccount] = createSignal("");
   const [error, setError] = createSignal("");
+  const loadHumanSession = props.dependencies?.humanSession ?? humanSession;
+  const bridgeSession = props.dependencies?.bridgeAuthorizationSession ?? bridgeAuthorizationSession;
+  const loadDeviceRequest = props.dependencies?.getDeviceRequest ?? getDeviceRequest;
+  const loadProjects = props.dependencies?.listAuthorizableProjects ?? listAuthorizableProjects;
+  const chooseProject = props.dependencies?.selectAuthorizationProject ?? selectAuthorizationProject;
+  const saveDecision = props.dependencies?.decideDeviceRequest ?? decideDeviceRequest;
   const currentReturnTo = () => `${location.pathname}${location.search}`;
   const selectedProject = createMemo(() => projects().find((project) => project.publicRef === projectRef()));
 
@@ -50,16 +71,16 @@ export default function DeviceAuthorizationRoute() {
     setState("loading");
     setError("");
     try {
-      const session = await humanSession();
+      const session = await loadHumanSession();
       if (!session) {
         navigate(loginHref(`/device?user_code=${encodeURIComponent(formatUserCode(code))}`), { replace: true });
         return;
       }
       setAccount(session.user.email || session.user.name);
-      await bridgeAuthorizationSession(`/device?user_code=${encodeURIComponent(formatUserCode(code))}`);
+      await bridgeSession(`/device?user_code=${encodeURIComponent(formatUserCode(code))}`);
       const [deviceRequest, availableProjects] = await Promise.all([
-        getDeviceRequest(code),
-        listAuthorizableProjects(),
+        loadDeviceRequest(code),
+        loadProjects(),
       ]);
       if (deviceRequest.status !== "pending") {
         throw new AuthorizationFlowError("conflict", "This authorization request has already been completed.");
@@ -90,8 +111,8 @@ export default function DeviceAuthorizationRoute() {
     setState("loading");
     setError("");
     try {
-      if (accept) await selectAuthorizationProject(projectRef(), currentReturnTo());
-      await decideDeviceRequest(userCode(), accept);
+      if (accept) await chooseProject(projectRef(), currentReturnTo());
+      await saveDecision(userCode(), accept);
       setState(accept ? "approved" : "denied");
     } catch (cause) {
       setError(cause instanceof AuthorizationFlowError ? cause.message : "The authorization decision could not be saved.");

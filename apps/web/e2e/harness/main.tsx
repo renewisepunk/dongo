@@ -3,6 +3,7 @@ import { render } from "solid-js/web";
 import { Overview } from "../../src/features/overview/Overview";
 import AuthCallbackRoute from "../../src/routes/auth/callback";
 import EmailCodeRoute from "../../src/routes/auth/code";
+import DeviceAuthorizationRoute from "../../src/routes/device";
 import LoginRoute from "../../src/routes/login";
 import OnboardingRoute from "../../src/routes/onboarding";
 import { connectFixtureProject, fixtureSession } from "./project-fixture";
@@ -106,6 +107,56 @@ const onboardingDependencies = {
   },
 };
 
+const deviceDependencies = {
+  async humanSession() {
+    const code = new URLSearchParams(window.location.search).get("user_code")?.replace(/-/g, "");
+    return code === "NOSSN000"
+      ? null
+      : { user: { name: "Fixture Owner", email: "fixture@example.test" } };
+  },
+  async bridgeAuthorizationSession(returnTo: string) {
+    document.documentElement.dataset.fixtureDeviceBridge = returnTo;
+    return returnTo;
+  },
+  async getDeviceRequest(userCode: string) {
+    if (userCode === "ERROR001") throw new Error("fixture request detail must stay hidden");
+    return {
+      userCode,
+      status: userCode === "USED0001" ? "approved" : "pending",
+      clientId: "dongo-cli",
+      scopes: ["dongo:work:read", "dongo:work:write", "offline_access"],
+      resources: ["https://dev.dongo.so/api/agent/v1"],
+    };
+  },
+  async listAuthorizableProjects() {
+    const code = new URLSearchParams(window.location.search).get("user_code")?.replace(/-/g, "");
+    return code === "NOPROJ00"
+      ? []
+      : [
+          {
+            publicRef: "fixture-project",
+            name: "Dongo",
+            slug: "dongo",
+            organizationName: "Fixture Studio",
+            organizationSlug: "fixture-studio",
+          },
+          {
+            publicRef: "companion-project",
+            name: "Companion",
+            slug: "companion",
+            organizationName: "Fixture Studio",
+            organizationSlug: "fixture-studio",
+          },
+        ];
+  },
+  async selectAuthorizationProject(publicRef: string, returnTo: string) {
+    document.documentElement.dataset.fixtureDeviceProject = JSON.stringify({ publicRef, returnTo });
+  },
+  async decideDeviceRequest(userCode: string, accept: boolean) {
+    document.documentElement.dataset.fixtureDeviceDecision = JSON.stringify({ userCode, accept });
+  },
+};
+
 function FixtureOverview() {
   return (
     <Overview
@@ -139,6 +190,7 @@ render(
       <Route path="/auth/code" component={FixtureEmailCode} />
       <Route path="/auth/callback" component={FixtureAuthCallback} />
       <Route path="/onboarding" component={() => <OnboardingRoute dependencies={onboardingDependencies} />} />
+      <Route path="/device" component={() => <DeviceAuthorizationRoute dependencies={deviceDependencies} />} />
       <Route path="*" component={FixtureOverview} />
     </Router>
   ),
