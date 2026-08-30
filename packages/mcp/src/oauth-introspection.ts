@@ -298,7 +298,7 @@ export class BetterAuthIntrospectionTokenVerifier implements DongoTokenVerifier 
           token_type_hint: "access_token",
         }),
         cache: "no-store",
-        redirect: "error",
+        redirect: "manual",
         signal: controller.signal,
       });
     } catch {

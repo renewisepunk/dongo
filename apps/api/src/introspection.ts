@@ -237,7 +237,7 @@ export class ApiIntrospectionTokenVerifier implements ApiTokenVerifier {
           token_type_hint: "access_token",
         }),
         cache: "no-store",
-        redirect: "error",
+        redirect: "manual",
         signal: controller.signal,
       });
       if (response.status !== 200) {

@@ -7,6 +7,9 @@
   "routes": [
     { "pattern": "dev.dongo.so/api/agent/v1/*", "zone_name": "dongo.so" }
   ],
+  "services": [
+    { "binding": "AUTH_SERVICE", "service": "dongo-auth-dev" }
+  ],
   "vars": {
     "API_RESOURCE": "https://dev.dongo.so/api/agent/v1",
     "ALLOWED_HOSTNAMES": "dev.dongo.so",

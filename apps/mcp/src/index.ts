@@ -170,6 +170,9 @@ function configuredWorker(env: DongoWorkerEnv): DongoMcpWorker {
   if (rateLimitBinding === undefined) {
     throw new Error("Required Worker binding MCP_RATE_LIMITER is absent");
   }
+  if (env.AUTH_SERVICE === undefined) {
+    throw new Error("Required Worker binding AUTH_SERVICE is absent");
+  }
 
   return createDongoMcpGateway({
     publicOrigin,
@@ -190,6 +193,21 @@ function configuredWorker(env: DongoWorkerEnv): DongoMcpWorker {
         env,
         "BETTER_AUTH_RESOURCE_CLIENT_SECRET",
       ),
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        try {
+          return await env.AUTH_SERVICE.fetch(new Request(input, init));
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              event: "auth_service_binding_failure",
+              errorName: error instanceof Error ? error.name : "unknown",
+              errorMessage:
+                error instanceof Error ? error.message : "Non-Error rejection",
+            }),
+          );
+          throw error;
+        }
+      }) as typeof fetch,
     }),
     operationExecutor: new ConvexHmacOperationExecutor({
       convexSiteUrl: new URL(requiredBinding(env, "CONVEX_SITE_URL")),

@@ -83,6 +83,13 @@ async function authenticateResourceClient(
     !expectedSecret ||
     !(await constantTimeEqual(credentials.clientSecret, expectedSecret))
   ) {
+    console.warn(
+      JSON.stringify({
+        event: "resource_introspection_client_rejected",
+        clientId: credentials.clientId,
+        recognizedClient: expectedSecret !== undefined,
+      }),
+    );
     return null;
   }
   return credentials.clientId;

@@ -65,6 +65,9 @@ function configuredWorker(env: DongoApiEnv): DongoApiWorker {
     throw new Error("Required Worker binding API_RATE_LIMITER is absent");
   }
   const issuer = requiredBinding(env, "AUTHORIZATION_SERVER_ISSUER");
+  if (env.AUTH_SERVICE === undefined) {
+    throw new Error("Required Worker binding AUTH_SERVICE is absent");
+  }
   return createDongoApiGateway({
     resource,
     allowedHostnames: commaSeparated(requiredBinding(env, "ALLOWED_HOSTNAMES")),
@@ -79,6 +82,8 @@ function configuredWorker(env: DongoApiEnv): DongoApiWorker {
         env,
         "BETTER_AUTH_RESOURCE_CLIENT_SECRET",
       ),
+      fetch: ((input: RequestInfo | URL, init?: RequestInit) =>
+        env.AUTH_SERVICE.fetch(new Request(input, init))) as typeof fetch,
     }),
     operationExecutor: new ApiConvexOperationExecutor({
       convexSiteUrl: new URL(requiredBinding(env, "CONVEX_SITE_URL")),

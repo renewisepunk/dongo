@@ -8,6 +8,9 @@
     { "pattern": "dev.dongo.so/p/*", "zone_name": "dongo.so" },
     { "pattern": "dev.dongo.so/.well-known/oauth-protected-resource/*", "zone_name": "dongo.so" }
   ],
+  "services": [
+    { "binding": "AUTH_SERVICE", "service": "dongo-auth-dev" }
+  ],
   "vars": {
     "PUBLIC_ORIGIN": "https://dev.dongo.so",
     "ALLOWED_HOSTNAMES": "dev.dongo.so",
