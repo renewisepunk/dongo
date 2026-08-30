@@ -419,6 +419,11 @@ const removeMemberReference = makeFunctionReference<
   { projectId: string; membershipId: string },
   { removed: true }
 >("domains/projects/index:removeMember");
+const addMemberReference = makeFunctionReference<
+  "mutation",
+  { projectId: string; email: string },
+  { membershipId: string; created: boolean; role: "owner" | "member" }
+>("domains/projects/index:addMember");
 const reserveUploadReference = makeFunctionReference<
   "action",
   {
@@ -1101,6 +1106,13 @@ export class ProjectDataConnection {
     await this.#client.mutation(removeMemberReference, {
       projectId: this.projectId,
       membershipId,
+    });
+  }
+
+  async addMember(email: string): Promise<{ created: boolean }> {
+    return await this.#client.mutation(addMemberReference, {
+      projectId: this.projectId,
+      email,
     });
   }
 

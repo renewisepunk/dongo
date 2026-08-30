@@ -407,6 +407,76 @@ export const updateOrganization = mutation({
   },
 });
 
+export const addMember = mutation({
+  args: { projectId: v.id("projects"), email: v.string() },
+  handler: async (ctx, args) => {
+    const principal = await requireHumanProject(ctx, args.projectId, {
+      owner: true,
+      allowArchived: true,
+    });
+    const email = requireString(args.email, "email", 320).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) {
+      fail("validation", "Enter a valid member email address");
+    }
+    const profiles = await ctx.db
+      .query("humanProfiles")
+      .withIndex("by_email", (query) => query.eq("email", email))
+      .take(2);
+    if (profiles.length !== 1) {
+      fail("not_found", "No unique Dongo account exists for that email");
+    }
+    const profile = profiles[0]!;
+    const organizationId = principal.project!.organizationId;
+    const existing = await ctx.db
+      .query("memberships")
+      .withIndex("by_organization_profile", (query) =>
+        query.eq("organizationId", organizationId).eq("profileId", profile._id),
+      )
+      .unique();
+    if (existing) {
+      return {
+        membershipId: existing._id,
+        created: false,
+        role: existing.role,
+      };
+    }
+    const now = Date.now();
+    const membershipId = await ctx.db.insert("memberships", {
+      organizationId,
+      profileId: profile._id,
+      role: "member",
+      createdAt: now,
+    });
+    const actor = await ctx.db
+      .query("actors")
+      .withIndex("by_organization_profile", (query) =>
+        query.eq("organizationId", organizationId).eq("profileId", profile._id),
+      )
+      .unique();
+    if (!actor) {
+      await ctx.db.insert("actors", {
+        organizationId,
+        type: "human",
+        name: profile.name,
+        avatarUrl: profile.avatarUrl,
+        profileId: profile._id,
+        createdAt: now,
+      });
+    } else if (actor.type !== "human") {
+      fail("unauthorized", "Member actor mapping is invalid");
+    }
+    await appendEvent(ctx, {
+      organizationId,
+      projectId: principal.project!._id,
+      actorId: principal.actor._id,
+      type: "membership.added",
+      data: { profileId: profile._id, role: "member" },
+      createdAt: now,
+    });
+    return { membershipId, created: true, role: "member" as const };
+  },
+});
+
 export const removeMember = mutation({
   args: {
     projectId: v.id("projects"),
@@ -428,16 +498,52 @@ export const removeMember = mutation({
       fail("forbidden", "The organization owner cannot be removed");
     }
     const now = Date.now();
+    const installations = await ctx.db
+      .query("installations")
+      .withIndex("by_organization_authorizer", (query) =>
+        query
+          .eq("organizationId", membership.organizationId)
+          .eq("authorizedByProfileId", membership.profileId),
+      )
+      .collect();
+    for (const installation of installations) {
+      if (installation.status !== "revoked") {
+        await ctx.db.patch(installation._id, {
+          status: "revoked",
+          revokedAt: now,
+          updatedAt: now,
+        });
+      }
+      const binding = await ctx.db
+        .query("oauthBindings")
+        .withIndex("by_installation", (query) =>
+          query.eq("installationId", installation._id),
+        )
+        .unique();
+      if (binding?.status === "active") {
+        await ctx.db.patch(binding._id, {
+          status: "revoked",
+          revokedAt: now,
+          updatedAt: now,
+        });
+      }
+    }
     await ctx.db.delete(membership._id);
     await appendEvent(ctx, {
       organizationId: membership.organizationId,
       projectId: principal.project!._id,
       actorId: principal.actor._id,
       type: "membership.removed",
-      data: { profileId: membership.profileId },
+      data: {
+        profileId: membership.profileId,
+        revokedInstallationCount: installations.length,
+      },
       createdAt: now,
     });
-    return { removed: true as const };
+    return {
+      removed: true as const,
+      revokedInstallationCount: installations.length,
+    };
   },
 });
 

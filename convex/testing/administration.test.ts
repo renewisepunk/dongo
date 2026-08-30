@@ -20,7 +20,156 @@ const memberIdentity = {
   name: "Project Member",
 };
 
+const invitedIdentity = {
+  tokenIdentifier: "https://human.example.test|admin-invited",
+  subject: "admin-invited",
+  issuer: "https://human.example.test",
+  email: "invited@example.test",
+  name: "Invited Member",
+};
+
 describe("project administration", () => {
+  it("adds an existing account once and revokes its installations on removal", async () => {
+    const root = convexTest(schema, modules);
+    const owner = root.withIdentity(ownerIdentity);
+    const invited = root.withIdentity({
+      ...invitedIdentity,
+      email: "INVITED@EXAMPLE.TEST",
+    });
+    const ownerProfile = await owner.mutation(
+      api.domains.identity.index.bootstrapCurrentUser,
+      {},
+    );
+    const invitedProfile = await invited.mutation(
+      api.domains.identity.index.bootstrapCurrentUser,
+      {},
+    );
+    const organization = await owner.mutation(
+      api.domains.projects.index.createPersonalOrganization,
+      { name: "Membership Test", slug: `membership-${crypto.randomUUID()}` },
+    );
+    const project = await owner.mutation(
+      internal.domains.projects.index.createProject,
+      {
+        organizationId: organization.organizationId,
+        name: "Membership Test",
+        slug: "membership",
+        identifierPrefix: "MEM",
+        executionMode: "manual",
+      },
+    );
+
+    await expect(owner.mutation(api.domains.projects.index.addMember, {
+      projectId: project.projectId,
+      email: "missing@example.test",
+    })).rejects.toThrow();
+    const added = await owner.mutation(api.domains.projects.index.addMember, {
+      projectId: project.projectId,
+      email: "INVITED@EXAMPLE.TEST",
+    });
+    expect(added).toMatchObject({ created: true, role: "member" });
+    const replay = await owner.mutation(api.domains.projects.index.addMember, {
+      projectId: project.projectId,
+      email: invitedIdentity.email,
+    });
+    expect(replay).toEqual({
+      membershipId: added.membershipId,
+      created: false,
+      role: "member",
+    });
+    await expect(invited.query(api.domains.projects.index.administration, {
+      projectId: project.projectId,
+    })).resolves.toMatchObject({ membershipRole: "member" });
+    await expect(invited.mutation(api.domains.projects.index.addMember, {
+      projectId: project.projectId,
+      email: ownerIdentity.email,
+    })).rejects.toThrow();
+
+    const grant = await root.run(async (ctx) => {
+      const now = Date.now();
+      const actorId = await ctx.db.insert("actors", {
+        organizationId: organization.organizationId,
+        type: "agent",
+        name: "Invited CLI",
+        agentType: "cli",
+        createdAt: now,
+      });
+      const installationId = await ctx.db.insert("installations", {
+        organizationId: organization.organizationId,
+        projectId: project.projectId,
+        actorId,
+        kind: "cli",
+        status: "active",
+        clientId: "invited-cli",
+        label: "Invited CLI",
+        resource: "https://dev.dongo.so/api/agent/v1",
+        scopes: ["dongo:work:read"],
+        authorizedByProfileId: invitedProfile.profileId,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.patch(actorId, { installationId });
+      const bindingId = await ctx.db.insert("oauthBindings", {
+        organizationId: organization.organizationId,
+        projectId: project.projectId,
+        installationId,
+        providerIssuer: "https://dev.dongo.so/api/auth",
+        providerGrantId: "invited-grant",
+        subject: invitedIdentity.subject,
+        clientId: "invited-cli",
+        resource: "https://dev.dongo.so/api/agent/v1",
+        scopes: ["dongo:work:read"],
+        status: "active",
+        authorizedByProfileId: invitedProfile.profileId,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return { bindingId, installationId };
+    });
+
+    const removed = await owner.mutation(api.domains.projects.index.removeMember, {
+      projectId: project.projectId,
+      membershipId: added.membershipId,
+    });
+    expect(removed).toEqual({ removed: true, revokedInstallationCount: 1 });
+    const state = await root.run(async (ctx) => ({
+      binding: await ctx.db.get(grant.bindingId),
+      installation: await ctx.db.get(grant.installationId),
+      membership: await ctx.db
+        .query("memberships")
+        .withIndex("by_organization_profile", (query) =>
+          query
+            .eq("organizationId", organization.organizationId)
+            .eq("profileId", invitedProfile.profileId),
+        )
+        .unique(),
+      invitedActor: await ctx.db
+        .query("actors")
+        .withIndex("by_organization_profile", (query) =>
+          query
+            .eq("organizationId", organization.organizationId)
+            .eq("profileId", invitedProfile.profileId),
+        )
+        .unique(),
+      ownerActor: await ctx.db
+        .query("actors")
+        .withIndex("by_organization_profile", (query) =>
+          query
+            .eq("organizationId", organization.organizationId)
+            .eq("profileId", ownerProfile.profileId),
+        )
+        .unique(),
+    }));
+    expect(state.membership).toBeNull();
+    expect(state.installation?.status).toBe("revoked");
+    expect(state.binding?.status).toBe("revoked");
+    expect(state.invitedActor?.type).toBe("human");
+    expect(state.ownerActor?.type).toBe("human");
+    await expect(invited.query(api.domains.projects.index.administration, {
+      projectId: project.projectId,
+    })).rejects.toThrow();
+  });
+
   it("serves member-safe data while enforcing owner mutations and quota truth", async () => {
     const root = convexTest(schema, modules);
     const owner = root.withIdentity(ownerIdentity);

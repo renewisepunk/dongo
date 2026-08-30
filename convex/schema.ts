@@ -135,6 +135,7 @@ export default defineSchema({
     revokedAt: v.optional(v.number()),
   })
     .index("by_project_status", ["projectId", "status"])
+    .index("by_organization_authorizer", ["organizationId", "authorizedByProfileId"])
     .index("by_actor", ["actorId"])
     .index("by_project_client", ["projectId", "clientId"]),
 

@@ -77,6 +77,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   const [repositoryUrl, setRepositoryUrl] = createSignal("");
   const [executionMode, setExecutionMode] = createSignal<"manual" | "autonomous">("manual");
   const [organizationName, setOrganizationName] = createSignal("");
+  const [memberEmail, setMemberEmail] = createSignal("");
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal("");
   const [status, setStatus] = createSignal("");
@@ -86,6 +87,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   const [revoking, setRevoking] = createSignal<string>();
   const [confirmRemove, setConfirmRemove] = createSignal<string>();
   const [removing, setRemoving] = createSignal<string>();
+  const [addingMember, setAddingMember] = createSignal(false);
   const [confirmArchive, setConfirmArchive] = createSignal(false);
   const [archiving, setArchiving] = createSignal(false);
   const [unarchiving, setUnarchiving] = createSignal(false);
@@ -266,6 +268,29 @@ export function ProjectSettings(props: ProjectSettingsProps) {
     }
   };
 
+  const addMember = async (event: SubmitEvent) => {
+    event.preventDefault();
+    if (!connection || addingMember() || !owner()) return;
+    const email = memberEmail().trim().toLowerCase();
+    if (!email || !email.includes("@")) {
+      setError("Enter the email for an existing Dongo account.");
+      return;
+    }
+    setAddingMember(true);
+    setError("");
+    setStatus("");
+    try {
+      const result = await connection.addMember(email);
+      await refreshAdministration();
+      setMemberEmail("");
+      setStatus(result.created ? "Member access added." : "That account is already a member.");
+    } catch {
+      setError("The member could not be added. Ask them to sign in to Dongo once, then try again.");
+    } finally {
+      setAddingMember(false);
+    }
+  };
+
   const archive = async () => {
     if (!connection || archiving()) return;
     setArchiving(true);
@@ -389,6 +414,19 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 </div>
                 <Show when={owner()}><button class="button" type="submit" disabled={savingOrganization()} style={{ "align-self": "flex-start" }}>{savingOrganization() ? "Saving…" : "Save organization"}</button></Show>
               </form>
+              <Show when={owner()}>
+                <form class="settings-section" onSubmit={addMember}>
+                  <div class="settings-section__title">Add member</div>
+                  <p class="note">Add someone who has already signed in to Dongo. New members receive the standard member role.</p>
+                  <div class="settings-actions">
+                    <div class="field-group" style={{ flex: 1 }}>
+                      <label class="field-label" for="member-email">Account email</label>
+                      <input class="input" id="member-email" type="email" autocomplete="email" value={memberEmail()} onInput={(event) => setMemberEmail(event.currentTarget.value)} placeholder="teammate@example.com" />
+                    </div>
+                    <button class="button" type="submit" disabled={addingMember()}>{addingMember() ? "Adding…" : "Add member"}</button>
+                  </div>
+                </form>
+              </Show>
               <div class="installation-list">
                 <For each={admin().members}>{(member) => (
                   <div class="installation-row">

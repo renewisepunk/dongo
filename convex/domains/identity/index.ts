@@ -13,12 +13,12 @@ export const bootstrapCurrentUser = mutation({
       .withIndex("by_auth_subject", (q) => q.eq("authSubject", subject))
       .unique();
     const now = Date.now();
+    const email = optionalString(identity.email, "email", 320)?.toLowerCase();
     const name = requireString(
-      identity.name?.trim() || identity.email?.trim() || "Dongo user",
+      identity.name?.trim() || email || "Dongo user",
       "name",
       240,
     );
-    const email = optionalString(identity.email, "email", 320);
     const avatarUrl = optionalString(identity.pictureUrl, "avatarUrl", 2_048);
     if (existing) {
       await ctx.db.patch(existing._id, { name, email, avatarUrl, updatedAt: now });
