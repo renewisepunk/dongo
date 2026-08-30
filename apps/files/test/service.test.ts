@@ -11,6 +11,7 @@ import {
   type AttachmentFinalizeInput,
   type AttachmentFinalizer,
   type AttachmentObjectStore,
+  type FilesRateLimiter,
   type MultipartUploadedPart,
   type StoreUploadOptions,
   type StoredAttachment,
@@ -286,7 +287,25 @@ class FakeFinalizer implements AttachmentFinalizer {
   }
 }
 
-function fixture(options?: { secret?: string; finalizer?: AttachmentFinalizer }) {
+class FakeRateLimiter implements FilesRateLimiter {
+  readonly keys: string[] = [];
+
+  constructor(
+    private readonly outcome: "allow" | "deny" | "fail" = "allow",
+  ) {}
+
+  async check(key: string): Promise<{ readonly allowed: boolean }> {
+    this.keys.push(key);
+    if (this.outcome === "fail") throw new Error("rate limiter unavailable");
+    return { allowed: this.outcome === "allow" };
+  }
+}
+
+function fixture(options?: {
+  secret?: string;
+  finalizer?: AttachmentFinalizer;
+  rateLimiter?: FilesRateLimiter;
+}) {
   const store = new FakeStore();
   const finalizer = options !== undefined && "finalizer" in options
     ? options.finalizer
@@ -299,6 +318,7 @@ function fixture(options?: { secret?: string; finalizer?: AttachmentFinalizer })
       : SECRET,
     store,
     finalizer,
+    rateLimiter: options?.rateLimiter ?? new FakeRateLimiter(),
     now: () => NOW,
   });
   return { worker, store, finalizer };
@@ -723,6 +743,46 @@ describe("attachment edge routes", () => {
     assert.equal(tampered.status, 403);
     assert.equal(store.puts.length, 0);
     assert.equal((finalizer as FakeFinalizer).calls.length, 0);
+  });
+
+  it("rate-limits valid capabilities before R2 access and fails closed", async () => {
+    const deniedLimiter = new FakeRateLimiter("deny");
+    const deniedFixture = fixture({ rateLimiter: deniedLimiter });
+    const invalid = downloadUrl({ signature: "invalid" });
+    const invalidResponse = await deniedFixture.worker.fetch(new Request(invalid));
+    assert.equal(invalidResponse.status, 403);
+    assert.deepEqual(deniedLimiter.keys, []);
+
+    const denied = await deniedFixture.worker.fetch(new Request(uploadUrl(), {
+      method: "PUT",
+      headers: {
+        "content-length": "5",
+        "content-type": "text/plain",
+        "x-dongo-content-sha256": CHECKSUM,
+      },
+      body: new TextEncoder().encode("hello"),
+    }));
+    assert.equal(denied.status, 429);
+    assert.equal(denied.headers.get("retry-after"), "60");
+    assert.deepEqual(await denied.json(), {
+      error: "rate_limited",
+      retryable: true,
+    });
+    assert.deepEqual(deniedLimiter.keys, [`upload:${ATTACHMENT_ID}`]);
+    assert.equal(deniedFixture.store.puts.length, 0);
+    assert.equal((deniedFixture.finalizer as FakeFinalizer).calls.length, 0);
+
+    const failedLimiter = new FakeRateLimiter("fail");
+    const failedFixture = fixture({ rateLimiter: failedLimiter });
+    const unavailable = await failedFixture.worker.fetch(new Request(downloadUrl()));
+    assert.equal(unavailable.status, 503);
+    assert.equal(unavailable.headers.get("retry-after"), "30");
+    assert.deepEqual(await unavailable.json(), {
+      error: "rate_limit_unavailable",
+      retryable: true,
+    });
+    assert.deepEqual(failedLimiter.keys, [`download:${ATTACHMENT_ID}`]);
+    assert.deepEqual(failedFixture.store.gets, []);
   });
 
   it("fails closed when secrets or the finalizer are absent", async () => {

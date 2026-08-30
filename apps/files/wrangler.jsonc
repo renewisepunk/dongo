@@ -18,6 +18,16 @@
     "ALLOWED_BROWSER_ORIGIN": "https://dev.dongo.so",
     "CONVEX_SITE_URL": "https://wandering-camel-662.convex.site"
   },
+  "ratelimits": [
+    {
+      "name": "FILES_RATE_LIMITER",
+      "namespace_id": "1003",
+      "simple": {
+        "limit": 180,
+        "period": 60
+      }
+    }
+  ],
   "observability": {
     "enabled": true,
     "logs": {

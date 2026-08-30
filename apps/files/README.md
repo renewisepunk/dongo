@@ -22,12 +22,17 @@ public listing or public R2 domain; objects are reachable only through the
   that exact R2 upload and removes any completed object.
 
 There is deliberately no object listing route and no browser-callable finalize
-route. Browser CORS is restricted to `https://dev.dongo.so`.
+route. Browser CORS is restricted to `https://dev.dongo.so`. Every valid
+download, upload, delete, and multipart capability is rate-limited by action
+and attachment before R2 access. Invalid signatures do not consume a valid
+capability's allowance, and limiter failure returns `503` without touching R2.
 
 ## Required configuration
 
 Wrangler config binds the development-only `dongo-dev-attachments` R2 bucket
-and the `wandering-camel-662` Convex development HTTP Actions origin. Set both
+and the `wandering-camel-662` Convex development HTTP Actions origin. The
+`FILES_RATE_LIMITER` namespace allows 180 requests per attachment/action per
+minute, enough for the bounded 64-part upload plus retries. Set both
 dashboard-managed Worker secrets before deployment:
 
 ```sh

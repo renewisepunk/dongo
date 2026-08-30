@@ -87,12 +87,17 @@ export interface AttachmentFinalizer {
   finalize(input: AttachmentFinalizeInput): Promise<void>;
 }
 
+export interface FilesRateLimiter {
+  check(key: string): Promise<{ readonly allowed: boolean }>;
+}
+
 export interface FilesWorkerOptions {
   readonly publicOrigin: URL;
   readonly allowedBrowserOrigin: string;
   readonly attachmentSigningSecret?: string;
   readonly store: AttachmentObjectStore;
   readonly finalizer?: AttachmentFinalizer;
+  readonly rateLimiter: FilesRateLimiter;
   readonly now?: () => number;
 }
 
@@ -800,6 +805,24 @@ function parseCompletedParts(
   return parts;
 }
 
+async function rateLimitResponse(
+  rateLimiter: FilesRateLimiter,
+  key: string,
+): Promise<Response | undefined> {
+  try {
+    const decision = await rateLimiter.check(key);
+    return decision.allowed
+      ? undefined
+      : json({ error: "rate_limited", retryable: true }, 429, {
+          "retry-after": "60",
+        });
+  } catch {
+    return json({ error: "rate_limit_unavailable", retryable: true }, 503, {
+      "retry-after": "30",
+    });
+  }
+}
+
 export function createFilesWorker(options: FilesWorkerOptions): {
   fetch(request: Request): Promise<Response>;
 } {
@@ -916,6 +939,18 @@ export function createFilesWorker(options: FilesWorkerOptions): {
               options.allowedBrowserOrigin,
             );
           }
+          const limited = await rateLimitResponse(
+            options.rateLimiter,
+            `download:${downloadId}`,
+          );
+          if (limited) {
+            return secureResponse(
+              limited,
+              request,
+              requestId,
+              options.allowedBrowserOrigin,
+            );
+          }
           const object = await options.store.get(verified.storageKey);
           if (object === null) {
             return secureResponse(
@@ -982,6 +1017,18 @@ export function createFilesWorker(options: FilesWorkerOptions): {
             if (verified === undefined) {
               return secureResponse(
                 json({ error: "invalid_or_expired_link" }, 403),
+                request,
+                requestId,
+                options.allowedBrowserOrigin,
+              );
+            }
+            const limited = await rateLimitResponse(
+              options.rateLimiter,
+              `multipart_create:${multipart.attachmentId}`,
+            );
+            if (limited) {
+              return secureResponse(
+                limited,
                 request,
                 requestId,
                 options.allowedBrowserOrigin,
@@ -1055,6 +1102,19 @@ export function createFilesWorker(options: FilesWorkerOptions): {
           if (verified === undefined) {
             return secureResponse(
               json({ error: "invalid_or_expired_link" }, 403),
+              request,
+              requestId,
+              options.allowedBrowserOrigin,
+            );
+          }
+
+          const limited = await rateLimitResponse(
+            options.rateLimiter,
+            `multipart_${multipart.action}:${multipart.attachmentId}`,
+          );
+          if (limited) {
+            return secureResponse(
+              limited,
               request,
               requestId,
               options.allowedBrowserOrigin,
@@ -1243,6 +1303,18 @@ export function createFilesWorker(options: FilesWorkerOptions): {
                 options.allowedBrowserOrigin,
               );
             }
+            const limited = await rateLimitResponse(
+              options.rateLimiter,
+              `delete:${uploadId}`,
+            );
+            if (limited) {
+              return secureResponse(
+                limited,
+                request,
+                requestId,
+                options.allowedBrowserOrigin,
+              );
+            }
             await options.store.delete(verified.storageKey);
             return secureResponse(
               json({ ok: true, attachmentId: uploadId, deleted: true }, 200),
@@ -1279,6 +1351,18 @@ export function createFilesWorker(options: FilesWorkerOptions): {
           if (verified === undefined) {
             return secureResponse(
               json({ error: "invalid_or_expired_link" }, 403),
+              request,
+              requestId,
+              options.allowedBrowserOrigin,
+            );
+          }
+          const limited = await rateLimitResponse(
+            options.rateLimiter,
+            `upload:${uploadId}`,
+          );
+          if (limited) {
+            return secureResponse(
+              limited,
               request,
               requestId,
               options.allowedBrowserOrigin,

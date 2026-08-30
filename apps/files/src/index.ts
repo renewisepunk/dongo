@@ -1,6 +1,7 @@
 import {
   createFilesWorker,
   type AttachmentObjectStore,
+  type FilesRateLimiter,
   type MultipartUploadedPart,
   type MultipartUploadHandle,
   type StoreUploadOptions,
@@ -147,6 +148,15 @@ class R2AttachmentObjectStore implements AttachmentObjectStore {
   }
 }
 
+class CloudflareFilesRateLimiter implements FilesRateLimiter {
+  constructor(private readonly binding: RateLimit) {}
+
+  async check(key: string): Promise<{ readonly allowed: boolean }> {
+    const result = await this.binding.limit({ key });
+    return { allowed: result.success };
+  }
+}
+
 export default {
   async fetch(request: Request, env: RuntimeEnv): Promise<Response> {
     const internalSecret = env.DONGO_INTERNAL_GATEWAY_SECRET;
@@ -162,6 +172,7 @@ export default {
       attachmentSigningSecret: env.DONGO_ATTACHMENT_URL_SIGNING_SECRET,
       store: new R2AttachmentObjectStore(env.ATTACHMENTS),
       finalizer,
+      rateLimiter: new CloudflareFilesRateLimiter(env.FILES_RATE_LIMITER),
     });
     return worker.fetch(request);
   },
