@@ -1,7 +1,6 @@
 import { jwtVerify, type JWTPayload } from "jose";
 
 const encoder = new TextEncoder();
-const MAX_METADATA_BYTES = 256 * 1024;
 const METADATA_TIMEOUT_MS = 5_000;
 const INTERNAL_REQUEST_WINDOW_MS = 60_000;
 
@@ -100,34 +99,6 @@ export function allowedMetadataHostname(
   });
 }
 
-async function readBounded(response: Response): Promise<Uint8Array> {
-  const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_METADATA_BYTES) {
-    throw new Error("Client metadata response is too large");
-  }
-  if (response.body === null) return new Uint8Array();
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > MAX_METADATA_BYTES) {
-      await reader.cancel("metadata response exceeded limit");
-      throw new Error("Client metadata response is too large");
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
-}
-
 export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
@@ -191,12 +162,11 @@ export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
     if (response.status >= 300 && response.status < 400) {
       throw new Error("Client metadata redirects are not allowed");
     }
-    const bytes = request.method === "HEAD" ? new Uint8Array() : await readBounded(response);
-    return new Response(ownedArrayBuffer(bytes), {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-    });
+    // The CIMD resolver owns content-type validation and a stricter 5 KB body
+    // limit. Returning the original response keeps content-encoding and stream
+    // state coherent; rebuilding a response after buffering can leave edge
+    // transport headers describing a body that has already been decoded.
+    return response;
   };
 }
 
