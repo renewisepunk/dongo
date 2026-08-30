@@ -9,6 +9,7 @@ Build and install the self-contained package archive so the command does not dep
 ```sh
 npm pack --workspace @dongo/cli
 npm install --global ./dongo-cli-0.1.0.tgz
+dongo --version
 dongo --help
 ```
 
@@ -33,6 +34,8 @@ dongo integrate codex|claude|generic [--apply]
 ```
 
 Add `--json` to receive one JSON object on stdout. Progress and the one complete browser approval link are written to stderr. The normal flow opens that link, waits for browser approval, stores the resulting credential, writes a non-secret project marker, and returns control to the terminal. `--no-browser` supports SSH/headless sessions by printing the same complete link while polling continues; no code or token needs to be copied into the CLI.
+
+`dongo --version` (or `dongo -V`) prints the installed package version. Combining it with `--json` returns the same version in the stable command envelope without accessing repository or credential state.
 
 ## Credential safety
 
