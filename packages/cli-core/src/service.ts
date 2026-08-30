@@ -48,6 +48,7 @@ export interface ConnectOptions {
   origin?: string;
   noBrowser?: boolean;
   projectName?: string;
+  projectRef?: string;
   repositoryUrl?: string;
   executionMode?: "manual" | "autonomous";
   events?: DeviceAuthorizationEvents;
@@ -122,6 +123,18 @@ export class CoreService {
       throw new CliCoreError({ code: "validation", message: "--repository-url must be a safe HTTP, HTTPS, or SSH repository URL.", exitCode: 2 });
     }
     const profile = credentialProfile(environment.productOrigin, repositoryRoot);
+    const requestedProjectRef = options.projectRef?.trim();
+    if (requestedProjectRef !== undefined && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/u.test(requestedProjectRef)) {
+      throw new CliCoreError({ code: "validation", message: "--project-ref must be a valid Dongo public project reference.", exitCode: 2 });
+    }
+    const existingMarker = await readProjectMarker(repositoryRoot);
+    const markerMatchesEnvironment = existingMarker
+      && existingMarker.productOrigin === environment.productOrigin
+      && existingMarker.issuer === environment.issuer
+      && existingMarker.apiBaseUrl === environment.apiBaseUrl
+      && existingMarker.apiResource === environment.apiResource
+      && existingMarker.credentialProfile === profile;
+    const projectRef = requestedProjectRef || (markerMatchesEnvironment ? existingMarker.publicProjectRef : undefined);
     const store = this.#secretStore();
     const auth = new DeviceAuthorizationClient({
       deviceAuthorizationEndpoint: environment.deviceAuthorizationEndpoint,
@@ -137,6 +150,7 @@ export class CoreService {
         name: projectName,
         repositoryUrl,
         executionMode: options.executionMode ?? "manual",
+        projectRef,
       },
       events: options.events,
       signal: options.signal,

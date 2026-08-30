@@ -144,6 +144,7 @@ const deviceDependencies = {
         slug: "dongo",
         organizationName: "Fixture Studio",
         organizationSlug: "fixture-studio",
+        repositoryUrl: "https://github.com/renewisepunk/dongo",
       },
       {
         publicRef: "companion-project",
@@ -151,6 +152,7 @@ const deviceDependencies = {
         slug: "companion",
         organizationName: "Fixture Studio",
         organizationSlug: "fixture-studio",
+        repositoryUrl: "https://github.com/renewisepunk/companion",
       },
     ];
   },

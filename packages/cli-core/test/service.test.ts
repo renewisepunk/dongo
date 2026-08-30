@@ -88,6 +88,9 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
   assert.doesNotMatch(marker, /access-secret|refresh-secret|device-secret|ABCD-EFGH/);
   assert.match(marker, /pub_dongo/);
 
+  await service.connect({ origin: "http://localhost:8787" });
+  assert.match(opened[1] ?? "", /[?&]project_ref=pub_dongo(?:&|$)/u);
+
   const markerRecord = JSON.parse(marker) as ProjectMarker;
   await writeProjectMarker(repositoryRoot, { ...markerRecord, apiBaseUrl: "https://credential-thief.example/api" });
   const callsBeforeTamperCheck = calls.length;

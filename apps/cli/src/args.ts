@@ -35,6 +35,7 @@ const VALUE_OPTIONS = new Set([
   "output",
   "parent-work-id",
   "project-name",
+  "project-ref",
   "revision",
   "repository-url",
   "selected-option",

@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 test("reviews and approves the exact terminal, project, resource, and scopes", async ({ page }) => {
-  await page.goto("/device?user_code=ABCD-EFGH");
+  const requestPath = "/device?user_code=ABCD-EFGH&project_ref=companion-project&project_name=Companion";
+  await page.goto(requestPath);
   await expect(page.getByRole("heading", { name: "Authorize Dongo CLI" })).toBeVisible();
   await expect(page.getByText("ABCD-EFGH", { exact: true })).toBeVisible();
   await expect(page.getByText("Dongo CLI · official client", { exact: true })).toBeVisible();
@@ -10,19 +11,33 @@ test("reviews and approves the exact terminal, project, resource, and scopes", a
   await expect(page.getByText("Read this project’s Intake, work, comments, and artifacts.")).toBeVisible();
   await expect(page.getByText("Stay signed in securely until you revoke this installation.")).toBeVisible();
 
-  await page.getByLabel("project").selectOption("companion-project");
+  await expect(page.getByText("Fixture Studio / Companion", { exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox")).toHaveCount(0);
+  await expect(page.getByText(/Project selected by the Dongo CLI/)).toBeVisible();
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("Approved — you can close this window", { exact: true })).toBeVisible();
   await expect(page.getByText("This page never displays access or refresh tokens.")).toBeVisible();
 
   await expect(page.locator("html")).toHaveAttribute(
     "data-fixture-device-project",
-    JSON.stringify({ publicRef: "companion-project", returnTo: "/device?user_code=ABCD-EFGH" }),
+    JSON.stringify({ publicRef: "companion-project", returnTo: requestPath }),
   );
   await expect(page.locator("html")).toHaveAttribute(
     "data-fixture-device-decision",
     JSON.stringify({ userCode: "ABCDEFGH", accept: true }),
   );
+});
+
+test("matches the agent proposal by repository and fails closed when context is ambiguous", async ({ page }) => {
+  await page.goto("/device?user_code=ABCD-EFGH&project_name=Dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo.git");
+  await expect(page.getByText("Fixture Studio / Dongo", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve" })).toBeEnabled();
+
+  await page.goto("/device?user_code=ABCD-EFGH");
+  await expect(page.getByText("No unambiguous project match", { exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("could not match this repository");
+  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
+  await expect(page.getByRole("combobox")).toHaveCount(0);
 });
 
 test("denies without binding a project or issuing a token", async ({ page }) => {

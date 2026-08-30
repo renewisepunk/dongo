@@ -167,6 +167,7 @@ test("connect forwards an explicit first-project proposal", async () => {
   let received: Record<string, unknown> | undefined;
   const exitCode = await runCli([
     "connect",
+    "--project-ref", "project_dongo",
     "--project-name", "Dongo",
     "--repository-url", "https://github.com/renewisepunk/dongo",
     "--execution-mode", "manual",
@@ -183,6 +184,7 @@ test("connect forwards an explicit first-project proposal", async () => {
   });
   assert.equal(exitCode, 0);
   assert.equal(received?.projectName, "Dongo");
+  assert.equal(received?.projectRef, "project_dongo");
   assert.equal(received?.repositoryUrl, "https://github.com/renewisepunk/dongo");
   assert.equal(received?.executionMode, "manual");
 });

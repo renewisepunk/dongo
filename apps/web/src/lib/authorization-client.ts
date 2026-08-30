@@ -18,6 +18,7 @@ export type AuthorizableProject = {
   slug: string;
   organizationName: string;
   organizationSlug: string;
+  repositoryUrl?: string;
 };
 
 export type DeviceRequest = {
@@ -39,7 +40,7 @@ type OAuthResult = { redirect?: boolean; url?: string };
 type ProjectGroup = {
   membership: { organizationId: string; role: "owner" | "member" };
   organization: { name: string; slug: string } | null;
-  projects: Array<{ _id?: string; publicRef: string; name: string; slug: string; archivedAt?: number }>;
+  projects: Array<{ _id?: string; publicRef: string; name: string; slug: string; repositoryUrl?: string; archivedAt?: number }>;
 };
 
 export type BootstrapResult = { profileId: string; created: boolean };
@@ -193,6 +194,7 @@ export async function listAuthorizableProjects(): Promise<AuthorizableProject[]>
             slug: project.slug,
             organizationName: group.organization!.name,
             organizationSlug: group.organization!.slug,
+            repositoryUrl: project.repositoryUrl,
           }))
       : []);
   } catch {

@@ -36,7 +36,7 @@ export interface CliDependencies {
 const HELP = `Dongo CLI
 
 Usage:
-  dongo connect [--environment development|production] [--origin URL] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
+  dongo connect [--environment development|production] [--origin URL] [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
   dongo ci setup [--environment development|production]
   dongo auth status
   dongo auth logout
@@ -55,6 +55,7 @@ Options:
   --version, -V                Print the installed CLI version
   --json                       Write one stable JSON result to stdout
   --no-browser                 Print the complete approval link without opening it
+  --project-ref REF            Bind the terminal to an exact existing project
   --project-name NAME          Override the inferred first-project name
   --repository-url URL         Override the inferred Git origin URL
   --execution-mode MODE        Create the first project in manual or autonomous mode
@@ -188,7 +189,7 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         }
         return 0;
       case "connect":
-        allowOnlyValues(parsed, ["project-name", "repository-url", "execution-mode"]);
+        allowOnlyValues(parsed, ["project-ref", "project-name", "repository-url", "execution-mode"]);
         requirePositionals(parsed, 1, "Usage: dongo connect [options]");
         const executionMode = option(parsed, "execution-mode");
         if (executionMode !== undefined && executionMode !== "manual" && executionMode !== "autonomous") {
@@ -198,6 +199,7 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           environment: parsed.environment,
           origin: parsed.origin,
           noBrowser: parsed.noBrowser,
+          projectRef: option(parsed, "project-ref"),
           projectName: option(parsed, "project-name"),
           repositoryUrl: option(parsed, "repository-url"),
           executionMode,

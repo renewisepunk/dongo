@@ -28,6 +28,56 @@ type FirstProjectProposal = {
   executionMode: "manual" | "autonomous";
 };
 
+type ProjectResolution = {
+  project?: AuthorizableProject;
+  strategy?: "reference" | "repository" | "name" | "only-project";
+};
+
+function repositoryKey(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value);
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) return undefined;
+    const pathname = parsed.pathname.replace(/\.git$/iu, "").replace(/\/+$/u, "");
+    return `${parsed.protocol}//${parsed.host.toLowerCase()}${pathname}`.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+function oneProject(projects: AuthorizableProject[]): AuthorizableProject | undefined {
+  return projects.length === 1 ? projects[0] : undefined;
+}
+
+export function resolveAgentSelectedProject(input: {
+  projects: AuthorizableProject[];
+  projectRef?: string;
+  projectName?: string;
+  repositoryUrl?: string;
+}): ProjectResolution {
+  const requestedRef = input.projectRef?.trim();
+  if (requestedRef) {
+    const project = input.projects.find((candidate) => candidate.publicRef === requestedRef);
+    if (project) return { project, strategy: "reference" };
+  }
+  const requestedRepository = repositoryKey(input.repositoryUrl);
+  if (requestedRepository) {
+    const matches = input.projects.filter((project) => repositoryKey(project.repositoryUrl) === requestedRepository);
+    const project = oneProject(matches);
+    if (project) return { project, strategy: "repository" };
+  }
+  const requestedName = input.projectName?.trim().toLowerCase();
+  if (requestedName) {
+    const matches = input.projects.filter((project) =>
+      project.name.trim().toLowerCase() === requestedName || project.slug.trim().toLowerCase() === requestedName
+    );
+    const project = oneProject(matches);
+    if (project) return { project, strategy: "name" };
+  }
+  const project = oneProject(input.projects);
+  return project ? { project, strategy: "only-project" } : {};
+}
+
 const scopeCopy: Record<string, string> = {
   "dongo:work:read": "Read this project’s Intake, work, comments, and artifacts.",
   "dongo:work:write": "Create, claim, and update work for this project.",
@@ -56,6 +106,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
   const location = useLocation();
   const [searchParams] = useSearchParams<{
     user_code?: string;
+    project_ref?: string;
     project_name?: string;
     repository_url?: string;
     execution_mode?: string;
@@ -65,7 +116,6 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
   const [state, setState] = createSignal<ApprovalState>(initialCode ? "loading" : "entry");
   const [request, setRequest] = createSignal<DeviceRequest>();
   const [projects, setProjects] = createSignal<AuthorizableProject[]>([]);
-  const [projectRef, setProjectRef] = createSignal("");
   const [accountUser, setAccountUser] = createSignal<HumanUser>();
   const [account, setAccount] = createSignal("");
   const [error, setError] = createSignal("");
@@ -78,7 +128,6 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
   const saveDecision = props.dependencies?.decideDeviceRequest ?? decideDeviceRequest;
   const currentReturnTo = () => `${location.pathname}${location.search}`;
   const onboardingHref = () => `/onboarding?returnTo=${encodeURIComponent(currentReturnTo())}`;
-  const selectedProject = createMemo(() => projects().find((project) => project.publicRef === projectRef()));
   const projectProposal = createMemo<FirstProjectProposal | undefined>(() => {
     const name = searchParams.project_name?.trim();
     if (!name || name.length > 120) return undefined;
@@ -110,6 +159,13 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
     }
     return { name, slug, repositoryUrl, executionMode };
   });
+  const projectResolution = createMemo(() => resolveAgentSelectedProject({
+    projects: projects(),
+    projectRef: searchParams.project_ref,
+    projectName: projectProposal()?.name,
+    repositoryUrl: projectProposal()?.repositoryUrl,
+  }));
+  const selectedProject = createMemo(() => projectResolution().project);
   const canApprove = createMemo(() => Boolean(selectedProject() || (projects().length === 0 && projectProposal())));
 
   const load = async () => {
@@ -125,12 +181,12 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
     try {
       const session = await loadHumanSession();
       if (!session) {
-        navigate(loginHref(`/device?user_code=${encodeURIComponent(formatUserCode(code))}`), { replace: true });
+        navigate(loginHref(currentReturnTo()), { replace: true });
         return;
       }
       setAccountUser(session.user);
       setAccount(session.user.email || session.user.name || "Dongo account");
-      await bridgeSession(`/device?user_code=${encodeURIComponent(formatUserCode(code))}`);
+      await bridgeSession(currentReturnTo());
       const [deviceRequest, availableProjects] = await Promise.all([
         loadDeviceRequest(code),
         loadProjects(),
@@ -140,7 +196,6 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
       }
       setRequest(deviceRequest);
       setProjects(availableProjects);
-      setProjectRef(availableProjects[0]?.publicRef ?? "");
       setState("review");
     } catch (cause) {
       if (cause instanceof AuthorizationFlowError && cause.code === "authentication_required") {
@@ -158,7 +213,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
 
   const decide = async (accept: boolean) => {
     if (accept && !canApprove()) {
-      setError("Choose a project or provide a valid CLI project proposal before approving this terminal.");
+      setError("Dongo could not resolve exactly one project for this repository. Deny this request and let the agent reconnect with an exact project reference.");
       return;
     }
     setState("loading");
@@ -183,9 +238,9 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
             slug: proposal.slug,
             organizationName: user.name?.trim() || user.email || "Personal workspace",
             organizationSlug: created.organizationSlug,
+            repositoryUrl: proposal.repositoryUrl,
           };
           setProjects([approvedProject]);
-          setProjectRef(approvedProject.publicRef);
         }
         await chooseProject(approvedProject.publicRef, currentReturnTo());
       }
@@ -238,10 +293,12 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
                 when={projects().length > 0}
                 fallback={<><span class="consent-summary__key">project</span><span class="consent-summary__value">{projectProposal() ? `New: ${projectProposal()!.name}` : "No project yet"}</span></>}
               >
-                <label class="consent-summary__key" for="device-project">project</label>
-                <select class="input consent-summary__select" id="device-project" value={projectRef()} onChange={(event) => setProjectRef(event.currentTarget.value)}>
-                  <For each={projects()}>{(project) => <option value={project.publicRef}>{project.organizationName} / {project.name}</option>}</For>
-                </select>
+                <span class="consent-summary__key">project</span>
+                <span class="consent-summary__value">
+                  {selectedProject()
+                    ? `${selectedProject()!.organizationName} / ${selectedProject()!.name}`
+                    : "No unambiguous project match"}
+                </span>
               </Show>
             </div>
             <div class="consent-summary__row"><span class="consent-summary__key">resource</span><span class="consent-summary__value mono">{loaded().resources.join(", ") || "Dongo agent API"}</span></div>
@@ -274,6 +331,14 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
                 <p class="note">To change these details, deny this request and rerun <span class="mono">dongo connect</span> with project options.</p>
               </>}</Show>
             </div>
+          </Show>
+          <Show when={projects().length > 0 && !selectedProject()}>
+            <div class="error" role="alert">
+              Dongo could not match this repository to exactly one active project. Deny this request and let the agent reconnect with an exact project reference.
+            </div>
+          </Show>
+          <Show when={selectedProject()}>
+            <p class="note">Project selected by the Dongo CLI from this repository. Confirm the binding above; project selection is not editable during approval.</p>
           </Show>
           <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
           <p class="note" id="device-warning">Approve only if this code matches a terminal in your possession. Do not approve a code sent in a message.</p>
