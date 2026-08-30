@@ -24,6 +24,7 @@
     "test:workspaces": "npm run test --workspaces --if-present",
     "test:convex": "vitest run convex/testing",
     "smoke:dev": "node scripts/smoke-dev.mjs",
+    "verify:environment-boundaries": "node scripts/verify-environment-boundaries.mjs",
     "verify:no-secrets": "node scripts/verify-no-secrets.mjs",
     "types": "wrangler types",
     "convex:codegen": "convex codegen",

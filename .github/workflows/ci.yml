@@ -33,6 +33,9 @@ jobs:
       - name: Reject committed secrets
         run: npm run verify:no-secrets
 
+      - name: Enforce development and production boundaries
+        run: npm run verify:environment-boundaries
+
       - name: Audit dependencies
         run: npm audit --audit-level=high
 
