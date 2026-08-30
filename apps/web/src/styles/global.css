@@ -670,11 +670,6 @@ p { margin: 0; }
   .consent-actions { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 540px) {
-  .auth-page { align-items: start; padding: 26px 20px; }
-  .auth-card { margin-top: max(4vh, 18px); }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

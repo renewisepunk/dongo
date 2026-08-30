@@ -50,6 +50,7 @@ export type FirstProjectResult = {
   created: boolean;
   resourceProvisioned: true;
   organizationId: string;
+  organizationSlug: string;
 };
 
 const bootstrapReference = makeFunctionReference<"mutation", Record<string, never>, BootstrapResult>(
@@ -231,7 +232,11 @@ export async function createFirstProject(input: {
       repositoryUrl: input.repositoryUrl,
       executionMode: input.executionMode,
     });
-    return { ...project, organizationId };
+    const organizationSlug = ownerGroup.organization?.slug;
+    if (!organizationSlug) {
+      throw new AuthorizationFlowError("invalid", "The project organization could not be resolved.");
+    }
+    return { ...project, organizationId, organizationSlug };
   } catch (cause) {
     if (cause instanceof AuthorizationFlowError) throw cause;
     const message = cause instanceof Error ? cause.message : "";

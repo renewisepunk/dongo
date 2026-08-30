@@ -1,11 +1,11 @@
 import { useNavigate, useSearchParams } from "@solidjs/router";
-import { createMemo, createSignal, Show } from "solid-js";
+import { createMemo, createSignal, onMount, Show } from "solid-js";
 import { AuthFrame } from "../components/AuthFrame";
 import { RequireHumanSession } from "../components/RequireHumanSession";
 import { SignOutButton } from "../components/SignOutButton";
 import { humanSession } from "../lib/auth-client";
 import { AuthorizationFlowError, createFirstProject } from "../lib/authorization-client";
-import { safeReturnTo } from "../lib/auth-flow";
+import { personalOrganizationSlug, safeReturnTo } from "../lib/auth-flow";
 import { slugify } from "../lib/slug";
 
 type ExecutionMode = "manual" | "autonomous";
@@ -13,12 +13,23 @@ type ExecutionMode = "manual" | "autonomous";
 export default function OnboardingRoute() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams<{ returnTo?: string }>();
-  const [name, setName] = createSignal("Dongo");
-  const [repositoryUrl, setRepositoryUrl] = createSignal("github.com/renewisepunk/dongo");
+  const [name, setName] = createSignal("");
+  const [repositoryUrl, setRepositoryUrl] = createSignal("");
+  const [organizationSlug, setOrganizationSlug] = createSignal("workspace");
   const [mode, setMode] = createSignal<ExecutionMode>("manual");
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal("");
   const slug = createMemo(() => slugify(name()));
+
+  onMount(async () => {
+    const session = await humanSession();
+    if (!session) return;
+    setOrganizationSlug(personalOrganizationSlug({
+      name: session.user.name,
+      email: session.user.email,
+      userId: session.user.id,
+    }));
+  });
 
   const createProject = async (event: SubmitEvent) => {
     event.preventDefault();
@@ -59,6 +70,7 @@ export default function OnboardingRoute() {
         publicRef: project.publicRef,
         projectId: project.projectId,
         organizationId: project.organizationId,
+        organizationSlug: project.organizationSlug,
       }));
       navigate(safeReturnTo(searchParams.returnTo) ?? "/connect", { replace: true });
     } catch (cause) {
@@ -87,7 +99,7 @@ export default function OnboardingRoute() {
             onInput={(event) => { setName(event.currentTarget.value); setError(""); }}
             placeholder="Checkout service"
           />
-          <div class="slug-preview">dev.dongo.so/rene/{slug()}</div>
+          <div class="slug-preview">dev.dongo.so/{organizationSlug()}/{slug()}</div>
         </div>
 
         <div class="field-group">
