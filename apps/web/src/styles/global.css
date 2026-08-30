@@ -146,6 +146,7 @@ a:hover {
 
 .brand {
   display: inline-flex;
+  min-height: 36px;
   align-items: center;
   gap: 9px;
   color: var(--text);
