@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -201,4 +201,45 @@ test("CI setup refuses to proceed without an exact service credential", async ()
     if (previousToken === undefined) delete process.env.DONGO_TOKEN;
     else process.env.DONGO_TOKEN = previousToken;
   }
+});
+
+test("interactive credentials cannot be redirected into the repository", async () => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-config-boundary-"));
+  await mkdir(path.join(repositoryRoot, ".git"));
+  const service = new CoreService({
+    cwd: repositoryRoot,
+    configDirectory: path.join(repositoryRoot, ".dongo-config"),
+    browserOpener: { open: async () => true },
+    fetch: async () => {
+      throw new Error("network must not run for an unsafe credential path");
+    },
+  });
+  await assert.rejects(service.connect({ origin: "http://localhost:8787" }), (error: unknown) => {
+    assert.ok(error instanceof CliCoreError);
+    assert.equal(error.code, "unsafe_path");
+    assert.match(error.message, /outside the repository/);
+    return true;
+  });
+});
+
+test("interactive credentials cannot reach the repository through a symlinked config parent", async () => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-config-link-boundary-"));
+  await mkdir(path.join(repositoryRoot, ".git"));
+  const outsideRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-config-link-"));
+  const linkedParent = path.join(outsideRoot, "linked-config");
+  await symlink(repositoryRoot, linkedParent);
+  const service = new CoreService({
+    cwd: repositoryRoot,
+    configDirectory: path.join(linkedParent, "credentials-root"),
+    browserOpener: { open: async () => true },
+    fetch: async () => {
+      throw new Error("network must not run for a symlinked repository credential path");
+    },
+  });
+  await assert.rejects(service.connect({ origin: "http://localhost:8787" }), (error: unknown) => {
+    assert.ok(error instanceof CliCoreError);
+    assert.equal(error.code, "unsafe_path");
+    assert.match(error.message, /outside the repository/);
+    return true;
+  });
 });

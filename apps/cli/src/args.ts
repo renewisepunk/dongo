@@ -8,7 +8,6 @@ export interface ParsedArgs {
   json: boolean;
   version: boolean;
   noBrowser: boolean;
-  allowFileSecretStore: boolean;
   apply: boolean;
   important: boolean;
   resolveWithoutResponse: boolean;
@@ -53,7 +52,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let json = false;
   let version = false;
   let noBrowser = false;
-  let allowFileSecretStore = false;
   let apply = false;
   let important = false;
   let resolveWithoutResponse = false;
@@ -68,7 +66,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
     else if (argument === "--help" || argument === "-h") help = true;
     else if (argument === "--version" || argument === "-V") version = true;
     else if (argument === "--no-browser") noBrowser = true;
-    else if (argument === "--allow-file-secret-store") allowFileSecretStore = true;
     else if (argument === "--apply") apply = true;
     else if (argument === "--important") important = true;
     else if (argument === "--resolve-without-response") resolveWithoutResponse = true;
@@ -100,7 +97,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
     json,
     version,
     noBrowser,
-    allowFileSecretStore,
     apply,
     important,
     resolveWithoutResponse,

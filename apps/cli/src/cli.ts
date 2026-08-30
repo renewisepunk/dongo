@@ -30,7 +30,7 @@ export interface CliDependencies {
     | "fetchAttachment"
     | "integration"
   >;
-  serviceOptions?: Omit<CoreServiceOptions, "allowFileFallback">;
+  serviceOptions?: CoreServiceOptions;
 }
 
 const HELP = `Dongo CLI
@@ -59,7 +59,6 @@ Options:
   --project-name NAME          Override the inferred first-project name
   --repository-url URL         Override the inferred Git origin URL
   --execution-mode MODE        Create the first project in manual or autonomous mode
-  --allow-file-secret-store    Explicitly permit the user-scoped 0600 fallback
   --idempotency-key KEY        Reuse this key when recovering a mutation response
   --apply                      Apply a rendered host integration after preview
 `;
@@ -164,7 +163,6 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
     const commandArgs = parsed;
     const service = (dependencies.serviceFactory ?? ((options) => new CoreService(options)))({
       ...dependencies.serviceOptions,
-      allowFileFallback: parsed.allowFileSecretStore,
     });
     const commandMutationKey = () =>
       mutationKey(commandArgs, (key) => {

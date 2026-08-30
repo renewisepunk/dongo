@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { sanitizedChildEnvironment } from "../src/index.ts";
 
-test("browser and credential helper environments do not inherit shell secrets", () => {
+test("browser subprocess environments do not inherit shell secrets", () => {
   const previousDongoToken = process.env.DONGO_TOKEN;
   const previousAwsSecret = process.env.AWS_SECRET_ACCESS_KEY;
   process.env.DONGO_TOKEN = "dongo-secret";

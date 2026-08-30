@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { mkdir, realpath } from "node:fs/promises";
+import path from "node:path";
 
 import { DongoClient, DongoClientError } from "@dongo/client";
 import type { OverviewData, SessionStartData, SyncSnapshotData } from "@dongo/client";
@@ -40,7 +41,6 @@ export interface CoreServiceOptions {
   now?: () => number;
   secretStore?: SecretStore;
   configDirectory?: string;
-  allowFileFallback?: boolean;
 }
 
 export interface ConnectOptions {
@@ -62,6 +62,22 @@ export interface ConnectResult {
   installation: SessionStartData["installation"];
   scopes: string[];
   credentialStore: string;
+}
+
+async function resolveProspectivePath(target: string): Promise<string> {
+  let existing = path.resolve(target);
+  const missing: string[] = [];
+  while (true) {
+    try {
+      return path.join(await realpath(existing), ...missing.reverse());
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const parent = path.dirname(existing);
+      if (parent === existing) throw error;
+      missing.push(path.basename(existing));
+      existing = parent;
+    }
+  }
 }
 
 export interface CiSetupOptions {
@@ -88,7 +104,6 @@ export class CoreService {
   readonly #now: () => number;
   readonly #providedStore?: SecretStore;
   readonly #configDirectory: string;
-  readonly #allowFileFallback: boolean;
 
   constructor(options: CoreServiceOptions = {}) {
     this.#cwd = options.cwd ?? process.cwd();
@@ -98,7 +113,6 @@ export class CoreService {
     this.#now = options.now ?? Date.now;
     this.#providedStore = options.secretStore;
     this.#configDirectory = options.configDirectory ?? defaultConfigDirectory();
-    this.#allowFileFallback = options.allowFileFallback ?? false;
   }
 
   async connect(options: ConnectOptions = {}): Promise<ConnectResult> {
@@ -110,6 +124,7 @@ export class CoreService {
       });
     }
     const repositoryRoot = await findRepositoryRoot(this.#cwd);
+    await this.#validateConfigDirectory(repositoryRoot);
     const environment = resolveEnvironment({ environment: options.environment, origin: options.origin });
     const projectName = options.projectName?.trim() || suggestedProjectName(repositoryRoot);
     if (!projectName || projectName.length > 120) {
@@ -223,6 +238,7 @@ export class CoreService {
       });
     }
     const repositoryRoot = await findRepositoryRoot(this.#cwd);
+    await this.#validateConfigDirectory(repositoryRoot);
     const environment = resolveEnvironment({
       environment: options.environment ?? "development",
     });
@@ -402,6 +418,7 @@ export class CoreService {
   >;
   async #context(required: boolean) {
     const repositoryRoot = await findRepositoryRoot(this.#cwd);
+    await this.#validateConfigDirectory(repositoryRoot);
     const marker = await readProjectMarker(repositoryRoot);
     if (!marker) {
       if (!required) return undefined;
@@ -438,11 +455,24 @@ export class CoreService {
   #secretStore(): SecretStore {
     return (
       this.#providedStore ??
-      createDefaultSecretStore({
-        allowFileFallback: this.#allowFileFallback,
-        configDirectory: this.#configDirectory,
-      })
+      createDefaultSecretStore({ configDirectory: this.#configDirectory })
     );
+  }
+
+  async #validateConfigDirectory(repositoryRoot: string): Promise<void> {
+    if (this.#providedStore) return;
+    const [resolvedRepositoryRoot, resolvedConfigDirectory] = await Promise.all([
+      realpath(repositoryRoot),
+      resolveProspectivePath(this.#configDirectory),
+    ]);
+    const relative = path.relative(resolvedRepositoryRoot, resolvedConfigDirectory);
+    if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+      throw new CliCoreError({
+        code: "unsafe_path",
+        message: "DONGO_CONFIG_DIR must be outside the repository.",
+        exitCode: 2,
+      });
+    }
   }
 
   #tokenManager(profile: string, store: SecretStore): TokenManager {

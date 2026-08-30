@@ -16,12 +16,8 @@ export { sanitizedChildEnvironment } from "./process-environment.ts";
 export {
   createDefaultSecretStore,
   defaultConfigDirectory,
-  ExplicitFallbackSecretStore,
   FileSecretStore,
-  MacOSKeychainStore,
   MemorySecretStore,
-  SecretToolStore,
-  SpawnCommandRunner,
 } from "./secret-store.ts";
 export type * from "./secret-store.ts";
 export { CoreService, mapClientError } from "./service.ts";

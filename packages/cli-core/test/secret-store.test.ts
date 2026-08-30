@@ -1,91 +1,62 @@
 import assert from "node:assert/strict";
-import { lstat, mkdtemp, readFile, symlink } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
-  CliCoreError,
-  ExplicitFallbackSecretStore,
+  createDefaultSecretStore,
   FileSecretStore,
-  MacOSKeychainStore,
-  type CommandRunner,
 } from "../src/index.ts";
 
-test("file fallback creates user-only files outside the repository", async () => {
+test("local credential storage creates user-only files outside the repository", async () => {
   const directory = path.join(await mkdtemp(path.join(os.tmpdir(), "dongo-store-")), "credentials");
   const store = new FileSecretStore(directory);
   await store.set("profile", "refresh-secret");
   assert.equal(await store.get("profile"), "refresh-secret");
-  const files = await import("node:fs/promises").then((fs) => fs.readdir(directory));
+  const files = await readdir(directory);
   assert.equal(files.length, 1);
+  assert.equal((await lstat(directory)).mode & 0o777, 0o700);
   const info = await lstat(path.join(directory, files[0] ?? ""));
   assert.equal(info.mode & 0o777, 0o600);
   assert.equal(await readFile(path.join(directory, files[0] ?? ""), "utf8"), "refresh-secret");
+  assert.equal(store.kind, "local-user-file");
 });
 
-test("file fallback refuses symlink credential targets", async () => {
+test("local credential storage refuses symlink targets", async () => {
   const directory = path.join(await mkdtemp(path.join(os.tmpdir(), "dongo-store-link-")), "credentials");
   const store = new FileSecretStore(directory);
   await store.set("profile", "first");
-  const files = await import("node:fs/promises").then((fs) => fs.readdir(directory));
+  const files = await readdir(directory);
   await store.delete("profile");
   await symlink("/tmp", path.join(directory, files[0] ?? "credential"));
-  await assert.rejects(store.set("profile", "second"), /unsafe/);
+  await assert.rejects(store.set("profile", "second"), /symlink/);
 });
 
-test("fallback must be explicitly supplied", async () => {
-  const store = new ExplicitFallbackSecretStore({});
-  await assert.rejects(store.set("profile", "secret"), /--allow-file-secret-store/);
-});
-
-test("macOS keychain receives the secret on stdin, never argv", async () => {
-  const calls: Array<{
-    command: string;
-    args: string[];
-    input?: string;
-    environment?: NodeJS.ProcessEnv;
-  }> = [];
-  const runner: CommandRunner = {
-    run: async (command, args, input, environment) => {
-      calls.push({ command, args, input, environment });
-      return { code: 0, stdout: "", stderr: "" };
-    },
-  };
-  const store = new MacOSKeychainStore({ runner });
+test("default storage is a Dongo-owned local file and needs no platform helper", async () => {
+  const configDirectory = await mkdtemp(path.join(os.tmpdir(), "dongo-default-store-"));
+  const store = createDefaultSecretStore({ configDirectory });
+  assert.equal(store.kind, "local-user-file");
   await store.set("profile", "refresh-secret");
-  assert.equal(calls[0]?.command, "/usr/bin/swift");
-  assert.equal(calls[0]?.input, "refresh-secret");
-  assert.ok(!calls[0]?.args.includes("refresh-secret"));
-  assert.ok(!Object.values(calls[0]?.environment ?? {}).includes("refresh-secret"));
-  assert.deepEqual(calls[0]?.environment, {
-    DONGO_KEYCHAIN_ACCOUNT: "profile",
-    DONGO_KEYCHAIN_SERVICE: "so.dongo.cli",
-  });
+  assert.equal(await store.get("profile"), "refresh-secret");
 });
 
-test("missing OS tooling produces a stable error or uses only an explicit fallback", async () => {
-  const unavailable = {
-    kind: "os-store",
-    get: async () => {
-      throw Object.assign(new Error("spawn secret-tool ENOENT sensitive internals"), { code: "ENOENT" });
-    },
-    set: async () => {
-      throw Object.assign(new Error("spawn secret-tool ENOENT sensitive internals"), { code: "ENOENT" });
-    },
-    delete: async () => undefined,
-  };
-  const strict = new ExplicitFallbackSecretStore({ primary: unavailable });
-  await assert.rejects(strict.set("profile", "secret"), (error: unknown) => {
-    assert.ok(error instanceof CliCoreError);
-    assert.equal(error.code, "secure_store_unavailable");
-    assert.doesNotMatch(error.message, /sensitive internals|secret-tool/);
-    return true;
-  });
+test("local credential reads fail closed when permissions become broad", async () => {
+  const directory = path.join(await mkdtemp(path.join(os.tmpdir(), "dongo-store-mode-")), "credentials");
+  const store = new FileSecretStore(directory);
+  await store.set("profile", "refresh-secret");
+  const files = await readdir(directory);
+  await chmod(path.join(directory, files[0] ?? ""), 0o644);
+  await assert.rejects(store.get("profile"), /permissions are not 0600/);
+});
 
-  const directory = path.join(await mkdtemp(path.join(os.tmpdir(), "dongo-store-explicit-")), "credentials");
-  const fallback = new ExplicitFallbackSecretStore({ primary: unavailable, fallback: new FileSecretStore(directory) });
-  await fallback.set("profile", "refresh-secret");
-  assert.equal(fallback.kind, "file-0600");
-  assert.equal(await fallback.get("profile"), "refresh-secret");
+test("local credential storage refuses a symlinked credential directory", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "dongo-store-directory-link-"));
+  const destination = path.join(root, "destination");
+  const directory = path.join(root, "credentials");
+  await mkdir(destination, { mode: 0o700 });
+  await symlink(destination, directory);
+  const store = new FileSecretStore(directory);
+  await assert.rejects(store.set("profile", "refresh-secret"), /not a safe directory/);
+  assert.deepEqual(await readdir(destination), []);
 });

@@ -20,7 +20,7 @@ export interface StoredCredential {
 }
 
 export interface CredentialStatus {
-  source: "environment" | "secure-store" | "none";
+  source: "environment" | "local-file" | "none";
   store: string;
   authenticated: boolean;
   issuer?: string;
@@ -170,7 +170,7 @@ export class TokenManager implements AccessTokenProvider {
     const credential = await this.load();
     return credential
       ? {
-          source: "secure-store",
+          source: "local-file",
           store: this.#store.kind,
           authenticated: Boolean(credential.refreshToken || credential.accessToken),
           issuer: credential.issuer,
