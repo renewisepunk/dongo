@@ -7,6 +7,7 @@ import { fail } from "../../lib/errors";
 const UPLOAD_PATH = "/api/files/upload";
 const MULTIPART_PATH = "/api/files/multipart";
 const DISCARD_TTL_MS = 60 * 1_000;
+const DOWNLOAD_TTL_MS = 5 * 60 * 1_000;
 const SINGLE_UPLOAD_MAX_BYTES = 32 * 1_024 * 1_024;
 const MULTIPART_PART_BYTES = 8 * 1_024 * 1_024;
 
@@ -201,6 +202,69 @@ export const discardUpload = action({
       });
     }
     return { attachmentId: discarded.attachmentId, deleted: true };
+  },
+});
+
+export const downloadForHuman = action({
+  args: { attachmentId: v.id("attachments") },
+  handler: async (ctx, args): Promise<{
+    attachmentId: Id<"attachments">;
+    filename: string;
+    contentType: string;
+    byteSize: number;
+    downloadUrl: string;
+    expiresAt: number;
+  }> => {
+    const attachment = await ctx.runQuery(
+      api.domains.attachments.index.getForHuman,
+      { attachmentId: args.attachmentId },
+    );
+    const baseUrl = process.env.DONGO_ATTACHMENT_DOWNLOAD_BASE_URL;
+    const secret = process.env.DONGO_ATTACHMENT_URL_SIGNING_SECRET;
+    if (!baseUrl || !secret || secret.length < 32) {
+      fail("internal", "Attachment download signing is not configured", {
+        retryable: true,
+      });
+    }
+    let url: URL;
+    try {
+      const configured = new URL(baseUrl);
+      if (
+        configured.protocol !== "https:" ||
+        configured.username !== "" ||
+        configured.password !== "" ||
+        configured.pathname.replace(/\/$/u, "") !== "/api/files/download" ||
+        configured.search !== "" ||
+        configured.hash !== ""
+      ) {
+        fail("internal", "Attachment download origin is invalid");
+      }
+      url = new URL(
+        `/api/files/download/${encodeURIComponent(attachment._id)}`,
+        configured.origin,
+      );
+    } catch {
+      fail("internal", "Attachment download origin is invalid");
+    }
+    const expiresAt = Date.now() + DOWNLOAD_TTL_MS;
+    const key = base64UrlEncode(
+      new TextEncoder().encode(attachment.storageKey),
+    );
+    const signature = await hmacBase64Url(
+      secret,
+      `${attachment._id}\n${attachment.storageKey}\n${expiresAt}`,
+    );
+    url.searchParams.set("expires", String(expiresAt));
+    url.searchParams.set("key", key);
+    url.searchParams.set("signature", signature);
+    return {
+      attachmentId: attachment._id,
+      filename: attachment.filename,
+      contentType: attachment.mimeType,
+      byteSize: attachment.byteSize,
+      downloadUrl: url.toString(),
+      expiresAt,
+    };
   },
 });
 

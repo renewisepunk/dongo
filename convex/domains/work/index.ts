@@ -303,6 +303,25 @@ export const getDetailForHuman = query({
     if (!work) fail("not_found", "Work item not found");
     await requireHumanProject(ctx, work.projectId, { allowArchived: true });
     const detail = await workDetail(ctx, work);
+    const attachments = (
+      await ctx.db
+        .query("attachments")
+        .withIndex("by_work", (q) => q.eq("workItemId", work._id))
+        .take(100)
+    ).filter((attachment) => attachment.status === "available");
+    const sourceIntakes = (
+      await Promise.all(detail.sources.map(async (source) => {
+        const intake = await ctx.db.get(source.intakeId);
+        if (!intake || intake.projectId !== work.projectId) return null;
+        const sourceAttachments = (
+          await ctx.db
+            .query("attachments")
+            .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
+            .take(100)
+        ).filter((attachment) => attachment.status === "available");
+        return { intake, attachments: sourceAttachments };
+      }))
+    ).filter((source): source is NonNullable<typeof source> => source !== null);
     const actorIds = new Set<Id<"actors">>();
     for (const run of detail.runs) actorIds.add(run.actorId);
     for (const comment of detail.comments) actorIds.add(comment.actorId);
@@ -314,7 +333,7 @@ export const getDetailForHuman = query({
     const actors = (
       await Promise.all([...actorIds].map((actorId) => ctx.db.get(actorId)))
     ).filter((actor): actor is Doc<"actors"> => actor !== null);
-    return { ...detail, actors };
+    return { ...detail, actors, attachments, sourceIntakes };
   },
 });
 

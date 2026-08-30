@@ -11,11 +11,14 @@ beforeEach(() => {
   process.env.DONGO_ATTACHMENT_URL_SIGNING_SECRET = gatewaySecret;
   process.env.DONGO_ATTACHMENT_UPLOAD_BASE_URL =
     "https://dev.dongo.so/api/files/upload";
+  process.env.DONGO_ATTACHMENT_DOWNLOAD_BASE_URL =
+    "https://dev.dongo.so/api/files/download";
 });
 
 describe("attachment edge contract", () => {
   it("issues a bound upload URL and finalizes through the replay-safe gateway", async () => {
-    const t = convexTest(schema, modules).withIdentity({
+    const root = convexTest(schema, modules);
+    const t = root.withIdentity({
       tokenIdentifier: "https://human.example.test|attachment-owner",
       subject: "attachment-owner",
       issuer: "https://human.example.test",
@@ -120,6 +123,39 @@ describe("attachment edge contract", () => {
       requestId: "attachment-finalize-1",
       data: { attachmentId: reserved.attachmentId, status: "available" },
     });
+    const download = await t.action(
+      api.domains.attachments.actions.downloadForHuman,
+      { attachmentId: reserved.attachmentId },
+    );
+    const downloadUrl = new URL(download.downloadUrl);
+    expect(downloadUrl.origin).toBe("https://dev.dongo.so");
+    expect(downloadUrl.pathname).toBe(
+      `/api/files/download/${reserved.attachmentId}`,
+    );
+    expect(download).toMatchObject({
+      attachmentId: reserved.attachmentId,
+      filename: "proof.txt",
+      contentType: "text/plain",
+      byteSize: 5,
+    });
+    expect(downloadUrl.searchParams.get("signature")).toBe(
+      await hmacBase64Url(
+        gatewaySecret,
+        `${reserved.attachmentId}\n${reserved.storageKey}\n${download.expiresAt}`,
+      ),
+    );
+    const stranger = root.withIdentity({
+      tokenIdentifier: "https://human.example.test|attachment-stranger",
+      subject: "attachment-stranger",
+      issuer: "https://human.example.test",
+      email: "stranger@example.test",
+      name: "Attachment Stranger",
+    });
+    await stranger.mutation(api.domains.identity.index.bootstrapCurrentUser, {});
+    await expect(stranger.action(
+      api.domains.attachments.actions.downloadForHuman,
+      { attachmentId: reserved.attachmentId },
+    )).rejects.toThrow("Organization or project not found");
     const replay = await t.fetch(
       "/internal/attachments/v1/finalize",
       request,
