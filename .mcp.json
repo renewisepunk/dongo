@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dongo-rx8dfzfa-dongo": {
+      "type": "http",
+      "url": "https://dev.dongo.so/p/rx8dfzfa-dongo/mcp"
+    }
+  }
+}
