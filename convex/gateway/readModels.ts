@@ -90,6 +90,9 @@ async function attentionDto(
   ctx: QueryCtx,
   request: Doc<"attentionRequests">,
 ): Promise<Attention> {
+  const response = request.resolutionCommentId
+    ? await ctx.db.get(request.resolutionCommentId)
+    : null;
   return {
     id: id<"attentionRequests">(request._id),
     workItemId: id<"workItems">(request.workItemId),
@@ -107,6 +110,13 @@ async function attentionDto(
     resolutionCommentId: request.resolutionCommentId
       ? id<"comments">(request.resolutionCommentId)
       : undefined,
+    resolution: request.resolutionKind
+      ? {
+          kind: request.resolutionKind,
+          body: response?.body,
+          selectedOption: request.selectedOption,
+        }
+      : undefined,
   };
 }
 
@@ -114,6 +124,10 @@ async function intakeDto(
   ctx: QueryCtx,
   intake: Doc<"intakes">,
 ): Promise<Intake> {
+  const claimActive =
+    intake.status === "claimed" &&
+    intake.claimExpiresAt !== undefined &&
+    intake.claimExpiresAt > Date.now();
   const [attachments, links, claimedBy] = await Promise.all([
     ctx.db
       .query("attachments")
@@ -131,11 +145,14 @@ async function intakeDto(
     id: id<"intakes">(intake._id),
     projectId: id<"projects">(intake.projectId),
     text: intake.text ?? "",
-    state: intake.status === "new" ? "waiting" : intake.status,
+    state:
+      intake.status === "new" || (intake.status === "claimed" && !claimActive)
+        ? "waiting"
+        : intake.status,
     revision: intake.revision,
     createdBy: await actorSummaryById(ctx, intake.createdByActorId),
-    claimedBy,
-    claimExpiresAt: intake.claimExpiresAt,
+    claimedBy: claimActive ? claimedBy : undefined,
+    claimExpiresAt: claimActive ? intake.claimExpiresAt : undefined,
     attachmentIds: attachments.map((attachment) =>
       id<"attachments">(attachment._id),
     ),
@@ -214,8 +231,12 @@ async function workDto(
         .order("desc")
         .take(25),
     ]);
+  const claimActive =
+    work.claimedRunId !== undefined &&
+    work.claimExpiresAt !== undefined &&
+    work.claimExpiresAt > Date.now();
   const activeRunDoc =
-    (work.claimedRunId
+    (claimActive && work.claimedRunId
       ? runs.find((run) => run._id === work.claimedRunId)
       : undefined) ?? runs.find((run) => run.status === "waiting");
   const terminalRun = runs.find((run) =>
@@ -232,7 +253,7 @@ async function workDto(
     title: work.title,
     goal: work.description ?? "",
     outcome: terminalRun?.summary,
-    state: work.state,
+    state: work.state === "working" && !claimActive ? "ready" : work.state,
     orderKey: String(work.rank),
     revision: work.revision,
     sourceIntakeIds: links.map((link) => id<"intakes">(link.intakeId)),
@@ -347,6 +368,73 @@ export const activeRun = internalQuery({
       fail("claim_conflict", "Installation has no active Run for this work");
     }
     return { runId: run._id };
+  },
+});
+
+export const mutationRun = internalQuery({
+  args: {
+    authorization: agentContextValidator,
+    workItemId: v.id("workItems"),
+    operation: v.union(
+      v.literal("work.update"),
+      v.literal("work.renew_claim"),
+      v.literal("work.finish"),
+      v.literal("attention.request"),
+    ),
+    idempotencyKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { principal, work } = await requireAgentWork(
+      ctx,
+      args.authorization,
+      args.workItemId,
+    );
+    if (
+      work.claimedRunId &&
+      work.claimedByInstallationId === principal.installation._id
+    ) {
+      const current = await ctx.db.get(work.claimedRunId);
+      if (
+        current &&
+        current.installationId === principal.installation._id &&
+        current.status === "running"
+      ) {
+        return { runId: current._id };
+      }
+    }
+    const cached = await ctx.db
+      .query("idempotencyKeys")
+      .withIndex("by_scope_operation_key", (q) =>
+        q
+          .eq("projectId", principal.project._id)
+          .eq("principalKey", principal.principalKey)
+          .eq("operation", args.operation)
+          .eq("key", args.idempotencyKey),
+      )
+      .unique();
+    if (cached && cached.expiresAt > Date.now()) {
+      let payload: unknown;
+      try {
+        payload = JSON.parse(cached.canonicalPayload);
+      } catch {
+        fail("internal", "Cached mutation context is invalid");
+      }
+      const record = payload as { workItemId?: unknown; runId?: unknown };
+      if (
+        record.workItemId === work._id &&
+        typeof record.runId === "string"
+      ) {
+        const run = await ctx.db.get(record.runId as Id<"runs">);
+        if (
+          run &&
+          run.workItemId === work._id &&
+          run.installationId === principal.installation._id
+        ) {
+          return { runId: run._id };
+        }
+      }
+    }
+    fail("claim_conflict", "Installation has no active Run for this work");
   },
 });
 

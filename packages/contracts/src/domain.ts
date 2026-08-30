@@ -83,6 +83,11 @@ export type Attention = {
   resolvedAt?: number;
   resolvedBy?: ActorSummary;
   resolutionCommentId?: Id<"comments">;
+  resolution?: {
+    kind: "responded" | "resolved" | "cancelled";
+    body?: string;
+    selectedOption?: string;
+  };
 };
 
 export type Run = {

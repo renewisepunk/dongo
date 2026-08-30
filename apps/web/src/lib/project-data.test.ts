@@ -55,6 +55,7 @@ describe("live project overview mapping", () => {
           createdAt: now - 5_000,
         },
         attachments: [],
+        staleClaim: false,
       }],
       recentlyDone: [],
     };
@@ -101,5 +102,21 @@ describe("live project overview mapping", () => {
       attachmentCount: 1,
       linkedWorkIds: ["work-1"],
     });
+  });
+
+  it("does not present an expired Intake claim as active triage", () => {
+    const mapped = mapIntakeDetail({
+      intake: {
+        _id: "intake-stale",
+        text: "Reclaim this Intake",
+        status: "claimed",
+        claimExpiresAt: Date.now() - 1,
+        createdAt: Date.now() - 60_000,
+      },
+      attachments: [],
+      links: [],
+    });
+
+    expect(mapped.status).toBe("waiting");
   });
 });

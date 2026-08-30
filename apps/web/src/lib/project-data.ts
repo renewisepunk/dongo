@@ -100,6 +100,7 @@ type WorkDoc = {
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
+  claimExpiresAt?: number;
 };
 
 type ActorDoc = {
@@ -139,6 +140,7 @@ type IntakeDoc = {
   text?: string;
   status: "new" | "claimed" | "processed" | "dismissed";
   createdAt: number;
+  claimExpiresAt?: number;
 };
 
 type AttachmentDoc = {
@@ -168,7 +170,11 @@ export type OverviewSnapshot = {
   needsYou: Array<{ request: AttentionDoc; work: WorkDoc | null; actor?: ActorDoc | null }>;
   working: Array<{ work: WorkDoc; run: RunDoc | null; actor: ActorDoc | null }>;
   ready: Array<{ work: WorkDoc; effectiveState: "ready"; staleClaim: boolean }>;
-  inbox: Array<{ intake: IntakeDoc; attachments: AttachmentDoc[] }>;
+  inbox: Array<{
+    intake: IntakeDoc;
+    attachments: AttachmentDoc[];
+    staleClaim: boolean;
+  }>;
   recentlyDone: WorkDoc[];
 };
 
@@ -443,13 +449,16 @@ export function mapOverviewSnapshot(snapshot: OverviewSnapshot): ProjectOverview
   }));
   const ready = snapshot.ready.map(({ work }) => baseWork(work, "ready", now));
   const done = snapshot.recentlyDone.map((work) => baseWork(work, "done", now));
-  const intakes = snapshot.inbox.map(({ intake, attachments }) => ({
+  const intakes = snapshot.inbox.map(({ intake, attachments, staleClaim }) => ({
     id: intake._id,
     submissionKey: intake.clientRequestId,
     text: intake.text || attachments[0]?.filename || "Attachment",
     attachment: attachments[0]?.filename,
     attachmentCount: attachments.length,
-    status: intake.status === "claimed" ? "triaging" as const : "waiting" as const,
+    status:
+      intake.status === "claimed" && !staleClaim
+        ? "triaging" as const
+        : "waiting" as const,
     age: relativeTime(intake.createdAt, now) || "now",
     createdAt: intake.createdAt,
   }));
@@ -519,7 +528,9 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
         ? "needs"
         : detail.work.state === "done"
           ? "done"
-          : detail.work.state === "working"
+          : detail.work.state === "working" &&
+              detail.work.claimExpiresAt !== undefined &&
+              detail.work.claimExpiresAt > now
             ? "working"
             : "ready",
     unseen: latestAttention?.status === "open",
@@ -545,7 +556,9 @@ export function mapIntakeDetail(detail: IntakeDetailSnapshot): Intake {
     attachment: first?.filename,
     attachmentCount: detail.attachments.length,
     status:
-      detail.intake.status === "claimed"
+      detail.intake.status === "claimed" &&
+      detail.intake.claimExpiresAt !== undefined &&
+      detail.intake.claimExpiresAt > Date.now()
         ? "triaging"
         : detail.intake.status === "processed" || detail.intake.status === "dismissed"
           ? "processed"

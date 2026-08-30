@@ -106,6 +106,14 @@ export const attentionSchema = z
     resolvedAt: timestamp.optional(),
     resolvedBy: actorSummarySchema.optional(),
     resolutionCommentId: identifier.optional(),
+    resolution: z
+      .object({
+        kind: z.enum(["responded", "resolved", "cancelled"]),
+        body: boundedText.optional(),
+        selectedOption: z.string().min(1).max(2_000).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

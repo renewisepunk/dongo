@@ -391,6 +391,10 @@ export const start = internalMutation({
     if (!work) fail("not_found", "Work item not found");
     assertSameProject(work, principal.project);
     const now = Date.now();
+    const revisionBeforeExpiry = work.revision;
+    const expiredClaim = Boolean(
+      work.claimedRunId && !isLeaseActive(work.claimExpiresAt, now),
+    );
     work = await expireStaleWorkClaim(ctx, work, now);
     return await runIdempotent(
       ctx,
@@ -410,9 +414,30 @@ export const start = internalMutation({
         now,
       },
       async () => {
-        assertExpectedRevision(work.revision, args.expectedRevision);
+        if (
+          args.expectedRevision !== work.revision &&
+          !(expiredClaim && args.expectedRevision === revisionBeforeExpiry)
+        ) {
+          assertExpectedRevision(work.revision, args.expectedRevision);
+        }
         if (work.state === "done" || work.state === "cancelled") {
           fail("invalid_transition", "Closed work cannot be started");
+        }
+        const unresolvedAttention = await Promise.all(
+          (["open", "seen"] as const).map((status) =>
+            ctx.db
+              .query("attentionRequests")
+              .withIndex("by_work_status", (q) =>
+                q.eq("workItemId", work._id).eq("status", status),
+              )
+              .first(),
+          ),
+        );
+        if (unresolvedAttention.some(Boolean)) {
+          fail(
+            "invalid_transition",
+            "Work with unresolved Attention cannot be started",
+          );
         }
         if (work.claimedRunId && isLeaseActive(work.claimExpiresAt, now)) {
           fail("claim_conflict", "Work is claimed by another active Run", {

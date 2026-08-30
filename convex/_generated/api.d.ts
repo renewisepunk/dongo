@@ -39,6 +39,7 @@ import type * as lib_errors from "../lib/errors.js";
 import type * as lib_events from "../lib/events.js";
 import type * as lib_idempotency from "../lib/idempotency.js";
 import type * as lib_leases from "../lib/leases.js";
+import type * as lib_plans from "../lib/plans.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as maintenance from "../maintenance.js";
 import type * as testing_fixtures from "../testing/fixtures.js";
@@ -81,6 +82,7 @@ declare const fullApi: ApiFromModules<{
   "lib/events": typeof lib_events;
   "lib/idempotency": typeof lib_idempotency;
   "lib/leases": typeof lib_leases;
+  "lib/plans": typeof lib_plans;
   "lib/validators": typeof lib_validators;
   maintenance: typeof maintenance;
   "testing/fixtures": typeof testing_fixtures;

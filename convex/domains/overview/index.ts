@@ -123,17 +123,14 @@ export async function buildOverview(
       staleClaim: work.state === "working",
     }));
   const inboxCandidates = [...newIntakes, ...claimedIntakes]
-    .filter(
-      (intake) =>
-        intake.status === "new" ||
-        intake.claimExpiresAt === undefined ||
-        intake.claimExpiresAt > now,
-    )
     .sort((left, right) => right.createdAt - left.createdAt)
     .slice(0, OVERVIEW_SECTION_LIMIT);
   const inbox = await Promise.all(
     inboxCandidates.map(async (intake) => ({
       intake,
+      staleClaim:
+        intake.status === "claimed" &&
+        (intake.claimExpiresAt === undefined || intake.claimExpiresAt <= now),
       attachments: await ctx.db
         .query("attachments")
         .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))

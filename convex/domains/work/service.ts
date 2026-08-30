@@ -146,6 +146,7 @@ export async function pauseRunForAttention(
     lastHeartbeatAt: options.now,
   });
   await ctx.db.patch(work._id, {
+    state: "ready",
     claimedByActorId: undefined,
     claimedByInstallationId: undefined,
     claimedRunId: undefined,

@@ -272,14 +272,22 @@ function artifactInput(value: unknown) {
   };
 }
 
-async function activeRunId(
+async function mutationRunId(
   ctx: ActionCtx,
   auth: AgentAuthorization,
   workItemId: Id<"workItems">,
+  operation:
+    | "work.update"
+    | "work.renew_claim"
+    | "work.finish"
+    | "attention.request",
+  idempotencyKey: string,
 ): Promise<Id<"runs">> {
-  const active = await ctx.runQuery(internal.gateway.readModels.activeRun, {
+  const active = await ctx.runQuery(internal.gateway.readModels.mutationRun, {
     authorization: auth,
     workItemId,
+    operation,
+    idempotencyKey,
   });
   return active.runId;
 }
@@ -443,7 +451,14 @@ async function dispatchAgentOperation(
     }
     case "update_work": {
       const workItemId = stringField(input, "workItemId") as Id<"workItems">;
-      const runId = await activeRunId(ctx, baseAuthorization, workItemId);
+      const idempotencyKey = stringField(input, "idempotencyKey");
+      const runId = await mutationRunId(
+        ctx,
+        baseAuthorization,
+        workItemId,
+        "work.update",
+        idempotencyKey,
+      );
       await ctx.runMutation(internal.domains.work.index.update, {
         authorization: baseAuthorization,
         workItemId,
@@ -453,26 +468,40 @@ async function dispatchAgentOperation(
         description: optionalStringField(input, "goal"),
         summary: optionalStringField(input, "latestUpdate"),
         artifact: input.artifact ? artifactInput(input.artifact) : undefined,
-        idempotencyKey: stringField(input, "idempotencyKey"),
+        idempotencyKey,
       });
       return await workResult(ctx, baseAuthorization, workItemId);
     }
     case "renew_claim": {
       const workItemId = stringField(input, "workItemId") as Id<"workItems">;
-      const runId = await activeRunId(ctx, baseAuthorization, workItemId);
+      const idempotencyKey = stringField(input, "idempotencyKey");
+      const runId = await mutationRunId(
+        ctx,
+        baseAuthorization,
+        workItemId,
+        "work.renew_claim",
+        idempotencyKey,
+      );
       await ctx.runMutation(internal.domains.work.index.renewClaim, {
         authorization: baseAuthorization,
         workItemId,
         runId,
         expectedRevision: numberField(input, "expectedRevision"),
         leaseSeconds: input.leaseSeconds as number | undefined,
-        idempotencyKey: stringField(input, "idempotencyKey"),
+        idempotencyKey,
       });
       return await workResult(ctx, baseAuthorization, workItemId);
     }
     case "finish_work": {
       const workItemId = stringField(input, "workItemId") as Id<"workItems">;
-      const runId = await activeRunId(ctx, baseAuthorization, workItemId);
+      const idempotencyKey = stringField(input, "idempotencyKey");
+      const runId = await mutationRunId(
+        ctx,
+        baseAuthorization,
+        workItemId,
+        "work.finish",
+        idempotencyKey,
+      );
       await ctx.runMutation(internal.domains.work.index.finish, {
         authorization: baseAuthorization,
         workItemId,
@@ -483,7 +512,7 @@ async function dispatchAgentOperation(
         artifacts: ((input.artifacts as unknown[] | undefined) ?? []).map(
           artifactInput,
         ),
-        idempotencyKey: stringField(input, "idempotencyKey"),
+        idempotencyKey,
       });
       return await workResult(ctx, baseAuthorization, workItemId);
     }
@@ -499,7 +528,14 @@ async function dispatchAgentOperation(
     }
     case "request_attention": {
       const workItemId = stringField(input, "workItemId") as Id<"workItems">;
-      const runId = await activeRunId(ctx, baseAuthorization, workItemId);
+      const idempotencyKey = stringField(input, "idempotencyKey");
+      const runId = await mutationRunId(
+        ctx,
+        baseAuthorization,
+        workItemId,
+        "attention.request",
+        idempotencyKey,
+      );
       const created = await ctx.runMutation(
         internal.domains.attention.index.request,
         {
@@ -516,7 +552,7 @@ async function dispatchAgentOperation(
           body: stringField(input, "body"),
           options: input.options as string[] | undefined,
           urgency: input.important ? "important" : "normal",
-          idempotencyKey: stringField(input, "idempotencyKey"),
+          idempotencyKey,
         },
       );
       return await attentionResult(
