@@ -8,6 +8,7 @@ test("device authorization opens one complete link and honors pending and slow_d
   const sleeps: number[] = [];
   const requests: string[] = [];
   const opened: string[] = [];
+  let reportedProposal: unknown;
   const responses = [
     Response.json({
       device_code: "device-secret",
@@ -34,7 +35,13 @@ test("device authorization opens one complete link and honors pending and slow_d
     clientId: "dongo-cli",
     resource: "https://dev.dongo.so/api/agent/v1",
     scopes: ["dongo:work:read", "offline_access"],
+    projectProposal: {
+      name: "Dongo",
+      repositoryUrl: "https://github.com/renewisepunk/dongo",
+      executionMode: "manual",
+    },
     browserOpener: { open: async (url) => (opened.push(url), true) },
+    events: { onVerification: (details) => void (reportedProposal = details.projectProposal) },
     clock: {
       now: () => now,
       sleep: async (milliseconds) => {
@@ -55,7 +62,14 @@ test("device authorization opens one complete link and honors pending and slow_d
   });
 
   const tokens = await client.authorize();
-  assert.deepEqual(opened, ["https://dev.dongo.so/device?user_code=ABCD-EFGH"]);
+  assert.deepEqual(opened, [
+    "https://dev.dongo.so/device?user_code=ABCD-EFGH&project_name=Dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo&execution_mode=manual",
+  ]);
+  assert.deepEqual(reportedProposal, {
+    name: "Dongo",
+    repositoryUrl: "https://github.com/renewisepunk/dongo",
+    executionMode: "manual",
+  });
   assert.deepEqual(sleeps, [1_000, 1_000, 6_000]);
   assert.equal(tokens.accessToken, "access-secret");
   assert.equal(tokens.refreshToken, "refresh-secret");

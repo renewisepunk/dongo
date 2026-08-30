@@ -29,10 +29,17 @@ export interface DeviceAuthorizationEvents {
     userCode: string;
     expiresAt: number;
     browserOpened: boolean;
+    projectProposal?: FirstProjectProposal;
   }): void;
   onPending?(): void;
   onSlowDown?(intervalSeconds: number): void;
   onNetworkRetry?(message: string): void;
+}
+
+export interface FirstProjectProposal {
+  name: string;
+  repositoryUrl?: string;
+  executionMode: "manual" | "autonomous";
 }
 
 export interface DeviceAuthorizationOptions {
@@ -45,6 +52,7 @@ export interface DeviceAuthorizationOptions {
   clock?: DeviceAuthClock;
   browserOpener: BrowserOpener;
   noBrowser?: boolean;
+  projectProposal?: FirstProjectProposal;
   events?: DeviceAuthorizationEvents;
   signal?: AbortSignal;
 }
@@ -152,17 +160,29 @@ export class DeviceAuthorizationClient {
     const request = await this.#requestDeviceAuthorization();
     if (this.#options.signal?.aborted) throw cancellationError();
     const expiresAt = this.#clock.now() + request.expires_in * 1_000;
+    const verificationUriComplete = this.#verificationUriWithProposal(request.verification_uri_complete);
     const browserOpened = this.#options.noBrowser
       ? false
-      : await this.#options.browserOpener.open(request.verification_uri_complete).catch(() => false);
+      : await this.#options.browserOpener.open(verificationUriComplete).catch(() => false);
     if (this.#options.signal?.aborted) throw cancellationError();
     this.#options.events?.onVerification?.({
-      verificationUriComplete: request.verification_uri_complete,
+      verificationUriComplete,
       userCode: request.user_code,
       expiresAt,
       browserOpened,
+      projectProposal: this.#options.projectProposal,
     });
     return this.#poll(request, expiresAt);
+  }
+
+  #verificationUriWithProposal(value: string): string {
+    const proposal = this.#options.projectProposal;
+    if (!proposal) return value;
+    const url = new URL(value);
+    url.searchParams.set("project_name", proposal.name);
+    if (proposal.repositoryUrl) url.searchParams.set("repository_url", proposal.repositoryUrl);
+    url.searchParams.set("execution_mode", proposal.executionMode);
+    return url.toString();
   }
 
   async #requestDeviceAuthorization(): Promise<DeviceAuthorizationResponse> {

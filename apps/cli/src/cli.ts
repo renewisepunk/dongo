@@ -36,7 +36,7 @@ export interface CliDependencies {
 const HELP = `Dongo CLI
 
 Usage:
-  dongo connect [--environment development|production] [--origin URL] [--no-browser]
+  dongo connect [--environment development|production] [--origin URL] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
   dongo ci setup [--environment development|production]
   dongo auth status
   dongo auth logout
@@ -55,6 +55,9 @@ Options:
   --version, -V                Print the installed CLI version
   --json                       Write one stable JSON result to stdout
   --no-browser                 Print the complete approval link without opening it
+  --project-name NAME          Override the inferred first-project name
+  --repository-url URL         Override the inferred Git origin URL
+  --execution-mode MODE        Create the first project in manual or autonomous mode
   --allow-file-secret-store    Explicitly permit the user-scoped 0600 fallback
   --idempotency-key KEY        Reuse this key when recovering a mutation response
   --apply                      Apply a rendered host integration after preview
@@ -185,17 +188,27 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         }
         return 0;
       case "connect":
-        allowOnlyValues(parsed, []);
+        allowOnlyValues(parsed, ["project-name", "repository-url", "execution-mode"]);
         requirePositionals(parsed, 1, "Usage: dongo connect [options]");
+        const executionMode = option(parsed, "execution-mode");
+        if (executionMode !== undefined && executionMode !== "manual" && executionMode !== "autonomous") {
+          throw new CliCoreError({ code: "validation", message: "--execution-mode must be manual or autonomous.", exitCode: 2 });
+        }
         data = await service.connect({
           environment: parsed.environment,
           origin: parsed.origin,
           noBrowser: parsed.noBrowser,
+          projectName: option(parsed, "project-name"),
+          repositoryUrl: option(parsed, "repository-url"),
+          executionMode,
           signal: dependencies.signal,
           events: {
-            onVerification: ({ verificationUriComplete, userCode, expiresAt, browserOpened }) => {
+            onVerification: ({ verificationUriComplete, userCode, expiresAt, browserOpened, projectProposal }) => {
               output.stderr(
                 `${browserOpened ? "Opened" : "Open"} this secure link:\n${verificationUriComplete}\n\n` +
+                  (projectProposal
+                    ? `If this account has no project, approval will create “${projectProposal.name}”${projectProposal.repositoryUrl ? ` for ${projectProposal.repositoryUrl}` : ""}.\n`
+                    : "") +
                   `Confirm code ${userCode} in the browser. Waiting until ${new Date(expiresAt).toISOString()}…\n`,
               );
             },

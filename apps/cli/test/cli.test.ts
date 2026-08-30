@@ -162,6 +162,40 @@ test("connect keeps the complete approval link out of JSON stdout", async () => 
   assert.equal(JSON.parse(stream.values().stdout).data.project.publicRef, "pub_1");
 });
 
+test("connect forwards an explicit first-project proposal", async () => {
+  const stream = capture();
+  let received: Record<string, unknown> | undefined;
+  const exitCode = await runCli([
+    "connect",
+    "--project-name", "Dongo",
+    "--repository-url", "https://github.com/renewisepunk/dongo",
+    "--execution-mode", "manual",
+    "--json",
+  ], {
+    output: stream.output,
+    serviceFactory: () => ({
+      ...fakeService,
+      connect: async (options: Record<string, unknown>) => {
+        received = options;
+        return { project: { publicRef: "pub_1" } };
+      },
+    }) as never,
+  });
+  assert.equal(exitCode, 0);
+  assert.equal(received?.projectName, "Dongo");
+  assert.equal(received?.repositoryUrl, "https://github.com/renewisepunk/dongo");
+  assert.equal(received?.executionMode, "manual");
+});
+
+test("connect rejects an unsupported execution mode", async () => {
+  const stream = capture();
+  assert.equal(await runCli(["connect", "--execution-mode", "reckless", "--json"], {
+    output: stream.output,
+    serviceFactory: () => fakeService as never,
+  }), 2);
+  assert.equal(JSON.parse(stream.values().stdout).error.code, "validation");
+});
+
 test("cancellation uses the shell-standard exit code and stable JSON", async () => {
   const stream = capture();
   const exitCode = await runCli(["connect", "--json"], {

@@ -20,7 +20,13 @@ import { configureIntegration } from "./integrations.ts";
 import type { IntegrationHost, IntegrationResult } from "./integrations.ts";
 import type { ProjectMarker } from "./marker.ts";
 import { readProjectMarker, writeProjectMarker } from "./marker.ts";
-import { credentialProfile, findRepositoryRoot } from "./repository.ts";
+import {
+  credentialProfile,
+  findRepositoryRoot,
+  normalizeRepositoryUrl,
+  repositoryOriginUrl,
+  suggestedProjectName,
+} from "./repository.ts";
 import type { SecretStore } from "./secret-store.ts";
 import { createDefaultSecretStore, defaultConfigDirectory } from "./secret-store.ts";
 import type { StoredCredential } from "./token-manager.ts";
@@ -41,6 +47,9 @@ export interface ConnectOptions {
   environment?: DongoEnvironment;
   origin?: string;
   noBrowser?: boolean;
+  projectName?: string;
+  repositoryUrl?: string;
+  executionMode?: "manual" | "autonomous";
   events?: DeviceAuthorizationEvents;
   signal?: AbortSignal;
 }
@@ -101,6 +110,17 @@ export class CoreService {
     }
     const repositoryRoot = await findRepositoryRoot(this.#cwd);
     const environment = resolveEnvironment({ environment: options.environment, origin: options.origin });
+    const projectName = options.projectName?.trim() || suggestedProjectName(repositoryRoot);
+    if (!projectName || projectName.length > 120) {
+      throw new CliCoreError({ code: "validation", message: "The proposed project name must be between 1 and 120 characters.", exitCode: 2 });
+    }
+    const inferredRepositoryUrl = await repositoryOriginUrl(repositoryRoot);
+    const repositoryUrl = options.repositoryUrl === undefined
+      ? inferredRepositoryUrl
+      : normalizeRepositoryUrl(options.repositoryUrl);
+    if (options.repositoryUrl !== undefined && !repositoryUrl) {
+      throw new CliCoreError({ code: "validation", message: "--repository-url must be a safe HTTP, HTTPS, or SSH repository URL.", exitCode: 2 });
+    }
     const profile = credentialProfile(environment.productOrigin, repositoryRoot);
     const store = this.#secretStore();
     const auth = new DeviceAuthorizationClient({
@@ -113,6 +133,11 @@ export class CoreService {
       clock: this.#deviceClock,
       browserOpener: this.#browserOpener,
       noBrowser: options.noBrowser,
+      projectProposal: {
+        name: projectName,
+        repositoryUrl,
+        executionMode: options.executionMode ?? "manual",
+      },
       events: options.events,
       signal: options.signal,
     });

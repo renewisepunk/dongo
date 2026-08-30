@@ -72,9 +72,18 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
     },
   });
 
-  const connected = await service.connect({ origin: "http://localhost:8787" });
+  const connected = await service.connect({
+    origin: "http://localhost:8787",
+    projectName: "Dongo CLI",
+    repositoryUrl: "git@github.com:renewisepunk/dongo.git",
+    executionMode: "autonomous",
+  });
   assert.equal(connected.project.publicRef, "pub_dongo");
   assert.equal(opened.length, 1);
+  assert.equal(
+    opened[0],
+    "http://localhost:8787/device?user_code=ABCD-EFGH&project_name=Dongo+CLI&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo&execution_mode=autonomous",
+  );
   const marker = await readFile(path.join(repositoryRoot, ".agent-work", "project.json"), "utf8");
   assert.doesNotMatch(marker, /access-secret|refresh-secret|device-secret|ABCD-EFGH/);
   assert.match(marker, /pub_dongo/);

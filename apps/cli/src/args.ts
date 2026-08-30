@@ -34,7 +34,9 @@ const VALUE_OPTIONS = new Set([
   "outcome",
   "output",
   "parent-work-id",
+  "project-name",
   "revision",
+  "repository-url",
   "selected-option",
   "session-id",
   "source-intake-id",
@@ -42,6 +44,7 @@ const VALUE_OPTIONS = new Set([
   "title",
   "work-id",
   "latest-update",
+  "execution-mode",
 ]);
 
 export function parseArgs(argv: string[]): ParsedArgs {
