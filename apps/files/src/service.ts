@@ -39,6 +39,7 @@ export interface AttachmentObjectStore {
     body: ReadableStream<Uint8Array>,
     options: StoreUploadOptions,
   ): Promise<StoredUpload>;
+  delete(storageKey: string): Promise<void>;
   ready(): Promise<void>;
 }
 
@@ -613,23 +614,40 @@ export function createFilesWorker(options: FilesWorkerOptions): {
               ? {}
               : { checksumSha256: verified.checksumSha256 }),
           });
-          if (stored.size !== contentLength) {
-            throw new Error("R2 accepted an upload with unexpected metadata");
+          try {
+            if (stored.size !== contentLength) {
+              throw new Error("R2 accepted an upload with unexpected metadata");
+            }
+            if (
+              verified.checksumSha256 !== undefined &&
+              stored.checksumSha256 !== undefined &&
+              stored.checksumSha256 !== verified.checksumSha256
+            ) throw new Error("R2 returned an unexpected upload checksum");
+            await options.finalizer.finalize({
+              requestId,
+              attachmentId: uploadId,
+              observedByteSize: contentLength,
+              observedMimeType: contentType,
+              ...(verified.checksumSha256 === undefined
+                ? {}
+                : { observedChecksumSha256: verified.checksumSha256 }),
+            });
+          } catch (error) {
+            try {
+              await options.store.delete(verified.storageKey);
+            } catch (cleanupError) {
+              console.error(JSON.stringify({
+                event: "attachment_upload_compensation_failed",
+                requestId,
+                attachmentId: uploadId,
+                errorName:
+                  cleanupError instanceof Error
+                    ? cleanupError.name
+                    : "UnknownError",
+              }));
+            }
+            throw error;
           }
-          if (
-            verified.checksumSha256 !== undefined &&
-            stored.checksumSha256 !== undefined &&
-            stored.checksumSha256 !== verified.checksumSha256
-          ) throw new Error("R2 returned an unexpected upload checksum");
-          await options.finalizer.finalize({
-            requestId,
-            attachmentId: uploadId,
-            observedByteSize: contentLength,
-            observedMimeType: contentType,
-            ...(verified.checksumSha256 === undefined
-              ? {}
-              : { observedChecksumSha256: verified.checksumSha256 }),
-          });
           return secureResponse(
             json({
               ok: true,

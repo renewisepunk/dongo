@@ -73,6 +73,10 @@ class R2AttachmentObjectStore implements AttachmentObjectStore {
     };
   }
 
+  async delete(storageKey: string): Promise<void> {
+    await this.bucket.delete(storageKey);
+  }
+
   async ready(): Promise<void> {
     await this.bucket.head("__dongo_files_readiness__");
   }

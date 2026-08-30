@@ -82,6 +82,7 @@ class FakeStore implements AttachmentObjectStore {
     body: string;
     options: StoreUploadOptions;
   }> = [];
+  readonly deletes: string[] = [];
   readyCalls = 0;
   object: StoredAttachment | null = {
     body: new Response("hello").body!,
@@ -109,6 +110,10 @@ class FakeStore implements AttachmentObjectStore {
         ? {}
         : { checksumSha256: options.checksumSha256 }),
     };
+  }
+
+  async delete(key: string): Promise<void> {
+    this.deletes.push(key);
   }
 
   async ready(): Promise<void> {
@@ -278,6 +283,28 @@ describe("attachment edge routes", () => {
       contentType: "text/plain",
     });
     assert.equal((finalizer as FakeFinalizer).calls[0]?.observedChecksumSha256, undefined);
+  });
+
+  it("deletes the exact R2 object when post-upload finalization fails", async () => {
+    const finalizer: AttachmentFinalizer = {
+      async finalize() {
+        throw new Error("finalization unavailable");
+      },
+    };
+    const { worker, store } = fixture({ finalizer });
+    const response = await worker.fetch(new Request(uploadUrl(), {
+      method: "PUT",
+      headers: {
+        "content-length": "5",
+        "content-type": "text/plain",
+        "x-dongo-content-sha256": CHECKSUM,
+      },
+      body: new TextEncoder().encode("hello"),
+    }));
+
+    assert.equal(response.status, 500);
+    assert.equal(store.puts.length, 1);
+    assert.deepEqual(store.deletes, [STORAGE_KEY]);
   });
 
   it("does not touch R2 when upload headers or the URL signature mismatch", async () => {
