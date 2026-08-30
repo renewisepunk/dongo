@@ -7,11 +7,27 @@ import {
   deliverFcm,
   renderAttentionEmail,
 } from "../src/providers";
+import { requiredNotificationProviders } from "../src/config";
 
 const deliveryPath = "/api/notifications/v1/deliver";
 const dispatchSecret = "test-dispatch-secret-with-at-least-32-characters";
 
 describe("notifications Worker", () => {
+  it("fails closed to every provider for an empty or unknown readiness policy", () => {
+    expect(requiredNotificationProviders("resend")).toEqual(["resend"]);
+    expect(requiredNotificationProviders("resend,apns,fcm")).toEqual([
+      "resend",
+      "apns",
+      "fcm",
+    ]);
+    expect(requiredNotificationProviders("")).toEqual(["resend", "apns", "fcm"]);
+    expect(requiredNotificationProviders("resend,unknown")).toEqual([
+      "resend",
+      "apns",
+      "fcm",
+    ]);
+  });
+
   it("reports liveness separately from provider readiness", async () => {
     const health = await exports.default.fetch(
       "https://dev.dongo.so/api/notifications/healthz",
@@ -28,6 +44,7 @@ describe("notifications Worker", () => {
     await expect(readiness.json()).resolves.toMatchObject({
       ok: false,
       providers: { dispatch: true, resend: false, apns: false, fcm: false },
+      required: ["dispatch", "resend"],
     });
   });
 

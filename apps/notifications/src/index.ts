@@ -1,5 +1,8 @@
 import { deliveryRequestSchema, type DeliveryResult } from "./contracts";
-import { providerConfig } from "./config";
+import {
+  providerConfig,
+  requiredNotificationProviders,
+} from "./config";
 import { json } from "./http";
 import { deliverApns, deliverEmail, deliverFcm } from "./providers";
 import { verifyInternalRequest } from "./security";
@@ -186,8 +189,18 @@ export default {
         apns: providers.apns !== undefined,
         fcm: providers.fcm !== undefined,
       };
-      const ready = Object.values(status).every(Boolean);
-      return json({ ok: ready, service: "notifications", providers: status }, ready ? 200 : 503);
+      const requiredProviders = requiredNotificationProviders(
+        env.REQUIRED_NOTIFICATION_PROVIDERS,
+      );
+      const ready = status.dispatch && requiredProviders.every(
+        (provider) => status[provider],
+      );
+      return json({
+        ok: ready,
+        service: "notifications",
+        providers: status,
+        required: ["dispatch", ...requiredProviders],
+      }, ready ? 200 : 503);
     }
     if (url.pathname !== DELIVER_PATH) {
       return json({ ok: false, error: { code: "not_found" } }, 404);

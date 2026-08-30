@@ -70,7 +70,7 @@ Recommended: browsers and native clients upload directly to R2. Small uploads us
 
 ### D-10 — Web and native release boundary
 
-Recommended: ship a Web Beta after the walking skeleton and product-completeness waves. Full V1 follows after at least one native client provides the promised push path; iOS and Android can be implemented in parallel once the API is frozen. If faster public launch is preferred, explicitly change the V1 notification gate to browser push or email.
+Decided: ship a Web Beta after the walking skeleton and product-completeness waves. Development readiness requires signed notification dispatch plus Resend email; APNs and FCM remain explicitly disabled and visibly not configured until native work begins. Full V1 follows only after the native gate changes both providers to required, supplies real credentials, and proves deep-linked push. iOS and Android can be implemented in parallel once the API is frozen.
 
 ## Contract decisions
 

@@ -34,6 +34,26 @@ export type ResendConfig = z.infer<typeof resendSchema>;
 export type ApnsConfig = z.infer<typeof apnsSchema>;
 export type FcmConfig = z.infer<typeof fcmSchema>;
 
+export const notificationProviderNames = ["resend", "apns", "fcm"] as const;
+export type NotificationProviderName = (typeof notificationProviderNames)[number];
+
+export function requiredNotificationProviders(
+  value: string,
+): readonly NotificationProviderName[] {
+  const requested = new Set(
+    value.split(",").map((entry) => entry.trim()).filter(Boolean),
+  );
+  if (
+    requested.size === 0 ||
+    [...requested].some(
+      (entry) => !notificationProviderNames.includes(entry as NotificationProviderName),
+    )
+  ) {
+    return notificationProviderNames;
+  }
+  return notificationProviderNames.filter((provider) => requested.has(provider));
+}
+
 export function providerConfig(env: Env): {
   resend?: ResendConfig;
   apns?: ApnsConfig;
