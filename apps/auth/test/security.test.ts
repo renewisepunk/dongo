@@ -14,6 +14,8 @@ import {
   decodePinnedRefreshToken,
   encodePinnedAccessToken,
   encodePinnedRefreshToken,
+  pinnedRefreshTokenHandlers,
+  REFRESH_TOKEN_PREFIX,
   projectRefForGrant,
   providerGrantId,
   type PinnedGrantContext,
@@ -198,5 +200,30 @@ describe("authorization boundary security", () => {
       sessionId: "session-1",
       grant,
     });
+
+    let activeGrant: PinnedGrantContext | undefined = grant;
+    const handlers = pinnedRefreshTokenHandlers(secret, {
+      get: () => activeGrant,
+      set: (value) => {
+        activeGrant = value;
+      },
+    });
+    const storedToken = await handlers.generate();
+    const formattedToken = handlers.encrypt(storedToken);
+    expect(formattedToken).toBe(storedToken);
+    expect(formattedToken).not.toBeInstanceOf(Promise);
+    expect(`${REFRESH_TOKEN_PREFIX}${formattedToken}`).not.toContain("[object Promise]");
+
+    activeGrant = undefined;
+    await expect(handlers.decrypt(formattedToken)).resolves.toEqual({
+      token: storedToken,
+      sessionId: undefined,
+    });
+    expect(activeGrant).toEqual(grant);
+
+    activeGrant = grant;
+    const malformed = await handlers.decrypt("[object Promise]");
+    expect(malformed.token).not.toBe("[object Promise]");
+    expect(activeGrant).toBeUndefined();
   });
 });

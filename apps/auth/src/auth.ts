@@ -12,10 +12,9 @@ import type { AuthWorkerEnv } from "./env";
 import {
   bindOAuthGrant,
   decodePinnedAccessToken,
-  decodePinnedRefreshToken,
   encodePinnedAccessToken,
-  encodePinnedRefreshToken,
   ACCESS_TOKEN_PREFIX,
+  pinnedRefreshTokenHandlers,
   REFRESH_TOKEN_PREFIX,
   projectRefForGrant,
   providerGrantId,
@@ -93,6 +92,12 @@ type TokenResponseInfo = {
 
 function tokenPinning(env: AuthWorkerEnv) {
   let currentGrant: PinnedGrantContext | undefined;
+  const refreshTokens = pinnedRefreshTokenHandlers(env.BETTER_AUTH_SECRET, {
+    get: () => currentGrant,
+    set: (grant) => {
+      currentGrant = grant;
+    },
+  });
 
   const inIssuancePhase = async <T>(
     phase: string,
@@ -206,22 +211,13 @@ function tokenPinning(env: AuthWorkerEnv) {
         return await encodePinnedAccessToken(env.BETTER_AUTH_SECRET, currentGrant);
       });
     },
+    async generateRefreshToken() {
+      return await inIssuancePhase("refresh_token", refreshTokens.generate);
+    },
     formatRefreshToken: {
-      async encrypt(token: string, sessionId?: string) {
-        return await inIssuancePhase("refresh_token", async () => {
-          if (!currentGrant) throw new Error("Refresh token grant context is missing");
-          return await encodePinnedRefreshToken({
-            secret: env.BETTER_AUTH_SECRET,
-            token,
-            sessionId,
-            grant: currentGrant,
-          });
-        });
-      },
+      encrypt: refreshTokens.encrypt,
       async decrypt(token: string) {
-        const decoded = await decodePinnedRefreshToken(env.BETTER_AUTH_SECRET, token);
-        currentGrant = decoded.grant;
-        return { token: decoded.token, sessionId: decoded.sessionId };
+        return await refreshTokens.decrypt(token);
       },
     },
     claims: {
@@ -314,6 +310,7 @@ export function createAuthorizationServer(env: AuthWorkerEnv) {
           refreshToken: REFRESH_TOKEN_PREFIX,
         },
         generateOpaqueAccessToken: pinning.generateOpaqueAccessToken,
+        generateRefreshToken: pinning.generateRefreshToken,
         formatRefreshToken: pinning.formatRefreshToken,
         customTokenResponseFields: pinning.customTokenResponseFields,
         loginPage: "/login",

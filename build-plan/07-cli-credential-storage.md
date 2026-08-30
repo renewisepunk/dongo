@@ -238,6 +238,29 @@ If local storage fails after browser approval, report that the connection did no
 5. Atomically persist the rotated refresh token and new access token before releasing the lock.
 6. If the response is lost or the rotated credential cannot be persisted, require reauthorization rather than restoring an older refresh token.
 
+The authorization worker also has a release-critical wire-format contract. The
+value returned to the CLI is an opaque, prefixed, encrypted token whose
+encrypted body is the same value stored (hashed) by the OAuth provider. The
+encrypted envelope carries the exact grant context needed to pin the next
+access token to its original account, client, resource, project, installation,
+and scopes. Refresh decoding restores that request-local context, but returns
+the encrypted database token unchanged for lookup. The raw provider token and
+grant context are never serialized separately to the client.
+
+The pinned OAuth provider version currently concatenates its configured prefix
+with `formatRefreshToken.encrypt(...)` synchronously. An async formatter is
+therefore unsafe: JavaScript coerces the unresolved Promise into the literal
+string `[object Promise]`, creating a credential that succeeds once and fails
+at the first refresh. Dongo avoids that upstream boundary by generating the
+encrypted database token in the provider's awaited `generateRefreshToken`
+hook and keeping the formatting hook synchronous and identity-only. A
+regression test asserts the actual prefix + formatter sequence never contains
+`[object Promise]`, then decodes the token and proves the exact stored value and
+grant are recovered. Malformed or pre-fix development tokens fail as
+`invalid_grant` and require a fresh browser connection; they must not cause a
+worker 500 or be migrated because their missing grant context cannot be
+reconstructed safely.
+
 ### Logout
 
 1. Load the current bounded credential.
@@ -272,6 +295,7 @@ The Keychain implementation was used only during development and must not become
 - secrets never occur in argv, environment, stdout/stderr, JSON results, errors, logs, snapshots, repository scans, or package metadata;
 - interrupted writes leave either the prior complete credential or the next complete credential, never a partial active file;
 - simultaneous expired-token commands cause one refresh and all observe the persisted rotation;
+- the OAuth provider's real prefix + formatter sequence yields encrypted token material, never `[object Promise]`, and a full expiry/refresh/rotation test passes against the deployed development worker;
 - restored/replayed old refresh tokens fail and require reauthorization;
 - logout failure retains local state; logout success revokes first and then removes only the exact file;
 - `DONGO_TOKEN` takes precedence for CI and causes no credential-file write;

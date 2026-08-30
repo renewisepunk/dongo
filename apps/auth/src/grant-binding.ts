@@ -328,3 +328,55 @@ export async function decodePinnedRefreshToken(
   const { version: _version, entropy: _entropy, ...grant } = parsed.data.grant;
   return { token: parsed.data.token, sessionId: parsed.data.sessionId, grant };
 }
+
+export interface PinnedRefreshTokenState {
+  get(): PinnedGrantContext | undefined;
+  set(grant: PinnedGrantContext | undefined): void;
+}
+
+/**
+ * Better Auth OAuth Provider 1.7.2 concatenates the refresh-token prefix with
+ * `formatRefreshToken.encrypt(...)` without awaiting it. An async encrypt hook
+ * therefore produces the literal wire value `[object Promise]`.
+ *
+ * Generate the encrypted, grant-pinned database token in the awaited
+ * `generateRefreshToken` hook instead. The formatter's encrypt side must stay
+ * deliberately synchronous and identity-only. On decode, return the encrypted
+ * database token unchanged so Better Auth can find the stored row, while
+ * restoring the request-local grant context used to mint the next access token.
+ */
+export function pinnedRefreshTokenHandlers(
+  secret: string,
+  state: PinnedRefreshTokenState,
+): {
+  generate(): Promise<string>;
+  encrypt(token: string): string;
+  decrypt(token: string): Promise<{ token: string; sessionId?: string }>;
+} {
+  return {
+    async generate() {
+      const grant = state.get();
+      if (!grant) throw new Error("Refresh token grant context is missing");
+      return await encodePinnedRefreshToken({
+        secret,
+        token: crypto.randomUUID(),
+        grant,
+      });
+    },
+    encrypt(token) {
+      return token;
+    },
+    async decrypt(token) {
+      try {
+        const decoded = await decodePinnedRefreshToken(secret, token);
+        state.set(decoded.grant);
+        return { token, sessionId: decoded.sessionId };
+      } catch {
+        state.set(undefined);
+        // Do not let malformed or pre-fix development tokens become a worker
+        // 500. A guaranteed non-matching database token yields invalid_grant.
+        return { token: `invalid-pinned-refresh-${crypto.randomUUID()}` };
+      }
+    },
+  };
+}
