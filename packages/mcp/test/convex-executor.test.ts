@@ -48,7 +48,8 @@ test("Convex executor signs the exact versioned envelope without forwarding bear
     secret: SECRET,
     nowMs: () => TIMESTAMP,
     nonce: () => NONCE,
-    fetch: async (input, init) => {
+    fetch: async function (this: void, input, init) {
+      assert.equal(this, undefined);
       observed = new Request(input, init);
       return Response.json({
         ok: true,
@@ -69,6 +70,7 @@ test("Convex executor signs the exact versioned envelope without forwarding bear
   assert.ok(observed);
   assert.equal(observed.url, "https://example.convex.site/internal/agent/v1/execute");
   assert.equal(observed.method, "POST");
+  assert.equal(observed.redirect, "manual");
   assert.equal(observed.headers.get("x-dongo-key-id"), "v1");
   assert.equal(observed.headers.get("x-dongo-timestamp"), String(TIMESTAMP));
   assert.equal(observed.headers.get("x-dongo-nonce"), NONCE);

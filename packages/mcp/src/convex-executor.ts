@@ -242,7 +242,8 @@ export class ConvexHmacOperationExecutor implements OperationExecutor {
       options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES,
       "maxResponseBytes",
     );
-    this.#fetch = options.fetch ?? fetch;
+    const fetcher = options.fetch ?? fetch;
+    this.#fetch = (input, init) => fetcher(input, init);
     this.#nowMs = options.nowMs ?? Date.now;
     this.#nonce = options.nonce ?? (() => crypto.randomUUID());
 
@@ -361,7 +362,7 @@ export class ConvexHmacOperationExecutor implements OperationExecutor {
         },
         body: rawBodyBytes,
         cache: "no-store",
-        redirect: "error",
+        redirect: "manual",
         signal: controller.signal,
       });
       const text = await readBoundedText(response, this.#maxResponseBytes);

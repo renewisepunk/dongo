@@ -47,7 +47,8 @@ function verifierWith(
       resourceClientId: "resource-server",
       resourceClientSecret: "resource-server-secret-32-bytes!!",
       nowSeconds: () => NOW,
-      fetch: async (input, init) => {
+      fetch: async function (this: void, input, init) {
+        assert.equal(this, undefined);
         calls += 1;
         const request = new Request(input, init);
         observed?.push(request.clone());

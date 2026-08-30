@@ -231,7 +231,8 @@ export class BetterAuthIntrospectionTokenVerifier implements DongoTokenVerifier 
     this.#clockSkewSeconds = options.clockSkewSeconds ?? 5;
     this.#timeoutMs = options.timeoutMs ?? 5_000;
     this.#maxResponseBytes = options.maxResponseBytes ?? 32 * 1024;
-    this.#fetch = options.fetch ?? fetch;
+    const fetcher = options.fetch ?? fetch;
+    this.#fetch = (input, init) => fetcher(input, init);
     this.#nowSeconds = options.nowSeconds ?? (() => Math.floor(Date.now() / 1_000));
 
     for (const [label, value] of [
