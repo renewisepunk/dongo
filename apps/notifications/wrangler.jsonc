@@ -1,0 +1,46 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "dongo-notifications-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    { "pattern": "dev.dongo.so/api/notifications/*", "zone_name": "dongo.so" }
+  ],
+  "vars": {
+    "ALLOWED_HOSTNAMES": "dev.dongo.so",
+    "PUBLIC_ORIGIN": "https://dev.dongo.so",
+    "RESEND_FROM_EMAIL": "notifications@dev.dongo.so",
+    "RESEND_FROM_NAME": "Dongo"
+  },
+  "secrets": {
+    "required": [
+      "DONGO_NOTIFICATION_DISPATCH_SECRET",
+      "DONGO_RESEND_CONFIG",
+      "DONGO_APNS_CONFIG",
+      "DONGO_FCM_CONFIG"
+    ]
+  },
+  "ratelimits": [
+    {
+      "name": "NOTIFICATION_RATE_LIMITER",
+      "namespace_id": "1004",
+      "simple": {
+        "limit": 600,
+        "period": 60
+      }
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.05
+    }
+  }
+}

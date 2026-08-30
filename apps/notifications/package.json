@@ -1,0 +1,22 @@
+{
+  "name": "@dongo/notifications-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "wrangler types --config wrangler.jsonc src/worker-configuration.d.ts && tsc -p tsconfig.json --noEmit",
+    "deploy": "wrangler deploy --config wrangler.jsonc",
+    "dry-run": "wrangler deploy --config wrangler.jsonc --dry-run",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.1.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11",
+    "wrangler": "4.127.1"
+  }
+}
