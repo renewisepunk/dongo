@@ -1,6 +1,6 @@
 import { Route, Router } from "@solidjs/router";
 import { render } from "solid-js/web";
-import { Overview } from "../../src/features/overview/Overview";
+import { Overview, type OverviewConnection } from "../../src/features/overview/Overview";
 import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
 import type { WorkItem } from "../../src/features/overview/model";
 import { CompletedWork } from "../../src/routes/app/[orgSlug]/[projectSlug]/done";
@@ -575,7 +575,22 @@ function FixtureOverview() {
     <Overview
       orgSlug="fixture-studio"
       projectSlug="dongo"
-      connect={connectFixtureProject}
+      connect={async (orgSlug, projectSlug): Promise<OverviewConnection> => {
+        if (oauthScenario() === "overview-connect-error") {
+          throw new Error("fixture overview connection detail must stay hidden");
+        }
+        const connected = await connectFixtureProject(orgSlug, projectSlug);
+        if (oauthScenario() !== "overview-subscription-error") return connected;
+        return {
+          ...connected,
+          subscribeOverview(_onUpdate, onError) {
+            queueMicrotask(() => onError(new Error(
+              "fixture overview subscription detail must stay hidden",
+            )));
+            return () => undefined;
+          },
+        };
+      }}
       loadSession={fixtureSession}
     />
   );

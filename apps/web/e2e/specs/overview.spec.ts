@@ -46,6 +46,32 @@ test("restores focus when project navigation is dismissed", async ({ page }) => 
   await expect(trigger).toBeFocused();
 });
 
+test("shows the authenticated account and organization role", async ({ page }) => {
+  await page.getByRole("button", { name: "Profile and settings" }).click();
+  const menu = page.getByRole("menu", { name: "Profile and settings" });
+  await expect(menu.getByText("Fixture Owner", { exact: true })).toBeVisible();
+  await expect(menu.getByText("fixture@example.test", { exact: true })).toBeVisible();
+  await expect(menu.getByText("Fixture Studio · owner", { exact: true })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Organization settings" })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Project settings" })).toBeVisible();
+});
+
+test("bounds overview connection and subscription failures", async ({ page }) => {
+  await page.goto("/?scenario=overview-connect-error");
+  await expect(page.getByRole("alert")).toContainText(
+    "This project could not be loaded for your account.",
+  );
+  await expect(page.getByText("fixture overview connection detail must stay hidden")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Submit to Inbox" })).toBeDisabled();
+
+  await page.goto("/?scenario=overview-subscription-error");
+  await expect(page.getByRole("alert")).toContainText(
+    "Live project data is temporarily unavailable.",
+  );
+  await expect(page.getByText("fixture overview subscription detail must stay hidden")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Submit to Inbox" })).toBeDisabled();
+});
+
 test("responds to Attention and reconciles the work lane", async ({ page }) => {
   const row = page.locator('[data-work-id="work-needs"]');
   await row.click();
