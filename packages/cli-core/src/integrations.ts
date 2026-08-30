@@ -19,6 +19,7 @@ export interface IntegrationResult {
   applied: boolean;
   serverName: string;
   endpoint: string;
+  replacedServers: string[];
   files: IntegrationFileResult[];
   loginCommand?: string;
   rollback: string[];
@@ -116,12 +117,86 @@ function mergeInstruction(existing: string | undefined, managedBlock: string): s
   return `${existing.slice(0, start)}${managedBlock}${existing.slice(end + MANAGED_END.length).replace(/^\r?\n/, "")}`;
 }
 
-function mergeToml(existing: string | undefined, serverName: string, desired: string): string {
-  if (existing === undefined || existing.trim().length === 0) return desired;
+interface ConfigurationMerge {
+  content: string;
+  replacedServers: string[];
+}
+
+function isExactManagedEndpoint(
+  serverName: string,
+  entry: Record<string, unknown>,
+  productOrigin: string,
+): boolean {
+  const keys = Object.keys(entry).sort();
+  if (
+    keys.length !== 2
+    || keys[0] !== "type"
+    || keys[1] !== "url"
+    || !["http", "streamable-http"].includes(String(entry.type))
+    || typeof entry.url !== "string"
+  ) return false;
+  try {
+    const endpoint = new URL(entry.url);
+    const origin = new URL(productOrigin);
+    const match = /^\/p\/([A-Za-z0-9_-]{1,200})\/mcp$/u.exec(endpoint.pathname);
+    if (
+      endpoint.origin !== origin.origin
+      || endpoint.search
+      || endpoint.hash
+      || !match?.[1]
+    ) return false;
+    return serverName === `dongo-${shortProjectReference(match[1])}`;
+  } catch {
+    return false;
+  }
+}
+
+function removeStaleManagedToml(
+  existing: string,
+  serverName: string,
+  productOrigin: string,
+): { content: string; replacedServers: string[] } {
+  const tablePattern = /^\[mcp_servers\.([A-Za-z0-9_-]+)\]\s*$/gmu;
+  const tables = [...existing.matchAll(tablePattern)];
+  const removals: Array<{ start: number; end: number; serverName: string }> = [];
+  for (const [index, table] of tables.entries()) {
+    const candidateName = table[1];
+    if (!candidateName || candidateName === serverName || !candidateName.startsWith("dongo-")) continue;
+    const start = table.index ?? 0;
+    const end = tables[index + 1]?.index ?? existing.length;
+    const block = existing.slice(start, end).trim();
+    const lines = block.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+    const urlMatch = lines.length === 2 ? /^url\s*=\s*"([^"\r\n]+)"$/u.exec(lines[1] ?? "") : null;
+    if (
+      urlMatch?.[1]
+      && isExactManagedEndpoint(candidateName, { type: "http", url: urlMatch[1] }, productOrigin)
+    ) removals.push({ start, end, serverName: candidateName });
+  }
+  let content = existing;
+  for (const removal of [...removals].reverse()) {
+    content = `${content.slice(0, removal.start)}${content.slice(removal.end)}`;
+  }
+  return { content, replacedServers: removals.map((removal) => removal.serverName) };
+}
+
+function mergeToml(
+  existing: string | undefined,
+  serverName: string,
+  desired: string,
+  productOrigin: string,
+): ConfigurationMerge {
+  if (existing === undefined || existing.trim().length === 0) return { content: desired, replacedServers: [] };
+  const replacement = removeStaleManagedToml(existing, serverName, productOrigin);
+  existing = replacement.content;
   const header = `[mcp_servers.${serverName}]`;
   const headerPattern = new RegExp(`^\\[mcp_servers\\.${serverName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\]\\s*$`, "gm");
   const matches = [...existing.matchAll(headerPattern)];
-  if (matches.length === 0) return `${existing.trimEnd()}\n\n${desired}`;
+  if (matches.length === 0) {
+    return {
+      content: existing.trim().length === 0 ? desired : `${existing.trimEnd()}\n\n${desired}`,
+      replacedServers: replacement.replacedServers,
+    };
+  }
   if (matches.length !== 1) {
     throw new CliCoreError({ code: "conflict", message: `Codex server table ${header} is duplicated.`, exitCode: 6 });
   }
@@ -132,7 +207,7 @@ function mergeToml(existing: string | undefined, serverName: string, desired: st
   const next = nextTable.exec(existing);
   const end = next?.index ?? existing.length;
   const current = existing.slice(start, end).trim();
-  if (current === desired.trim()) return existing;
+  if (current === desired.trim()) return { content: existing, replacedServers: replacement.replacedServers };
   throw new CliCoreError({
     code: "conflict",
     message: `Codex server ${serverName} already exists with different settings; no file was changed.`,
@@ -144,7 +219,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function mergeJson(existing: string | undefined, serverName: string, desiredText: string): string {
+function mergeJson(
+  existing: string | undefined,
+  serverName: string,
+  desiredText: string,
+  productOrigin: string,
+): ConfigurationMerge {
   let root: Record<string, unknown> = {};
   if (existing !== undefined && existing.trim().length > 0) {
     try {
@@ -167,6 +247,18 @@ function mergeJson(existing: string | undefined, serverName: string, desiredText
     throw new CliCoreError({ code: "conflict", message: "Existing mcpServers configuration is not an object.", exitCode: 6 });
   }
   const servers = currentServers === undefined ? {} : { ...currentServers };
+  const replacedServers: string[] = [];
+  for (const [candidateName, candidate] of Object.entries(servers)) {
+    if (
+      candidateName !== serverName
+      && candidateName.startsWith("dongo-")
+      && isRecord(candidate)
+      && isExactManagedEndpoint(candidateName, candidate, productOrigin)
+    ) {
+      delete servers[candidateName];
+      replacedServers.push(candidateName);
+    }
+  }
   const existingEntry = servers[serverName];
   if (existingEntry !== undefined && JSON.stringify(existingEntry) !== JSON.stringify(desiredEntry)) {
     throw new CliCoreError({
@@ -177,7 +269,7 @@ function mergeJson(existing: string | undefined, serverName: string, desiredText
   }
   servers[serverName] = desiredEntry;
   root.mcpServers = servers;
-  return `${JSON.stringify(root, null, 2)}\n`;
+  return { content: `${JSON.stringify(root, null, 2)}\n`, replacedServers };
 }
 
 export async function configureIntegration(input: {
@@ -214,10 +306,11 @@ export async function configureIntegration(input: {
       : input.host === "claude"
         ? bundle.claudeProjectConfig
         : bundle.genericMcpConfig;
-  const configuration =
+  const configurationMerge =
     input.host === "codex"
-      ? mergeToml(existingConfiguration, bundle.serverName, manifestText)
-      : mergeJson(existingConfiguration, bundle.serverName, manifestText);
+      ? mergeToml(existingConfiguration, bundle.serverName, manifestText, input.productOrigin)
+      : mergeJson(existingConfiguration, bundle.serverName, manifestText, input.productOrigin);
+  const configuration = configurationMerge.content;
   const instruction = mergeInstruction(existingInstruction, bundle.managedInstructionBlock);
   const prepared = [
     {
@@ -261,6 +354,7 @@ export async function configureIntegration(input: {
     applied: input.apply,
     serverName: bundle.serverName,
     endpoint: bundle.endpoint,
+    replacedServers: configurationMerge.replacedServers,
     files,
     loginCommand,
     rollback,

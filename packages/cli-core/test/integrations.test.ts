@@ -49,6 +49,37 @@ test("Codex apply preserves unrelated TOML and prose and is idempotent", async (
   assert.equal(second.files.every((file) => !file.changed), true);
 });
 
+test("Codex apply replaces only an exact stale Dongo project table", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "dongo-integrate-codex-replace-"));
+  await mkdir(path.join(root, ".codex"));
+  await import("node:fs/promises").then((fs) =>
+    fs.writeFile(
+      path.join(root, ".codex", "config.toml"),
+      [
+        "model = \"gpt\"",
+        "",
+        "[mcp_servers.other]",
+        "url = \"https://other.example/mcp\"",
+        "",
+        "[mcp_servers.dongo-oldproject]",
+        "url = \"https://dev.dongo.so/p/oldproject/mcp\"",
+        "",
+        "[mcp_servers.dongo-custom]",
+        "url = \"https://dev.dongo.so/p/custom/mcp\"",
+        "enabled = false",
+        "",
+      ].join("\n"),
+    ),
+  );
+  const applied = await configureIntegration(input(root, "codex", true));
+  assert.deepEqual(applied.replacedServers, ["dongo-oldproject"]);
+  const config = await readFile(path.join(root, ".codex", "config.toml"), "utf8");
+  assert.doesNotMatch(config, /dongo-oldproject/u);
+  assert.match(config, /mcp_servers\.other/u);
+  assert.match(config, /mcp_servers\.dongo-custom/u);
+  assert.match(config, /mcp_servers\.dongo-abcdef/u);
+});
+
 test("Claude JSON merge preserves unrelated servers and conflicting ownership changes nothing", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "dongo-integrate-claude-"));
   await import("node:fs/promises").then((fs) =>
@@ -71,6 +102,29 @@ test("Claude JSON merge preserves unrelated servers and conflicting ownership ch
     return true;
   });
   assert.equal(await readFile(path.join(root, ".mcp.json"), "utf8"), before);
+});
+
+test("Claude apply replaces only an exact stale Dongo project entry", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "dongo-integrate-claude-replace-"));
+  await import("node:fs/promises").then((fs) =>
+    fs.writeFile(
+      path.join(root, ".mcp.json"),
+      `${JSON.stringify({
+        mcpServers: {
+          other: { type: "http", url: "https://other.example/mcp" },
+          "dongo-oldproject": { type: "http", url: "https://dev.dongo.so/p/oldproject/mcp" },
+          "dongo-custom": { type: "http", url: "https://dev.dongo.so/p/custom/mcp", headers: { custom: "value" } },
+        },
+      }, null, 2)}\n`,
+    ),
+  );
+  const applied = await configureIntegration(input(root, "claude", true));
+  assert.deepEqual(applied.replacedServers, ["dongo-oldproject"]);
+  const config = JSON.parse(await readFile(path.join(root, ".mcp.json"), "utf8"));
+  assert.equal(config.mcpServers["dongo-oldproject"], undefined);
+  assert.equal(config.mcpServers.other.url, "https://other.example/mcp");
+  assert.equal(config.mcpServers["dongo-custom"].headers.custom, "value");
+  assert.equal(config.mcpServers["dongo-abcdef"].url, "https://dev.dongo.so/p/project_abcdef/mcp");
 });
 
 test("integration apply refuses symlink targets", async () => {
