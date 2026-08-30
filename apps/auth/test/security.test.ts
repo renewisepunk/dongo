@@ -70,9 +70,9 @@ describe("authorization boundary security", () => {
   });
 
   it("fetches an allowlisted CIMD document with bounded manual redirects", async () => {
-    const upstream = vi.fn(async (request: Request, _init?: RequestInit) =>
+    const upstream = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) =>
       Response.json({
-        client_id: request.url,
+        client_id: String(input),
         client_name: "Claude Code",
         redirect_uris: ["http://localhost/callback"],
       }, {
@@ -82,18 +82,23 @@ describe("authorization boundary security", () => {
     const fetchMetadata = createMetadataFetcher(["claude.ai"]);
     const response = await fetchMetadata(
       "https://claude.ai/oauth/claude-code-client-metadata",
-      { headers: { accept: "application/json" } },
+      { headers: { accept: "application/json" }, redirect: "error" },
     );
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       client_name: "Claude Code",
     });
     expect(upstream).toHaveBeenCalledOnce();
-    expect(upstream.mock.calls[0]?.[0].redirect).toBe("follow");
-    expect(upstream.mock.calls[0]?.[0].headers.get("accept")).toBe(
+    expect(upstream.mock.calls[0]?.[0]).toBe(
+      "https://claude.ai/oauth/claude-code-client-metadata",
+    );
+    expect(upstream.mock.calls[0]?.[1]).toMatchObject({
+      method: "GET",
+      redirect: "manual",
+    });
+    expect(new Headers(upstream.mock.calls[0]?.[1]?.headers).get("accept")).toBe(
       "application/json",
     );
-    expect(upstream.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
   });
 
   it("rejects CIMD redirects instead of following them", async () => {

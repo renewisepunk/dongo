@@ -155,7 +155,13 @@ export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
     else request.signal.addEventListener("abort", abort, { once: true });
     let response: Response;
     try {
-      response = await fetch(request, {
+      // Do not reuse the caller-owned Request here. CIMD resolvers commonly
+      // construct it with redirect="error"; workerd rejects attempts to reuse
+      // that Request while overriding the redirect mode. Rebuild the bounded
+      // GET/HEAD subrequest from the already-validated URL and headers.
+      response = await fetch(url.toString(), {
+        method: request.method,
+        headers: request.headers,
         redirect: "manual",
         signal: controller.signal,
       });
