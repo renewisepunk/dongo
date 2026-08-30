@@ -15,6 +15,7 @@ import type * as dev_bootstrapAction from "../dev/bootstrapAction.js";
 import type * as domains_artifacts_index from "../domains/artifacts/index.js";
 import type * as domains_attachments_actions from "../domains/attachments/actions.js";
 import type * as domains_attachments_index from "../domains/attachments/index.js";
+import type * as domains_attachments_summary from "../domains/attachments/summary.js";
 import type * as domains_attention_index from "../domains/attention/index.js";
 import type * as domains_comments_index from "../domains/comments/index.js";
 import type * as domains_events_index from "../domains/events/index.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   "domains/artifacts/index": typeof domains_artifacts_index;
   "domains/attachments/actions": typeof domains_attachments_actions;
   "domains/attachments/index": typeof domains_attachments_index;
+  "domains/attachments/summary": typeof domains_attachments_summary;
   "domains/attention/index": typeof domains_attention_index;
   "domains/comments/index": typeof domains_comments_index;
   "domains/events/index": typeof domains_events_index;
