@@ -172,6 +172,7 @@ export function Overview(props: OverviewProps) {
   const [viewerInitials, setViewerInitials] = createSignal("ME");
   const [projectMenuOpen, setProjectMenuOpen] = createSignal(false);
   const [profileMenuOpen, setProfileMenuOpen] = createSignal(false);
+  const [draggedReadyId, setDraggedReadyId] = createSignal<string>();
   let connection: OverviewConnection | undefined;
   let unsubscribeOverview: (() => void) | undefined;
   let unsubscribeWork: (() => void) | undefined;
@@ -693,26 +694,52 @@ export function Overview(props: OverviewProps) {
     }
   };
 
-  const moveReady = async (id: string, direction: -1 | 1) => {
+  const reorderReady = async (id: string, targetIndex: number) => {
     const readyItems = ready();
-    const index = readyItems.findIndex((item) => item.id === id);
-    const target = index + direction;
-    const item = readyItems[index];
-    const targetItem = readyItems[target];
-    if (!connection || !item || !targetItem || target < 0 || target >= readyItems.length) return;
-    const rank = direction < 0
-      ? target === 0
-        ? targetItem.rank - 1_024
-        : (readyItems[target - 1]!.rank + targetItem.rank) / 2
-      : target === readyItems.length - 1
-        ? targetItem.rank + 1_024
-        : (targetItem.rank + readyItems[target + 1]!.rank) / 2;
+    const sourceIndex = readyItems.findIndex((item) => item.id === id);
+    const item = readyItems[sourceIndex];
+    if (!connection || !item || sourceIndex < 0) return;
+    const remaining = readyItems.filter((candidate) => candidate.id !== id);
+    const insertionIndex = Math.max(0, Math.min(targetIndex, remaining.length));
+    if (insertionIndex === sourceIndex) return;
+    const before = remaining[insertionIndex - 1];
+    const after = remaining[insertionIndex];
+    const rank = !before
+      ? after!.rank - 1_024
+      : !after
+        ? before.rank + 1_024
+        : (before.rank + after.rank) / 2;
     try {
       await connection.reorderWork(item, rank);
       announce("Ready order updated");
     } catch {
       announce("The Ready order changed; try again");
     }
+  };
+
+  const moveReady = (id: string, direction: -1 | 1) => {
+    const index = ready().findIndex((item) => item.id === id);
+    if (index < 0) return;
+    void reorderReady(id, index + direction);
+  };
+
+  const dropReady = (
+    event: DragEvent & { currentTarget: HTMLDivElement },
+    targetId: string,
+  ) => {
+    const sourceId = draggedReadyId() || event.dataTransfer?.getData("text/plain");
+    setDraggedReadyId(undefined);
+    if (!sourceId || sourceId === targetId) return;
+    const readyItems = ready();
+    const sourceIndex = readyItems.findIndex((item) => item.id === sourceId);
+    const targetIndex = readyItems.findIndex((item) => item.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const afterTarget = event.clientY >= bounds.top + bounds.height / 2;
+    let insertionIndex = targetIndex + (afterTarget ? 1 : 0);
+    if (sourceIndex < insertionIndex) insertionIndex -= 1;
+    void reorderReady(sourceId, insertionIndex);
   };
 
   const downloadAttachment = async (attachmentId: string) => {
@@ -1216,12 +1243,32 @@ export function Overview(props: OverviewProps) {
                 <span>ready</span><span class="section-heading__count">{ready().length}</span><span class="section-heading__aside">order = priority</span>
               </div>
               <For each={ready()}>{(item, index) => (
-                <div class="ready-row">
+                <div
+                  class="ready-row"
+                  data-ready-id={item.id}
+                  data-dragging={draggedReadyId() === item.id}
+                  draggable="true"
+                  onDragStart={(event) => {
+                    setDraggedReadyId(item.id);
+                    if (event.dataTransfer) {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", item.id);
+                    }
+                  }}
+                  onDragEnd={() => setDraggedReadyId(undefined)}
+                  onDragOver={(event) => {
+                    const sourceId = draggedReadyId();
+                    if (!sourceId || sourceId === item.id) return;
+                    event.preventDefault();
+                    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(event) => dropReady(event, item.id)}
+                >
                   <div class="reorder-controls">
-                    <button class="reorder-button" type="button" disabled={index() === 0} aria-label={`Move ${item.title} up`} onClick={() => void moveReady(item.id, -1)}>▲</button>
-                    <button class="reorder-button" type="button" disabled={index() === ready().length - 1} aria-label={`Move ${item.title} down`} onClick={() => void moveReady(item.id, 1)}>▼</button>
+                    <button class="reorder-button" type="button" disabled={index() === 0} aria-label={`Move ${item.title} up`} onClick={() => moveReady(item.id, -1)}>▲</button>
+                    <button class="reorder-button" type="button" disabled={index() === ready().length - 1} aria-label={`Move ${item.title} down`} onClick={() => moveReady(item.id, 1)}>▼</button>
                   </div>
-                  <button class="ready-row__open" data-work-id={item.id} type="button" onClick={() => openWork(item.id)}>
+                  <button class="ready-row__open" data-work-id={item.id} draggable="true" type="button" onClick={() => openWork(item.id)}>
                     <span class="ready-row__position">{String(index() + 1).padStart(2, "0")}</span>
                     <span class="work-row__title">{item.title}</span>
                     <span class="work-row__identifier mono">{item.identifier}</span>

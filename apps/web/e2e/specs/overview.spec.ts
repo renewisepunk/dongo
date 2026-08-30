@@ -52,6 +52,26 @@ test("reconciles optimistic Intake exactly once", async ({ page }) => {
   await expect(page.getByText("Capture this fixture request exactly once", { exact: true })).toHaveCount(1);
 });
 
+test("reorders Ready work by drag and by accessible controls", async ({ page }) => {
+  const titles = page.locator('[data-ready-id] .work-row__title');
+  await expect(titles).toHaveText(["Verify fixture search", "Audit mobile controls"]);
+
+  const target = page.locator('[data-work-id="work-ready-b"]');
+  const targetBounds = await target.boundingBox();
+  expect(targetBounds).not.toBeNull();
+  await page.locator('[data-work-id="work-ready-a"]').dragTo(target, {
+    targetPosition: {
+      x: Math.min(120, targetBounds!.width - 2),
+      y: targetBounds!.height - 2,
+    },
+  });
+  await expect(titles).toHaveText(["Audit mobile controls", "Verify fixture search"]);
+  await expect(page.getByText("Ready order updated")).toBeVisible();
+
+  await page.getByRole("button", { name: "Move Verify fixture search up" }).click();
+  await expect(titles).toHaveText(["Verify fixture search", "Audit mobile controls"]);
+});
+
 test("uploads a browser-selected file before Intake submission", async ({ page }) => {
   await page.locator('input[type="file"]').setInputFiles({
     name: "fixture.txt",

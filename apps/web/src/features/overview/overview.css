@@ -551,6 +551,11 @@
 
 .ready-row:hover { border-color: var(--line-strong); }
 
+.ready-row[data-dragging="true"] {
+  border-color: var(--amber);
+  opacity: 0.58;
+}
+
 .reorder-controls {
   display: flex;
   width: 38px;
@@ -584,6 +589,9 @@
   padding: 14px 15px;
   text-align: left;
 }
+
+.ready-row__open { cursor: grab; }
+.ready-row[data-dragging="true"] .ready-row__open { cursor: grabbing; }
 
 .ready-row__position {
   width: 22px;
