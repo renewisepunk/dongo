@@ -9,6 +9,11 @@ import {
 } from "../lib/project-data";
 
 type Host = "Codex" | "Claude Code" | "AGENTS.md";
+const HOSTS: readonly Host[] = ["Codex", "Claude Code", "AGENTS.md"];
+
+function hostId(host: Host): string {
+  return host.toLowerCase().replace(/[^a-z]+/gu, "-").replace(/^-|-$/gu, "");
+}
 
 function preferredProjectId(): string | undefined {
   if (typeof sessionStorage === "undefined") return undefined;
@@ -31,6 +36,7 @@ export default function ConnectRoute() {
   const [error, setError] = createSignal("");
   let connection: ProjectDataConnection | undefined;
   let unsubscribe: (() => void) | undefined;
+  let hostTabs: HTMLDivElement | undefined;
   let disposed = false;
 
   const activeInstallation = createMemo(() => installations().find(
@@ -85,6 +91,23 @@ export default function ConnectRoute() {
     window.setTimeout(() => setCopied(false), 1600);
   };
 
+  const moveHostTab = (event: KeyboardEvent, current: Host) => {
+    const currentIndex = HOSTS.indexOf(current);
+    let nextIndex: number | undefined;
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % HOSTS.length;
+    if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + HOSTS.length) % HOSTS.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = HOSTS.length - 1;
+    if (nextIndex === undefined) return;
+    event.preventDefault();
+    setHost(HOSTS[nextIndex]!);
+    queueMicrotask(() => {
+      hostTabs
+        ?.querySelector<HTMLButtonElement>(`[data-host-index="${nextIndex}"]`)
+        ?.focus();
+    });
+  };
+
   return (
     <RequireHumanSession><AuthFrame>
       <div class="auth-stack" style={{ gap: "22px" }}>
@@ -94,22 +117,32 @@ export default function ConnectRoute() {
           <p class="auth-lede">Open your repository with your coding agent and tell it to install Dongo.</p>
         </div>
 
-        <div class="host-tabs" role="tablist" aria-label="Coding agent host">
-          {(["Codex", "Claude Code", "AGENTS.md"] as const).map((item) => (
+        <div ref={hostTabs} class="host-tabs" role="tablist" aria-label="Coding agent host">
+          {HOSTS.map((item, index) => (
             <button
+              id={`host-tab-${hostId(item)}`}
               class="host-tab"
               type="button"
               role="tab"
               aria-selected={host() === item}
+              aria-controls="host-instructions"
+              tabindex={host() === item ? 0 : -1}
               data-selected={host() === item}
+              data-host-index={index}
               onClick={() => setHost(item)}
+              onKeyDown={(event) => moveHostTab(event, item)}
             >
               {item}
             </button>
           ))}
         </div>
 
-        <div class="instruction">
+        <div
+          class="instruction"
+          id="host-instructions"
+          role="tabpanel"
+          aria-labelledby={`host-tab-${hostId(host())}`}
+        >
           <div class="instruction__head">
             <span class="instruction__label">say this to {host()}</span>
             <button class="copy-button" type="button" onClick={copyInstruction}>
