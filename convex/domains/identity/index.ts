@@ -44,6 +44,16 @@ export const current = query({
       .query("memberships")
       .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
       .take(100);
-    return { profile, memberships };
+    return {
+      profile: {
+        _id: profile._id,
+        email: profile.email,
+        name: profile.name,
+        avatarUrl: profile.avatarUrl,
+        createdAt: profile.createdAt,
+        updatedAt: profile.updatedAt,
+      },
+      memberships,
+    };
   },
 });

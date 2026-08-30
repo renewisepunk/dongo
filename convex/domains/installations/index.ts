@@ -345,10 +345,21 @@ export const listForProject = query({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
     await requireHumanProject(ctx, args.projectId, { owner: true, allowArchived: true });
-    return await ctx.db
+    const installations = await ctx.db
       .query("installations")
       .withIndex("by_project_status", (q) => q.eq("projectId", args.projectId))
       .take(100);
+    return installations.map((installation) => ({
+      _id: installation._id,
+      kind: installation.kind,
+      status: installation.status,
+      clientId: installation.clientId,
+      label: installation.label,
+      machineLabel: installation.machineLabel,
+      scopes: installation.scopes,
+      createdAt: installation.createdAt,
+      lastUsedAt: installation.lastUsedAt,
+    }));
   },
 });
 

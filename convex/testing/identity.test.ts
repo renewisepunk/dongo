@@ -32,5 +32,15 @@ describe("human identity bootstrap", () => {
       email: identity.email,
       name: identity.email,
     });
+    const current = await human.query(api.domains.identity.index.current, {});
+    expect(current.profile).toEqual({
+      _id: profile!._id,
+      email: identity.email,
+      name: identity.email,
+      avatarUrl: undefined,
+      createdAt: profile!.createdAt,
+      updatedAt: profile!.updatedAt,
+    });
+    expect(current.profile).not.toHaveProperty("authSubject");
   });
 });

@@ -80,6 +80,68 @@ describe("project administration", () => {
       { email: ownerIdentity.email, role: "owner" },
       { email: memberIdentity.email, role: "member" },
     ]);
+    expect(snapshot.project).not.toHaveProperty("nextWorkNumber");
+    expect(snapshot.project).not.toHaveProperty("organizationId");
+    expect(snapshot.organization).not.toHaveProperty("createdByProfileId");
+    const mine = await owner.query(api.domains.projects.index.listMine, {});
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.membership).toEqual({
+      organizationId: organization.organizationId,
+      role: "owner",
+    });
+    expect(mine[0]?.organization).not.toHaveProperty("createdByProfileId");
+    expect(mine[0]?.projects[0]).not.toHaveProperty("nextWorkNumber");
+
+    const installationId = await owner.run(async (ctx) => {
+      const profile = await ctx.db
+        .query("humanProfiles")
+        .withIndex("by_auth_subject", (query) =>
+          query.eq("authSubject", ownerIdentity.tokenIdentifier),
+        )
+        .unique();
+      if (!profile) throw new Error("Expected owner profile");
+      const now = Date.now();
+      const actorId = await ctx.db.insert("actors", {
+        organizationId: organization.organizationId,
+        type: "agent",
+        name: "Test CLI",
+        agentType: "cli",
+        createdAt: now,
+      });
+      return await ctx.db.insert("installations", {
+        organizationId: organization.organizationId,
+        projectId: project.projectId,
+        actorId,
+        kind: "cli",
+        status: "active",
+        clientId: "test-cli",
+        label: "Test CLI",
+        machineLabel: "Test Mac",
+        resource: "https://dev.dongo.so/api/agent/v1",
+        scopes: ["dongo:work:read"],
+        authorizedByProfileId: profile._id,
+        createdAt: now,
+        updatedAt: now,
+        lastUsedAt: now,
+      });
+    });
+    const installations = await owner.query(
+      api.domains.installations.index.listForProject,
+      { projectId: project.projectId },
+    );
+    expect(installations).toEqual([
+      expect.objectContaining({
+        _id: installationId,
+        kind: "cli",
+        status: "active",
+        clientId: "test-cli",
+        label: "Test CLI",
+        machineLabel: "Test Mac",
+        scopes: ["dongo:work:read"],
+      }),
+    ]);
+    expect(installations[0]).not.toHaveProperty("resource");
+    expect(installations[0]).not.toHaveProperty("authorizedByProfileId");
     await expect(member.mutation(api.domains.projects.index.updateProject, {
       projectId: project.projectId,
       name: "Forbidden rename",

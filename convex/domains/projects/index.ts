@@ -222,16 +222,41 @@ export const listMine = query({
       .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
       .take(100);
     return await Promise.all(
-      memberships.map(async (membership) => ({
-        membership,
-        organization: await ctx.db.get(membership.organizationId),
-        projects: await ctx.db
+      memberships.map(async (membership) => {
+        const [organization, projects] = await Promise.all([
+          ctx.db.get(membership.organizationId),
+          ctx.db
           .query("projects")
           .withIndex("by_organization", (q) =>
             q.eq("organizationId", membership.organizationId),
           )
           .take(100),
-      })),
+        ]);
+        return {
+          membership: {
+            organizationId: membership.organizationId,
+            role: membership.role,
+          },
+          organization: organization
+            ? {
+                _id: organization._id,
+                name: organization.name,
+                slug: organization.slug,
+                plan: organization.plan,
+              }
+            : null,
+          projects: projects.map((project) => ({
+            _id: project._id,
+            publicRef: project.publicRef,
+            name: project.name,
+            slug: project.slug,
+            repositoryUrl: project.repositoryUrl,
+            identifierPrefix: project.identifierPrefix,
+            executionMode: project.executionMode,
+            archivedAt: project.archivedAt,
+          })),
+        };
+      }),
     );
   },
 });
@@ -283,8 +308,19 @@ export const administration = query({
       )
       .unique();
     return {
-      project,
-      organization,
+      project: {
+        name: project.name,
+        slug: project.slug,
+        repositoryUrl: project.repositoryUrl,
+        identifierPrefix: project.identifierPrefix,
+        executionMode: project.executionMode,
+        archivedAt: project.archivedAt,
+      },
+      organization: {
+        name: organization.name,
+        slug: organization.slug,
+        plan: organization.plan,
+      },
       membershipRole: principal.membership.role,
       members,
       activeProjectCount: projects.filter(
