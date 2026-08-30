@@ -83,7 +83,9 @@ The installer may alter only its named MCP entry and versioned dongo instruction
 
 After host-native OAuth, call one read-only session-start tool. Then verify one idempotent write using a fresh test work item. If login succeeds but tools fail, compare the exact resource URL and approved scopes before reauthorizing.
 
-Native host loopback callbacks must remain top-level redirects to the host-provided `redirect_uri`. Never embed or fetch a localhost callback from the dongo web app: Chrome and other browsers may show a device/private-network access prompt. The plain final localhost page is served by the host, not dongo, and can only be branded when the host offers an explicit post-callback redirect or customizable callback response.
+Native host loopback callbacks must remain top-level redirects to the host-provided `redirect_uri`. Never embed, probe, proxy, or fetch a localhost callback from the dongo web app: Chrome's Local Network Access protection applies to public-origin fetches, subresources, and subframes that reach loopback and can show the suspicious device-access prompt. Authorization API fetches therefore use `redirect: "manual"` and accept only the provider's JSON continuation; `followOAuthResult` performs the one explicit top-level navigation. The plain final localhost page is served by the host, not dongo, and can only be branded when the host offers an explicit post-callback redirect or customizable callback response.
+
+If Chrome shows “Access other apps and services on this device,” deny it and treat the flow as a release-blocking regression. Do not teach the user to grant that permission. Confirm in DevTools that no `fetch`, XHR, iframe, image, script, preflight, or service-worker request from `dev.dongo.so` targets a loopback address. A single document navigation to the exact registered callback after consent is expected.
 
 ### Claude Code CIMD loopback compatibility
 

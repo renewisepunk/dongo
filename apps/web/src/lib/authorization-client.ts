@@ -130,6 +130,10 @@ async function workerRequest<T>(pathname: string, init: RequestInit = {}): Promi
   try {
     response = await fetch(authWorkerUrl(pathname), {
       ...init,
+      // Authorization endpoints return a JSON continuation. Never let fetch
+      // follow that continuation: a loopback OAuth callback must be reached
+      // only as the explicit top-level navigation in followOAuthResult.
+      redirect: "manual",
       credentials: "same-origin",
       headers: {
         accept: "application/json",
@@ -161,6 +165,7 @@ export async function authorizationWorkerHasSession(): Promise<boolean> {
   try {
     const response = await fetch(authWorkerUrl("/get-session"), {
       method: "GET",
+      redirect: "manual",
       credentials: "same-origin",
       headers: { accept: "application/json" },
     });

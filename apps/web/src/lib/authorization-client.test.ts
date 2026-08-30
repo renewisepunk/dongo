@@ -91,6 +91,7 @@ describe("isolated authorization worker client", () => {
   it("sends consent through the provider and strips unsigned query injection", async () => {
     const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe("https://dev.dongo.so/api/auth/oauth2/consent");
+      expect(init?.redirect).toBe("manual");
       const body = JSON.parse(String(init?.body)) as { accept: boolean; oauth_query: string };
       expect(body.accept).toBe(true);
       const query = new URLSearchParams(body.oauth_query);
@@ -100,5 +101,20 @@ describe("isolated authorization worker client", () => {
     });
     vi.stubGlobal("fetch", fetch);
     await decideOAuthConsent("?client_id=codex&injected=drop&sig=s&ba_param=client_id", true);
+  });
+
+  it("never lets an authorization fetch follow the host loopback callback", async () => {
+    const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.redirect).toBe("manual");
+      return new Response(null, {
+        status: 302,
+        headers: { location: "http://127.0.0.1:8765/callback?code=secret" },
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(decideOAuthConsent("?client_id=codex&sig=s&ba_param=client_id", true))
+      .rejects.toMatchObject({ code: "invalid" });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
