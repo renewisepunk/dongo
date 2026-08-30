@@ -91,6 +91,8 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   const [unarchiving, setUnarchiving] = createSignal(false);
   let connection: ProjectDataConnection | undefined;
   let unsubscribe: (() => void) | undefined;
+  let manualModeButton: HTMLButtonElement | undefined;
+  let autonomousModeButton: HTMLButtonElement | undefined;
   let disposed = false;
 
   const owner = createMemo(() => administration()?.membershipRole === "owner");
@@ -102,6 +104,32 @@ export function ProjectSettings(props: ProjectSettingsProps) {
     setSearchParams({ tab: next === "General" ? undefined : next });
     setError("");
     setStatus("");
+  };
+
+  const selectExecutionMode = (
+    mode: "manual" | "autonomous",
+    focus = false,
+  ) => {
+    setExecutionMode(mode);
+    if (focus) {
+      queueMicrotask(() => {
+        (mode === "manual" ? manualModeButton : autonomousModeButton)?.focus();
+      });
+    }
+  };
+
+  const moveExecutionMode = (event: KeyboardEvent) => {
+    if (!owner()) return;
+    let next: "manual" | "autonomous" | undefined;
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "Home") {
+      next = "manual";
+    }
+    if (event.key === "ArrowRight" || event.key === "ArrowDown" || event.key === "End") {
+      next = "autonomous";
+    }
+    if (!next) return;
+    event.preventDefault();
+    selectExecutionMode(next, true);
   };
 
   const applyAdministration = (next: ProjectAdministration) => {
@@ -281,7 +309,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
       <div class="settings-layout">
         <nav class="settings-nav" aria-label="Project settings">
           <For each={SETTINGS_TABS}>{(item) => (
-            <button class="settings-nav__link" data-selected={tab() === item} type="button" onClick={() => selectTab(item)}>{item}</button>
+            <button class="settings-nav__link" data-selected={tab() === item} aria-current={tab() === item ? "page" : undefined} type="button" onClick={() => selectTab(item)}>{item}</button>
           )}</For>
         </nav>
 
@@ -310,8 +338,8 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 </div>
                 <div class="field-label" id="settings-mode">Agent execution mode</div>
                 <div class="choice-list" role="radiogroup" aria-labelledby="settings-mode">
-                  <button class="choice" data-selected={executionMode() === "manual"} type="button" role="radio" aria-checked={executionMode() === "manual"} disabled={!owner()} onClick={() => setExecutionMode("manual")}><span class="choice__dot" /><span class="choice__copy"><span class="choice__title">Manual</span><span class="choice__body">Agents triage and suggest work, then wait for you.</span></span></button>
-                  <button class="choice" data-selected={executionMode() === "autonomous"} type="button" role="radio" aria-checked={executionMode() === "autonomous"} disabled={!owner()} onClick={() => setExecutionMode("autonomous")}><span class="choice__dot" /><span class="choice__copy"><span class="choice__title">Autonomous</span><span class="choice__body">Agents may claim and begin the highest suitable Ready work.</span></span></button>
+                  <button ref={manualModeButton} class="choice" data-selected={executionMode() === "manual"} type="button" role="radio" aria-checked={executionMode() === "manual"} tabindex={executionMode() === "manual" ? 0 : -1} disabled={!owner()} onClick={() => selectExecutionMode("manual")} onKeyDown={moveExecutionMode}><span class="choice__dot" /><span class="choice__copy"><span class="choice__title">Manual</span><span class="choice__body">Agents triage and suggest work, then wait for you.</span></span></button>
+                  <button ref={autonomousModeButton} class="choice" data-selected={executionMode() === "autonomous"} type="button" role="radio" aria-checked={executionMode() === "autonomous"} tabindex={executionMode() === "autonomous" ? 0 : -1} disabled={!owner()} onClick={() => selectExecutionMode("autonomous")} onKeyDown={moveExecutionMode}><span class="choice__dot" /><span class="choice__copy"><span class="choice__title">Autonomous</span><span class="choice__body">Agents may claim and begin the highest suitable Ready work.</span></span></button>
                 </div>
                 <Show when={owner()}><button class="button button--primary" type="submit" disabled={savingProject()} style={{ "align-self": "flex-start" }}>{savingProject() ? "Saving…" : "Save project"}</button></Show>
               </form>
