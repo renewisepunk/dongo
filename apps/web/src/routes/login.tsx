@@ -13,7 +13,18 @@ import {
   safeReturnTo,
 } from "../lib/auth-flow";
 
-export default function LoginRoute() {
+export type LoginRouteDependencies = {
+  googleAuthConfigured: boolean;
+  humanSession: typeof humanSession;
+  requestEmailOtp: typeof requestEmailOtp;
+  startGoogleSignIn: typeof startGoogleSignIn;
+};
+
+export type LoginRouteProps = {
+  dependencies?: Partial<LoginRouteDependencies>;
+};
+
+export default function LoginRoute(props: LoginRouteProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams<{ returnTo?: string }>();
@@ -21,9 +32,13 @@ export default function LoginRoute() {
   const [error, setError] = createSignal("");
   const [pending, setPending] = createSignal(false);
   const returnTo = () => safeReturnTo(searchParams.returnTo) ?? returnToFromSearch(location.search);
+  const providerConfigured = () => props.dependencies?.googleAuthConfigured ?? googleAuthConfigured;
+  const loadHumanSession = props.dependencies?.humanSession ?? humanSession;
+  const sendEmailOtp = props.dependencies?.requestEmailOtp ?? requestEmailOtp;
+  const beginGoogleSignIn = props.dependencies?.startGoogleSignIn ?? startGoogleSignIn;
 
   onMount(async () => {
-    if (await humanSession().catch(() => null)) navigate(callbackHref(returnTo()), { replace: true });
+    if (await loadHumanSession().catch(() => null)) navigate(callbackHref(returnTo()), { replace: true });
   });
 
   const continueWithEmail = async (event: SubmitEvent) => {
@@ -36,7 +51,7 @@ export default function LoginRoute() {
     setPending(true);
     setError("");
     try {
-      await requestEmailOtp(value);
+      await sendEmailOtp(value);
       sessionStorage.setItem(AUTH_EMAIL_KEY, value);
       navigate(codeHref(returnTo()));
     } catch (cause) {
@@ -47,11 +62,11 @@ export default function LoginRoute() {
   };
 
   const continueWithGoogle = async () => {
-    if (!googleAuthConfigured || pending()) return;
+    if (!providerConfigured() || pending()) return;
     setPending(true);
     setError("");
     try {
-      await startGoogleSignIn(`${window.location.origin}${callbackHref(returnTo())}`);
+      await beginGoogleSignIn(`${window.location.origin}${callbackHref(returnTo())}`);
     } catch (cause) {
       setError(safeAuthMessage(cause, "Google sign-in could not be started."));
       setPending(false);
@@ -68,14 +83,14 @@ export default function LoginRoute() {
         <button
           class="button button--primary button--full"
           type="button"
-          disabled={!googleAuthConfigured || pending()}
-          aria-describedby={!googleAuthConfigured ? "google-unavailable" : undefined}
+          disabled={!providerConfigured() || pending()}
+          aria-describedby={!providerConfigured() ? "google-unavailable" : undefined}
           onClick={continueWithGoogle}
         >
           <span class="mono" aria-hidden="true">G</span>
-          <span>{googleAuthConfigured ? "Continue with Google" : "Google sign-in unavailable"}</span>
+          <span>{providerConfigured() ? "Continue with Google" : "Google sign-in unavailable"}</span>
         </button>
-        <Show when={!googleAuthConfigured}>
+        <Show when={!providerConfigured()}>
           <p class="note" id="google-unavailable">Google has not been configured for this environment. Use an email code instead.</p>
         </Show>
 

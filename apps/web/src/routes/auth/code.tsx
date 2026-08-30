@@ -4,14 +4,28 @@ import { AuthFrame } from "../../components/AuthFrame";
 import { requestEmailOtp, verifyEmailOtp } from "../../lib/auth-client";
 import { AUTH_EMAIL_KEY, callbackHref, loginHref, normalizeOtp, safeAuthMessage, safeReturnTo } from "../../lib/auth-flow";
 
-export default function EmailCodeRoute() {
+export type EmailCodeRouteDependencies = {
+  requestEmailOtp: typeof requestEmailOtp;
+  verifyEmailOtp: typeof verifyEmailOtp;
+  resendCooldownSeconds: number;
+};
+
+export type EmailCodeRouteProps = {
+  dependencies?: Partial<EmailCodeRouteDependencies>;
+};
+
+export default function EmailCodeRoute(props: EmailCodeRouteProps = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams<{ returnTo?: string }>();
   const [code, setCode] = createSignal("");
   const [error, setError] = createSignal("");
   const [status, setStatus] = createSignal("");
   const [pending, setPending] = createSignal(false);
-  const [resendIn, setResendIn] = createSignal(30);
+  const [resendIn, setResendIn] = createSignal(
+    props.dependencies?.resendCooldownSeconds ?? 30,
+  );
+  const sendEmailOtp = props.dependencies?.requestEmailOtp ?? requestEmailOtp;
+  const confirmEmailOtp = props.dependencies?.verifyEmailOtp ?? verifyEmailOtp;
   const returnTo = () => safeReturnTo(searchParams.returnTo);
   const email = typeof sessionStorage === "undefined"
     ? "your email"
@@ -36,7 +50,7 @@ export default function EmailCodeRoute() {
     setError("");
     setStatus("Verifying…");
     try {
-      await verifyEmailOtp(email, code());
+      await confirmEmailOtp(email, code());
       navigate(callbackHref(returnTo()), { replace: true });
     } catch (cause) {
       setError(safeAuthMessage(cause, "We couldn’t verify that code."));
@@ -51,8 +65,8 @@ export default function EmailCodeRoute() {
     setPending(true);
     setError("");
     try {
-      await requestEmailOtp(email);
-      setResendIn(30);
+      await sendEmailOtp(email);
+      setResendIn(props.dependencies?.resendCooldownSeconds ?? 30);
       setStatus("A new code was sent.");
     } catch (cause) {
       setError(safeAuthMessage(cause, "We couldn’t resend the code."));
