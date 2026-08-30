@@ -1,6 +1,7 @@
 import { jwtVerify, type JWTPayload } from "jose";
 
 const encoder = new TextEncoder();
+const MAX_METADATA_BYTES = 5 * 1_024;
 const METADATA_TIMEOUT_MS = 5_000;
 const INTERNAL_REQUEST_WINDOW_MS = 60_000;
 
@@ -99,6 +100,48 @@ export function allowedMetadataHostname(
   });
 }
 
+async function readBoundedMetadataBody(response: Response): Promise<Uint8Array> {
+  const reader = response.body?.getReader();
+  if (!reader) return new Uint8Array();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_METADATA_BYTES) {
+      await reader.cancel("client metadata response exceeded limit");
+      throw new Error("Client metadata response is too large");
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+function metadataResponseHeaders(source: Headers): Headers {
+  const headers = new Headers();
+  for (const name of [
+    "content-type",
+    "cache-control",
+    "vary",
+    "expires",
+    "date",
+    "age",
+    "etag",
+    "last-modified",
+  ]) {
+    const value = source.get(name);
+    if (value !== null) headers.set(name, value);
+  }
+  return headers;
+}
+
 export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
@@ -162,11 +205,20 @@ export function createMetadataFetcher(allowedSuffixes: readonly string[]) {
     if (response.status >= 300 && response.status < 400) {
       throw new Error("Client metadata redirects are not allowed");
     }
-    // The CIMD resolver owns content-type validation and a stricter 5 KB body
-    // limit. Returning the original response keeps content-encoding and stream
-    // state coherent; rebuilding a response after buffering can leave edge
-    // transport headers describing a body that has already been decoded.
-    return response;
+    const body =
+      request.method === "HEAD"
+        ? null
+        : ownedArrayBuffer(await readBoundedMetadataBody(response));
+    // Worker fetches may decode the body while retaining upstream transport
+    // headers. Return a small clean response so the CIMD resolver never sees a
+    // stale content-encoding/content-length pair, cookies, or unrelated origin
+    // headers. It independently validates JSON, Content-Type, and the same 5 KB
+    // maximum before accepting the client.
+    return new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: metadataResponseHeaders(response.headers),
+    });
   };
 }
 

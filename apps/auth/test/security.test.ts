@@ -76,7 +76,11 @@ describe("authorization boundary security", () => {
         client_name: "Claude Code",
         redirect_uris: ["http://localhost/callback"],
       }, {
-        headers: { "cache-control": "public, max-age=300" },
+        headers: {
+          "cache-control": "public, max-age=300",
+          "content-encoding": "br",
+          "set-cookie": "private=never-forward",
+        },
       }));
     vi.stubGlobal("fetch", upstream);
     const fetchMetadata = createMetadataFetcher(["claude.ai"]);
@@ -85,6 +89,9 @@ describe("authorization boundary security", () => {
       { headers: { accept: "application/json" }, redirect: "error" },
     );
     expect(response.status).toBe(200);
+    expect(response.headers.get("content-encoding")).toBeNull();
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
     await expect(response.json()).resolves.toMatchObject({
       client_name: "Claude Code",
     });
