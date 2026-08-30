@@ -5,7 +5,6 @@ import {
   oauthProvider,
 } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
-import { jwt } from "better-auth/plugins";
 import Database from "better-sqlite3";
 
 /** Static CLI-only configuration used to generate the D1 migration. */
@@ -14,7 +13,6 @@ export const auth = betterAuth({
   basePath: "/api/auth",
   secret: "schema-generation-only-secret-not-used-at-runtime",
   database: new Database(":memory:"),
-  disabledPaths: ["/token"],
   user: {
     additionalFields: {
       convexProfileId: { type: "string", required: false, input: false },
@@ -27,9 +25,16 @@ export const auth = betterAuth({
     window: 60,
     max: 100,
   },
+  advanced: {
+    ipAddress: {
+      ipAddressHeaders: ["cf-connecting-ip"],
+      ipv6Subnet: 64,
+    },
+  },
   plugins: [
-    jwt({ disableSettingJwtHeader: true }),
     oauthProvider({
+      disableJwtPlugin: true,
+      storeClientSecret: "encrypted",
       loginPage: "/login",
       consentPage: "/oauth/consent",
       scopes: [

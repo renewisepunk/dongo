@@ -23,7 +23,7 @@ import { createAuthorizationServer } from "../src/auth";
 import type { AuthWorkerEnv } from "../src/env";
 
 describe("authorization boundary security", () => {
-  it("constructs the OAuth server with hashed client secrets and JWKS signing", async () => {
+  it("constructs the OAuth server with encrypted clients and opaque tokens", async () => {
     const database = new Database(":memory:");
     const env = {
       AUTH_DB: database,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { symmetricEncrypt } from "better-auth/crypto";
 import type { AuthWorkerEnv } from "./env";
 import { verifyInternalRequest } from "./security";
 
@@ -82,12 +83,14 @@ export async function provisionProjectResource(
   const resourceName = parsed.data.projectName
     ? `${parsed.data.projectName} MCP`
     : `Dongo project ${parsed.data.projectRef}`;
-  const hashedResourceClientSecret = await sha256Base64Url(
-    env.BETTER_AUTH_RESOURCE_CLIENT_SECRET,
-  );
-  const hashedApiResourceClientSecret = await sha256Base64Url(
-    env.DONGO_API_RESOURCE_CLIENT_SECRET,
-  );
+  const encryptedResourceClientSecret = await symmetricEncrypt({
+    key: env.BETTER_AUTH_SECRET,
+    data: env.BETTER_AUTH_RESOURCE_CLIENT_SECRET,
+  });
+  const encryptedApiResourceClientSecret = await symmetricEncrypt({
+    key: env.BETTER_AUTH_SECRET,
+    data: env.DONGO_API_RESOURCE_CLIENT_SECRET,
+  });
   await env.AUTH_DB.batch([
     env.AUTH_DB.prepare(
       `INSERT INTO oauthResource (
@@ -153,7 +156,7 @@ export async function provisionProjectResource(
     ).bind(
       crypto.randomUUID(),
       env.BETTER_AUTH_RESOURCE_CLIENT_ID,
-      hashedResourceClientSecret,
+      encryptedResourceClientSecret,
       0,
       1,
       0,
@@ -185,7 +188,7 @@ export async function provisionProjectResource(
     ).bind(
       crypto.randomUUID(),
       env.DONGO_API_RESOURCE_CLIENT_ID,
-      hashedApiResourceClientSecret,
+      encryptedApiResourceClientSecret,
       0,
       1,
       0,
@@ -237,13 +240,4 @@ export async function provisionProjectResource(
     { ok: true, resource: identifier, agentApiResource: agentApiIdentifier },
     200,
   );
-}
-
-async function sha256Base64Url(value: string): Promise<string> {
-  const digest = new Uint8Array(
-    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
-  );
-  let binary = "";
-  for (const byte of digest) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }

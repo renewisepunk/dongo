@@ -7,7 +7,6 @@ import {
   type SchemaClient,
 } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
-import { jwt } from "better-auth/plugins";
 import { dongoHumanBridge } from "./bridge-plugin";
 import type { AuthWorkerEnv } from "./env";
 import {
@@ -95,6 +94,24 @@ type TokenResponseInfo = {
 function tokenPinning(env: AuthWorkerEnv) {
   let currentGrant: PinnedGrantContext | undefined;
 
+  const inIssuancePhase = async <T>(
+    phase: string,
+    operation: () => Promise<T>,
+  ): Promise<T> => {
+    try {
+      return await operation();
+    } catch (error) {
+      console.error(JSON.stringify({
+        event: "oauth_token_issuance_failure",
+        phase,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        errorMessage:
+          error instanceof Error ? error.message : "Non-Error rejection",
+      }));
+      throw error;
+    }
+  };
+
   const initialGrant = async (info: TokenResponseInfo): Promise<PinnedGrantContext> => {
     const user = info.user as
       | (Record<string, unknown> & {
@@ -180,21 +197,27 @@ function tokenPinning(env: AuthWorkerEnv) {
 
   return {
     async customTokenResponseFields(info: TokenResponseInfo) {
-      currentGrant = await initialGrant(info);
-      return {};
+      return await inIssuancePhase("bind_grant", async () => {
+        currentGrant = await initialGrant(info);
+        return {};
+      });
     },
     async generateOpaqueAccessToken() {
-      if (!currentGrant) throw new Error("Access token grant context is missing");
-      return await encodePinnedAccessToken(env.BETTER_AUTH_SECRET, currentGrant);
+      return await inIssuancePhase("access_token", async () => {
+        if (!currentGrant) throw new Error("Access token grant context is missing");
+        return await encodePinnedAccessToken(env.BETTER_AUTH_SECRET, currentGrant);
+      });
     },
     formatRefreshToken: {
       async encrypt(token: string, sessionId?: string) {
-        if (!currentGrant) throw new Error("Refresh token grant context is missing");
-        return await encodePinnedRefreshToken({
-          secret: env.BETTER_AUTH_SECRET,
-          token,
-          sessionId,
-          grant: currentGrant,
+        return await inIssuancePhase("refresh_token", async () => {
+          if (!currentGrant) throw new Error("Refresh token grant context is missing");
+          return await encodePinnedRefreshToken({
+            secret: env.BETTER_AUTH_SECRET,
+            token,
+            sessionId,
+            grant: currentGrant,
+          });
         });
       },
       async decrypt(token: string) {
@@ -252,7 +275,6 @@ export function createAuthorizationServer(env: AuthWorkerEnv) {
     basePath: "/api/auth",
     secret: env.BETTER_AUTH_SECRET,
     database: env.AUTH_DB,
-    disabledPaths: ["/token"],
     trustedOrigins: [env.PUBLIC_ORIGIN],
     user: {
       additionalFields: {
@@ -277,14 +299,18 @@ export function createAuthorizationServer(env: AuthWorkerEnv) {
     advanced: {
       useSecureCookies: true,
       database: { joins: false },
+      ipAddress: {
+        ipAddressHeaders: ["cf-connecting-ip"],
+        ipv6Subnet: 64,
+      },
     },
     plugins: [
-      jwt({ disableSettingJwtHeader: true }),
       oauthProvider({
-        // Resource-server credentials are high-entropy, one-way secrets. Hashing
-        // keeps the Auth database unable to recover them while still supporting
-        // RFC 7662 client authentication.
-        storeClientSecret: "hashed",
+        // Better Auth requires recoverable client secrets when JWT access-token
+        // mode is disabled because confidential-client ID tokens use HS256.
+        // Access and refresh tokens remain opaque and hashed independently.
+        disableJwtPlugin: true,
+        storeClientSecret: "encrypted",
         prefix: {
           opaqueAccessToken: ACCESS_TOKEN_PREFIX,
           refreshToken: REFRESH_TOKEN_PREFIX,
