@@ -161,7 +161,7 @@ async function workerRequest<T>(pathname: string, init: RequestInit = {}): Promi
   return body;
 }
 
-export async function authorizationWorkerHasSession(): Promise<boolean> {
+async function authorizationWorkerProfileId(): Promise<string | undefined> {
   try {
     const response = await fetch(authWorkerUrl("/get-session"), {
       method: "GET",
@@ -169,17 +169,25 @@ export async function authorizationWorkerHasSession(): Promise<boolean> {
       credentials: "same-origin",
       headers: { accept: "application/json" },
     });
-    if (response.status === 401) return false;
+    if (response.status === 401) return undefined;
     if (!response.ok) throw new Error("session check failed");
-    return Boolean(await response.json().catch(() => null));
+    const body = await response.json().catch(() => null) as {
+      user?: { id?: unknown; convexProfileId?: unknown };
+    } | null;
+    const profileId = body?.user?.convexProfileId ?? body?.user?.id;
+    return typeof profileId === "string" ? profileId : undefined;
   } catch {
     throw new AuthorizationFlowError("unavailable", "The authorization service is unavailable. Try again shortly.");
   }
 }
 
 export async function bridgeAuthorizationSession(returnTo: string): Promise<string> {
-  if (await authorizationWorkerHasSession()) return returnTo;
   const minted = await mintAssertion({ returnTo });
+  // The Convex human session and the authorization-worker session are separate
+  // cookies. A valid worker cookie may belong to an account that was used
+  // earlier in the same browser. Only reuse it when it is bound to the exact
+  // current Convex profile; otherwise replace it through the signed bridge.
+  if (await authorizationWorkerProfileId() === minted.profileId) return returnTo;
   const bridged = await workerRequest<{ ok: boolean; redirectTo: string }>("/dongo/bridge", {
     method: "POST",
     body: JSON.stringify({ assertion: minted.assertion }),

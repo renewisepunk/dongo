@@ -25,11 +25,21 @@ vi.mock("convex/browser", () => ({
         projects: [{ publicRef: "project_1", name: "dongo", slug: "dongo" }],
       }];
     }
+
+    async action(_reference: unknown, input: unknown) {
+      convexCalls.push(`mintAssertion:${JSON.stringify(input)}`);
+      return {
+        assertion: "signed-human-bridge-assertion-with-safe-length",
+        expiresAt: Date.now() + 60_000,
+        profileId: "profile_1",
+      };
+    }
   },
 }));
 
 import {
   bootstrapHumanIdentity,
+  bridgeAuthorizationSession,
   decideDeviceRequest,
   decideOAuthConsent,
   getDeviceRequest,
@@ -75,6 +85,44 @@ describe("isolated authorization worker client", () => {
       scopes: ["dongo:work:read", "dongo:work:write", "offline_access"],
       resources: ["https://dev.dongo.so/api/agent/v1"],
     });
+  });
+
+  it("replaces a valid authorization-worker session that belongs to another human profile", async () => {
+    const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "https://dev.dongo.so/api/auth/get-session") {
+        return Response.json({
+          session: { id: "old-session" },
+          user: { id: "profile_old", convexProfileId: "profile_old" },
+        });
+      }
+      expect(url).toBe("https://dev.dongo.so/api/auth/dongo/bridge");
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        assertion: "signed-human-bridge-assertion-with-safe-length",
+      });
+      return Response.json({ ok: true, redirectTo: "/device?user_code=DV9KPQLH" });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(bridgeAuthorizationSession("/device?user_code=DV9KPQLH"))
+      .resolves.toBe("/device?user_code=DV9KPQLH");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("reuses an authorization-worker session only for the exact current human profile", async () => {
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe("https://dev.dongo.so/api/auth/get-session");
+      return Response.json({
+        session: { id: "current-session" },
+        user: { id: "profile_1", convexProfileId: "profile_1" },
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(bridgeAuthorizationSession("/oauth/consent?client_id=test"))
+      .resolves.toBe("/oauth/consent?client_id=test");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("posts only the comparison code to the maintained approve endpoint", async () => {
