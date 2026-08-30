@@ -4,14 +4,24 @@
   "private": true,
   "type": "module",
   "bin": {
-    "dongo": "./src/index.ts"
+    "dongo": "./dist/dongo.js"
   },
-  "dependencies": {
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
     "@dongo/cli-core": "0.1.0",
     "@dongo/client": "0.1.0",
-    "@dongo/contracts": "0.1.0"
+    "@dongo/contracts": "0.1.0",
+    "esbuild": "0.28.1"
   },
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.json",
     "test": "node --test test/*.test.ts"
   }

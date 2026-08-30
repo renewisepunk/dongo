@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { renderDongoManagedIntegrationBundle } from "@dongo/mcp";
+import { renderDongoManagedIntegrationBundle } from "@dongo/mcp/managed-integrations";
 
 import { CliCoreError } from "./errors.ts";
 

@@ -1,4 +1,4 @@
-import { DONGO_MCP_INSTRUCTIONS } from "./instructions.js";
+import { DONGO_MCP_INSTRUCTIONS } from "./instructions.ts";
 
 const PROJECT_REF = /^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/;
 const SHORT_REF = /^[A-Za-z0-9][A-Za-z0-9_-]{1,31}$/;

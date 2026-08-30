@@ -1,6 +1,18 @@
 # Dongo CLI
 
-The first CLI slice connects a Git repository to Dongo with OAuth Device Authorization and provides read-only startup, Overview, diagnostics, and deterministic repository export.
+The Dongo CLI connects a Git repository through OAuth Device Authorization, exposes the complete agent operation surface, and writes deterministic repository exports.
+
+## Install from a checkout
+
+Build and install the self-contained package archive so the command does not depend on workspace source files:
+
+```sh
+npm pack --workspace @dongo/cli
+npm install --global ./dongo-cli-0.1.0.tgz
+dongo --help
+```
+
+The archive contains one executable JavaScript bundle and this README. It requires Node.js 20 or newer and contains no runtime dependency on Dongo's private workspace packages.
 
 ## Commands
 

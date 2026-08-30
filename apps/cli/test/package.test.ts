@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+const execute = promisify(execFile);
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+
+test("the packed CLI installs and runs without workspace dependencies", async () => {
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "dongo-cli-package-"));
+  try {
+    const { stdout: packedName } = await execute(
+      npm,
+      ["pack", "--silent", "--workspace", "@dongo/cli", "--pack-destination", temporaryDirectory],
+      { cwd: repositoryRoot },
+    );
+    const archive = path.join(temporaryDirectory, packedName.trim());
+    const prefix = path.join(temporaryDirectory, "install");
+    await execute(npm, ["install", "--global", "--prefix", prefix, archive], { cwd: temporaryDirectory });
+    const executable = path.join(prefix, "bin", process.platform === "win32" ? "dongo.cmd" : "dongo");
+    const { stdout } = await execute(executable, ["--json", "--help"], { cwd: temporaryDirectory });
+    const result = JSON.parse(stdout) as { ok?: unknown; command?: unknown; data?: { usage?: unknown } };
+    assert.equal(result.ok, true);
+    assert.equal(result.command, "help");
+    assert.match(String(result.data?.usage), /Dongo CLI/);
+  } finally {
+    await rm(temporaryDirectory, { force: true, recursive: true });
+  }
+});
