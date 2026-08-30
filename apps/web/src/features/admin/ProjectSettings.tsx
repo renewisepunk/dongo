@@ -5,6 +5,7 @@ import { SignOutButton } from "../../components/SignOutButton";
 import { dongoPublicOrigin } from "../../lib/auth-config";
 import {
   ProjectDataConnection,
+  type CreatedServiceCredential,
   type ProjectAdministration,
   type ProjectInfo,
   type ProjectInstallation,
@@ -18,6 +19,23 @@ type ProjectSettingsProps = {
 
 type Tab = "General" | "Agent access" | "Members" | "Plan & storage";
 const SETTINGS_TABS: readonly Tab[] = ["General", "Agent access", "Members", "Plan & storage"];
+const SERVICE_SCOPES = [
+  {
+    value: "dongo:work:read",
+    label: "Read project work",
+    detail: "Overview, Intake, Work, Attention, comments, and sync snapshots.",
+  },
+  {
+    value: "dongo:work:write",
+    label: "Change project work",
+    detail: "Claim, triage, create, update, comment, request Attention, and finish.",
+  },
+  {
+    value: "dongo:attachments:read",
+    label: "Read attachments",
+    detail: "Request short-lived download links for project attachments.",
+  },
+] as const;
 
 function settingsTab(value: string | undefined): Tab {
   return SETTINGS_TABS.find((tab) => tab === value) ?? "General";
@@ -88,6 +106,13 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   const [confirmRemove, setConfirmRemove] = createSignal<string>();
   const [removing, setRemoving] = createSignal<string>();
   const [addingMember, setAddingMember] = createSignal(false);
+  const [serviceLabel, setServiceLabel] = createSignal("Repository CI");
+  const [serviceScopes, setServiceScopes] = createSignal<string[]>(
+    SERVICE_SCOPES.map((scope) => scope.value),
+  );
+  const [creatingServiceCredential, setCreatingServiceCredential] = createSignal(false);
+  const [createdServiceCredential, setCreatedServiceCredential] =
+    createSignal<CreatedServiceCredential>();
   const [confirmArchive, setConfirmArchive] = createSignal(false);
   const [archiving, setArchiving] = createSignal(false);
   const [unarchiving, setUnarchiving] = createSignal(false);
@@ -252,6 +277,56 @@ export function ProjectSettings(props: ProjectSettingsProps) {
     }
   };
 
+  const toggleServiceScope = (scope: string) => {
+    setServiceScopes((current) =>
+      current.includes(scope)
+        ? current.filter((entry) => entry !== scope)
+        : [...current, scope],
+    );
+  };
+
+  const createServiceCredential = async (event: SubmitEvent) => {
+    event.preventDefault();
+    if (!connection || creatingServiceCredential() || !owner()) return;
+    const label = serviceLabel().trim();
+    if (!label) {
+      setError("Name this CI/service credential.");
+      return;
+    }
+    if (serviceScopes().length === 0) {
+      setError("Select at least one CI/service permission.");
+      return;
+    }
+    setCreatingServiceCredential(true);
+    setCreatedServiceCredential(undefined);
+    setError("");
+    setStatus("");
+    try {
+      const created = await connection.createServiceCredential({
+        label,
+        scopes: serviceScopes(),
+      });
+      setCreatedServiceCredential(created);
+      setStatus("CI/service credential created. Copy it before leaving this page.");
+    } catch {
+      setError("The CI/service credential could not be created. Try again.");
+    } finally {
+      setCreatingServiceCredential(false);
+    }
+  };
+
+  const copyServiceCredential = async () => {
+    const credential = createdServiceCredential();
+    if (!credential) return;
+    try {
+      await navigator.clipboard.writeText(credential.token);
+      setError("");
+      setStatus("Credential copied. Store it as the DONGO_TOKEN secret in your CI provider.");
+    } catch {
+      setError("Copy failed. Select the credential and copy it manually before closing it.");
+    }
+  };
+
   const removeMember = async (membershipId: string) => {
     if (!connection || removing()) return;
     setRemoving(membershipId);
@@ -400,6 +475,53 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                   <Show when={installations().length === 0}><div class="note" style={{ padding: "16px" }}>No agent installations yet.</div></Show>
                 </div>
                 <p class="security-note">Token material is never shown here. Revocation blocks the installation’s next authenticated request; local host configuration must be removed separately.</p>
+                <section class="settings-section service-credential-section">
+                  <div class="settings-section__title">Advanced CI/service credential</div>
+                  <p class="note">For unattended CI only. Interactive CLI and MCP hosts should use <span class="mono">Connect an agent</span> so each host gets revocable OAuth access.</p>
+                  <Show when={createdServiceCredential()}>{(credential) => (
+                    <div class="service-secret" role="status" aria-live="polite">
+                      <div>
+                        <strong>Copy this credential now.</strong>
+                        <p class="note">It cannot be revealed again. Dongo stores only its keyed hash.</p>
+                      </div>
+                      <label class="field-label" for="service-credential-secret">One-time DONGO_TOKEN value</label>
+                      <textarea
+                        class="input mono service-secret__value"
+                        id="service-credential-secret"
+                        readonly
+                        rows="3"
+                        spellcheck={false}
+                        value={credential().token}
+                        onFocus={(event) => event.currentTarget.select()}
+                      />
+                      <div class="settings-actions">
+                        <button class="button button--primary" type="button" onClick={() => void copyServiceCredential()}>Copy credential</button>
+                        <button class="button button--quiet" type="button" onClick={() => setCreatedServiceCredential(undefined)}>I have stored it</button>
+                      </div>
+                      <p class="security-note">Add it to your CI provider as a masked secret named <span class="mono">DONGO_TOKEN</span>. Never commit it to this repository or place it in a command argument.</p>
+                    </div>
+                  )}</Show>
+                  <Show when={!createdServiceCredential()}>
+                    <form class="service-credential-form" onSubmit={createServiceCredential}>
+                      <div class="field-group">
+                        <label class="field-label" for="service-credential-label">Credential name</label>
+                        <input class="input" id="service-credential-label" maxlength="240" value={serviceLabel()} onInput={(event) => setServiceLabel(event.currentTarget.value)} placeholder="Repository CI" />
+                      </div>
+                      <fieldset class="scope-fieldset">
+                        <legend class="field-label">Project permissions</legend>
+                        <div class="scope-grid">
+                          <For each={SERVICE_SCOPES}>{(scope) => (
+                            <label class="scope-option">
+                              <input type="checkbox" checked={serviceScopes().includes(scope.value)} onChange={() => toggleServiceScope(scope.value)} />
+                              <span><strong>{scope.label}</strong><span>{scope.detail}</span></span>
+                            </label>
+                          )}</For>
+                        </div>
+                      </fieldset>
+                      <button class="button" type="submit" disabled={creatingServiceCredential()} style={{ "align-self": "flex-start" }}>{creatingServiceCredential() ? "Creating…" : "Create CI credential"}</button>
+                    </form>
+                  </Show>
+                </section>
               </Show>
             </>
           )}</Show>

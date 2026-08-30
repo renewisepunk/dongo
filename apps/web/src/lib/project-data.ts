@@ -135,6 +135,13 @@ export type ProjectInstallation = {
   lastUsedAt?: number;
 };
 
+export type CreatedServiceCredential = {
+  installationId: string;
+  serviceCredentialId: string;
+  tokenPrefix: string;
+  token: string;
+};
+
 type WorkDoc = {
   _id: string;
   identifier: string;
@@ -380,6 +387,11 @@ const revokeInstallationReference = makeFunctionReference<
   { installationId: string },
   { revoked: true }
 >("domains/installations/index:revoke");
+const createServiceCredentialReference = makeFunctionReference<
+  "action",
+  { projectId: string; label: string; scopes: string[] },
+  CreatedServiceCredential
+>("domains/installations/actions:createServiceCredential");
 const archiveProjectReference = makeFunctionReference<
   "mutation",
   { projectId: string },
@@ -1074,6 +1086,16 @@ export class ProjectDataConnection {
 
   async revokeInstallation(installationId: string): Promise<void> {
     await this.#client.mutation(revokeInstallationReference, { installationId });
+  }
+
+  async createServiceCredential(input: {
+    label: string;
+    scopes: string[];
+  }): Promise<CreatedServiceCredential> {
+    return await this.#client.action(createServiceCredentialReference, {
+      projectId: this.projectId,
+      ...input,
+    });
   }
 
   async getAdministration(): Promise<ProjectAdministration> {
