@@ -1,7 +1,12 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
-import type { EmailDeliveryRequest } from "../src/contracts";
-import { deliverEmail, renderAttentionEmail } from "../src/providers";
+import type { EmailDeliveryRequest, PushDeliveryRequest } from "../src/contracts";
+import {
+  deliverApns,
+  deliverEmail,
+  deliverFcm,
+  renderAttentionEmail,
+} from "../src/providers";
 
 const deliveryPath = "/api/notifications/v1/deliver";
 const dispatchSecret = "test-dispatch-secret-with-at-least-32-characters";
@@ -90,9 +95,109 @@ describe("notifications Worker", () => {
     });
     expect(fetcher).toHaveBeenCalledOnce();
   });
+
+  it("signs APNs requests and sends only neutral deep-link identifiers", async () => {
+    const privateKeyPkcs8 = await es256PrivateKey();
+    const request = pushPayload();
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe(
+        `https://api.sandbox.push.apple.com/3/device/${request.pushToken}`,
+      );
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toMatch(/^bearer [^.]+\.[^.]+\.[^.]+$/u);
+      expect(headers.get("apns-topic")).toBe("so.dongo.dev");
+      expect(headers.get("apns-collapse-id")).toBe(request.attentionRequestId);
+      expect(JSON.parse(String(init?.body))).toEqual({
+        aps: {
+          alert: { title: "Dongo needs you", body: "Open Dongo to respond." },
+          sound: "default",
+        },
+        attentionRequestId: request.attentionRequestId,
+        workItemId: request.workItemId,
+        projectId: request.projectId,
+      });
+      return new Response(null, {
+        status: 200,
+        headers: { "apns-id": "apns-message-1" },
+      });
+    });
+    await expect(deliverApns({
+      request,
+      config: {
+        teamId: "TEAMID1234",
+        keyId: "KEYID12345",
+        bundleId: "so.dongo.dev",
+        environment: "sandbox",
+        privateKeyPkcs8,
+      },
+      fetcher,
+      now: 1_787_000_000_000,
+    })).resolves.toEqual({
+      ok: true,
+      provider: "apns",
+      messageId: "apns-message-1",
+    });
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("exchanges a signed service assertion and sends a neutral FCM payload", async () => {
+    const privateKeyPkcs8 = await rs256PrivateKey();
+    const request = { ...pushPayload(), platform: "android" as const };
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "https://oauth2.googleapis.com/token") {
+        const form = new URLSearchParams(String(init?.body));
+        expect(form.get("grant_type")).toBe(
+          "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        );
+        expect(form.get("assertion")).toMatch(/^[^.]+\.[^.]+\.[^.]+$/u);
+        return Response.json({ access_token: "short-lived-fcm-access" });
+      }
+      expect(url).toBe(
+        "https://fcm.googleapis.com/v1/projects/dongo-dev/messages:send",
+      );
+      expect(new Headers(init?.headers).get("authorization")).toBe(
+        "Bearer short-lived-fcm-access",
+      );
+      expect(JSON.parse(String(init?.body))).toEqual({
+        message: {
+          token: request.pushToken,
+          notification: {
+            title: "Dongo needs you",
+            body: "Open Dongo to respond.",
+          },
+          data: {
+            attentionRequestId: request.attentionRequestId,
+            workItemId: request.workItemId,
+            projectId: request.projectId,
+          },
+          android: { collapseKey: request.attentionRequestId },
+          apns: {
+            headers: { "apns-collapse-id": request.attentionRequestId },
+          },
+        },
+      });
+      return Response.json({ name: "projects/dongo-dev/messages/fcm-message-1" });
+    });
+    await expect(deliverFcm({
+      request,
+      config: {
+        projectId: "dongo-dev",
+        clientEmail: "notifications@dongo-dev.iam.gserviceaccount.com",
+        privateKeyPkcs8,
+      },
+      fetcher,
+      now: 1_787_000_000_000,
+    })).resolves.toEqual({
+      ok: true,
+      provider: "fcm",
+      messageId: "projects/dongo-dev/messages/fcm-message-1",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
 });
 
-function pushPayload() {
+function pushPayload(): PushDeliveryRequest {
   return {
     version: 1,
     deliveryId: "delivery-1",
@@ -105,6 +210,40 @@ function pushPayload() {
     projectId: "project-1",
     deepLink: "https://dev.dongo.so/app/org/project?work=work-1",
   };
+}
+
+async function es256PrivateKey(): Promise<string> {
+  const pair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"],
+  ) as CryptoKeyPair;
+  return privateKeyPem(
+    await crypto.subtle.exportKey("pkcs8", pair.privateKey) as ArrayBuffer,
+  );
+}
+
+async function rs256PrivateKey(): Promise<string> {
+  const pair = await crypto.subtle.generateKey(
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      modulusLength: 2_048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-256",
+    },
+    true,
+    ["sign", "verify"],
+  ) as CryptoKeyPair;
+  return privateKeyPem(
+    await crypto.subtle.exportKey("pkcs8", pair.privateKey) as ArrayBuffer,
+  );
+}
+
+function privateKeyPem(buffer: ArrayBuffer): string {
+  let binary = "";
+  for (const byte of new Uint8Array(buffer)) binary += String.fromCharCode(byte);
+  const lines = btoa(binary).match(/.{1,64}/gu) ?? [];
+  return `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----`;
 }
 
 function emailPayload(): EmailDeliveryRequest {
