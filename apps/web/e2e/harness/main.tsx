@@ -1,6 +1,7 @@
 import { Route, Router } from "@solidjs/router";
 import { render } from "solid-js/web";
 import { Overview } from "../../src/features/overview/Overview";
+import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
 import AuthCallbackRoute from "../../src/routes/auth/callback";
 import EmailCodeRoute from "../../src/routes/auth/code";
 import ConnectRoute from "../../src/routes/connect";
@@ -313,6 +314,190 @@ const connectDependencies = {
   },
 };
 
+function fixtureAdministration() {
+  const memberRole = oauthScenario() === "member";
+  const archived = oauthScenario() === "archived";
+  return {
+    project: {
+      name: "Dongo",
+      slug: "dongo",
+      repositoryUrl: "https://github.com/renewisepunk/dongo",
+      identifierPrefix: "DONGO",
+      executionMode: "manual" as const,
+      ...(archived ? { archivedAt: Date.now() - 60_000 } : {}),
+    },
+    organization: {
+      name: "Fixture Studio",
+      slug: "fixture-studio",
+      plan: memberRole ? "free" as const : "paid" as const,
+    },
+    membershipRole: memberRole ? "member" as const : "owner" as const,
+    members: [
+      {
+        membershipId: "membership-owner",
+        profileId: "profile-owner",
+        name: "Fixture Owner",
+        email: "owner@example.test",
+        role: "owner" as const,
+        joinedAt: Date.now() - 86_400_000,
+        current: !memberRole,
+      },
+      {
+        membershipId: "membership-member",
+        profileId: "profile-member",
+        name: "Fixture Member",
+        email: "member@example.test",
+        role: "member" as const,
+        joinedAt: Date.now() - 3_600_000,
+        current: memberRole,
+      },
+    ],
+    activeProjectCount: 1,
+    storage: {
+      activeBytes: 1_572_864,
+      reservedBytes: 524_288,
+      limitBytes: 10_737_418_240,
+      maximumAttachmentBytes: 262_144_000,
+    },
+  };
+}
+
+const settingsDependencies = {
+  async connectForSettings(orgSlug: string, projectSlug: string) {
+    document.documentElement.dataset.fixtureSettingsTarget = `${orgSlug}/${projectSlug}`;
+    if (oauthScenario() === "load-error") {
+      throw new Error("fixture settings detail must stay hidden");
+    }
+    const administration = fixtureAdministration();
+    const project = {
+      id: "project-fixture",
+      name: administration.project.name,
+      slug: administration.project.slug,
+      publicRef: "fixture-project",
+      organizationName: administration.organization.name,
+      organizationSlug: administration.organization.slug,
+      organizationPlan: administration.organization.plan,
+      membershipRole: administration.membershipRole,
+      activeProjectCount: administration.activeProjectCount,
+      repositoryUrl: administration.project.repositoryUrl,
+      identifierPrefix: administration.project.identifierPrefix,
+      executionMode: administration.project.executionMode,
+      ...(administration.project.archivedAt === undefined
+        ? {}
+        : { archivedAt: administration.project.archivedAt }),
+    };
+    const installations = [
+      {
+        id: "installation-cli",
+        kind: "cli" as const,
+        status: "active" as const,
+        clientId: "dongo-cli",
+        label: "Dongo CLI",
+        machineLabel: "Fixture Mac",
+        scopes: ["dongo:work:read", "dongo:work:write"],
+        createdAt: Date.now() - 3_600_000,
+        lastUsedAt: Date.now(),
+      },
+      {
+        id: "installation-revoked",
+        kind: "mcp" as const,
+        status: "revoked" as const,
+        clientId: "claude",
+        label: "Claude Code",
+        scopes: ["dongo:work:read"],
+        createdAt: Date.now() - 86_400_000,
+      },
+    ];
+    return {
+      project,
+      async getAdministration() {
+        return structuredClone(administration);
+      },
+      subscribeInstallations(
+        onUpdate: (value: typeof installations) => void,
+        onError: (error: Error) => void,
+      ) {
+        if (oauthScenario() === "installation-error") {
+          onError(new Error("fixture installation detail must stay hidden"));
+        } else {
+          onUpdate(installations);
+        }
+        return () => {
+          document.documentElement.dataset.fixtureSettingsUnsubscribed = "true";
+        };
+      },
+      async updateProject(input: {
+        name: string;
+        repositoryUrl?: string;
+        executionMode: "manual" | "autonomous";
+      }) {
+        if (input.name === "Fail safely") throw new Error("fixture update detail must stay hidden");
+        Object.assign(administration.project, input);
+        Object.assign(project, input);
+        document.documentElement.dataset.fixtureProjectUpdate = JSON.stringify(input);
+      },
+      async updateOrganization(name: string) {
+        if (name === "Fail safely") throw new Error("fixture organization detail must stay hidden");
+        administration.organization.name = name;
+        project.organizationName = name;
+        document.documentElement.dataset.fixtureOrganizationUpdate = name;
+      },
+      async revokeInstallation(installationId: string) {
+        if (oauthScenario() === "mutation-error") throw new Error("fixture revoke detail must stay hidden");
+        document.documentElement.dataset.fixtureRevokedInstallation = installationId;
+      },
+      async createServiceCredential(input: { label: string; scopes: string[] }) {
+        document.documentElement.dataset.fixtureServiceCredential = JSON.stringify(input);
+        return {
+          installationId: "installation-service",
+          serviceCredentialId: "credential-fixture",
+          tokenPrefix: "dongo_ci_fixture",
+          token: "fixture-ci-token-not-secret",
+        };
+      },
+      async removeMember(membershipId: string) {
+        administration.members = administration.members.filter(
+          (member) => member.membershipId !== membershipId,
+        );
+        document.documentElement.dataset.fixtureRemovedMember = membershipId;
+      },
+      async addMember(email: string) {
+        document.documentElement.dataset.fixtureAddedMember = email;
+        const created = email !== "member@example.test";
+        if (created) {
+          administration.members.push({
+            membershipId: "membership-added",
+            profileId: "profile-added",
+            name: "Added Member",
+            email,
+            role: "member",
+            joinedAt: Date.now(),
+            current: false,
+          });
+        }
+        return { created };
+      },
+      async archive() {
+        document.documentElement.dataset.fixtureArchivedProject = "true";
+        administration.project.archivedAt = Date.now();
+        project.archivedAt = administration.project.archivedAt;
+      },
+      async unarchive() {
+        delete administration.project.archivedAt;
+        delete project.archivedAt;
+        document.documentElement.dataset.fixtureRestoredProject = "true";
+      },
+      async close() {
+        document.documentElement.dataset.fixtureSettingsClosed = "true";
+      },
+    };
+  },
+  async writeClipboard(value: string) {
+    if (oauthScenario() === "copy-error") throw new Error("fixture copy detail must stay hidden");
+    document.documentElement.dataset.fixtureSettingsClipboard = value;
+  },
+};
+
 function FixtureOverview() {
   return (
     <Overview
@@ -350,6 +535,16 @@ render(
       <Route path="/oauth/project" component={() => <OAuthProjectRoute dependencies={oauthProjectDependencies} />} />
       <Route path="/oauth/consent" component={() => <OAuthConsentRoute dependencies={oauthConsentDependencies} />} />
       <Route path="/connect" component={() => <ConnectRoute dependencies={connectDependencies} />} />
+      <Route
+        path="/app/:orgSlug/:projectSlug/settings"
+        component={() => (
+          <ProjectSettings
+            orgSlug="fixture-studio"
+            projectSlug="dongo"
+            dependencies={settingsDependencies}
+          />
+        )}
+      />
       <Route path="*" component={FixtureOverview} />
     </Router>
   ),

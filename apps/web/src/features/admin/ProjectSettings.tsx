@@ -12,9 +12,43 @@ import {
 } from "../../lib/project-data";
 import "./admin.css";
 
-type ProjectSettingsProps = {
+type ProjectSettingsConnection = {
+  project: ProjectInfo;
+  getAdministration: () => Promise<ProjectAdministration>;
+  subscribeInstallations: (
+    onUpdate: (installations: ProjectInstallation[]) => void,
+    onError: (error: Error) => void,
+  ) => () => void;
+  updateProject: (input: {
+    name: string;
+    repositoryUrl?: string;
+    executionMode: "manual" | "autonomous";
+  }) => Promise<void>;
+  updateOrganization: (name: string) => Promise<void>;
+  revokeInstallation: (installationId: string) => Promise<void>;
+  createServiceCredential: (input: {
+    label: string;
+    scopes: string[];
+  }) => Promise<CreatedServiceCredential>;
+  removeMember: (membershipId: string) => Promise<void>;
+  addMember: (email: string) => Promise<{ created: boolean }>;
+  archive: () => Promise<void>;
+  unarchive: () => Promise<void>;
+  close: () => Promise<void>;
+};
+
+export type ProjectSettingsDependencies = {
+  connectForSettings: (
+    orgSlug: string,
+    projectSlug: string,
+  ) => Promise<ProjectSettingsConnection>;
+  writeClipboard: (text: string) => Promise<void>;
+};
+
+export type ProjectSettingsProps = {
   orgSlug: string;
   projectSlug: string;
+  dependencies?: Partial<ProjectSettingsDependencies>;
 };
 
 type Tab = "General" | "Agent access" | "Members" | "Plan & storage";
@@ -116,11 +150,15 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   const [confirmArchive, setConfirmArchive] = createSignal(false);
   const [archiving, setArchiving] = createSignal(false);
   const [unarchiving, setUnarchiving] = createSignal(false);
-  let connection: ProjectDataConnection | undefined;
+  let connection: ProjectSettingsConnection | undefined;
   let unsubscribe: (() => void) | undefined;
   let manualModeButton: HTMLButtonElement | undefined;
   let autonomousModeButton: HTMLButtonElement | undefined;
   let disposed = false;
+  const connectForSettings = props.dependencies?.connectForSettings ?? ProjectDataConnection.connectForSettings;
+  const writeClipboard = props.dependencies?.writeClipboard ?? (
+    (text: string) => navigator.clipboard.writeText(text)
+  );
 
   const owner = createMemo(() => administration()?.membershipRole === "owner");
 
@@ -174,7 +212,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   };
 
   onMount(() => {
-    void ProjectDataConnection.connectForSettings(props.orgSlug, props.projectSlug)
+    void connectForSettings(props.orgSlug, props.projectSlug)
       .then(async (connected) => {
         if (disposed) {
           await connected.close();
@@ -319,7 +357,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
     const credential = createdServiceCredential();
     if (!credential) return;
     try {
-      await navigator.clipboard.writeText(credential.token);
+      await writeClipboard(credential.token);
       setError("");
       setStatus("Credential copied. Store it as the DONGO_TOKEN secret in your CI provider.");
     } catch {
