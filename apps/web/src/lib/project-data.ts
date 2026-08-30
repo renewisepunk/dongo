@@ -15,9 +15,14 @@ import {
   type AttachmentUploadReservation,
 } from "./attachment-upload";
 
-type ProjectGroup = {
+export type ProjectGroup = {
   membership: { organizationId: string; role: "owner" | "member" };
-  organization: { _id: string; name: string; slug: string } | null;
+  organization: {
+    _id: string;
+    name: string;
+    slug: string;
+    plan: "free" | "paid";
+  } | null;
   projects: Array<{
     _id: string;
     publicRef: string;
@@ -37,6 +42,7 @@ export type ProjectInfo = {
   publicRef: string;
   organizationName: string;
   organizationSlug: string;
+  organizationPlan: "free" | "paid";
   membershipRole: "owner" | "member";
   activeProjectCount: number;
   repositoryUrl?: string;
@@ -44,6 +50,41 @@ export type ProjectInfo = {
   executionMode: "manual" | "autonomous";
   archivedAt?: number;
 };
+
+function mapProjectInfo(
+  group: ProjectGroup,
+  project: ProjectGroup["projects"][number],
+): ProjectInfo | undefined {
+  if (!group.organization) return undefined;
+  return {
+    id: project._id,
+    name: project.name,
+    slug: project.slug,
+    publicRef: project.publicRef,
+    organizationName: group.organization.name,
+    organizationSlug: group.organization.slug,
+    organizationPlan: group.organization.plan,
+    membershipRole: group.membership.role,
+    activeProjectCount: group.projects.filter(
+      (candidate) => candidate.archivedAt === undefined,
+    ).length,
+    repositoryUrl: project.repositoryUrl,
+    identifierPrefix: project.identifierPrefix,
+    executionMode: project.executionMode,
+    archivedAt: project.archivedAt,
+  };
+}
+
+export function mapAvailableProjects(groups: ProjectGroup[]): ProjectInfo[] {
+  return groups.flatMap((group) =>
+    group.projects.flatMap((project) => {
+      const mapped = project.archivedAt === undefined
+        ? mapProjectInfo(group, project)
+        : undefined;
+      return mapped ? [mapped] : [];
+    }),
+  );
+}
 
 export type ProjectMember = {
   membershipId: string;
@@ -575,6 +616,7 @@ export class ProjectDataConnection {
   private constructor(
     client: ConvexClient,
     readonly project: ProjectInfo,
+    readonly availableProjects: readonly ProjectInfo[],
   ) {
     this.#client = client;
   }
@@ -602,22 +644,13 @@ export class ProjectDataConnection {
       ) {
         throw new Error("Project not found");
       }
-      return new ProjectDataConnection(client, {
-        id: selected.project._id,
-        name: selected.project.name,
-        slug: selected.project.slug,
-        publicRef: selected.project.publicRef,
-        organizationName: selected.group.organization.name,
-        organizationSlug: selected.group.organization.slug,
-        membershipRole: selected.group.membership.role,
-        activeProjectCount: selected.group.projects.filter(
-          (project) => project.archivedAt === undefined,
-        ).length,
-        repositoryUrl: selected.project.repositoryUrl,
-        identifierPrefix: selected.project.identifierPrefix,
-        executionMode: selected.project.executionMode,
-        archivedAt: selected.project.archivedAt,
-      });
+      const project = mapProjectInfo(selected.group, selected.project);
+      if (!project) throw new Error("Project organization not found");
+      return new ProjectDataConnection(
+        client,
+        project,
+        mapAvailableProjects(groups),
+      );
     } catch (error) {
       await client.close();
       throw error;

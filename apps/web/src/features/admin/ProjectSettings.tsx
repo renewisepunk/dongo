@@ -1,5 +1,5 @@
-import { A, useNavigate } from "@solidjs/router";
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { A, useNavigate, useSearchParams } from "@solidjs/router";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
 import { SignOutButton } from "../../components/SignOutButton";
 import { dongoPublicOrigin } from "../../lib/auth-config";
@@ -17,6 +17,11 @@ type ProjectSettingsProps = {
 };
 
 type Tab = "General" | "Agent access" | "Members" | "Plan & storage";
+const SETTINGS_TABS: readonly Tab[] = ["General", "Agent access", "Members", "Plan & storage"];
+
+function settingsTab(value: string | undefined): Tab {
+  return SETTINGS_TABS.find((tab) => tab === value) ?? "General";
+}
 
 function relativeTime(timestamp: number | undefined): string {
   if (!timestamp) return "never used";
@@ -63,7 +68,8 @@ function normalizedRepositoryUrl(value: string): string | undefined {
 
 export function ProjectSettings(props: ProjectSettingsProps) {
   const navigate = useNavigate();
-  const [tab, setTab] = createSignal<Tab>("General");
+  const [searchParams, setSearchParams] = useSearchParams<{ tab?: string }>();
+  const [tab, setTab] = createSignal<Tab>(settingsTab(searchParams.tab));
   const [project, setProject] = createSignal<ProjectInfo>();
   const [administration, setAdministration] = createSignal<ProjectAdministration>();
   const [installations, setInstallations] = createSignal<ProjectInstallation[]>([]);
@@ -88,6 +94,15 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   let disposed = false;
 
   const owner = createMemo(() => administration()?.membershipRole === "owner");
+
+  createEffect(() => setTab(settingsTab(searchParams.tab)));
+
+  const selectTab = (next: Tab) => {
+    setTab(next);
+    setSearchParams({ tab: next === "General" ? undefined : next });
+    setError("");
+    setStatus("");
+  };
 
   const applyAdministration = (next: ProjectAdministration) => {
     setAdministration(next);
@@ -265,8 +280,8 @@ export function ProjectSettings(props: ProjectSettingsProps) {
       </header>
       <div class="settings-layout">
         <nav class="settings-nav" aria-label="Project settings">
-          <For each={(["General", "Agent access", "Members", "Plan & storage"] as Tab[])}>{(item) => (
-            <button class="settings-nav__link" data-selected={tab() === item} type="button" onClick={() => { setTab(item); setError(""); setStatus(""); }}>{item}</button>
+          <For each={SETTINGS_TABS}>{(item) => (
+            <button class="settings-nav__link" data-selected={tab() === item} type="button" onClick={() => selectTab(item)}>{item}</button>
           )}</For>
         </nav>
 

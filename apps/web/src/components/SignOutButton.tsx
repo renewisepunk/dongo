@@ -1,10 +1,11 @@
 import { useNavigate } from "@solidjs/router";
 import { createSignal } from "solid-js";
+import type { JSX } from "solid-js";
 
 import { signOutEverywhere } from "../lib/auth-client";
 import { AUTH_EMAIL_KEY, LAST_APP_ROUTE_KEY } from "../lib/auth-flow";
 
-export function SignOutButton(props: { class?: string }) {
+export function SignOutButton(props: { class?: string; role?: JSX.AriaAttributes["role"] }) {
   const navigate = useNavigate();
   const [pending, setPending] = createSignal(false);
 
@@ -21,5 +22,5 @@ export function SignOutButton(props: { class?: string }) {
     }
   };
 
-  return <button class={props.class ?? "button button--quiet"} type="button" disabled={pending()} onClick={() => void signOut()}>{pending() ? "Signing out…" : "Sign out"}</button>;
+  return <button class={props.class ?? "button button--quiet"} type="button" role={props.role} disabled={pending()} onClick={() => void signOut()}>{pending() ? "Signing out…" : "Sign out"}</button>;
 }

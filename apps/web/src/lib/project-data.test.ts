@@ -1,12 +1,80 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  mapAvailableProjects,
   mapIntakeDetail,
   mapOverviewSnapshot,
   type OverviewSnapshot,
 } from "./project-data";
 
 describe("live project overview mapping", () => {
+  it("maps only authorized active projects without crossing organization metadata", () => {
+    const projects = mapAvailableProjects([
+      {
+        membership: { organizationId: "org-1", role: "owner" },
+        organization: {
+          _id: "org-1",
+          name: "Studio",
+          slug: "studio",
+          plan: "free",
+        },
+        projects: [
+          {
+            _id: "project-1",
+            publicRef: "public-1",
+            name: "Checkout",
+            slug: "checkout",
+            identifierPrefix: "CHK",
+            executionMode: "manual",
+          },
+          {
+            _id: "project-archived",
+            publicRef: "public-old",
+            name: "Old app",
+            slug: "old-app",
+            identifierPrefix: "OLD",
+            executionMode: "manual",
+            archivedAt: 123,
+          },
+        ],
+      },
+      {
+        membership: { organizationId: "org-2", role: "member" },
+        organization: {
+          _id: "org-2",
+          name: "Client",
+          slug: "client",
+          plan: "paid",
+        },
+        projects: [{
+          _id: "project-2",
+          publicRef: "public-2",
+          name: "Portal",
+          slug: "portal",
+          identifierPrefix: "POR",
+          executionMode: "autonomous",
+        }],
+      },
+    ]);
+
+    expect(projects).toEqual([
+      expect.objectContaining({
+        id: "project-1",
+        organizationName: "Studio",
+        organizationSlug: "studio",
+        membershipRole: "owner",
+        activeProjectCount: 1,
+      }),
+      expect.objectContaining({
+        id: "project-2",
+        organizationName: "Client",
+        organizationSlug: "client",
+        membershipRole: "member",
+        activeProjectCount: 1,
+      }),
+    ]);
+  });
+
   it("maps Convex state without inventing fixture activity", () => {
     const now = 1_800_000_000_000;
     const ready = {

@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
+import { SignOutButton } from "../../components/SignOutButton";
 import { humanSession } from "../../lib/auth-client";
 import {
   attachmentKind,
@@ -14,6 +15,7 @@ import {
 } from "../../lib/optimistic-intake";
 import { ProjectDataConnection } from "../../lib/project-data";
 import type {
+  ProjectInfo,
   ProjectSearchCursor,
   ProjectSearchResult,
 } from "../../lib/project-data";
@@ -76,7 +78,11 @@ export function Overview(props: OverviewProps) {
   const [loadError, setLoadError] = createSignal("");
   const [submitting, setSubmitting] = createSignal(false);
   const [projectName, setProjectName] = createSignal(props.projectSlug);
+  const [availableProjects, setAvailableProjects] = createSignal<readonly ProjectInfo[]>([]);
+  const [viewer, setViewer] = createSignal<{ name: string; email: string }>();
   const [viewerInitials, setViewerInitials] = createSignal("ME");
+  const [projectMenuOpen, setProjectMenuOpen] = createSignal(false);
+  const [profileMenuOpen, setProfileMenuOpen] = createSignal(false);
   let connection: ProjectDataConnection | undefined;
   let unsubscribeOverview: (() => void) | undefined;
   let unsubscribeWork: (() => void) | undefined;
@@ -109,6 +115,30 @@ export function Overview(props: OverviewProps) {
   const visibleIntakes = createMemo(() =>
     mergeOptimisticIntakes(intakes(), optimisticIntakes()),
   );
+  const projectGroups = createMemo(() => {
+    const groups = new Map<string, { name: string; projects: ProjectInfo[] }>();
+    for (const project of availableProjects()) {
+      const group = groups.get(project.organizationSlug);
+      if (group) group.projects.push(project);
+      else groups.set(project.organizationSlug, {
+        name: project.organizationName,
+        projects: [project],
+      });
+    }
+    return [...groups.entries()].map(([slug, group]) => ({ slug, ...group }));
+  });
+  const currentProject = createMemo(() =>
+    availableProjects().find(
+      (project) =>
+        project.organizationSlug === props.orgSlug &&
+        project.slug === props.projectSlug,
+    ),
+  );
+  const canCreateProject = createMemo(() => {
+    const project = currentProject();
+    return project?.membershipRole === "owner" &&
+      (project.organizationPlan === "paid" || project.activeProjectCount < 1);
+  });
   const selectedWork = createMemo(() => {
     const detail = selectedWorkDetail();
     return detail?.id === selectedWorkId()
@@ -158,6 +188,8 @@ export function Overview(props: OverviewProps) {
   };
 
   const openSearch = (updateRoute = true) => {
+    setProjectMenuOpen(false);
+    setProfileMenuOpen(false);
     setSearchOpen(true);
     if (updateRoute) setRouteParams({ search: "1" });
   };
@@ -166,6 +198,25 @@ export function Overview(props: OverviewProps) {
     setSearchOpen(false);
     setQuery("");
     if (updateRoute) setRouteParams({ search: undefined });
+  };
+
+  const switchProject = (project: ProjectInfo) => {
+    setProjectMenuOpen(false);
+    if (
+      project.organizationSlug === props.orgSlug &&
+      project.slug === props.projectSlug
+    ) return;
+    window.location.assign(
+      `/app/${encodeURIComponent(project.organizationSlug)}/${encodeURIComponent(project.slug)}`,
+    );
+  };
+
+  const openSettings = (tab: "General" | "Members") => {
+    setProjectMenuOpen(false);
+    setProfileMenuOpen(false);
+    navigate(
+      `/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/settings?tab=${encodeURIComponent(tab)}`,
+    );
   };
 
   const closeDetail = (updateRoute = true) => {
@@ -479,6 +530,12 @@ export function Overview(props: OverviewProps) {
         if (!loading() && !loadError()) openSearch();
       }
       if (event.key === "Escape") {
+        if (projectMenuOpen() || profileMenuOpen()) {
+          event.preventDefault();
+          setProjectMenuOpen(false);
+          setProfileMenuOpen(false);
+          return;
+        }
         if (searchOpen()) {
           closeSearch();
         } else {
@@ -486,7 +543,15 @@ export function Overview(props: OverviewProps) {
         }
       }
     };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest(".header-menu")) {
+        setProjectMenuOpen(false);
+        setProfileMenuOpen(false);
+      }
+    };
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("pointerdown", onPointerDown);
     void (async () => {
       try {
         const [connected, session] = await Promise.all([
@@ -498,9 +563,14 @@ export function Overview(props: OverviewProps) {
           return;
         }
         connection = connected;
+        setAvailableProjects(connected.availableProjects);
         setConnectionReady(true);
         setProjectName(connected.projectName);
         const name = session?.user.name || session?.user.email || "Me";
+        setViewer({
+          name,
+          email: session?.user.email || "Email unavailable",
+        });
         const initials = name
           .split(/\s+|@/)
           .filter(Boolean)
@@ -538,7 +608,10 @@ export function Overview(props: OverviewProps) {
         setLoading(false);
       }
     })();
-    onCleanup(() => window.removeEventListener("keydown", onKeyDown));
+    onCleanup(() => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("pointerdown", onPointerDown);
+    });
   });
 
   onCleanup(() => {
@@ -567,16 +640,85 @@ export function Overview(props: OverviewProps) {
     <main class="app-page">
       <header class="app-header">
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
-        <button class="project-button" type="button" aria-label="Select organization or project">
-          <span>{projectName()}</span><span style={{ color: "var(--text-faint)" }}>▾</span>
-        </button>
+        <div class="header-menu">
+          <button
+            class="project-button"
+            type="button"
+            aria-label="Select organization or project"
+            aria-haspopup="menu"
+            aria-expanded={projectMenuOpen()}
+            onClick={() => {
+              setProjectMenuOpen((open) => !open);
+              setProfileMenuOpen(false);
+            }}
+          >
+            <span>{projectName()}</span><span style={{ color: "var(--text-faint)" }}>▾</span>
+          </button>
+          <Show when={projectMenuOpen()}>
+            <div class="menu-popover project-menu-popover" role="menu" aria-label="Organizations and projects">
+              <For each={projectGroups()}>{(group) => (
+                <div class="menu-group">
+                  <div class="menu-label">{group.name}</div>
+                  <For each={group.projects}>{(project) => {
+                    const selected = () =>
+                      project.organizationSlug === props.orgSlug &&
+                      project.slug === props.projectSlug;
+                    return (
+                      <button
+                        class="menu-action menu-action--project"
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={selected()}
+                        onClick={() => switchProject(project)}
+                      >
+                        <span class="menu-check" aria-hidden="true">{selected() ? "✓" : ""}</span>
+                        <span>{project.name}</span>
+                      </button>
+                    );
+                  }}</For>
+                </div>
+              )}</For>
+              <div class="menu-divider" />
+              <Show when={canCreateProject()}>
+                <button class="menu-action" type="button" role="menuitem" onClick={() => navigate("/onboarding")}>+ Create project</button>
+              </Show>
+              <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("Members")}>Organization settings</button>
+              <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("General")}>Project settings</button>
+            </div>
+          </Show>
+        </div>
         <div class="header-spacer" />
         <button class="search-button" type="button" disabled={loading() || Boolean(loadError())} onClick={() => openSearch()} aria-label="Search this project">
           <span>search</span><span class="shortcut">⌘K</span>
         </button>
-        <button class="avatar-button" type="button" aria-label="Profile and settings" onClick={() => navigate(`/app/${props.orgSlug}/${props.projectSlug}/settings`)}>
-          {viewerInitials()}
-        </button>
+        <div class="header-menu header-menu--right">
+          <button
+            class="avatar-button"
+            type="button"
+            aria-label="Profile and settings"
+            aria-haspopup="menu"
+            aria-expanded={profileMenuOpen()}
+            onClick={() => {
+              setProfileMenuOpen((open) => !open);
+              setProjectMenuOpen(false);
+            }}
+          >
+            {viewerInitials()}
+          </button>
+          <Show when={profileMenuOpen()}>
+            <div class="menu-popover profile-menu-popover" role="menu" aria-label="Profile and settings">
+              <div class="profile-summary" role="presentation">
+                <strong>{viewer()?.name ?? "Dongo user"}</strong>
+                <span>{viewer()?.email ?? ""}</span>
+                <span>{currentProject()?.organizationName ?? projectName()} · {currentProject()?.membershipRole ?? "member"}</span>
+              </div>
+              <div class="menu-divider" />
+              <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("Members")}>Organization settings</button>
+              <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("General")}>Project settings</button>
+              <SignOutButton class="menu-action menu-action--danger" role="menuitem" />
+            </div>
+          </Show>
+        </div>
       </header>
 
       <div class="overview-scroll">
