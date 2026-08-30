@@ -102,3 +102,91 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
   assert.equal((await service.authStatus()).authenticated, false);
   assert.ok(calls.some((url) => url.endsWith("/oauth2/revoke")));
 });
+
+test("CI setup authenticates from the environment and writes only a non-secret project marker", async () => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-ci-service-"));
+  const configDirectory = await mkdtemp(path.join(os.tmpdir(), "dongo-ci-config-"));
+  await mkdir(path.join(repositoryRoot, ".git"));
+  const serviceToken = `dng_svc_abcdefghijk_${"s".repeat(43)}`;
+  const previousToken = process.env.DONGO_TOKEN;
+  process.env.DONGO_TOKEN = serviceToken;
+  const calls: string[] = [];
+  try {
+    const service = new CoreService({
+      cwd: repositoryRoot,
+      configDirectory,
+      secretStore: new MemorySecretStore(),
+      now: () => 1_788_086_400_000,
+      fetch: async (input, init) => {
+        const url = String(input);
+        calls.push(url);
+        assert.equal(
+          new Headers(init?.headers).get("authorization"),
+          `Bearer ${serviceToken}`,
+        );
+        if (url.endsWith("/session_start")) {
+          return envelope(
+            {
+              ...session,
+              installation: {
+                ...session.installation,
+                id: "service_actor_1",
+                scopes: ["dongo:work:read"],
+              },
+            },
+            "req_ci_session",
+          );
+        }
+        if (url.endsWith("/get_overview")) {
+          return envelope(
+            {
+              needsYou: [],
+              working: [],
+              ready: [],
+              inbox: [],
+              recentlyDone: [],
+            },
+            "req_ci_overview",
+          );
+        }
+        return new Response(null, { status: 404 });
+      },
+    });
+    const setup = await service.setupCi();
+    assert.equal(setup.credentialStore, "environment");
+    assert.equal(setup.project.publicRef, "pub_dongo");
+    const marker = await readFile(
+      path.join(repositoryRoot, ".agent-work", "project.json"),
+      "utf8",
+    );
+    assert.doesNotMatch(marker, /dng_svc_|ssssssss/);
+    assert.match(marker, /pub_dongo/);
+    assert.equal((await service.authStatus()).credential?.source, "environment");
+    assert.deepEqual((await service.overview()).ready, []);
+    assert.deepEqual(calls, [
+      "https://dev.dongo.so/api/agent/v1/session_start",
+      "https://dev.dongo.so/api/agent/v1/get_overview",
+    ]);
+  } finally {
+    if (previousToken === undefined) delete process.env.DONGO_TOKEN;
+    else process.env.DONGO_TOKEN = previousToken;
+  }
+});
+
+test("CI setup refuses to proceed without an exact service credential", async () => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-ci-missing-"));
+  await mkdir(path.join(repositoryRoot, ".git"));
+  const previousToken = process.env.DONGO_TOKEN;
+  try {
+    delete process.env.DONGO_TOKEN;
+    const service = new CoreService({ cwd: repositoryRoot });
+    await assert.rejects(service.setupCi(), (error: unknown) => {
+      assert.ok(error instanceof CliCoreError);
+      assert.equal(error.code, "authentication_required");
+      return true;
+    });
+  } finally {
+    if (previousToken === undefined) delete process.env.DONGO_TOKEN;
+    else process.env.DONGO_TOKEN = previousToken;
+  }
+});

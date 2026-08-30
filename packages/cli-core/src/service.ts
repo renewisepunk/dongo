@@ -54,6 +54,15 @@ export interface ConnectResult {
   credentialStore: string;
 }
 
+export interface CiSetupOptions {
+  environment?: Exclude<DongoEnvironment, "custom">;
+  signal?: AbortSignal;
+}
+
+export interface CiSetupResult extends ConnectResult {
+  credentialStore: "environment";
+}
+
 export interface DoctorResult {
   ok: boolean;
   checks: Array<{ name: string; ok: boolean; detail: string }>;
@@ -158,6 +167,60 @@ export class CoreService {
       installation: session.installation,
       scopes: tokenSet.scope,
       credentialStore: store.kind,
+    };
+  }
+
+  async setupCi(options: CiSetupOptions = {}): Promise<CiSetupResult> {
+    const token = process.env.DONGO_TOKEN;
+    if (
+      !token ||
+      !/^dng_svc_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$/u.test(token)
+    ) {
+      throw new CliCoreError({
+        code: "authentication_required",
+        message:
+          "Set DONGO_TOKEN to a Dongo CI/service credential before running dongo ci setup.",
+        exitCode: 3,
+      });
+    }
+    const repositoryRoot = await findRepositoryRoot(this.#cwd);
+    const environment = resolveEnvironment({
+      environment: options.environment ?? "development",
+    });
+    const profile = credentialProfile(environment.productOrigin, repositoryRoot);
+    const bootstrapClient = new DongoClient({
+      baseUrl: environment.apiBaseUrl,
+      tokenProvider: { getAccessToken: async () => token },
+      fetch: this.#fetch,
+    });
+    const session = await bootstrapClient.sessionStart(
+      { externalSessionId: randomUUID() },
+      { signal: options.signal },
+    );
+    if (options.signal?.aborted) throw this.#cancellationError();
+    this.#validateSession(session);
+    const marker: ProjectMarker = {
+      schemaVersion: 1,
+      environment: environment.environment,
+      productOrigin: environment.productOrigin,
+      issuer: environment.issuer,
+      apiBaseUrl: environment.apiBaseUrl,
+      apiResource: environment.apiResource,
+      publicProjectRef: session.project.publicRef,
+      projectId: session.project.id,
+      projectName: session.project.name,
+      installationId: session.installation.id,
+      credentialProfile: profile,
+      connectedAt: new Date(this.#now()).toISOString(),
+    };
+    const writtenMarker = await writeProjectMarker(repositoryRoot, marker);
+    return {
+      repositoryRoot,
+      markerPath: writtenMarker,
+      project: session.project,
+      installation: session.installation,
+      scopes: [],
+      credentialStore: "environment",
     };
   }
 

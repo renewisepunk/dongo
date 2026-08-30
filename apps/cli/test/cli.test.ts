@@ -27,6 +27,7 @@ function capture() {
 
 const fakeService = {
   connect: async () => ({ project: { publicRef: "pub_1" } }),
+  setupCi: async () => ({ project: { publicRef: "pub_ci" }, credentialStore: "environment" }),
   authStatus: async () => ({ authenticated: true, credential: { scopes: ["dongo:work:read"] } }),
   logout: async () => ({ revoked: true }),
   doctor: async () => ({ ok: true, checks: [] }),
@@ -38,6 +39,46 @@ const fakeService = {
   fetchAttachment: async (attachmentId: string, output?: string) => ({ attachmentId, path: output ?? ".agent-work/attachments/report.txt" }),
   integration: async (host: string, apply: boolean) => ({ host, applied: apply, files: [] }),
 };
+
+test("ci setup accepts only a non-interactive environment selection", async () => {
+  const stream = capture();
+  let environment: string | undefined;
+  const exitCode = await runCli(
+    ["ci", "setup", "--environment", "production", "--json"],
+    {
+      output: stream.output,
+      serviceFactory: () => ({
+        ...fakeService,
+        setupCi: async (options: { environment?: string }) => {
+          environment = options.environment;
+          return {
+            project: { publicRef: "pub_ci" },
+            credentialStore: "environment",
+          };
+        },
+      }) as never,
+    },
+  );
+  assert.equal(exitCode, 0);
+  assert.equal(environment, "production");
+  assert.deepEqual(JSON.parse(stream.values().stdout), {
+    ok: true,
+    command: "ci setup",
+    data: {
+      project: { publicRef: "pub_ci" },
+      credentialStore: "environment",
+    },
+  });
+
+  const rejected = capture();
+  assert.equal(
+    await runCli(["ci", "setup", "--origin", "https://other.example", "--json"], {
+      output: rejected.output,
+      serviceFactory: () => fakeService as never,
+    }),
+    2,
+  );
+});
 
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();

@@ -1,5 +1,17 @@
 # Dongo CLI
 
+Interactive use starts with `dongo connect`. For unattended CI, create a
+project credential in Dongo’s Advanced CI/service settings, expose it through
+the CI provider as the masked `DONGO_TOKEN` environment variable, and run:
+
+```sh
+dongo ci setup
+```
+
+The setup command authenticates once, writes only the non-secret project marker
+to the checkout, and never copies the credential into repository files or a
+local credential store.
+
 The Dongo CLI connects a Git repository through OAuth Device Authorization, exposes the complete agent operation surface, and writes deterministic repository exports.
 
 ## Install from a checkout

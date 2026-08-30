@@ -12,7 +12,7 @@ export interface ParsedArgs {
   apply: boolean;
   important: boolean;
   resolveWithoutResponse: boolean;
-  environment?: DongoEnvironment;
+  environment?: Exclude<DongoEnvironment, "custom">;
   origin?: string;
   values: Record<string, string[]>;
 }
@@ -54,7 +54,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let important = false;
   let resolveWithoutResponse = false;
   let help = false;
-  let environment: DongoEnvironment | undefined;
+  let environment: Exclude<DongoEnvironment, "custom"> | undefined;
   let origin: string | undefined;
   const values: Record<string, string[]> = {};
 

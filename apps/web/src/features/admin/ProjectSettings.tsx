@@ -498,7 +498,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                         <button class="button button--primary" type="button" onClick={() => void copyServiceCredential()}>Copy credential</button>
                         <button class="button button--quiet" type="button" onClick={() => setCreatedServiceCredential(undefined)}>I have stored it</button>
                       </div>
-                      <p class="security-note">Add it to your CI provider as a masked secret named <span class="mono">DONGO_TOKEN</span>. Never commit it to this repository or place it in a command argument.</p>
+                      <p class="security-note">Add it to your CI provider as a masked secret named <span class="mono">DONGO_TOKEN</span>, then run <span class="mono">dongo ci setup</span> in the checkout. Never commit it to this repository or place it in a command argument.</p>
                     </div>
                   )}</Show>
                   <Show when={!createdServiceCredential()}>

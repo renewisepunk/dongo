@@ -18,6 +18,7 @@ export interface CliDependencies {
   serviceFactory?: (options: CoreServiceOptions) => Pick<
     CoreService,
     | "connect"
+    | "setupCi"
     | "authStatus"
     | "logout"
     | "doctor"
@@ -36,6 +37,7 @@ const HELP = `Dongo CLI
 
 Usage:
   dongo connect [--environment development|production] [--origin URL] [--no-browser]
+  dongo ci setup [--environment development|production]
   dongo auth status
   dongo auth logout
   dongo doctor
@@ -136,9 +138,11 @@ function allowOnlyValues(parsed: ParsedArgs, allowed: string[]): void {
 }
 
 function validateModeFlags(parsed: ParsedArgs): void {
+  const ciSetup = parsed.command === "ci" && parsed.subcommand === "setup";
   const invalid =
     (parsed.noBrowser && parsed.command !== "connect") ||
-    ((parsed.environment !== undefined || parsed.origin !== undefined) && parsed.command !== "connect") ||
+    (parsed.environment !== undefined && parsed.command !== "connect" && !ciSetup) ||
+    (parsed.origin !== undefined && parsed.command !== "connect") ||
     (parsed.apply && parsed.command !== "integrate") ||
     (parsed.important && !(parsed.command === "attention" && parsed.subcommand === "request")) ||
     (parsed.resolveWithoutResponse && !(parsed.command === "attention" && parsed.subcommand === "resolve"));
@@ -198,6 +202,27 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
             onSlowDown: (seconds) => output.stderr(`Authorization server requested slower polling (${seconds}s).\n`),
             onNetworkRetry: (message) => output.stderr(`${message}\n`),
           },
+        });
+        break;
+      case "ci":
+        allowOnlyValues(parsed, []);
+        requirePositionals(
+          parsed,
+          2,
+          "Usage: dongo ci setup [--environment development|production]",
+        );
+        if (parsed.subcommand !== "setup") {
+          throw new CliCoreError({
+            code: "validation",
+            message:
+              "Usage: dongo ci setup [--environment development|production]",
+            exitCode: 2,
+          });
+        }
+        command = "ci setup";
+        data = await service.setupCi({
+          environment: parsed.environment,
+          signal: dependencies.signal,
         });
         break;
       case "auth":
