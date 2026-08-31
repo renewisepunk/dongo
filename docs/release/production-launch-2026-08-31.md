@@ -10,7 +10,7 @@ The release includes the public marketing, get-started, and help pages; email OT
 
 | Component | Production target | Released version |
 |---|---|---|
-| Web | `dongo-web-production` | `1771d7f5-d03e-4ca4-8042-a6aed8dfd235` |
+| Web | `dongo-web-production` | `650a94ae-f2c7-4ed3-9d38-a02e0a3e912e` |
 | Authorization | `dongo-auth-production` | `d96dd602-f4b9-45fb-adf6-833aab5281ce` |
 | Agent API | `dongo-api-production` | `f57a195e-efb5-4c82-8732-a11569f481a6` |
 | Remote MCP | `dongo-mcp-production` | `67583ee0-27cd-4233-9332-c225054f6cab` |

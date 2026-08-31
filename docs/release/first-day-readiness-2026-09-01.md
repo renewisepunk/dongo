@@ -13,6 +13,7 @@ The first web-and-Codex release is live at `https://dongo.so` and can be used fo
 - Codex authenticated as its own production installation actor, completed a real work lifecycle, and passed revoke/reauthorize isolation.
 - A human production comment uploaded a PNG to R2, rendered its secure inline preview, and exposed only safe attachment metadata to Codex.
 - The exact packed CLI completed browser authorization without a project picker, token copy, Keychain prompt, or platform credential helper.
+- The `E` shortcut opens the selected issue at a human correction comment; state transitions remain agent-owned and truthfully represented.
 
 ## Owner setup for the real workspace
 
