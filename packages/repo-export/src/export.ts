@@ -104,7 +104,19 @@ export function renderWorkItem(item: ExportWorkItem): string {
   }
 
   const conversation = item.conversation
-    ?.map((entry) => `${entry.actor?.displayName ? `${entry.actor.displayName}: ` : ""}${entry.body}`)
+    ?.map((entry) => {
+      const author = entry.actor?.displayName ? `${entry.actor.displayName}: ` : "";
+      const body = normalizeText(entry.body);
+      const attachmentIds = [...new Set(entry.attachmentIds ?? [])]
+        .map((attachmentId) => normalizeText(attachmentId))
+        .filter((attachmentId): attachmentId is string => Boolean(attachmentId));
+      return [
+        body ? `${author}${body}` : author.trimEnd(),
+        ...(attachmentIds.length > 0
+          ? [`Attachments: ${attachmentIds.join(", ")}`]
+          : []),
+      ].filter(Boolean).join("\n");
+    })
     .join("\n\n");
   lines.push(...section("Notes", item.notes ?? conversation));
   return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`;

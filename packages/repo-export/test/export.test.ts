@@ -68,13 +68,19 @@ test("canonical artifacts, source IDs, and conversation notes export without tem
       { kind: "preview", label: "Preview", url: "https://preview.example/build?x-amz-signature=secret" },
       { kind: "file", label: "Report", repositoryPath: "reports/final.md" },
     ],
-    conversation: [{ actor: { displayName: "Agent" }, body: "Verified." }],
+    conversation: [{
+      actor: { displayName: "Agent" },
+      body: "Verified.",
+      attachmentIds: ["attachment_image", "attachment_trace"],
+    }],
   });
   assert.match(markdown, /intake_1\nintake_2/);
   assert.match(markdown, /- Preview/);
   assert.doesNotMatch(markdown, /x-amz-signature|secret/);
   assert.match(markdown, /Report: `reports\/final\.md`/);
   assert.match(markdown, /Agent: Verified\./);
+  assert.match(markdown, /Attachments: attachment_image, attachment_trace/);
+  assert.doesNotMatch(markdown, /signature=/);
 });
 
 test("filename collision handling is deterministic across snapshot ordering", async () => {

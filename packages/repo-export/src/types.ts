@@ -21,7 +21,11 @@ export interface ExportWorkItem {
   sourceIntake?: string;
   sourceIntakeIds?: readonly string[];
   notes?: string;
-  conversation?: readonly { actor?: { displayName?: string }; body: string }[];
+  conversation?: readonly {
+    actor?: { displayName?: string };
+    body: string;
+    attachmentIds?: readonly string[];
+  }[];
   createdAt?: WorkItem["createdAt"] | string;
   completedAt?: WorkItem["completedAt"] | string;
   artifacts?: readonly ExportArtifact[];
