@@ -88,6 +88,7 @@ export const conversationEntrySchema = z
     id: identifier,
     actor: actorSummarySchema,
     body: boundedText,
+    attachmentIds: z.array(identifier).max(20),
     createdAt: timestamp,
   })
   .strict();

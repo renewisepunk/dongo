@@ -402,6 +402,7 @@ export default defineSchema({
     workItemId: v.id("workItems"),
     actorId: v.id("actors"),
     body: v.string(),
+    attachmentIds: v.optional(v.array(v.id("attachments"))),
     createdAt: v.number(),
   })
     .index("by_work_created", ["workItemId", "createdAt"])

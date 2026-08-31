@@ -283,6 +283,9 @@ async function workDto(
         id: id<"comments">(comment._id),
         actor: await actorSummaryById(ctx, comment.actorId),
         body: comment.body,
+        attachmentIds: (comment.attachmentIds ?? []).map((attachmentId) =>
+          id<"attachments">(attachmentId),
+        ),
         createdAt: comment.createdAt,
       })),
     ),

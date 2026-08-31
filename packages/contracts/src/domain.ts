@@ -67,6 +67,7 @@ export type ConversationEntry = {
   id: Id<"comments">;
   actor: ActorSummary;
   body: string;
+  attachmentIds: Array<Id<"attachments">>;
   createdAt: number;
 };
 

@@ -78,6 +78,7 @@ export function commentSummaryForHuman(comment: Doc<"comments">) {
     _id: comment._id,
     actorId: comment.actorId,
     body: comment.body,
+    attachmentIds: comment.attachmentIds ?? [],
     createdAt: comment.createdAt,
   };
 }

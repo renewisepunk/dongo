@@ -26,6 +26,126 @@ beforeEach(() => {
 });
 
 describe("agent lifecycle reliability", () => {
+  it("exposes finalized human comment attachments to the authorized agent", async () => {
+    const t = convexTest(schema, modules);
+    const seedKey = `comment-attachment-${crypto.randomUUID()}`;
+    const context = await seededContext(t, seedKey);
+    const human = t.withIdentity({
+      tokenIdentifier: `development:${seedKey}`,
+      subject: seedKey,
+      issuer: "development",
+      email: `${seedKey}@development.invalid`,
+      name: "dongo developer",
+    });
+    const work = await successfulData(t, context, "create_work", {
+      title: "Review pasted evidence",
+      goal: "Make the screenshot available in the conversation.",
+      idempotencyKey: "comment-attachment-work",
+    });
+    const { attachmentId, pendingAttachmentId, foreignAttachmentId } = await t.run(async (ctx) => {
+      const profile = await ctx.db
+        .query("humanProfiles")
+        .withIndex("by_auth_subject", (q) =>
+          q.eq("authSubject", `development:${seedKey}`),
+        )
+        .unique();
+      if (!profile) throw new Error("human profile fixture missing");
+      const now = Date.now();
+      const attachmentId = await ctx.db.insert("attachments", {
+        organizationId: context.organizationId,
+        projectId: context.projectId,
+        createdByProfileId: profile._id,
+        filename: "pasted-review.png",
+        mimeType: "image/png",
+        byteSize: 27,
+        storageKey: `comment-attachments/${crypto.randomUUID()}`,
+        status: "available",
+        createdAt: now,
+        finalizedAt: now,
+      });
+      const pendingAttachmentId = await ctx.db.insert("attachments", {
+        organizationId: context.organizationId,
+        projectId: context.projectId,
+        createdByProfileId: profile._id,
+        filename: "still-uploading.png",
+        mimeType: "image/png",
+        byteSize: 12,
+        storageKey: `comment-attachments/${crypto.randomUUID()}`,
+        status: "pending",
+        createdAt: now,
+        expiresAt: now + 60_000,
+      });
+      const foreignProfileId = await ctx.db.insert("humanProfiles", {
+        authSubject: `development:foreign-${seedKey}`,
+        name: "Foreign uploader",
+        createdAt: now,
+        updatedAt: now,
+      });
+      const foreignAttachmentId = await ctx.db.insert("attachments", {
+        organizationId: context.organizationId,
+        projectId: context.projectId,
+        createdByProfileId: foreignProfileId,
+        filename: "foreign.png",
+        mimeType: "image/png",
+        byteSize: 9,
+        storageKey: `comment-attachments/${crypto.randomUUID()}`,
+        status: "available",
+        createdAt: now,
+        finalizedAt: now,
+      });
+      return { attachmentId, pendingAttachmentId, foreignAttachmentId };
+    });
+
+    await expect(human.mutation(
+      api.domains.comments.index.createForHuman,
+      {
+        workItemId: work.id as Id<"workItems">,
+        attachmentIds: [pendingAttachmentId],
+        idempotencyKey: "comment-attachment-pending",
+      },
+    )).rejects.toThrow("Comment attachment is not available");
+    await expect(human.mutation(
+      api.domains.comments.index.createForHuman,
+      {
+        workItemId: work.id as Id<"workItems">,
+        attachmentIds: [foreignAttachmentId],
+        idempotencyKey: "comment-attachment-foreign",
+      },
+    )).rejects.toThrow("Attachment not found");
+
+    const created = await human.mutation(
+      api.domains.comments.index.createForHuman,
+      {
+        workItemId: work.id as Id<"workItems">,
+        attachmentIds: [attachmentId],
+        idempotencyKey: "comment-attachment-create",
+      },
+    );
+    const replayed = await human.mutation(
+      api.domains.comments.index.createForHuman,
+      {
+        workItemId: work.id as Id<"workItems">,
+        attachmentIds: [attachmentId],
+        idempotencyKey: "comment-attachment-create",
+      },
+    );
+    expect(replayed.commentId).toBe(created.commentId);
+
+    const observed = await successfulData(t, context, "get_work", {
+      workItemId: work.id,
+    });
+    expect(observed.conversation).toContainEqual(
+      expect.objectContaining({
+        id: created.commentId,
+        body: "",
+        attachmentIds: [attachmentId],
+      }),
+    );
+    await expect(
+      human.mutation(internal.domains.attachments.index.discard, { attachmentId }),
+    ).rejects.toThrow("Attached media cannot be discarded");
+  });
+
   it("replays terminal and Attention mutations after a lost response", async () => {
     const t = convexTest(schema, modules);
     const seedKey = `lifecycle-${crypto.randomUUID()}`;
