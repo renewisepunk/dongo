@@ -1081,6 +1081,17 @@ export function Overview(props: OverviewProps) {
               <div class="menu-divider" />
               <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("Members")}>Organization settings</button>
               <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("General")}>Project settings</button>
+              <button
+                class="menu-action"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setProfileMenuOpen(false);
+                  navigate(`/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/help`);
+                }}
+              >
+                Help <span class="menu-action__shortcut">?</span>
+              </button>
               <SignOutButton class="menu-action menu-action--danger" role="menuitem" />
             </div>
           </Show>

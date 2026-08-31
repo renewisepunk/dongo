@@ -54,6 +54,17 @@ test("shows the authenticated account and organization role", async ({ page }) =
   await expect(menu.getByText("Fixture Studio · owner", { exact: true })).toBeVisible();
   await expect(menu.getByRole("menuitem", { name: "Organization settings" })).toBeVisible();
   await expect(menu.getByRole("menuitem", { name: "Project settings" })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: /Help/ })).toBeVisible();
+});
+
+test("opens the route-backed help guide from the profile menu", async ({ page }) => {
+  await page.getByRole("button", { name: "Profile and settings" }).click();
+  await page.getByRole("menuitem", { name: /Help/ }).click();
+
+  await expect(page).toHaveURL(/\/app\/fixture-studio\/dongo\/help$/);
+  await expect(page.getByRole("heading", { name: "Keep the loop moving" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Keyboard shortcuts" })).toBeVisible();
+  await expect(page.getByText("Command menu", { exact: true })).toBeVisible();
 });
 
 test("bounds overview connection and subscription failures", async ({ page }) => {

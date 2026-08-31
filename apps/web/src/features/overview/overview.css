@@ -191,6 +191,13 @@
 .menu-action--danger { color: var(--danger); }
 .menu-check { width: 15px; flex: none; font-family: var(--mono); }
 
+.menu-action__shortcut {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
 .menu-divider {
   height: 1px;
   flex: none;

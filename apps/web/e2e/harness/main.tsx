@@ -1,6 +1,7 @@
 import { Route, Router } from "@solidjs/router";
 import { render } from "solid-js/web";
 import { Overview, type OverviewConnection } from "../../src/features/overview/Overview";
+import { HelpGuide } from "../../src/features/help/HelpGuide";
 import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
 import type { WorkItem } from "../../src/features/overview/model";
 import { CompletedWork } from "../../src/routes/app/[orgSlug]/[projectSlug]/done";
@@ -659,6 +660,10 @@ render(
             dependencies={completedDependencies}
           />
         )}
+      />
+      <Route
+        path="/app/:orgSlug/:projectSlug/help"
+        component={() => <HelpGuide orgSlug="fixture-studio" projectSlug="dongo" />}
       />
       <Route path="*" component={FixtureOverview} />
     </Router>
