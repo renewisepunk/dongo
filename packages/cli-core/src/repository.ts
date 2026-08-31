@@ -46,6 +46,7 @@ export function repositoryName(repositoryRoot: string): string {
 
 export function suggestedProjectName(repositoryRoot: string): string {
   const name = repositoryName(repositoryRoot).replace(/[-_]+/gu, " ").trim();
+  if (name.toLocaleLowerCase("en-US") === "dongo") return "dongo";
   return name ? `${name[0]!.toUpperCase()}${name.slice(1)}` : "Project";
 }
 

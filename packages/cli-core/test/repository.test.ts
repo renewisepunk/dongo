@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeRepositoryUrl } from "../src/repository.ts";
+import { normalizeRepositoryUrl, suggestedProjectName } from "../src/repository.ts";
+
+test("keeps the dongo brand lowercase when proposing a project name", () => {
+  assert.equal(suggestedProjectName("/workspace/dongo"), "dongo");
+  assert.equal(suggestedProjectName(`/workspace/${["Don", "go"].join("")}`), "dongo");
+  assert.equal(suggestedProjectName("/workspace/example-project"), "Example project");
+});
 
 test("normalizes HTTPS, SCP-style, and SSH Git origins without inventing hosts", () => {
   assert.equal(
