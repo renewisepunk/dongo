@@ -235,16 +235,21 @@ async function workDto(
     work.claimedRunId !== undefined &&
     work.claimExpiresAt !== undefined &&
     work.claimExpiresAt > Date.now();
-  const activeRunDoc =
-    (claimActive && work.claimedRunId
-      ? runs.find((run) => run._id === work.claimedRunId)
-      : undefined) ?? runs.find((run) => run.status === "waiting");
-  const terminalRun = runs.find((run) =>
-    ["completed", "failed", "cancelled"].includes(run.status),
-  );
   const request = [...openRequests, ...seenRequests].sort(
     (left, right) => right.createdAt - left.createdAt,
   )[0];
+  const activeRunDoc =
+    (claimActive && work.claimedRunId
+      ? runs.find((run) => run._id === work.claimedRunId)
+      : undefined) ??
+    (request?.runId
+      ? runs.find(
+          (run) => run._id === request.runId && run.status === "waiting",
+        )
+      : undefined);
+  const terminalRun = runs.find((run) =>
+    ["completed", "failed", "cancelled"].includes(run.status),
+  );
   return {
     id: id<"workItems">(work._id),
     projectId: id<"projects">(work.projectId),

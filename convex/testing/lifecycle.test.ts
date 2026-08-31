@@ -262,6 +262,11 @@ describe("agent lifecycle reliability", () => {
         },
       }),
     );
+    const readyAfterResponse = await successfulData(t, context, "get_work", {
+      workItemId: attentionWork.id,
+    });
+    expect(readyAfterResponse).toMatchObject({ state: "ready" });
+    expect(readyAfterResponse.activeRun).toBeUndefined();
     const resumed = await successfulData(t, context, "start_work", {
       workItemId: attentionWork.id,
       expectedRevision: waitingWork.revision,
@@ -269,6 +274,26 @@ describe("agent lifecycle reliability", () => {
       idempotencyKey: "restart-after-response",
     });
     expect(resumed).toMatchObject({ state: "working" });
+    expect(resumed.activeRun).toMatchObject({
+      state: "running",
+      externalSessionId: "session-after-human-response",
+    });
+    const finishedAfterResponse = await successfulData(
+      t,
+      context,
+      "finish_work",
+      {
+        workItemId: attentionWork.id,
+        expectedRevision: resumed.revision,
+        outcome: "The human response was applied on the next pull.",
+        idempotencyKey: "finish-after-response",
+      },
+    );
+    expect(finishedAfterResponse).toMatchObject({
+      state: "done",
+      outcome: "The human response was applied on the next pull.",
+    });
+    expect(finishedAfterResponse.activeRun).toBeUndefined();
 
     const finishWork = await successfulData(t, context, "create_work", {
       title: "Finish exactly once",
