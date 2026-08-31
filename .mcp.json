@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "dongo-p58de816-dongo": {
-      "type": "http",
-      "url": "https://dev.dongo.so/p/p58de816-dongo/mcp"
+    "dongo-en8dgh2y-dongo": {
+      "type": "streamable-http",
+      "url": "https://dongo.so/p/en8dgh2y-dongo/mcp"
     }
   }
 }

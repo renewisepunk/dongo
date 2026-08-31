@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "environment": "development",
-  "productOrigin": "https://dev.dongo.so",
-  "issuer": "https://dev.dongo.so/api/auth",
-  "apiBaseUrl": "https://dev.dongo.so/api/agent/v1",
-  "apiResource": "https://dev.dongo.so/api/agent/v1",
-  "publicProjectRef": "p58de816-dongo",
-  "projectId": "m57ejgmb6ek7j2jsf9xx4w29as8denw5",
-  "projectName": "Dongo",
-  "installationId": "j579dtxvpx9f9zjkd5fekahm198dea1w",
-  "credentialProfile": "repo-5c78b450fdfd95b4387cedf7226a1b63",
-  "connectedAt": "2026-08-30T19:45:54.866Z"
+  "environment": "production",
+  "productOrigin": "https://dongo.so",
+  "issuer": "https://dongo.so/api/auth",
+  "apiBaseUrl": "https://dongo.so/api/agent/v1",
+  "apiResource": "https://dongo.so/api/agent/v1",
+  "publicProjectRef": "en8dgh2y-dongo",
+  "projectId": "md77rjr642w62pnwwk9pqjcjc98dg572",
+  "projectName": "dongo",
+  "installationId": "j576pe3r7j2gpsj5wbkmp5s7c18dgjyw",
+  "credentialProfile": "repo-bc0af2ee609a9ef9c9e229ee9f751c38",
+  "connectedAt": "2026-08-31T22:43:02.369Z"
 }
