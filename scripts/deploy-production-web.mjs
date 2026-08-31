@@ -12,7 +12,7 @@ const productionEnvironment = {
   VITE_CONVEX_SITE_URL: "https://brainy-camel-172.convex.site",
   VITE_DONGO_ENVIRONMENT: "production",
   VITE_DONGO_PUBLIC_ORIGIN: "https://dongo.so",
-  VITE_DONGO_GOOGLE_AUTH_CONFIGURED: "false",
+  VITE_DONGO_GOOGLE_AUTH_CONFIGURED: "true",
 };
 const deployEnvironment = { ...productionEnvironment };
 delete deployEnvironment.CLOUDFLARE_ENV;

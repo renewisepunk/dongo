@@ -8,7 +8,7 @@ const publicDefaults = productionBuild
       convexUrl: "https://brainy-camel-172.convex.cloud",
       convexSiteUrl: "https://brainy-camel-172.convex.site",
       environment: "production",
-      googleAuthConfigured: "false",
+      googleAuthConfigured: "true",
       publicOrigin: "https://dongo.so",
     }
   : {

@@ -74,6 +74,13 @@ const files = readJson("apps/files/wrangler.jsonc");
 if (files?.env?.production?.r2_buckets?.[0]?.bucket_name !== "dongo-attachments") {
   failures.push("apps/files/wrangler.jsonc: production files does not bind dongo-attachments");
 }
+const web = readJson("apps/web/wrangler.jsonc");
+if (web?.vars?.VITE_DONGO_GOOGLE_AUTH_CONFIGURED !== "true") {
+  failures.push("apps/web/wrangler.jsonc: development Google sign-in is not enabled");
+}
+if (web?.env?.production?.vars?.VITE_DONGO_GOOGLE_AUTH_CONFIGURED !== "true") {
+  failures.push("apps/web/wrangler.jsonc: production Google sign-in is not enabled");
+}
 
 const packageJson = readJson("package.json");
 if (packageJson?.scripts?.deploy !== "npm run deploy:production") {
@@ -88,6 +95,7 @@ if (packageJson?.scripts?.["deploy:production"] !== "node scripts/deploy-product
 
 const devDeploy = readFileSync("scripts/deploy-dev.mjs", "utf8");
 const productionDeploy = readFileSync("scripts/deploy-production.mjs", "utf8");
+const productionWebDeploy = readFileSync("scripts/deploy-production-web.mjs", "utf8");
 for (const [path] of workers) {
   if (path !== "apps/web/wrangler.jsonc" && !devDeploy.includes(path)) {
     failures.push(`scripts/deploy-dev.mjs: coherent development deploy omits ${path}`);
@@ -100,6 +108,9 @@ if (!devDeploy.includes('"convex", "dev", "--once"')) failures.push("scripts/dep
 if (!productionDeploy.includes('"convex", "deploy"')) failures.push("scripts/deploy-production.mjs: Convex production deploy is missing");
 if (!productionDeploy.includes('"d1", "migrations", "apply"')) failures.push("scripts/deploy-production.mjs: production D1 migration is missing");
 if (!productionDeploy.includes("scripts/deploy-production-web.mjs")) failures.push("scripts/deploy-production.mjs: production web deploy is missing");
+if (!productionWebDeploy.includes('VITE_DONGO_GOOGLE_AUTH_CONFIGURED: "true"')) {
+  failures.push("scripts/deploy-production-web.mjs: production Google sign-in is not enabled");
+}
 
 if (failures.length > 0) {
   console.error("Environment boundary verification failed:");
