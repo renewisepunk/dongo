@@ -2,6 +2,13 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
 import { SignOutButton } from "../../components/SignOutButton";
+import {
+  CommandMenu,
+  ShortcutDialog,
+  type OverviewCommand,
+  type OverviewCommandId,
+} from "../help/KeyboardOverlays";
+import { DONGO_SHORTCUTS } from "../help/shortcuts";
 import { humanSession } from "../../lib/auth-client";
 import {
   attachmentKind,
@@ -128,6 +135,34 @@ type OverviewRouteState = {
   search?: string;
 };
 
+type DetailInitialFocus = "close" | "respond";
+
+const OVERVIEW_COMMANDS: readonly OverviewCommand[] = [
+  ...DONGO_SHORTCUTS.map((shortcut) => ({
+    id: shortcut.id,
+    label: shortcut.label,
+    description: shortcut.description,
+    keys: shortcut.keys,
+    ...(shortcut.id === "working" || shortcut.id === "done"
+      ? { status: "agent-owned" }
+      : shortcut.id === "edit"
+        ? { status: "not available" }
+        : {}),
+  })),
+  {
+    id: "help",
+    label: "Open help guide",
+    description: "Read the core workflow and full shortcut reference.",
+    keys: [],
+  },
+];
+
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(
+    target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])"),
+  );
+}
+
 function sameOverviewRoute(
   left: OverviewRouteState,
   right: OverviewRouteState,
@@ -172,6 +207,11 @@ export function Overview(props: OverviewProps) {
   const [viewerInitials, setViewerInitials] = createSignal("ME");
   const [projectMenuOpen, setProjectMenuOpen] = createSignal(false);
   const [profileMenuOpen, setProfileMenuOpen] = createSignal(false);
+  const [commandMenuOpen, setCommandMenuOpen] = createSignal(false);
+  const [shortcutDialogOpen, setShortcutDialogOpen] = createSignal(false);
+  const [keyboardSelection, setKeyboardSelection] = createSignal<string>();
+  const [detailPeek, setDetailPeek] = createSignal(false);
+  const [detailInitialFocus, setDetailInitialFocus] = createSignal<DetailInitialFocus>("close");
   const [draggedReadyId, setDraggedReadyId] = createSignal<string>();
   const [fileDropActive, setFileDropActive] = createSignal(false);
   let connection: OverviewConnection | undefined;
@@ -185,7 +225,10 @@ export function Overview(props: OverviewProps) {
   let profileMenu: HTMLDivElement | undefined;
   let searchButton: HTMLButtonElement | undefined;
   let searchInput: HTMLInputElement | undefined;
+  let composerInput: HTMLTextAreaElement | undefined;
   let searchReturnFocus: HTMLElement | undefined;
+  let commandReturnFocus: HTMLElement | undefined;
+  let shortcutReturnFocus: HTMLElement | undefined;
   let detailReturnFocus: HTMLElement | undefined;
   let detailReturnToSearch = false;
   let detailReturnScroll: { x: number; y: number } | undefined;
@@ -303,9 +346,9 @@ export function Overview(props: OverviewProps) {
     window.setTimeout(() => setToast(""), 2200);
   };
 
-  const openSearch = (updateRoute = true) => {
+  const openSearch = (updateRoute = true, preferredReturnFocus?: HTMLElement) => {
     if (!searchOpen() && document.activeElement instanceof HTMLElement) {
-      searchReturnFocus = document.activeElement;
+      searchReturnFocus = preferredReturnFocus ?? document.activeElement;
     }
     if (updateRoute) applyRouteUpdate({ search: "1" });
     setProjectMenuOpen(false);
@@ -321,6 +364,42 @@ export function Overview(props: OverviewProps) {
     setSearchOpen(false);
     setQuery("");
     if (restoreFocus) restoreFocusAfterRender(returnFocus, searchButton);
+  };
+
+  const closeCommandMenu = (restoreFocus = true) => {
+    const returnFocus = commandReturnFocus;
+    commandReturnFocus = undefined;
+    setCommandMenuOpen(false);
+    if (restoreFocus) restoreFocusAfterRender(returnFocus, searchButton);
+  };
+
+  const openCommandMenu = () => {
+    if (!commandMenuOpen() && document.activeElement instanceof HTMLElement) {
+      commandReturnFocus = document.activeElement;
+    }
+    if (searchOpen()) closeSearch(true, false);
+    if (shortcutDialogOpen()) closeShortcutDialog(false);
+    setProjectMenuOpen(false);
+    setProfileMenuOpen(false);
+    setShortcutDialogOpen(false);
+    setCommandMenuOpen(true);
+  };
+
+  const closeShortcutDialog = (restoreFocus = true) => {
+    const returnFocus = shortcutReturnFocus;
+    shortcutReturnFocus = undefined;
+    setShortcutDialogOpen(false);
+    if (restoreFocus) restoreFocusAfterRender(returnFocus, searchButton);
+  };
+
+  const openShortcutDialog = (preferredReturnFocus?: HTMLElement) => {
+    if (!shortcutDialogOpen() && document.activeElement instanceof HTMLElement) {
+      shortcutReturnFocus = preferredReturnFocus ?? document.activeElement;
+    }
+    setProjectMenuOpen(false);
+    setProfileMenuOpen(false);
+    if (commandMenuOpen()) closeCommandMenu(false);
+    setShortcutDialogOpen(true);
   };
 
   const switchProject = (project: ProjectInfo) => {
@@ -401,6 +480,8 @@ export function Overview(props: OverviewProps) {
     setSelectedIntakeDetail(undefined);
     setSelectedWorkId(undefined);
     setSelectedIntakeId(undefined);
+    setDetailPeek(false);
+    setDetailInitialFocus("close");
     restoreFocusAfterRender(returnToSearch ? undefined : returnFocus, () => {
       if (returnToSearch) return searchButton;
       if (returnWorkId) {
@@ -417,6 +498,8 @@ export function Overview(props: OverviewProps) {
     id: string,
     updateRoute = true,
     returnFocus?: HTMLElement,
+    peek = false,
+    initialFocus: DetailInitialFocus = "close",
   ) => {
     if (!selectedWorkId() && !selectedIntakeId()) {
       const resolvedReturnFocus = returnFocus ?? (
@@ -437,6 +520,8 @@ export function Overview(props: OverviewProps) {
     setSelectedWorkDetail(undefined);
     setSelectedIntakeDetail(undefined);
     setSelectedIntakeId(undefined);
+    setDetailPeek(peek);
+    setDetailInitialFocus(initialFocus);
     setSelectedWorkId(id);
     const item = work().find((candidate) => candidate.id === id);
     if (!connection) return;
@@ -468,6 +553,7 @@ export function Overview(props: OverviewProps) {
     id: string,
     updateRoute = true,
     returnFocus?: HTMLElement,
+    peek = false,
   ) => {
     if (!selectedWorkId() && !selectedIntakeId()) {
       const resolvedReturnFocus = returnFocus ?? (
@@ -488,6 +574,8 @@ export function Overview(props: OverviewProps) {
     setSelectedWorkDetail(undefined);
     setSelectedIntakeDetail(undefined);
     setSelectedWorkId(undefined);
+    setDetailPeek(peek);
+    setDetailInitialFocus("close");
     setSelectedIntakeId(id);
     if (!connection || id.startsWith("optimistic:")) return;
     unsubscribeIntake = connection.subscribeIntakeDetail(
@@ -520,7 +608,7 @@ export function Overview(props: OverviewProps) {
       if (selectedIntakeId() !== intakeId) openIntake(intakeId, false);
       return;
     }
-    if (selectedWorkId() || selectedIntakeId()) closeDetail(false);
+    if ((selectedWorkId() || selectedIntakeId()) && !detailPeek()) closeDetail(false);
   });
 
   const updateDraftAttachment = (
@@ -798,15 +886,170 @@ export function Overview(props: OverviewProps) {
     else openIntake(result.targetId, true, returnFocus);
   };
 
+  const navigableItems = (): HTMLElement[] =>
+    [...document.querySelectorAll<HTMLElement>("[data-nav-item]")]
+      .filter((element) => element.offsetParent !== null);
+
+  const navKey = (element: HTMLElement): string | undefined => {
+    const kind = element.dataset.navKind;
+    const id = element.dataset.navId;
+    return kind && id ? `${kind}:${id}` : undefined;
+  };
+
+  const selectedNavItem = (): HTMLElement | undefined => {
+    const focused = document.activeElement instanceof Element
+      ? document.activeElement.closest<HTMLElement>("[data-nav-item]")
+      : null;
+    if (focused) return focused;
+    const selected = keyboardSelection();
+    return selected
+      ? navigableItems().find((element) => navKey(element) === selected)
+      : undefined;
+  };
+
+  const focusRelativeItem = (direction: -1 | 1) => {
+    const items = navigableItems();
+    if (items.length === 0) {
+      announce("There is no project activity to select");
+      return;
+    }
+    const current = selectedNavItem();
+    const currentIndex = current ? items.indexOf(current) : -1;
+    const nextIndex = currentIndex < 0
+      ? direction === 1 ? 0 : items.length - 1
+      : Math.max(0, Math.min(items.length - 1, currentIndex + direction));
+    const next = items[nextIndex]!;
+    const key = navKey(next);
+    if (key) setKeyboardSelection(key);
+    next.focus({ preventScroll: true });
+    next.scrollIntoView({ block: "nearest" });
+  };
+
+  const requireSelectedItem = (): HTMLElement | undefined => {
+    const selected = selectedNavItem();
+    if (!selected) announce("Use J or K to select an item first");
+    return selected;
+  };
+
+  const openSelectedItem = (peek = false, respond = false) => {
+    const selected = requireSelectedItem();
+    if (!selected) return;
+    const id = selected.dataset.navId;
+    if (!id) return;
+    if (selected.dataset.navKind === "work") {
+      openWork(id, !peek, selected, peek, respond ? "respond" : "close");
+      return;
+    }
+    if (respond) {
+      announce("Respond and review are available on Work items");
+      return;
+    }
+    openIntake(id, !peek, selected, peek);
+  };
+
+  const explainAgentOwnedCommand = (command: "working" | "done" | "edit") => {
+    const selected = requireSelectedItem();
+    if (!selected) return;
+    if (selected.dataset.navKind !== "work") {
+      announce("This command applies to Work items");
+      return;
+    }
+    const item = work().find((candidate) => candidate.id === selected.dataset.navId);
+    if (!item) return;
+    if (command === "working") {
+      announce(item.state === "ready"
+        ? "Starting work is agent-owned. Ask the connected agent to claim it."
+        : `This item is already ${item.state === "needs" ? "waiting for you" : item.state}.`);
+      return;
+    }
+    if (command === "done") {
+      announce(item.state === "done"
+        ? "This item is already done."
+        : "Only the active agent run can mark work done.");
+      return;
+    }
+    announce("Human work editing is not available yet. Add a comment with the correction.");
+  };
+
+  const focusCapture = () => {
+    if (searchOpen()) closeSearch(true, false);
+    if (selectedWorkId() || selectedIntakeId()) closeDetail();
+    queueMicrotask(() => {
+      composerInput?.focus({ preventScroll: true });
+      composerInput?.scrollIntoView({ block: "center" });
+    });
+  };
+
+  const runOverviewCommand = (id: OverviewCommandId) => {
+    const returnFocus = commandReturnFocus;
+    if (commandMenuOpen()) closeCommandMenu(false);
+    queueMicrotask(() => {
+      switch (id) {
+        case "capture":
+          focusCapture();
+          break;
+        case "search":
+          openSearch(true, returnFocus);
+          break;
+        case "next":
+          focusRelativeItem(1);
+          break;
+        case "previous":
+          focusRelativeItem(-1);
+          break;
+        case "open":
+          openSelectedItem();
+          break;
+        case "peek":
+          openSelectedItem(true);
+          break;
+        case "respond":
+          openSelectedItem(false, true);
+          break;
+        case "working":
+        case "done":
+        case "edit":
+          explainAgentOwnedCommand(id);
+          break;
+        case "submit":
+          if (document.activeElement === composerInput) void submitIntake();
+          else announce("Use ⌘ Enter while editing a composer");
+          break;
+        case "shortcuts":
+          openShortcutDialog(returnFocus);
+          break;
+        case "help":
+          navigate(`/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/help`);
+          break;
+        case "close":
+        case "commands":
+          break;
+      }
+    });
+  };
+
   onMount(() => {
     const previousScrollRestoration = window.history.scrollRestoration;
     window.history.scrollRestoration = "manual";
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        if (!loading() && !loadError()) openSearch();
+        if (commandMenuOpen()) closeCommandMenu();
+        else if (!loading() && !loadError()) openCommandMenu();
+        return;
       }
       if (event.key === "Escape") {
+        if (commandMenuOpen()) {
+          event.preventDefault();
+          closeCommandMenu();
+          return;
+        }
+        if (shortcutDialogOpen()) {
+          event.preventDefault();
+          closeShortcutDialog();
+          return;
+        }
         if (projectMenuOpen() || profileMenuOpen()) {
           event.preventDefault();
           const trigger = projectMenuOpen()
@@ -818,10 +1061,60 @@ export function Overview(props: OverviewProps) {
           return;
         }
         if (searchOpen()) {
+          event.preventDefault();
           closeSearch();
-        } else {
+        } else if (selectedWorkId() || selectedIntakeId()) {
+          event.preventDefault();
           closeDetail();
         }
+        return;
+      }
+      if (
+        commandMenuOpen() ||
+        shortcutDialogOpen() ||
+        projectMenuOpen() ||
+        profileMenuOpen() ||
+        searchOpen() ||
+        selectedWorkId() ||
+        selectedIntakeId() ||
+        loading() ||
+        Boolean(loadError()) ||
+        isTextEntryTarget(event.target) ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey
+      ) return;
+
+      const key = event.key.toLowerCase();
+      if (key === "?" || (event.key === "/" && event.shiftKey)) {
+        event.preventDefault();
+        openShortcutDialog();
+      } else if (key === "c") {
+        event.preventDefault();
+        focusCapture();
+      } else if (key === "/") {
+        event.preventDefault();
+        openSearch();
+      } else if (key === "j" || event.key === "ArrowDown") {
+        event.preventDefault();
+        focusRelativeItem(1);
+      } else if (key === "k" || event.key === "ArrowUp") {
+        event.preventDefault();
+        focusRelativeItem(-1);
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        openSelectedItem();
+      } else if (event.key === " " || event.code === "Space") {
+        event.preventDefault();
+        openSelectedItem(true);
+      } else if (key === "r") {
+        event.preventDefault();
+        openSelectedItem(false, true);
+      } else if (key === "w" || key === "d" || key === "e") {
+        event.preventDefault();
+        explainAgentOwnedCommand(
+          key === "w" ? "working" : key === "d" ? "done" : "edit",
+        );
       }
     };
     const onPointerDown = (event: PointerEvent) => {
@@ -1040,8 +1333,8 @@ export function Overview(props: OverviewProps) {
           </Show>
         </div>
         <div class="header-spacer" />
-        <button ref={searchButton} class="search-button" type="button" disabled={loading() || Boolean(loadError())} onClick={() => openSearch()} aria-label="Search this project">
-          <span>search</span><span class="shortcut">⌘K</span>
+        <button ref={searchButton} class="search-button" type="button" disabled={loading() || Boolean(loadError())} onClick={() => openSearch()} aria-label="Search this project" aria-keyshortcuts="/">
+          <span>search</span><span class="shortcut">/</span>
         </button>
         <div class="header-menu header-menu--right">
           <button
@@ -1085,6 +1378,7 @@ export function Overview(props: OverviewProps) {
                 class="menu-action"
                 type="button"
                 role="menuitem"
+                aria-keyshortcuts="?"
                 onClick={() => {
                   setProfileMenuOpen(false);
                   navigate(`/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/help`);
@@ -1105,7 +1399,9 @@ export function Overview(props: OverviewProps) {
             aria-label="Add something"
           >
             <textarea
+              ref={composerInput}
               class="composer__input"
+              aria-keyshortcuts="C Meta+Enter Control+Enter"
               rows={draft().length > 60 ? 4 : 2}
               value={draft()}
               onInput={(event) => {
@@ -1269,7 +1565,18 @@ export function Overview(props: OverviewProps) {
                 <span>needs you</span><span class="section-heading__count">{needs().length}</span>
               </div>
               <For each={needs()}>{(item) => (
-                <button class="work-row work-row--attention" data-work-id={item.id} type="button" onClick={() => openWork(item.id)}>
+                <button
+                  class="work-row work-row--attention"
+                  data-work-id={item.id}
+                  data-nav-item
+                  data-nav-kind="work"
+                  data-nav-id={item.id}
+                  data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
+                  type="button"
+                  aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
+                  onFocus={() => setKeyboardSelection(`work:${item.id}`)}
+                  onClick={() => openWork(item.id)}
+                >
                   <span class="work-row__head">
                     <span class="work-row__title">{item.title}</span>
                     <Show when={item.unseen}><span class="unseen-dot" aria-label="Unseen" /></Show>
@@ -1291,7 +1598,18 @@ export function Overview(props: OverviewProps) {
                 <span>working</span><span class="section-heading__count">{working().length}</span>
               </div>
               <For each={working()}>{(item) => (
-                <button class="work-row" data-work-id={item.id} type="button" onClick={() => openWork(item.id)}>
+                <button
+                  class="work-row"
+                  data-work-id={item.id}
+                  data-nav-item
+                  data-nav-kind="work"
+                  data-nav-id={item.id}
+                  data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
+                  type="button"
+                  aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
+                  onFocus={() => setKeyboardSelection(`work:${item.id}`)}
+                  onClick={() => openWork(item.id)}
+                >
                   <span class="work-row__head">
                     <span class="work-row__title">{item.title}</span>
                     <span class="work-row__identifier mono">{item.identifier}</span>
@@ -1336,7 +1654,19 @@ export function Overview(props: OverviewProps) {
                     <button class="reorder-button" type="button" disabled={index() === 0} aria-label={`Move ${item.title} up`} onClick={() => moveReady(item.id, -1)}>▲</button>
                     <button class="reorder-button" type="button" disabled={index() === ready().length - 1} aria-label={`Move ${item.title} down`} onClick={() => moveReady(item.id, 1)}>▼</button>
                   </div>
-                  <button class="ready-row__open" data-work-id={item.id} draggable="true" type="button" onClick={() => openWork(item.id)}>
+                  <button
+                    class="ready-row__open"
+                    data-work-id={item.id}
+                    data-nav-item
+                    data-nav-kind="work"
+                    data-nav-id={item.id}
+                    data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
+                    draggable="true"
+                    type="button"
+                    aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
+                    onFocus={() => setKeyboardSelection(`work:${item.id}`)}
+                    onClick={() => openWork(item.id)}
+                  >
                     <span class="ready-row__position">{String(index() + 1).padStart(2, "0")}</span>
                     <span class="work-row__title">{item.title}</span>
                     <span class="work-row__identifier mono">{item.identifier}</span>
@@ -1352,7 +1682,17 @@ export function Overview(props: OverviewProps) {
                 <span>inbox</span><span class="section-heading__count">{visibleIntakes().length}</span>
               </div>
               <For each={visibleIntakes()}>{(intake) => (
-                <button class="work-row" type="button" onClick={() => openIntake(intake.id)}>
+                <button
+                  class="work-row"
+                  data-nav-item
+                  data-nav-kind="intake"
+                  data-nav-id={intake.id}
+                  data-keyboard-selected={keyboardSelection() === `intake:${intake.id}`}
+                  type="button"
+                  aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space"
+                  onFocus={() => setKeyboardSelection(`intake:${intake.id}`)}
+                  onClick={() => openIntake(intake.id)}
+                >
                   <span class="work-row__summary">{intake.text}</span>
                   <span class="work-row__meta">
                     <span style={{ color: intake.status === "processed" ? "var(--green)" : "var(--amber)" }}>
@@ -1377,7 +1717,18 @@ export function Overview(props: OverviewProps) {
                 <span>recently done</span><span class="section-heading__aside"><button class="view-all" type="button" onClick={() => navigate(`/app/${props.orgSlug}/${props.projectSlug}/done`)}>view all →</button></span>
               </div>
               <For each={done()}>{(item) => (
-                <button class="work-row work-row--done" data-work-id={item.id} type="button" onClick={() => openWork(item.id)}>
+                <button
+                  class="work-row work-row--done"
+                  data-work-id={item.id}
+                  data-nav-item
+                  data-nav-kind="work"
+                  data-nav-id={item.id}
+                  data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
+                  type="button"
+                  aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
+                  onFocus={() => setKeyboardSelection(`work:${item.id}`)}
+                  onClick={() => openWork(item.id)}
+                >
                   <span style={{ color: "var(--green)" }} class="mono">✓</span>
                   <span class="work-row__title work-row__title--done">{item.title}</span>
                   <span class="work-row__identifier mono">{item.completedAt}</span>
@@ -1391,6 +1742,8 @@ export function Overview(props: OverviewProps) {
       <Show when={selectedWork()}>{(item) => (
         <WorkDetail
           item={item()}
+          peek={detailPeek()}
+          initialFocus={detailInitialFocus()}
           mobileCloseLabel="←  back"
           onClose={closeDetail}
           onOpenIntake={openIntake}
@@ -1508,6 +1861,18 @@ export function Overview(props: OverviewProps) {
         </div>
       </Show>
 
+      <Show when={commandMenuOpen()}>
+        <CommandMenu
+          commands={OVERVIEW_COMMANDS}
+          onRun={runOverviewCommand}
+          onClose={() => closeCommandMenu()}
+        />
+      </Show>
+
+      <Show when={shortcutDialogOpen()}>
+        <ShortcutDialog onClose={() => closeShortcutDialog()} />
+      </Show>
+
       <Show when={toast()}>
         <div class="toast-wrap" role="status" aria-live="polite">
           <div class="toast"><span class="toast__check">✓</span><span>{toast()}</span></div>
@@ -1519,6 +1884,8 @@ export function Overview(props: OverviewProps) {
 
 type WorkDetailProps = {
   item: WorkItem;
+  peek: boolean;
+  initialFocus: DetailInitialFocus;
   mobileCloseLabel: string;
   onClose: () => void;
   onOpenIntake: (id: string) => void;
@@ -1533,9 +1900,21 @@ function WorkDetail(props: WorkDetailProps) {
   const [response, setResponse] = createSignal("");
   const [comment, setComment] = createSignal("");
   const [pending, setPending] = createSignal(false);
+  let detailPanel: HTMLElement | undefined;
   let closeButton: HTMLButtonElement | undefined;
 
-  onMount(() => closeButton?.focus());
+  onMount(() => {
+    if (props.initialFocus === "respond") {
+      queueMicrotask(() => {
+        const target = detailPanel?.querySelector<HTMLElement>(
+          ".attention-option, [data-response-composer], [data-comment-composer]",
+        );
+        (target ?? closeButton)?.focus();
+      });
+      return;
+    }
+    closeButton?.focus();
+  });
 
   const stateLine = () => {
     if (props.item.state === "needs") return `Working · waiting for your ${props.item.attention?.kind.toLowerCase()}`;
@@ -1587,12 +1966,13 @@ function WorkDetail(props: WorkDetailProps) {
   };
 
   return (
-    <aside class="detail" role="dialog" aria-modal="true" aria-labelledby="work-detail-title" onKeyDown={trapModalFocus}>
+    <aside ref={detailPanel} class="detail" data-peek={props.peek} role="dialog" aria-modal="true" aria-labelledby="work-detail-title" onKeyDown={trapModalFocus}>
       <div class="detail__head">
         <button ref={closeButton} class="detail__close" type="button" onClick={props.onClose}>
           <span class="detail-close-desktop">✕&nbsp; close</span><span class="detail-close-mobile">{props.mobileCloseLabel}</span>
         </button>
         <div class="detail__head-spacer" />
+        <Show when={props.peek}><span class="detail__peek">peek · esc closes</span></Show>
         <span class="detail__identifier">{props.item.identifier}</span>
       </div>
       <div class="detail__scroll">
@@ -1623,7 +2003,21 @@ function WorkDetail(props: WorkDetailProps) {
                     <span class="attention-option__dot" /><span>{option}</span>
                   </button>
                 )}</For>
-                <textarea class="textarea" value={response()} onInput={(event) => setResponse(event.currentTarget.value)} placeholder="Add anything the agent should know…" rows={3} />
+                <textarea
+                  class="textarea"
+                  data-response-composer
+                  aria-keyshortcuts="Meta+Enter Control+Enter"
+                  value={response()}
+                  onInput={(event) => setResponse(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                      event.preventDefault();
+                      void respond();
+                    }
+                  }}
+                  placeholder="Add anything the agent should know…"
+                  rows={3}
+                />
                 <div class="response-actions">
                   <button class="button button--primary" type="button" disabled={pending() || (!choice() && !response().trim())} onClick={() => void respond()}>Respond</button>
                   <button class="button button--quiet" type="button" disabled={pending()} onClick={() => void resolveWithoutResponse()}>Resolve without response</button>
@@ -1703,7 +2097,21 @@ function WorkDetail(props: WorkDetailProps) {
         </Show>
 
         <div class="comment-form">
-          <textarea class="textarea" value={comment()} onInput={(event) => setComment(event.currentTarget.value)} placeholder="Add a comment…" rows={2} />
+          <textarea
+            class="textarea"
+            data-comment-composer
+            aria-keyshortcuts="Meta+Enter Control+Enter"
+            value={comment()}
+            onInput={(event) => setComment(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                event.preventDefault();
+                void addComment();
+              }
+            }}
+            placeholder="Add a comment…"
+            rows={2}
+          />
           <button class="button" type="button" disabled={pending() || !comment().trim()} onClick={() => void addComment()}>Add comment</button>
         </div>
       </div>

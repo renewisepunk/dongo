@@ -207,7 +207,7 @@ test("cancels an in-flight upload and removes its draft", async ({ page }) => {
 test("opens search by keyboard and restores focus after detail close", async ({ page }) => {
   const searchButton = page.getByRole("button", { name: "Search this project" });
   await searchButton.focus();
-  await page.keyboard.press("Control+k");
+  await page.keyboard.press("/");
   const search = page.getByRole("dialog", { name: "Search this project" });
   await expect(search).toBeVisible();
   await search.getByPlaceholder("Search work, comments and intake…").fill("fixture search");
@@ -217,6 +217,98 @@ test("opens search by keyboard and restores focus after detail close", async ({ 
   await expect(detail).toBeVisible();
   await detail.getByRole("button", { name: /close|back/i }).click();
   await expect(searchButton).toBeFocused();
+});
+
+test("uses capture and search shortcuts without hijacking text entry", async ({ page }) => {
+  const composer = page.getByRole("textbox", { name: "Add something…" });
+  await page.keyboard.press("c");
+  await expect(composer).toBeFocused();
+
+  await composer.fill("Keep / inside this draft");
+  await page.keyboard.press("/");
+  await expect(composer).toHaveValue("Keep / inside this draft/");
+  await expect(page.getByRole("dialog", { name: "Search this project" })).toBeHidden();
+
+  await composer.blur();
+  await page.keyboard.press("/");
+  await expect(page.getByRole("dialog", { name: "Search this project" })).toBeVisible();
+});
+
+test("navigates, peeks, opens, and restores selection by keyboard", async ({ page }) => {
+  const first = page.locator('[data-work-id="work-needs"]');
+  const second = page.locator('[data-work-id="work-working"]');
+
+  await page.keyboard.press("j");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(second).toBeFocused();
+  await page.keyboard.press("k");
+  await expect(first).toBeFocused();
+
+  await page.keyboard.press("Space");
+  const peek = page.getByRole("dialog", { name: "Approve the release candidate" });
+  await expect(peek).toBeVisible();
+  await expect(peek.getByText("peek · esc closes")).toBeVisible();
+  await expect(page).not.toHaveURL(/work=work-needs/);
+  await page.keyboard.press("Escape");
+  await expect(first).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  await expect(peek).toBeVisible();
+  await expect(page).toHaveURL(/work=work-needs/);
+});
+
+test("opens the response surface with R and submits composers with Control Enter", async ({ page }) => {
+  await page.keyboard.press("j");
+  await page.keyboard.press("r");
+  const dialog = page.getByRole("dialog", { name: "Approve the release candidate" });
+  const firstOption = dialog.getByRole("button", { name: "Approve staging" });
+  await expect(firstOption).toBeFocused();
+  await firstOption.click();
+  const response = dialog.getByPlaceholder("Add anything the agent should know…");
+  await response.fill("Ship the verified candidate.");
+  await response.press("Control+Enter");
+  await expect(page.getByText("Response sent to your agent")).toBeVisible();
+
+  await dialog.getByPlaceholder("Add a comment…").fill("Record this review note.");
+  await dialog.getByPlaceholder("Add a comment…").press("Control+Enter");
+  await expect(page.getByText("Comment added")).toBeVisible();
+  await expect(dialog.getByText("Record this review note.")).toBeVisible();
+});
+
+test("opens the command menu and compact shortcut reference", async ({ page }) => {
+  const searchButton = page.getByRole("button", { name: "Search this project" });
+  await searchButton.focus();
+  await page.keyboard.press("Control+k");
+
+  const commands = page.getByRole("dialog", { name: "Command menu" });
+  await expect(commands).toBeVisible();
+  await expect(commands.getByRole("textbox", { name: "Filter commands" })).toBeFocused();
+  await expect(commands.getByText("agent-owned").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(searchButton).toBeFocused();
+
+  await page.keyboard.press("Shift+/");
+  const shortcuts = page.getByRole("dialog", { name: "Move at agent speed" });
+  await expect(shortcuts).toBeVisible();
+  await expect(shortcuts.getByText("Move to Working", { exact: true })).toBeVisible();
+  await expect(shortcuts.getByText("Command menu", { exact: true })).toBeVisible();
+  await shortcuts.getByRole("button", { name: "esc" }).click();
+  await expect(searchButton).toBeFocused();
+});
+
+test("keeps agent-owned state shortcuts truthful", async ({ page }) => {
+  await page.keyboard.press("j");
+  await page.keyboard.press("j");
+  await page.keyboard.press("j");
+  await expect(page.locator('[data-work-id="work-ready-a"]')).toBeFocused();
+
+  await page.keyboard.press("w");
+  await expect(page.getByText("Starting work is agent-owned. Ask the connected agent to claim it.")).toBeVisible();
+  await page.keyboard.press("d");
+  await expect(page.getByText("Only the active agent run can mark work done.")).toBeVisible();
+  await page.keyboard.press("e");
+  await expect(page.getByText("Human work editing is not available yet. Add a comment with the correction.")).toBeVisible();
 });
 
 test("reconciles browser Back and preserves the overview scroll position", async ({ page }) => {
