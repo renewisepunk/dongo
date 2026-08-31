@@ -42,4 +42,16 @@ Listing policies requires `Notifications Read` (or an equivalent account-setting
 
 The normal Wrangler OAuth profile currently used for development Worker deploys does not carry Notifications Read/Write. That is intentional evidence of least privilege, but it means account alert state cannot be claimed as inspected or deployed through that profile.
 
+### Read-only account audit — 2026-08-31
+
+The authenticated Cloudflare dashboard was inspected without changing policy, recipient, product plan, or zone configuration:
+
+- the account contained six unrelated email policies (billing budget and image-transformation types) and no dongo/development policy;
+- the complete 54-type notification catalog contained no Workers application-error alert that can filter to `dev.dongo.so` or its readiness paths;
+- the only native candidate that can isolate development is `Health Checks status notification`, backed by explicit Health Check resources for the exact development hostname and paths;
+- the `dongo.so` Health Checks page reported that Health Checks are provided through Smart Shield and presented `Upgrade to Pro`, so no Health Check or alert was created;
+- no broad `dongo.so` HTTP-traffic policy is acceptable because it would mix development and production landing traffic.
+
+Do not upgrade a plan, add a recipient, create a Health Check, or enable a policy without explicit product-owner approval at the point of change. Until an exact development-only external route is approved, use the verified logs/traces plus the repeatable smoke gates for diagnosis, but continue to report alert routing as incomplete. Acceptable completion paths are either: (a) exact `dev.dongo.so` Health Checks plus a transition-only email policy after plan and recipient approval, or (b) a development-only OpenTelemetry/log destination with its own deduplicated alert rule and independently verified delivery.
+
 Cloudflare references: [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/), [Workers Traces](https://developers.cloudflare.com/workers/observability/traces/), [notification-policy API](https://developers.cloudflare.com/api/resources/alerting/subresources/policies/), and [HTTP traffic alert limitations](https://developers.cloudflare.com/notifications/reference/traffic-alerts/).
