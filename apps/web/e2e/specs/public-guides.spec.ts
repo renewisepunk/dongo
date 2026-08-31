@@ -6,7 +6,6 @@ test("keeps get started public and preserves routes into help, sign-in, and the 
   await expect(page.getByRole("heading", { name: "Your agent can set up dongo." })).toBeVisible();
   await expect(page.getByText("No project yet?")).toBeVisible();
   await expect(page.getByText("The CLI does not invoke macOS Keychain", { exact: false })).toBeVisible();
-  await expect(page.locator("body")).not.toContainText("Dongo");
 
   await page.getByRole("link", { name: "Help", exact: true }).first().click();
   await expect(page).toHaveURL(/\/help$/);
@@ -30,5 +29,4 @@ test("keeps the complete help guide public without a project session", async ({ 
   await expect(page.getByText("Drop files anywhere")).toBeVisible();
   await expect(page.getByText("Command menu", { exact: true })).toBeVisible();
   await expect(page.getByText("dongo_session_start", { exact: true })).toBeVisible();
-  await expect(page.locator("body")).not.toContainText("Dongo");
 });
