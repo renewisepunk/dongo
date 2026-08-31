@@ -611,7 +611,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 <div class="plan-stat"><span class="plan-stat__value">{admin().activeProjectCount} / {admin().organization.plan === "free" ? "1" : "∞"}</span><span class="plan-stat__label">active projects</span></div>
                 <div class="plan-stat"><span class="plan-stat__value">{formatBytes(admin().storage.activeBytes + admin().storage.reservedBytes)} / {formatBytes(admin().storage.limitBytes)}</span><span class="plan-stat__label">media storage</span></div>
               </div>
-              <section class="settings-section"><div class="settings-section__title">{admin().organization.plan === "free" ? "Free" : "Paid"} plan</div><p class="note">Individual uploads are limited to {formatBytes(admin().storage.maximumAttachmentBytes)}. dongo does not meter people, agents, or WorkItems.</p><Show when={admin().organization.plan === "free"}><p class="security-note">Billing checkout is not configured in this development environment.</p></Show></section>
+              <section class="settings-section"><div class="settings-section__title">{admin().organization.plan === "free" ? "Free" : "Paid"} plan</div><p class="note">Individual uploads are limited to {formatBytes(admin().storage.maximumAttachmentBytes)}. dongo does not meter people, agents, or WorkItems.</p><Show when={admin().organization.plan === "free"}><p class="security-note">Plan upgrades are not available yet.</p></Show></section>
             </>
           )}</Show>
         </div>

@@ -1,0 +1,44 @@
+name: dongo production availability
+
+run-name: dongo production availability${{ inputs.exercise_failure && ' — synthetic failure' || '' }}
+
+on:
+  schedule:
+    - cron: "2,32 * * * *"
+  workflow_dispatch:
+    inputs:
+      exercise_failure:
+        description: Exercise the failure-only notification route after the live checks pass
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dongo-production-availability
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: exact production smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+
+      - name: Check every production service and OAuth/MCP discovery boundary
+        run: node scripts/smoke-production.mjs --project-ref ps8dhbky-dongo-production-e2e
+
+      - name: Exercise the failure-only alert route
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.exercise_failure }}
+        run: |
+          echo "::error title=Synthetic dongo production alert::The exact production checks passed; this explicit failure exercises notification routing."
+          exit 1

@@ -81,12 +81,51 @@ for (const prohibitedFragment of [
   }
 }
 
+const productionAvailabilityWorkflowPath = ".github/workflows/production-availability.yml";
+let productionAvailabilityWorkflow = "";
+try {
+  productionAvailabilityWorkflow = readFileSync(productionAvailabilityWorkflowPath, "utf8");
+} catch {
+  failures.push(`${productionAvailabilityWorkflowPath}: exact production availability workflow is missing`);
+}
+
+const requiredProductionWorkflowFragments = [
+  'cron: "2,32 * * * *"',
+  "workflow_dispatch:",
+  "contents: read",
+  "cancel-in-progress: false",
+  "node scripts/smoke-production.mjs --project-ref ps8dhbky-dongo-production-e2e",
+  "github.event_name == 'workflow_dispatch' && inputs.exercise_failure",
+  "Synthetic dongo production alert",
+];
+
+for (const fragment of requiredProductionWorkflowFragments) {
+  if (productionAvailabilityWorkflow && !productionAvailabilityWorkflow.includes(fragment)) {
+    failures.push(`${productionAvailabilityWorkflowPath}: missing required fragment ${JSON.stringify(fragment)}`);
+  }
+}
+
+for (const prohibitedFragment of [
+  "secrets.",
+  "DONGO_TOKEN",
+  "smoke:boundaries",
+  "https://dev.dongo.so",
+  "pull_request:",
+  "push:",
+]) {
+  if (productionAvailabilityWorkflow.includes(prohibitedFragment)) {
+    failures.push(
+      `${productionAvailabilityWorkflowPath}: prohibited fragment ${JSON.stringify(prohibitedFragment)}`,
+    );
+  }
+}
+
 if (failures.length > 0) {
   console.error("Development observability verification failed:");
   for (const failure of failures) console.error(`- ${failure}`);
   process.exitCode = 1;
 } else {
   console.log(
-    `Development logs and traces are explicitly configured across ${developmentConfigs.length} Workers; the exact scheduled availability workflow is bounded and credential-free.`,
+    `Logs and traces are explicitly configured across ${developmentConfigs.length} Workers; the exact development and production availability workflows are bounded and credential-free.`,
   );
 }
