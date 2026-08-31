@@ -13,11 +13,7 @@ import {
 import type { OAuthMetadata } from "@modelcontextprotocol/server";
 
 interface DongoWorkerEnv extends Env {
-  readonly AUTHORIZATION_SERVER_METADATA_JSON?: string;
-  readonly BETTER_AUTH_RESOURCE_CLIENT_SECRET?: string;
-  readonly DONGO_INTERNAL_GATEWAY_SECRET?: string;
   readonly DONGO_INTERNAL_GATEWAY_KEY_ID?: string;
-  readonly SERVICE_DOCUMENTATION_URL?: string;
 }
 
 const workerCache = new WeakMap<object, DongoMcpWorker>();
