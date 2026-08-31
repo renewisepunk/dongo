@@ -57,8 +57,27 @@ const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 if (packageJson.scripts?.deploy !== "npm run deploy:landing") {
   failures.push("package.json: default deploy must remain the landing deploy");
 }
-if (packageJson.scripts?.["deploy:dev"] !== "npm run deploy --workspace @dongo/web") {
-  failures.push("package.json: development deploy must remain explicitly scoped to the web app");
+if (packageJson.scripts?.["deploy:dev"] !== "node scripts/deploy-dev.mjs") {
+  failures.push("package.json: development deploy must use the coherent development-stack runner");
+}
+if (packageJson.scripts?.["deploy:dev:web"] !== "npm run deploy --workspace @dongo/web") {
+  failures.push("package.json: web-only development deploy must remain explicitly scoped to the web app");
+}
+const devDeploy = readFileSync("scripts/deploy-dev.mjs", "utf8");
+for (const path of expectedWorkerNames.keys()) {
+  if (path === "apps/web/wrangler.jsonc") continue;
+  if (!devDeploy.includes(path)) {
+    failures.push(`scripts/deploy-dev.mjs: coherent development deploy omits ${path}`);
+  }
+}
+if (!devDeploy.includes('"@dongo/web"')) {
+  failures.push("scripts/deploy-dev.mjs: coherent development deploy omits the built web Worker");
+}
+if (!devDeploy.includes('"convex", "dev", "--once"')) {
+  failures.push("scripts/deploy-dev.mjs: coherent development deploy omits Convex dev functions");
+}
+if (/deploy:landing|wrangler\.jsonc"\]\s*[,)]/u.test(devDeploy.replaceAll(/apps\/[a-z]+\/wrangler\.jsonc/gu, ""))) {
+  failures.push("scripts/deploy-dev.mjs: coherent development deploy may target the production landing Worker");
 }
 
 if (failures.length > 0) {

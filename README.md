@@ -54,6 +54,17 @@ npm run smoke:boundaries -- --project-ref <public-project-ref>
 
 The development smoke gate requires every development service to be ready and validates OAuth authorization-server metadata, exact project Protected Resource Metadata, and the unauthenticated RFC 9728 MCP challenge. The boundary smoke gate proves the development product routes are live while the production apex remains landing-only and `www` redirects to it.
 
+## Deploy one coherent development candidate
+
+Preview the exact development-only release plan, then deploy it:
+
+```sh
+npm run deploy:dev:plan
+npm run deploy:dev
+```
+
+The coherent deploy updates Convex first, followed by the authorization, API, MCP, attachment, notification, and web Workers in dependency order. This prevents a strict shared-contract change from leaving an older API or MCP bundle in front of newer Convex functions. It never invokes the root landing deploy and therefore does not modify `dongo.so` or `www.dongo.so`. `npm run deploy:dev:web` remains available for an explicitly web-only development iteration; it is not a complete candidate release.
+
 ## Install the CLI from this checkout
 
 ```sh

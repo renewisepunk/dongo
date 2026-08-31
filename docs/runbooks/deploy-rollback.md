@@ -28,17 +28,14 @@ npx wrangler d1 migrations apply AUTH_DB --remote --config apps/auth/wrangler.js
 
 Wrangler captures a backup for each migration. Destructive or compatibility-breaking migrations require a separate rehearsal and are not part of a normal deploy.
 
-Deploy the development stack in dependency order:
+Preview and deploy the development stack in dependency order with the canonical runner:
 
 ```sh
-npx convex dev --once
-npx wrangler deploy --config apps/auth/wrangler.jsonc
-npx wrangler deploy --config apps/api/wrangler.jsonc
-npx wrangler deploy --config apps/mcp/wrangler.jsonc
-npx wrangler deploy --config apps/files/wrangler.jsonc
-npx wrangler deploy --config apps/notifications/wrangler.jsonc
-npm run deploy --workspace @dongo/web
+npm run deploy:dev:plan
+npm run deploy:dev
 ```
+
+Do not accept a web-only deploy as a coherent candidate when Convex, contracts, auth, API, MCP, files, or notification code changed. `npm run deploy:dev:web` is reserved for an explicitly isolated web iteration. The canonical runner stops at the first failed service so a partial candidate cannot be reported as complete.
 
 Verify all health/readiness routes from the [runbook index](README.md), then repeat email OTP, CLI device authorization, MCP discovery/login, one read, one idempotent write, web Intake/Attention, attachment, notification, and sync journeys.
 
