@@ -34,6 +34,6 @@ Use [production release and rollback](production-release.md) for live changes. D
 | Expired claims, export conflicts, uploads, attachments, or notifications | [Data delivery](data-delivery.md) |
 | Production release, cutover, or live rollback | [Production release and rollback](production-release.md) |
 | Development deployment, Worker/Convex outage, migration, or package rollback | [Development deployment and rollback](deploy-rollback.md) |
-| Failure-spike detection, alert routing, or observability coverage | [Development alerting](alerting.md) |
+| Failure-spike detection, alert routing, or observability coverage | [Availability alerting](alerting.md) |
 
 After recovery, run `npm run verify:no-secrets`, `npm run check`, `npm test`, and `npm run build`; then repeat the exact failed public journey.

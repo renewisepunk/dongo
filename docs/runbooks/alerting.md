@@ -1,16 +1,16 @@
-# Development alerting and observability
+# Availability alerting and observability
 
-This runbook covers only the development application at `dev.dongo.so`. It does not authorize an account-wide or `dongo.so` production notification policy.
+This runbook covers the isolated development application at `dev.dongo.so` and production application at `dongo.so`. It does not authorize a broad Cloudflare account- or zone-wide notification policy.
 
 ## Runtime coverage
 
-Every development Worker must keep persistent invocation logs enabled at a sampling rate of 1 and persistent traces enabled at a sampling rate from 0.01 through 0.05. CI enforces this with:
+Every Worker must keep persistent invocation logs enabled at a sampling rate of 1 and persistent traces enabled at a sampling rate from 0.01 through 0.05. CI enforces the shared development/production configuration with:
 
 ```sh
 npm run verify:observability
 ```
 
-The enforced Workers are web, authorization, agent API, MCP, attachments, and notifications. A coherent development deployment must be followed by both public smoke gates. A successful `wrangler tail` probe must show the expected Worker/version and a redacted Authorization header, with no request body, Intake, comment, attachment content, token, signed URL, or raw exception message.
+The enforced Workers are web, authorization, agent API, MCP, attachments, and notifications. A coherent deployment must be followed by its environment smoke plus the cross-environment boundary gate. A successful `wrangler tail` probe must show the expected Worker/version and a redacted Authorization header, with no request body, Intake, comment, attachment content, token, signed URL, or raw exception message.
 
 Cloudflare invocation records can contain network metadata such as IP, location, TLS, and user-agent fields. Treat broad tail output as private operational data: filter it in place, never paste it into a work item, and retain only the safe request ID, Worker version ID, route class, status, timing, and outcome needed for diagnosis.
 
@@ -23,7 +23,7 @@ Cloudflare invocation records can contain network metadata such as IP, location,
 | Agent API or MCP mutation failures spike | API/MCP logs/traces and Convex gateway result | request ID plus operation name and opaque installation ID | Check readiness, dependency status, conflicts, and idempotency replay before retrying. |
 | Notification dispatch or provider delivery fails | Convex delivery record and notification Worker | safe delivery ID, provider class, attempt count | Follow [data delivery](data-delivery.md); do not log recipient or message content. |
 | Upload initialization, part, completion, or finalization fails | attachment Worker plus Convex attachment metadata | request ID plus attachment ID and phase | Verify exact-object cleanup and reservation state without exposing the signed capability. |
-| A development deployment fails or a readiness gate regresses | CI/deploy job, Worker version, and smoke gates | commit, job ID, Worker version ID | Stop promotion and follow [deployment and rollback](deploy-rollback.md). |
+| A deployment fails or a readiness gate regresses | CI/deploy job, Worker version, and smoke gates | environment, commit, job ID, Worker version ID | Stop promotion and follow [deployment and rollback](deploy-rollback.md). |
 
 An alert is useful only when it names one of these safe signals, has an owner and destination, deduplicates repeated failures, and links to the relevant runbook. A dashboard graph without routing is observability evidence, not alert coverage.
 
@@ -33,7 +33,7 @@ An alert is useful only when it names one of these safe signals, has an owner an
 
 The workflow has read-only repository permission, uses no secret, does not call production, does not write an issue, and cannot expose application content. Its concurrency group does not cancel a prior run, so a later healthy probe cannot erase a failing run before notification. A manual boolean input can deliberately fail only after every live check succeeds; this is the bounded notification-route exercise and never changes dongo or Cloudflare state.
 
-The workflow is not an active alert merely because the file exists. Activation and proof require all of the following:
+The workflow is active on the default branch, but notification delivery is not proven merely because the file exists. Complete evidence requires all of the following:
 
 1. The workflow exists on the repository's default branch and GitHub Actions is enabled.
 2. The product owner who creates or activates the scheduled workflow enables GitHub Actions email notifications, preferably **Only notify for failed workflows**.
@@ -42,6 +42,12 @@ The workflow is not an active alert merely because the file exists. Activation a
 5. Observe one scheduled run at an off-hour minute before accepting the route.
 
 Scheduled-workflow notifications go to the user who created the workflow, or to the user who later changes its cron schedule or re-enables it. This route therefore has an explicit human owner without adding a repository secret or a Cloudflare-wide recipient. It covers external availability and discovery/readiness regressions. The existing development logs/traces remain the diagnostic source for failure spikes inside healthy services; adding provider-side rate alerts still requires an approved development-only OTel destination.
+
+## Credential-free production availability monitor
+
+`.github/workflows/production-availability.yml` applies the same bounded design to `https://dongo.so` and synthetic project resource `ps8dhbky-dongo-production-e2e` at minutes 2 and 32 of every hour. It checks the production root and public guides, every service health/readiness endpoint, exact authorization metadata, canonical `www` redirect, project Protected Resource Metadata, and the unauthenticated MCP boundary. It has read-only repository permission and no secret.
+
+The workflow is active on the default branch. Manual healthy [run 33437103370](https://github.com/renewisepunk/dongo/actions/runs/33437103370) completed the exact production smoke successfully. A scheduled run and the explicit `exercise_failure: true` delivery route remain to be observed before claiming external failure paging is complete.
 
 ## Cloudflare notification-policy boundary
 
@@ -68,6 +74,6 @@ The authenticated Cloudflare dashboard was inspected without changing policy, re
 - the `dongo.so` Health Checks page reported that Health Checks are provided through Smart Shield and presented `Upgrade to Pro`, so no Health Check or alert was created;
 - no broad `dongo.so` HTTP-traffic policy is acceptable because it would mix development and production landing traffic.
 
-Do not upgrade a plan, add a recipient, create a Health Check, push/activate the scheduled workflow, or enable a policy without explicit product-owner approval at the point of change. Until an exact development-only external route is activated and its delivery is proven, use the verified logs/traces plus the repeatable smoke gates for diagnosis, but continue to report alert routing as incomplete. Acceptable completion paths are: (a) the credential-free GitHub availability workflow plus failure-only email for the external service gate; (b) exact `dev.dongo.so` Health Checks plus a transition-only email policy after plan and recipient approval; or (c) a development-only OpenTelemetry/log destination with its own deduplicated alert rule and independently verified delivery.
+The product owner approved the production launch, and both bounded GitHub availability workflows are now on the default branch and active. Do not upgrade a plan, add a recipient, create a Health Check, or enable a Cloudflare policy without separate approval at the point of change. Until the failure-only email route and at least one scheduled run are observed, use the active workflows plus verified logs/traces for diagnosis but continue to report external failure paging as incomplete. Future alternatives remain exact-host Health Checks plus a transition-only email policy after plan and recipient approval, or an environment-specific OpenTelemetry/log destination with its own deduplicated alert rule and independently verified delivery.
 
 References: [GitHub workflow notifications](https://docs.github.com/en/actions/concepts/workflows-and-actions/notifications-for-workflow-runs), [GitHub Actions notification settings](https://docs.github.com/en/subscriptions-and-notifications/how-tos/managing-github-actions-notifications), [GitHub scheduled-workflow timing](https://docs.github.com/en/actions/how-tos/troubleshoot-workflows#scheduled-workflows-running-at-unexpected-times), [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/), [Workers Traces](https://developers.cloudflare.com/workers/observability/traces/), [notification-policy API](https://developers.cloudflare.com/api/resources/alerting/subresources/policies/), and [HTTP traffic alert limitations](https://developers.cloudflare.com/notifications/reference/traffic-alerts/).
