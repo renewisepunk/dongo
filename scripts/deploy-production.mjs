@@ -5,7 +5,11 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const executable = (name) => process.platform === "win32" ? `${name}.cmd` : name;
-const productionEnvironment = { ...process.env, CLOUDFLARE_ENV: "production" };
+const productionEnvironment = {
+  ...process.env,
+  CI: "true",
+  CLOUDFLARE_ENV: "production",
+};
 const steps = [
   ["Convex production functions", executable("npx"), ["convex", "deploy", "--message", "dongo production release"]],
   ["production auth migrations", executable("npx"), ["wrangler", "d1", "migrations", "apply", "AUTH_DB", "--remote", "--config", "apps/auth/wrangler.jsonc", "--env", "production"]],
