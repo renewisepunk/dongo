@@ -556,7 +556,8 @@ test("keeps agent-owned state shortcuts truthful", async ({ page }) => {
   await page.keyboard.press("d");
   await expect(page.getByText("Only the active agent run can mark work done.")).toBeVisible();
   await page.keyboard.press("e");
-  await expect(page.getByText("Human work editing is not available yet. Add a comment with the correction.")).toBeVisible();
+  await expect(page.getByText("Add your correction as a comment for the agent.")).toBeVisible();
+  await expect(page.getByPlaceholder("Add a comment…")).toBeFocused();
 });
 
 test("reconciles browser Back and preserves the overview scroll position", async ({ page }) => {

@@ -141,7 +141,7 @@ type OverviewRouteState = {
   search?: string;
 };
 
-type DetailInitialFocus = "close" | "respond" | "detail";
+type DetailInitialFocus = "close" | "respond" | "comment" | "detail";
 
 const OVERVIEW_COMMANDS: readonly OverviewCommand[] = [
   ...DONGO_SHORTCUTS.map((shortcut) => ({
@@ -1012,6 +1012,16 @@ export function Overview(props: OverviewProps) {
     return true;
   };
 
+  const focusCurrentWorkComment = (id: string): boolean => {
+    const detail = [...document.querySelectorAll<HTMLElement>(".detail[data-detail-id]")]
+      .find((element) => element.dataset.detailId === id);
+    const target = detail?.querySelector<HTMLElement>("[data-comment-composer]");
+    if (!target) return false;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: "nearest" });
+    return true;
+  };
+
   const focusRelativeItem = (direction: -1 | 1) => {
     const items = navigableItems();
     if (items.length === 0) return;
@@ -1105,7 +1115,12 @@ export function Overview(props: OverviewProps) {
         : "Only the active agent run can mark work done.");
       return;
     }
-    announce("Human work editing is not available yet. Add a comment with the correction.");
+    const id = selected.dataset.navId;
+    if (!id) return;
+    if (!(wideDetailLayout() && selectedWorkId() === id && focusCurrentWorkComment(id))) {
+      openWork(id, true, selected, false, "comment");
+    }
+    announce("Add your correction as a comment for the agent.");
   };
 
   const focusCapture = () => {
@@ -2121,6 +2136,13 @@ function WorkDetail(props: WorkDetailProps) {
   onCleanup(() => window.clearTimeout(identifierCopyTimer));
 
   onMount(() => {
+    if (props.initialFocus === "comment") {
+      queueMicrotask(() => {
+        const target = detailPanel?.querySelector<HTMLElement>("[data-comment-composer]");
+        (target ?? closeButton)?.focus();
+      });
+      return;
+    }
     if (props.initialFocus === "respond") {
       queueMicrotask(() => {
         const target = detailPanel?.querySelector<HTMLElement>(

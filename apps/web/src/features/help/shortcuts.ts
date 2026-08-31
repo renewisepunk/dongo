@@ -32,7 +32,7 @@ export const DONGO_SHORTCUTS: readonly DongoShortcut[] = [
   { id: "respond", keys: ["R"], label: "Respond / review", description: "Open the selected item at the response or review area." },
   { id: "working", keys: ["W"], label: "Move to Working", description: "Show the agent-owned start boundary for selected Ready work." },
   { id: "done", keys: ["D"], label: "Mark Done", description: "Show the active-run completion boundary for selected work." },
-  { id: "edit", keys: ["E"], label: "Edit", description: "Show the supported correction path for selected work." },
+  { id: "edit", keys: ["E"], label: "Edit", description: "Open the selected work at a human correction comment." },
   { id: "submit", keys: ["⌘", "Enter"], label: "Submit", description: "Submit the composer currently being edited." },
   { id: "commands", keys: ["⌘", "K"], label: "Command menu", description: "Open the command menu from anywhere in the project." },
   { id: "shortcuts", keys: ["?"], label: "Show shortcuts", description: "Open the keyboard shortcut reference." },
