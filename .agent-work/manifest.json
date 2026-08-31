@@ -20,6 +20,10 @@
     {
       "path": "work/DONGO-5-claude-mcp-human-attention-lifecycle-verification.md",
       "sha256": "537c0144798e49bf98592d4f1b662135943f7d91d1b055d1a68a565d135cb843"
+    },
+    {
+      "path": "work/DONGO-6-generic-mcp-inspector-end-to-end-lifecycle-verification.md",
+      "sha256": "14dbf5379dfe329916735e695b3c15c7abd7cd83e0cb250ca59d813e2ab79196"
     }
   ]
 }
