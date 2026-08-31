@@ -191,6 +191,8 @@ export function CommentComposer(props: CommentComposerProps) {
       for (const attachment of submittedAttachments) revokePreview(attachment);
       setBody("");
       setAttachments([]);
+    } catch {
+      return;
     } finally {
       setSubmitting(false);
     }
@@ -238,6 +240,8 @@ export function CommentComposer(props: CommentComposerProps) {
     >
       <textarea
         class="textarea"
+        data-comment-composer
+        aria-keyshortcuts="Meta+Enter Control+Enter"
         value={body()}
         onInput={(event) => setBody(event.currentTarget.value)}
         onPaste={(event) => {
@@ -340,6 +344,7 @@ export function CommentComposer(props: CommentComposerProps) {
           class="visually-hidden"
           type="file"
           multiple
+          tabindex="-1"
           aria-label="Choose files to attach to comment"
           onChange={(event) => {
             addFiles([...(event.currentTarget.files ?? [])]);

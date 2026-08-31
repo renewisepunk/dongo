@@ -28,6 +28,7 @@ import type {
 } from "../../lib/project-data";
 import { searchHighlightSegments } from "../../lib/search-highlight";
 import type { AttachmentSummary, Intake, WorkItem } from "./model";
+import { CommentComposer } from "./CommentComposer";
 import "./overview.css";
 
 export type OverviewConnection = Pick<
@@ -1126,8 +1127,17 @@ export function Overview(props: OverviewProps) {
     };
     const carriesFiles = (event: DragEvent) =>
       [...(event.dataTransfer?.types ?? [])].includes("Files");
+    const targetsCommentComposer = (event: DragEvent) =>
+      event.target instanceof Element && Boolean(event.target.closest(".comment-drop-target"));
+    const handOffToCommentComposer = (event: DragEvent) => {
+      if (!targetsCommentComposer(event)) return false;
+      fileDragDepth = 0;
+      setFileDropActive(false);
+      return true;
+    };
     const onFileDragEnter = (event: DragEvent) => {
       if (!carriesFiles(event)) return;
+      if (handOffToCommentComposer(event)) return;
       event.preventDefault();
       event.stopPropagation();
       fileDragDepth += 1;
@@ -1135,12 +1145,14 @@ export function Overview(props: OverviewProps) {
     };
     const onFileDragOver = (event: DragEvent) => {
       if (!carriesFiles(event)) return;
+      if (handOffToCommentComposer(event)) return;
       event.preventDefault();
       event.stopPropagation();
       if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
       setFileDropActive(true);
     };
     const onFileDragLeave = (event: DragEvent) => {
+      if (handOffToCommentComposer(event)) return;
       if (!fileDropActive()) return;
       event.preventDefault();
       event.stopPropagation();
@@ -1152,6 +1164,7 @@ export function Overview(props: OverviewProps) {
     };
     const onFileDrop = (event: DragEvent) => {
       if (!carriesFiles(event)) return;
+      if (handOffToCommentComposer(event)) return;
       event.preventDefault();
       event.stopPropagation();
       fileDragDepth = 0;
@@ -1748,6 +1761,15 @@ export function Overview(props: OverviewProps) {
           onClose={closeDetail}
           onOpenIntake={openIntake}
           onDownload={downloadAttachment}
+          uploadAttachment={async (file, onProgress, signal) => {
+            if (!connection) throw new Error("upload_unavailable");
+            return await connection.uploadAttachment(file, onProgress, signal);
+          }}
+          discardAttachment={async (attachmentId) => {
+            if (!connection) throw new Error("discard_unavailable");
+            await connection.discardAttachment(attachmentId);
+          }}
+          announce={announce}
           onRespond={async (selectedOption, body) => {
             const attention = item().attention;
             if (!connection || !attention) return;
@@ -1770,10 +1792,10 @@ export function Overview(props: OverviewProps) {
               throw new Error("resolve_failed");
             }
           }}
-          onComment={async (body) => {
+          onComment={async (body, attachmentIds) => {
             if (!connection) return;
             try {
-              await connection.addComment(item().id, body);
+              await connection.addComment(item().id, body, attachmentIds);
               announce("Comment added");
             } catch {
               announce("Comment could not be added");
@@ -1890,15 +1912,17 @@ type WorkDetailProps = {
   onClose: () => void;
   onOpenIntake: (id: string) => void;
   onDownload: (attachmentId: string) => Promise<void>;
+  uploadAttachment: OverviewConnection["uploadAttachment"];
+  discardAttachment: OverviewConnection["discardAttachment"];
+  announce: (message: string) => void;
   onRespond: (selectedOption?: string, body?: string) => Promise<void>;
   onResolve: () => Promise<void>;
-  onComment: (body: string) => Promise<void>;
+  onComment: (body: string | undefined, attachmentIds: string[]) => Promise<void>;
 };
 
 function WorkDetail(props: WorkDetailProps) {
   const [choice, setChoice] = createSignal<string>();
   const [response, setResponse] = createSignal("");
-  const [comment, setComment] = createSignal("");
   const [pending, setPending] = createSignal(false);
   let detailPanel: HTMLElement | undefined;
   let closeButton: HTMLButtonElement | undefined;
@@ -1944,20 +1968,6 @@ function WorkDetail(props: WorkDetailProps) {
     setPending(true);
     try {
       await props.onResolve();
-    } catch {
-      return;
-    } finally {
-      setPending(false);
-    }
-  };
-
-  const addComment = async () => {
-    const text = comment().trim();
-    if (!text || pending()) return;
-    setPending(true);
-    try {
-      await props.onComment(text);
-      setComment("");
     } catch {
       return;
     } finally {
@@ -2090,30 +2100,25 @@ function WorkDetail(props: WorkDetailProps) {
             <For each={props.item.conversation}>{(entry) => (
               <div class="conversation-entry">
                 <div class="conversation-entry__meta"><span class="conversation-entry__who" data-human={entry.human}>{entry.who}</span><span>{entry.when}</span></div>
-                <div class="conversation-entry__text">{entry.text}</div>
+                <Show when={entry.text}><div class="conversation-entry__text">{entry.text}</div></Show>
+                <Show when={entry.attachments?.length}>
+                  <div class="conversation-entry__attachments">
+                    <For each={entry.attachments}>{(attachment) => (
+                      <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} />
+                    )}</For>
+                  </div>
+                </Show>
               </div>
             )}</For>
           </section>
         </Show>
 
-        <div class="comment-form">
-          <textarea
-            class="textarea"
-            data-comment-composer
-            aria-keyshortcuts="Meta+Enter Control+Enter"
-            value={comment()}
-            onInput={(event) => setComment(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                event.preventDefault();
-                void addComment();
-              }
-            }}
-            placeholder="Add a comment…"
-            rows={2}
-          />
-          <button class="button" type="button" disabled={pending() || !comment().trim()} onClick={() => void addComment()}>Add comment</button>
-        </div>
+        <CommentComposer
+          onSubmit={props.onComment}
+          uploadAttachment={props.uploadAttachment}
+          discardAttachment={props.discardAttachment}
+          announce={props.announce}
+        />
       </div>
     </aside>
   );

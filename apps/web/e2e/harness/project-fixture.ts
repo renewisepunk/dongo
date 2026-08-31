@@ -144,6 +144,12 @@ const overviewListeners = new Set<(overview: ProjectOverview) => void>();
 const workListeners = new Map<string, Set<WorkListener>>();
 const intakeListeners = new Map<string, Set<IntakeListener>>();
 const uploadAttempts = new Map<string, number>();
+const uploadedAttachments = new Map<string, {
+  id: string;
+  filename: string;
+  mimeType: string;
+  byteSize: number;
+}>();
 
 function overview(): ProjectOverview {
   return {
@@ -287,9 +293,18 @@ const connection: OverviewConnection = {
       throw new Error("fixture upload interruption");
     }
     onProgress(100, "available");
-    return `attachment-${file.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+    const attachmentId = `attachment-${file.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+    uploadedAttachments.set(attachmentId, {
+      id: attachmentId,
+      filename: file.name,
+      mimeType: file.type || "application/octet-stream",
+      byteSize: file.size,
+    });
+    return attachmentId;
   },
-  async discardAttachment() {},
+  async discardAttachment(attachmentId) {
+    uploadedAttachments.delete(attachmentId);
+  },
   async downloadAttachment() {},
   async reorderWork(item, rank) {
     updateWork(item.id, (current) => ({
@@ -325,12 +340,21 @@ const connection: OverviewConnection = {
   async resolveAttention(attentionRequestId) {
     await this.respondToAttention(attentionRequestId, undefined, "Resolved without response");
   },
-  async addComment(workItemId, body) {
+  async addComment(workItemId, body, attachmentIds = []) {
     updateWork(workItemId, (current) => ({
       ...current,
       conversation: [
         ...(current.conversation ?? []),
-        { who: "Fixture Owner", when: "now", text: body ?? "", human: true },
+        {
+          who: "Fixture Owner",
+          when: "now",
+          text: body ?? "",
+          human: true,
+          attachments: attachmentIds.flatMap((attachmentId) => {
+            const attachment = uploadedAttachments.get(attachmentId);
+            return attachment ? [attachment] : [];
+          }),
+        },
       ],
     }));
   },

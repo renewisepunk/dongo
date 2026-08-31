@@ -178,6 +178,50 @@ test("attaches a pasted clipboard image to the new issue", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("pastes and submits a finalized image attachment with a comment", async ({ page }) => {
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  const dialog = page.getByRole("dialog", { name: "Verify fixture search" });
+  const comment = dialog.getByRole("textbox", { name: "Add a comment" });
+  await comment.evaluate((composer) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["comment image"], "comment-image.png", { type: "image/png" }));
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: transfer });
+    composer.dispatchEvent(event);
+  });
+
+  const commentForm = dialog.locator(".comment-form");
+  await expect(commentForm.getByText("comment-image.png", { exact: true })).toBeVisible();
+  await expect(commentForm.getByText("ready", { exact: true })).toBeVisible();
+  await comment.fill("The screenshot shows the edge case.");
+  await comment.press("Control+Enter");
+
+  await expect(page.getByText("Comment added")).toBeVisible();
+  await expect(dialog.getByText("The screenshot shows the edge case.")).toBeVisible();
+  await expect(dialog.getByText("comment-image.png", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Download comment-image.png" })).toBeVisible();
+});
+
+test("routes a detail drop to the comment instead of the Intake composer", async ({ page }) => {
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  const dialog = page.getByRole("dialog", { name: "Verify fixture search" });
+  const commentForm = dialog.locator(".comment-form");
+  const dataTransfer = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["comment drop"], "comment-drop.txt", { type: "text/plain" }));
+    return transfer;
+  });
+
+  await commentForm.dispatchEvent("dragenter", { dataTransfer });
+  await expect(dialog.getByText("Drop to attach to this comment")).toBeVisible();
+  await expect(page.getByText("Drop to attach", { exact: true })).toBeHidden();
+  await commentForm.dispatchEvent("drop", { dataTransfer });
+
+  await expect(dialog.getByText("Drop to attach to this comment")).toBeHidden();
+  await expect(commentForm.getByText("comment-drop.txt", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Add something" }).getByText("comment-drop.txt", { exact: true })).toBeHidden();
+});
+
 test("retries an interrupted upload without duplicating the draft", async ({ page }) => {
   const composer = page.getByRole("region", { name: "Add something" });
   await page.locator('input[type="file"]').setInputFiles({
@@ -333,11 +377,11 @@ test("traps keyboard focus inside work detail", async ({ page }) => {
   await page.locator('[data-work-id="work-ready-a"]').click();
   const dialog = page.getByRole("dialog", { name: "Verify fixture search" });
   const close = dialog.getByRole("button", { name: /close|back/i });
-  const comment = dialog.getByPlaceholder("Add a comment…");
+  const attach = dialog.getByRole("button", { name: "+ Attach" });
   await expect(close).toBeFocused();
 
   await page.keyboard.press("Shift+Tab");
-  await expect(comment).toBeFocused();
+  await expect(attach).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(close).toBeFocused();
 });
