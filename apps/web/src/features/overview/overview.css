@@ -1743,6 +1743,21 @@
     box-shadow: inset 2px 0 0 var(--amber);
   }
 
+  /* Keep the open issue subtle; make the keyboard target unmistakable. */
+  .app-page[data-detail-open="true"] .work-row[data-keyboard-selected="true"]:focus-visible,
+  .app-page[data-detail-open="true"] .ready-row:has(.ready-row__open[data-keyboard-selected="true"]:focus-visible) {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid var(--amber);
+    outline-offset: -2px;
+    background: color-mix(in srgb, var(--amber) 11%, var(--surface-2));
+  }
+
+  .app-page[data-detail-open="true"] .work-row[data-keyboard-selected="true"]:focus-visible .work-row__identifier,
+  .app-page[data-detail-open="true"] .ready-row__open[data-keyboard-selected="true"]:focus-visible .work-row__identifier {
+    color: var(--amber-bright);
+  }
+
   .app-page[data-detail-open="true"] .work-row--attention {
     border-color: oklch(0.84 0.19 78 / 0.32);
     background: color-mix(in oklch, var(--surface-attention) 68%, transparent);

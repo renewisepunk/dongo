@@ -376,8 +376,13 @@ test("moves from wide detail to the sidebar, selects with arrows, and re-enters 
 
   await page.keyboard.press("ArrowLeft");
   await expect(first).toBeFocused();
+  await expect(first.locator("..")).toHaveCSS("outline-style", "solid");
+  await expect(first.locator("..")).toHaveCSS("outline-width", "2px");
   await page.keyboard.press("ArrowDown");
   await expect(second).toBeFocused();
+  await expect(second.locator("..")).toHaveCSS("outline-style", "solid");
+  await expect(second.locator("..")).toHaveCSS("outline-width", "2px");
+  await expect(first.locator("..")).toHaveCSS("outline-style", "none");
   await expect(page).toHaveURL(/work=work-ready-a/);
 
   await page.keyboard.press("Enter");
@@ -385,9 +390,11 @@ test("moves from wide detail to the sidebar, selects with arrows, and re-enters 
   await expect(secondDetail).toBeVisible();
   await expect(second).toHaveAttribute("aria-current", "page");
   await expect(secondDetail).toBeFocused();
+  await expect(second.locator("..")).toHaveCSS("outline-style", "none");
 
   await page.keyboard.press("ArrowLeft");
   await expect(second).toBeFocused();
+  await expect(second.locator("..")).toHaveCSS("outline-style", "solid");
 });
 
 test("moves keyboard selection into capture and draws one outer selection border", async ({ page }) => {
