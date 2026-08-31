@@ -190,8 +190,8 @@ try {
   const convexEnvironment = [
     ["SITE_URL", "https://dongo.so"],
     ["BETTER_AUTH_SECRET", values.convexBetterAuth],
-    ["DONGO_ATTACHMENT_UPLOAD_BASE_URL", "https://dongo.so/api/files"],
-    ["DONGO_ATTACHMENT_DOWNLOAD_BASE_URL", "https://dongo.so/api/files"],
+    ["DONGO_ATTACHMENT_UPLOAD_BASE_URL", "https://dongo.so/api/files/upload"],
+    ["DONGO_ATTACHMENT_DOWNLOAD_BASE_URL", "https://dongo.so/api/files/download"],
     ["DONGO_ATTACHMENT_URL_SIGNING_SECRET", values.attachmentSigning],
     ["DONGO_AUTH_INTERNAL_URL", "https://dongo.so/api/auth/internal/resources"],
     ["DONGO_AUTH_ISSUER", "https://dongo.so/api/auth"],
