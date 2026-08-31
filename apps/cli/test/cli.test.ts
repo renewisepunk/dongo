@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
@@ -8,10 +9,13 @@ import { CliCoreError } from "@dongo/cli-core";
 import { DongoClientError } from "@dongo/client";
 import { isEntrypoint, runCli } from "../src/index.ts";
 
-test("the installed workspace symlink resolves to the CLI entrypoint", () => {
-  const installedBinary = resolve("../../node_modules/.bin/dongo");
-  const installedEntrypoint = realpathSync(installedBinary);
-  assert.equal(isEntrypoint(pathToFileURL(installedEntrypoint).href, installedBinary), true);
+test("a symlinked binary resolves to the CLI entrypoint", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "dongo-cli-entrypoint-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const source = resolve("src/index.ts");
+  const installedBinary = join(directory, "dongo");
+  await symlink(source, installedBinary);
+  assert.equal(isEntrypoint(pathToFileURL(source).href, installedBinary), true);
 });
 
 function capture() {
