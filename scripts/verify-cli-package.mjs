@@ -21,6 +21,15 @@ function run(command, args, { cwd = repositoryRoot, env = process.env } = {}) {
   });
 }
 
+function readArchiveEntry(archivePath, entry) {
+  return execFileSync("tar", ["-xOf", archivePath, entry], {
+    cwd: repositoryRoot,
+    env: process.env,
+    encoding: null,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
 const temporaryRoot = await mkdtemp(join(tmpdir(), "dongo-cli-package-"));
 
 try {
@@ -110,10 +119,18 @@ try {
   );
 
   const digest = createHash("sha256").update(await readFile(archivePath)).digest("hex");
+  const payloadHasher = createHash("sha256");
+  for (const entry of [...archiveEntries].sort()) {
+    const contents = readArchiveEntry(archivePath, entry);
+    payloadHasher.update(Buffer.from(`${entry}\0${contents.byteLength}\0`, "utf8"));
+    payloadHasher.update(contents);
+  }
+  const payloadDigest = payloadHasher.digest("hex");
   process.stdout.write(`${JSON.stringify({
     ok: true,
     archive: archives[0],
     sha256: digest,
+    payloadSha256: payloadDigest,
     entries: archiveEntries.length,
     version,
     configMode: configMode.toString(8),
