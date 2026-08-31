@@ -22,6 +22,7 @@ export type ConversationEntry = {
   when: string;
   text: string;
   human?: boolean;
+  attachments?: AttachmentSummary[];
 };
 
 export type AttachmentSummary = {

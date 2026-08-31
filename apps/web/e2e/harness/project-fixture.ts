@@ -330,7 +330,7 @@ const connection: OverviewConnection = {
       ...current,
       conversation: [
         ...(current.conversation ?? []),
-        { who: "Fixture Owner", when: "now", text: body, human: true },
+        { who: "Fixture Owner", when: "now", text: body ?? "", human: true },
       ],
     }));
   },

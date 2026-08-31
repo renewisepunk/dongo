@@ -207,6 +207,7 @@ type CommentDoc = {
   _id: string;
   actorId: string;
   body: string;
+  attachmentIds: string[];
   createdAt: number;
 };
 
@@ -364,7 +365,7 @@ const resolveAttentionReference = makeFunctionReference<
 >("domains/attention/index:resolveWithoutResponse");
 const addCommentReference = makeFunctionReference<
   "mutation",
-  { workItemId: string; body: string; idempotencyKey: string },
+  { workItemId: string; body?: string; attachmentIds?: string[]; idempotencyKey: string },
   { commentId: string }
 >("domains/comments/index:createForHuman");
 const listInstallationsReference = makeFunctionReference<
@@ -603,6 +604,12 @@ export function safeHumanAttachmentDownload(
 export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkItem {
   const now = Date.now();
   const actors = new Map(detail.actors.map((actor) => [actor._id, actor]));
+  const attachments = new Map(
+    detail.attachments.map((attachment) => [attachment._id, mapAttachment(attachment)]),
+  );
+  const commentAttachmentIds = new Set(
+    detail.comments.flatMap((comment) => comment.attachmentIds ?? []),
+  );
   const latestRun = detail.runs[0];
   const conversation: ConversationEntry[] = detail.comments.map((comment) => {
     const actor = actors.get(comment.actorId);
@@ -611,6 +618,10 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
       when: relativeTime(comment.createdAt, now) || "now",
       text: comment.body,
       human: actor?.type === "human",
+      attachments: (comment.attachmentIds ?? []).flatMap((attachmentId) => {
+        const attachment = attachments.get(attachmentId);
+        return attachment ? [attachment] : [];
+      }),
     };
   });
   const artifacts: Artifact[] = detail.artifacts.map((artifact) => ({
@@ -666,7 +677,9 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
         : base.elapsed,
     artifacts,
     conversation,
-    attachments: detail.attachments.map(mapAttachment),
+    attachments: detail.attachments
+      .filter((attachment) => !commentAttachmentIds.has(attachment._id))
+      .map(mapAttachment),
     sources: detail.sourceIntakes.map(({ intake, attachments }) => ({
       id: intake._id,
       text: intake.text || attachments[0]?.filename || "Attachment",
@@ -1054,10 +1067,15 @@ export class ProjectDataConnection {
     });
   }
 
-  async addComment(workItemId: string, body: string): Promise<void> {
+  async addComment(
+    workItemId: string,
+    body: string | undefined,
+    attachmentIds: string[] = [],
+  ): Promise<void> {
     await this.#client.mutation(addCommentReference, {
       workItemId,
-      body,
+      ...(body ? { body } : {}),
+      attachmentIds,
       idempotencyKey: crypto.randomUUID(),
     });
   }
