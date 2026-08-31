@@ -1,5 +1,7 @@
 # V1 completion audit — 2026-08-31
 
+> **Production promotion update:** Later on 2026-08-31, the product owner expanded the active goal from development-only validation to a first production web release. That release is live at `https://dongo.so`. The authoritative promotion record is [`production-launch-2026-08-31.md`](production-launch-2026-08-31.md); the development-only language below is retained as the pre-promotion audit snapshot.
+
 This audit measures the current repository and live development stack against the unchanged PRD and [`build-plan/03-release-gates.md`](../../build-plan/03-release-gates.md). It is intentionally stricter than a progress summary.
 
 The original PRD SHA-256 remains `b6a97c39aaf056dd6380e451b89fd76ff8883ac968ede5a1b0fab48eceb0f70a`.
