@@ -21,7 +21,7 @@
   --amber-bright: oklch(0.86 0.19 82);
   --green: oklch(0.82 0.2 150);
   --danger: oklch(0.68 0.21 27);
-  --font: "Switzer", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: ui-monospace, Menlo, Monaco, Consolas, monospace;
   font-family: var(--font);
   font-synthesis: none;

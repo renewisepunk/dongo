@@ -42,11 +42,6 @@ export default function App() {
             name="description"
             content="Give coding agents work, see what they are doing, and answer when they need you."
           />
-          <Link rel="preconnect" href="https://api.fontshare.com" />
-          <Link
-            rel="stylesheet"
-            href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap"
-          />
           <ErrorBoundary fallback={<SafeApplicationError />}>
             <Suspense>{props.children}</Suspense>
           </ErrorBoundary>
