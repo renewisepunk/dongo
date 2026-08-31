@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "..");
@@ -72,17 +72,89 @@ function writeSecretFile(name, contents) {
   return path;
 }
 
+function parseJsonc(source) {
+  let output = "";
+  let inString = false;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const current = source[index];
+    const next = source[index + 1];
+    if (lineComment) {
+      if (current === "\n") {
+        lineComment = false;
+        output += current;
+      }
+      continue;
+    }
+    if (blockComment) {
+      if (current === "*" && next === "/") {
+        blockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+    if (inString) {
+      output += current;
+      if (escaped) escaped = false;
+      else if (current === "\\") escaped = true;
+      else if (current === '"') inString = false;
+      continue;
+    }
+    if (current === '"') {
+      inString = true;
+      output += current;
+    } else if (current === "/" && next === "/") {
+      lineComment = true;
+      index += 1;
+    } else if (current === "/" && next === "*") {
+      blockComment = true;
+      index += 1;
+    } else {
+      output += current;
+    }
+  }
+  return JSON.parse(output);
+}
+
+function writeBootstrapConfig(label, config) {
+  const absoluteConfig = resolve(root, config);
+  const configDirectory = dirname(absoluteConfig);
+  const base = parseJsonc(readFileSync(absoluteConfig, "utf8"));
+  const production = base.env?.production;
+  if (!production?.name) throw new Error(`${config} has no production environment`);
+  const merged = {
+    ...base,
+    ...production,
+    main: resolve(configDirectory, base.main),
+    routes: [],
+    workers_dev: false,
+  };
+  delete merged.env;
+  if (merged.d1_databases) {
+    merged.d1_databases = merged.d1_databases.map((database) => ({
+      ...database,
+      ...(database.migrations_dir
+        ? { migrations_dir: resolve(configDirectory, database.migrations_dir) }
+        : {}),
+    }));
+  }
+  const path = join(temp, `${label}.wrangler.json`);
+  writeFileSync(path, JSON.stringify(merged), { mode: 0o600 });
+  chmodSync(path, 0o600);
+  return path;
+}
+
 function uploadVersion(label, config, secrets) {
   console.log(`Preparing route-free ${label} Worker…`);
   const secretFile = writeSecretFile(`${label}.json`, secrets);
+  const bootstrapConfig = writeBootstrapConfig(label, config);
   run("npx", [
     "wrangler",
     "deploy",
     "--config",
-    config,
-    "--env",
-    "production",
-    "--routes=[]",
+    bootstrapConfig,
     "--secrets-file",
     secretFile,
     "--message",
@@ -141,7 +213,19 @@ try {
   console.log("Production is prepared with route-free Workers and an isolated Convex environment.");
   console.log("No production routes or traffic were activated by this command.");
 } finally {
-  for (const name of ["auth.json", "api.json", "mcp.json", "files.json", "notifications.json", "convex.env"]) {
+  for (const name of [
+    "auth.json",
+    "api.json",
+    "mcp.json",
+    "files.json",
+    "notifications.json",
+    "auth.wrangler.json",
+    "api.wrangler.json",
+    "mcp.wrangler.json",
+    "files.wrangler.json",
+    "notifications.wrangler.json",
+    "convex.env",
+  ]) {
     const path = join(temp, name);
     try {
       if (readFileSync(path).length > 0) writeFileSync(path, "", { mode: 0o600 });
