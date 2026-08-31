@@ -1338,6 +1338,15 @@
             "type": "string",
             "maxLength": 100000
           },
+          "attachmentIds": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
           "createdAt": {
             "type": "integer",
             "minimum": 0,
@@ -1348,6 +1357,7 @@
           "id",
           "actor",
           "body",
+          "attachmentIds",
           "createdAt"
         ],
         "additionalProperties": false
