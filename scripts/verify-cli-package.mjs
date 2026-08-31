@@ -1,12 +1,15 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access, chmod, mkdtemp, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
+import { access, chmod, mkdtemp, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { constants } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const execFileAsync = promisify(execFile);
 
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
@@ -21,6 +24,26 @@ function run(command, args, { cwd = repositoryRoot, env = process.env } = {}) {
   });
 }
 
+async function runAsync(command, args, { cwd = repositoryRoot, env = process.env } = {}) {
+  return await execFileAsync(command, args, {
+    cwd,
+    env,
+    encoding: "utf8",
+    timeout: 20_000,
+    maxBuffer: 2 * 1_024 * 1_024,
+  });
+}
+
+async function regularFiles(root) {
+  const files = [];
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) files.push(...await regularFiles(path));
+    else if (entry.isFile()) files.push(path);
+  }
+  return files;
+}
+
 function readArchiveEntry(archivePath, entry) {
   return execFileSync("tar", ["-xOf", archivePath, entry], {
     cwd: repositoryRoot,
@@ -31,18 +54,22 @@ function readArchiveEntry(archivePath, entry) {
 }
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), "dongo-cli-package-"));
+let mockServer;
 
 try {
   const packageDirectory = join(temporaryRoot, "package");
   const installPrefix = join(temporaryRoot, "install");
   const configDirectory = join(temporaryRoot, "config");
   const cleanRepository = join(temporaryRoot, "repository");
+  const helperDirectory = join(temporaryRoot, "helpers");
+  const helperLog = join(temporaryRoot, "helper-invocations.log");
 
   await Promise.all([
     mkdir(packageDirectory),
     mkdir(installPrefix),
     mkdir(configDirectory, { mode: 0o700 }),
     mkdir(cleanRepository),
+    mkdir(helperDirectory),
   ]);
   await chmod(configDirectory, 0o700);
 
@@ -63,6 +90,11 @@ try {
     invariant(!entry.includes("/.env"), `CLI package contains an environment file: ${entry}`);
     invariant(!entry.includes("/src/"), `CLI package unexpectedly contains source files: ${entry}`);
   }
+  const bundledCli = readArchiveEntry(archivePath, "package/dist/dongo.js").toString("utf8");
+  invariant(
+    !/\/usr\/bin\/(?:security|swift)|find-generic-password|add-generic-password|secret-tool|DONGO_KEYCHAIN/u.test(bundledCli),
+    "Packaged CLI contains a forbidden credential-helper integration.",
+  );
 
   run("npm", ["install", "--global", "--prefix", installPrefix, "--ignore-scripts", archivePath]);
   const binaryPath = join(installPrefix, "bin", "dongo");
@@ -76,6 +108,18 @@ try {
 
   const isolatedEnvironment = { ...process.env, DONGO_CONFIG_DIR: configDirectory };
   delete isolatedEnvironment.DONGO_TOKEN;
+
+  for (const helper of ["security", "secret-tool", "swift", "xcode-select", "xcrun"]) {
+    const helperPath = join(helperDirectory, helper);
+    await writeFile(
+      helperPath,
+      "#!/bin/sh\nprintf '%s\\n' \"$0\" >> \"$DONGO_HELPER_LOG\"\nexit 97\n",
+      { mode: 0o700 },
+    );
+    await chmod(helperPath, 0o700);
+  }
+  isolatedEnvironment.PATH = `${helperDirectory}:${isolatedEnvironment.PATH ?? ""}`;
+  isolatedEnvironment.DONGO_HELPER_LOG = helperLog;
 
   const version = run(binaryPath, ["--version"], {
     cwd: cleanRepository,
@@ -112,11 +156,181 @@ try {
   invariant(configMode === 0o700, `CLI config directory mode is ${configMode.toString(8)}, expected 700.`);
   invariant((await readdir(configDirectory)).length === 0, "Unauthenticated CLI wrote into its config directory.");
 
-  const repositoryMarker = join(cleanRepository, ".dongo", "project.json");
+  const repositoryMarker = join(cleanRepository, ".agent-work", "project.json");
   await access(repositoryMarker).then(
     () => invariant(false, "Unauthenticated CLI wrote a repository marker."),
     (error) => invariant(error?.code === "ENOENT", "Could not verify repository marker absence."),
   );
+
+  const now = Date.now();
+  const project = {
+    id: "project_package_verification",
+    publicRef: "package-verification",
+    organizationId: "organization_package_verification",
+    organizationSlug: "package-verification",
+    name: "dongo package verification",
+    slug: "dongo-package-verification",
+    identifierPrefix: "PKG",
+    repositoryUrl: "https://github.com/renewisepunk/dongo",
+    executionMode: "manual",
+  };
+  const installation = {
+    id: "installation_package_verification",
+    kind: "installation",
+    displayName: "dongo CLI",
+    agentType: "cli",
+  };
+  const session = {
+    project,
+    installation,
+    overview: {
+      project,
+      needsYou: [],
+      working: [],
+      ready: [],
+      inbox: [],
+      recentlyDone: [],
+      serverTime: now,
+    },
+    newlyResolvedAttention: [],
+    instructions: {
+      executionMode: "manual",
+      maxNewWorkItemsPerSession: 1,
+      wakeUpSemantics: "next_pull",
+    },
+  };
+  let origin;
+  const jsonResponse = (response, status, body, requestId) => {
+    response.writeHead(status, {
+      "content-type": "application/json",
+      ...(requestId ? { "x-request-id": requestId } : {}),
+    });
+    response.end(JSON.stringify(body));
+  };
+  mockServer = createServer((request, response) => {
+    request.resume();
+    const url = new URL(request.url ?? "/", origin);
+    if (request.method === "POST" && url.pathname === "/api/auth/device/code") {
+      jsonResponse(response, 200, {
+        device_code: "package-device-secret",
+        user_code: "PKG1-TEST",
+        verification_uri: `${origin}/device`,
+        verification_uri_complete: `${origin}/device?user_code=PKG1-TEST`,
+        expires_in: 60,
+        interval: 0.01,
+      });
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/api/auth/oauth2/token") {
+      jsonResponse(response, 200, {
+        access_token: "package-access-secret",
+        refresh_token: "package-refresh-secret",
+        token_type: "Bearer",
+        expires_in: 3_600,
+        scope: "dongo:work:read dongo:work:write dongo:attachments:read offline_access",
+      });
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/api/agent/v1/session_start") {
+      jsonResponse(response, 200, {
+        ok: true,
+        data: session,
+        requestId: "package-session-request",
+        apiVersion: "v1",
+      }, "package-session-request");
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/api/auth/oauth2/revoke") {
+      response.writeHead(200);
+      response.end();
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise((resolveListen, rejectListen) => {
+    mockServer.once("error", rejectListen);
+    mockServer.listen(0, "127.0.0.1", () => resolveListen());
+  });
+  const address = mockServer.address();
+  invariant(address && typeof address === "object", "Mock authorization server did not bind.");
+  origin = `http://127.0.0.1:${address.port}`;
+
+  const connect = await runAsync(binaryPath, [
+    "connect",
+    "--origin",
+    origin,
+    "--project-name",
+    "dongo package verification",
+    "--repository-url",
+    "https://github.com/renewisepunk/dongo",
+    "--execution-mode",
+    "manual",
+    "--no-browser",
+    "--json",
+  ], { cwd: cleanRepository, env: isolatedEnvironment });
+  const connected = JSON.parse(connect.stdout);
+  invariant(connected.ok === true, "Installed CLI did not complete local device authorization.");
+  invariant(
+    connected.data?.credentialStore === "local-user-file",
+    "Installed CLI did not report its local credential storage class.",
+  );
+  invariant(
+    !/package-(?:access|refresh|device)-secret/u.test(connect.stdout + connect.stderr),
+    "Installed CLI exposed secret authorization material in terminal output.",
+  );
+  invariant(
+    !/PKG1-TEST|user_code/u.test(connect.stdout),
+    "Installed CLI exposed the human verification prompt in JSON stdout.",
+  );
+  invariant(
+    /PKG1-TEST/u.test(connect.stderr),
+    "Installed CLI did not show the non-secret comparison code on stderr.",
+  );
+
+  const authenticated = JSON.parse((await runAsync(binaryPath, ["auth", "status", "--json"], {
+    cwd: cleanRepository,
+    env: isolatedEnvironment,
+  })).stdout);
+  invariant(authenticated.data?.authenticated === true, "Installed CLI did not persist authentication.");
+  const doctor = JSON.parse((await runAsync(binaryPath, ["doctor", "--json"], {
+    cwd: cleanRepository,
+    env: isolatedEnvironment,
+  })).stdout);
+  invariant(doctor.data?.ok === true, "Installed CLI doctor failed after connection.");
+  const repeatedSession = JSON.parse((await runAsync(binaryPath, ["session-start", "--json"], {
+    cwd: cleanRepository,
+    env: isolatedEnvironment,
+  })).stdout);
+  invariant(repeatedSession.ok === true, "Installed CLI follow-up session failed.");
+
+  const credentialFiles = await regularFiles(configDirectory);
+  invariant(credentialFiles.length === 1, "Installed CLI must persist exactly one credential file.");
+  invariant(
+    ((await stat(credentialFiles[0])).mode & 0o777) === 0o600,
+    "Installed CLI credential file is not mode 600.",
+  );
+  invariant(
+    !/package-(?:access|refresh|device)-secret|PKG1-TEST/u.test(await readFile(repositoryMarker, "utf8")),
+    "Repository marker contains authorization material.",
+  );
+  const helperInvocations = await readFile(helperLog, "utf8").catch((error) => {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  });
+  invariant(helperInvocations === "", "Installed CLI invoked a forbidden credential helper.");
+
+  const logout = JSON.parse((await runAsync(binaryPath, ["auth", "logout", "--json"], {
+    cwd: cleanRepository,
+    env: isolatedEnvironment,
+  })).stdout);
+  invariant(logout.data?.revoked === true, "Installed CLI logout did not revoke first.");
+  invariant((await regularFiles(configDirectory)).length === 0, "Installed CLI logout retained a credential.");
+  const loggedOut = JSON.parse((await runAsync(binaryPath, ["auth", "status", "--json"], {
+    cwd: cleanRepository,
+    env: isolatedEnvironment,
+  })).stdout);
+  invariant(loggedOut.data?.authenticated === false, "Installed CLI remained authenticated after logout.");
 
   const digest = createHash("sha256").update(await readFile(archivePath)).digest("hex");
   const payloadHasher = createHash("sha256");
@@ -147,7 +361,11 @@ try {
     configMode: configMode.toString(8),
     authenticated: false,
     marker: "absent",
+    lifecycle: "connect-status-doctor-session-logout",
+    credentialMode: "600",
+    credentialHelper: "not-invoked",
   })}\n`);
 } finally {
+  if (mockServer) await new Promise((resolveClose) => mockServer.close(resolveClose));
   await rm(temporaryRoot, { recursive: true, force: true });
 }
