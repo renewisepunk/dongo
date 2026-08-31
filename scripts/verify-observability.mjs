@@ -42,12 +42,51 @@ for (const path of developmentConfigs) {
   }
 }
 
+const availabilityWorkflowPath = ".github/workflows/dev-availability.yml";
+let availabilityWorkflow = "";
+try {
+  availabilityWorkflow = readFileSync(availabilityWorkflowPath, "utf8");
+} catch {
+  failures.push(`${availabilityWorkflowPath}: exact development availability workflow is missing`);
+}
+
+const requiredWorkflowFragments = [
+  'cron: "17,47 * * * *"',
+  "workflow_dispatch:",
+  "contents: read",
+  "cancel-in-progress: false",
+  "node scripts/smoke-dev.mjs --project-ref p58de816-dongo",
+  "github.event_name == 'workflow_dispatch' && inputs.exercise_failure",
+  "Synthetic dongo development alert",
+];
+
+for (const fragment of requiredWorkflowFragments) {
+  if (availabilityWorkflow && !availabilityWorkflow.includes(fragment)) {
+    failures.push(`${availabilityWorkflowPath}: missing required fragment ${JSON.stringify(fragment)}`);
+  }
+}
+
+for (const prohibitedFragment of [
+  "secrets.",
+  "DONGO_TOKEN",
+  "smoke:boundaries",
+  "https://dongo.so",
+  "pull_request:",
+  "push:",
+]) {
+  if (availabilityWorkflow.includes(prohibitedFragment)) {
+    failures.push(
+      `${availabilityWorkflowPath}: prohibited fragment ${JSON.stringify(prohibitedFragment)}`,
+    );
+  }
+}
+
 if (failures.length > 0) {
   console.error("Development observability verification failed:");
   for (const failure of failures) console.error(`- ${failure}`);
   process.exitCode = 1;
 } else {
   console.log(
-    `Development logs and traces are explicitly configured across ${developmentConfigs.length} Workers.`,
+    `Development logs and traces are explicitly configured across ${developmentConfigs.length} Workers; the exact scheduled availability workflow is bounded and credential-free.`,
   );
 }
