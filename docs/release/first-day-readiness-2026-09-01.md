@@ -15,15 +15,15 @@ The first web-and-Codex release is live at `https://dongo.so` and can be used fo
 - A human production comment uploaded a PNG to R2, rendered its secure inline preview, and exposed only safe attachment metadata to Codex.
 - The exact packed CLI completed browser authorization without a project picker, token copy, Keychain prompt, or platform credential helper.
 - The `E` shortcut opens the selected issue at a human correction comment; state transitions remain agent-owned and truthfully represented.
+- The owner account `rene@wisepunk.com` created the real production project `en8dgh2y-dongo`, set its repository to `https://github.com/renewisepunk/dongo`, and kept agent execution in Manual mode.
+- This repository now points to that real project in `.agent-work/project.json`, `.codex/config.toml`, and `.mcp.json`; the historical development MCP entries were replaced without touching unrelated host configuration.
+- A fresh Codex grant started a real production session as the independently attributed `Codex` installation, and CLI `auth status`, `doctor`, and `session-start` all passed against the same project.
 
-## Owner setup for the real workspace
+## Owner workspace — complete
 
-1. Sign in at `https://dongo.so` with the owner's real email and create the real `dongo` project.
-2. Open that project's **Get started** page and apply its generated Codex configuration in this repository.
-3. Confirm `codex mcp list` shows one intended dongo project for this repository, then run one read-only `dongo_session_start`.
-4. Create the first real issue in the web workspace and let Codex update it as its own attributed agent actor.
+`codex mcp list` now exposes one intended repository-scoped server, `dongo-en8dgh2y-dongo`, and it is authenticated through OAuth. The disposable production test server was logged out and removed. The real project begins empty; the first issue can now be created in the web workspace and handled by Codex as its own agent actor.
 
-Do not reuse the synthetic project `ps8dhbky-dongo-production-e2e` as the owner's permanent workspace. Do not mechanically rewrite the checked-in development project identifiers before the real production project exists.
+Keep the synthetic project `ps8dhbky-dongo-production-e2e` only for bounded availability checks; it is not the owner's workspace.
 
 ## Visible follow-up work, not a first-day blocker
 

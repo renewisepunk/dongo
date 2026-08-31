@@ -98,6 +98,8 @@ Native host loopback callbacks must remain top-level redirects to the host-provi
 
 Do not describe a raw loopback callback as a missing dongo style. It is proof that the authorization code reached the native host at the registered redirect. Conversely, a dongo-origin request to loopback is a security regression even if its purpose is to replace that host page with branded HTML.
 
+An automation-controlled Chrome session may replace the host-owned loopback response with `ERR_BLOCKED_BY_CLIENT` after the native host has already accepted the code. In that case, the terminal's successful login result and a subsequent authenticated session check are authoritative; close the tab and repeat presentation testing without browser automation if needed. This is distinct from a dongo-origin fetch or Local Network Access prompt, both of which remain release-blocking regressions.
+
 If Chrome shows “Access other apps and services on this device,” deny it and treat the flow as a release-blocking regression. Do not teach the user to grant that permission. Confirm in DevTools that no `fetch`, XHR, iframe, image, script, preflight, or service-worker request from `dev.dongo.so` targets a loopback address. A single document navigation to the exact registered callback after consent is expected.
 
 ### Claude Code CIMD loopback compatibility

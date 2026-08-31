@@ -25,7 +25,7 @@ The previous landing Worker versions recorded before cutover were `f956c68f-9fdd
 ## Release gates
 
 - Complete source checks and tests passed after the final CLI branding change.
-- The exact CLI archive gate passed with archive SHA-256 `645dec2dec439d1ca342333da656678b55fa401d6af35fe042def644619abe0b` and canonical payload SHA-256 `8027c6af5d178d583737f56ed3729cd04c822182b7ab9e2d2394f0757912f135`.
+- The exact CLI archive gate passed with archive SHA-256 `385fae240e01e39145c2d53a2d47c4530c8684eda0e055c8f18a8c083486aab8` and canonical payload SHA-256 `6cde031f44e20b14e5a3c6882885dedab1bacb7e475177998bdc2b471de5b7fe`.
 - The current web candidate previously passed 249/249 Playwright cases across Chromium, Firefox, and WebKit.
 - Production smoke passed 18/18 with project-scoped MCP discovery and authentication enforcement.
 - Live development/production isolation passed 10/10 after cutover.
@@ -75,7 +75,7 @@ A fresh Codex MCP session resolved the same attachment through the agent contrac
 3. Authorize once in the browser. Codex then appears as its own agent identity and can create, update, comment on, and finish work.
 4. Use the web workspace for review, human comments, pasted images, dragged files, and keyboard navigation.
 
-The production test account/project is disposable validation data and must not be treated as the owner’s permanent workspace. This repository's checked-in `.codex/config.toml`, `.mcp.json`, and `.agent-work/project.json` still identify the historical development project; replace them through the real production project's generated setup only after the owner has signed in and created that project.
+The production test account/project is disposable validation data and must not be treated as the owner’s permanent workspace. The owner has now created `en8dgh2y-dongo`, and this repository's checked-in `.codex/config.toml`, `.mcp.json`, and `.agent-work/project.json` identify that real production project. The disposable Codex server entry has been removed.
 
 ## Explicitly deferred, non-blocking items
 
