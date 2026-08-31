@@ -22,6 +22,8 @@ export type ConversationEntry = {
   when: string;
   text: string;
   human?: boolean;
+  role?: "human" | "agent" | "system";
+  agentType?: string;
   attachments?: AttachmentSummary[];
 };
 

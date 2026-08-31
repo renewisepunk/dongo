@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
+import { MarkdownContent } from "../../components/MarkdownContent";
 import { SignOutButton } from "../../components/SignOutButton";
 import {
   CommandMenu,
@@ -1999,11 +2000,11 @@ function WorkDetail(props: WorkDetailProps) {
               <span class="attention-card__when">{props.item.age}</span>
             </div>
             <div class="attention-card__title">{attention().title}</div>
-            <div class="attention-card__body">{attention().body}</div>
+            <MarkdownContent source={attention().body} class="attention-card__body" />
             <Show when={!attention().response} fallback={
               <div class="resolved-response">
                 <div class="resolved-response__status">✓ answered</div>
-                <div class="detail-section__body">{attention().response}</div>
+                <MarkdownContent source={attention().response ?? ""} class="detail-section__body" />
                 <div class="note">Your agent will see this on its next pull.</div>
               </div>
             }>
@@ -2039,7 +2040,7 @@ function WorkDetail(props: WorkDetailProps) {
 
         <section class="detail-section">
           <div class="detail-section__label">goal</div>
-          <div class="detail-section__body">{props.item.goal}</div>
+          <MarkdownContent source={props.item.goal} class="detail-section__body" />
         </section>
 
         <Show when={props.item.sources?.length}>
@@ -2075,7 +2076,7 @@ function WorkDetail(props: WorkDetailProps) {
         <Show when={props.item.latest}>
           <section class="detail-section">
             <div class="detail-section__label">latest from {props.item.agent ?? "agent"}</div>
-            <div class="detail-card">{props.item.latest}</div>
+            <div class="detail-card"><MarkdownContent source={props.item.latest ?? ""} /></div>
             <div class="security-note">{props.item.state === "done" ? "run finished" : props.item.elapsed ?? "waiting to start"}</div>
           </section>
         </Show>
@@ -2099,8 +2100,12 @@ function WorkDetail(props: WorkDetailProps) {
             <div class="detail-section__label">conversation</div>
             <For each={props.item.conversation}>{(entry) => (
               <div class="conversation-entry">
-                <div class="conversation-entry__meta"><span class="conversation-entry__who" data-human={entry.human}>{entry.who}</span><span>{entry.when}</span></div>
-                <Show when={entry.text}><div class="conversation-entry__text">{entry.text}</div></Show>
+                <div class="conversation-entry__meta">
+                  <span class="conversation-entry__who" data-role={entry.role ?? (entry.human ? "human" : "agent")}>{entry.who}</span>
+                  <span class="conversation-entry__role">{entry.role === "system" ? "system" : entry.human || entry.role === "human" ? "human" : entry.agentType ? `${entry.agentType} agent` : "agent"}</span>
+                  <span>{entry.when}</span>
+                </div>
+                <Show when={entry.text}><MarkdownContent source={entry.text} class="conversation-entry__text" /></Show>
                 <Show when={entry.attachments?.length}>
                   <div class="conversation-entry__attachments">
                     <For each={entry.attachments}>{(attachment) => (

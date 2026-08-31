@@ -160,6 +160,7 @@ type ActorDoc = {
   _id: string;
   type: "human" | "agent" | "system";
   name: string;
+  agentType?: string;
 };
 
 type RunDoc = {
@@ -618,6 +619,8 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
       when: relativeTime(comment.createdAt, now) || "now",
       text: comment.body,
       human: actor?.type === "human",
+      role: actor?.type ?? "system",
+      agentType: actor?.agentType,
       attachments: (comment.attachmentIds ?? []).flatMap((attachmentId) => {
         const attachment = attachments.get(attachmentId);
         return attachment ? [attachment] : [];

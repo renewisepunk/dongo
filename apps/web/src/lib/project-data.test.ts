@@ -209,16 +209,28 @@ describe("live project overview mapping", () => {
     }, {
       work,
       runs: [],
-      comments: [{
-        _id: "comment-review",
-        actorId: "actor-owner",
-        body: "See the pasted review image.",
-        attachmentIds: ["attachment-comment"],
-        createdAt: now - 30_000,
-      }],
+      comments: [
+        {
+          _id: "comment-agent",
+          actorId: "actor-codex",
+          body: "## Verification\n\n✅ `npm test` is green.",
+          attachmentIds: [],
+          createdAt: now - 45_000,
+        },
+        {
+          _id: "comment-review",
+          actorId: "actor-owner",
+          body: "See the pasted review image.",
+          attachmentIds: ["attachment-comment"],
+          createdAt: now - 30_000,
+        },
+      ],
       artifacts: [],
       attention: [],
-      actors: [{ _id: "actor-owner", type: "human", name: "Fixture Owner" }],
+      actors: [
+        { _id: "actor-codex", type: "agent", name: "Codex", agentType: "mcp" },
+        { _id: "actor-owner", type: "human", name: "Fixture Owner" },
+      ],
       attachments: [
         {
           _id: "attachment-work",
@@ -253,14 +265,25 @@ describe("live project overview mapping", () => {
       id: "attachment-work",
       filename: "result.log",
     })]);
-    expect(mapped.conversation).toEqual([expect.objectContaining({
-      who: "Fixture Owner",
-      text: "See the pasted review image.",
-      attachments: [expect.objectContaining({
-        id: "attachment-comment",
-        filename: "review.png",
-      })],
-    })]);
+    expect(mapped.conversation).toEqual([
+      expect.objectContaining({
+        who: "Codex",
+        role: "agent",
+        agentType: "mcp",
+        human: false,
+        text: "## Verification\n\n✅ `npm test` is green.",
+      }),
+      expect.objectContaining({
+        who: "Fixture Owner",
+        role: "human",
+        human: true,
+        text: "See the pasted review image.",
+        attachments: [expect.objectContaining({
+          id: "attachment-comment",
+          filename: "review.png",
+        })],
+      }),
+    ]);
     expect(mapped.sources).toEqual([expect.objectContaining({
       id: "intake-source",
       text: "The browser freezes after upload",

@@ -373,6 +373,23 @@ test("reconciles browser Back and preserves the overview scroll position", async
   await expect.poll(async () => page.evaluate(() => window.scrollY)).toBe(scrollBefore);
 });
 
+test("renders attributed agent progress as safe reviewable Markdown", async ({ page }) => {
+  await page.locator('[data-work-id="work-done"]').click();
+  const dialog = page.getByRole("dialog", { name: "Complete the agent golden journey" });
+  await expect(dialog.getByText("Codex", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("mcp agent", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Verification" })).toBeVisible();
+  await expect(dialog.getByText("Shipped the verified path.", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("link", { name: "Review evidence" })).toHaveAttribute(
+    "href",
+    "https://example.test/evidence",
+  );
+  await expect(dialog.getByRole("table")).toContainText("Contracts");
+  await expect(dialog.getByText("231 tests passed", { exact: true })).toBeVisible();
+  await expect(dialog.locator("img")).toHaveCount(0);
+  await expect(dialog.getByText("<img src=x onerror=alert(1)>", { exact: true })).toBeVisible();
+});
+
 test("traps keyboard focus inside work detail", async ({ page }) => {
   await page.locator('[data-work-id="work-ready-a"]').click();
   const dialog = page.getByRole("dialog", { name: "Verify fixture search" });

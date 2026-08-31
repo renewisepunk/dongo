@@ -5,6 +5,7 @@ export function actorSummaryForHuman(actor: Doc<"actors">) {
     _id: actor._id,
     type: actor.type,
     name: actor.name,
+    agentType: actor.agentType,
     avatarUrl: actor.avatarUrl,
   };
 }
