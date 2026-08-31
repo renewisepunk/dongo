@@ -33,5 +33,6 @@ The root `wrangler.jsonc` owns the existing production landing Worker on `dongo.
 | MCP discovery, OAuth login, scopes, project binding, or host configuration | [Agent authentication](agent-auth.md) |
 | Expired claims, export conflicts, uploads, attachments, or notifications | [Data delivery](data-delivery.md) |
 | Worker/Convex outage, migration, bad release, or package rollback | [Deployment and rollback](deploy-rollback.md) |
+| Failure-spike detection, alert routing, or observability coverage | [Development alerting](alerting.md) |
 
 After recovery, run `npm run verify:no-secrets`, `npm run check`, `npm test`, and `npm run build`; then repeat the exact failed public journey.
