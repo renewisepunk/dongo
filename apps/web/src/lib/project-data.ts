@@ -602,6 +602,80 @@ export function safeHumanAttachmentDownload(
   return url;
 }
 
+const INLINE_IMAGE_MIME_TYPES = new Set([
+  "image/apng",
+  "image/avif",
+  "image/bmp",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/x-icon",
+]);
+const MAX_INLINE_IMAGE_PREVIEW_BYTES = 25 * 1_024 * 1_024;
+
+export function isInlineImagePreviewAvailable(attachment: AttachmentSummary): boolean {
+  return INLINE_IMAGE_MIME_TYPES.has(attachment.mimeType.toLowerCase()) &&
+    attachment.byteSize > 0 &&
+    attachment.byteSize <= MAX_INLINE_IMAGE_PREVIEW_BYTES;
+}
+
+export async function fetchHumanAttachmentPreview(
+  access: {
+    attachmentId: string;
+    filename: string;
+    contentType: string;
+    byteSize: number;
+    downloadUrl: string;
+    expiresAt: number;
+  },
+  expectedAttachment: AttachmentSummary,
+  browserOrigin: string,
+  signal?: AbortSignal,
+  fetcher: typeof fetch = fetch,
+): Promise<Blob> {
+  if (
+    !isInlineImagePreviewAvailable(expectedAttachment) ||
+    access.filename !== expectedAttachment.filename ||
+    access.contentType.toLowerCase() !== expectedAttachment.mimeType.toLowerCase() ||
+    access.byteSize !== expectedAttachment.byteSize
+  ) {
+    throw new Error("Attachment service returned invalid preview metadata");
+  }
+  const url = safeHumanAttachmentDownload(
+    access,
+    expectedAttachment.id,
+    browserOrigin,
+  );
+  const response = await fetcher(url, {
+    cache: "no-store",
+    credentials: "omit",
+    redirect: "error",
+    referrerPolicy: "no-referrer",
+    signal,
+  });
+  if (!response.ok) throw new Error("Attachment preview could not be loaded");
+  const responseType = (response.headers.get("content-type") ?? "")
+    .split(";", 1)[0]!
+    .trim()
+    .toLowerCase();
+  const responseLength = response.headers.get("content-length");
+  if (
+    responseType !== expectedAttachment.mimeType.toLowerCase() ||
+    (responseLength !== null && Number(responseLength) !== expectedAttachment.byteSize)
+  ) {
+    throw new Error("Attachment service returned invalid preview content");
+  }
+  const blob = await response.blob();
+  if (
+    blob.size !== expectedAttachment.byteSize ||
+    blob.type.toLowerCase() !== expectedAttachment.mimeType.toLowerCase()
+  ) {
+    throw new Error("Attachment service returned invalid preview content");
+  }
+  return blob;
+}
+
 export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkItem {
   const now = Date.now();
   const actors = new Map(detail.actors.map((actor) => [actor._id, actor]));
@@ -1039,6 +1113,25 @@ export class ProjectDataConnection {
     document.body.append(link);
     link.click();
     link.remove();
+  }
+
+  async loadAttachmentPreview(
+    attachment: AttachmentSummary,
+    signal?: AbortSignal,
+  ): Promise<Blob> {
+    if (!isInlineImagePreviewAvailable(attachment)) {
+      throw new Error("This attachment is not eligible for inline preview");
+    }
+    const access = await this.#client.action(downloadAttachmentReference, {
+      attachmentId: attachment.id,
+    });
+    if (signal?.aborted) throw new DOMException("Preview cancelled", "AbortError");
+    return await fetchHumanAttachmentPreview(
+      access,
+      attachment,
+      window.location.origin,
+      signal,
+    );
   }
 
   async reorderWork(work: WorkItem, rank: number): Promise<void> {

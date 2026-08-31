@@ -188,9 +188,21 @@ test("pastes and submits a finalized image attachment with a comment", async ({ 
   await page.locator('[data-work-id="work-ready-a"]').click();
   const dialog = workDetail(page, "Verify fixture search");
   const comment = dialog.getByRole("textbox", { name: "Add a comment" });
-  await comment.evaluate((composer) => {
+  await comment.evaluate(async (composer) => {
     const transfer = new DataTransfer();
-    transfer.items.add(new File(["comment image"], "comment-image.png", { type: "image/png" }));
+    const canvas = document.createElement("canvas");
+    canvas.width = 640;
+    canvas.height = 360;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#09090b";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#ffb800";
+    context.fillRect(36, 36, 8, 288);
+    context.fillStyle = "#f2f2f4";
+    context.font = "bold 38px sans-serif";
+    context.fillText("attachment preview", 72, 190);
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob((value) => resolve(value!), "image/png"));
+    transfer.items.add(new File([blob], "comment-image.png", { type: "image/png" }));
     const event = new Event("paste", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "clipboardData", { value: transfer });
     composer.dispatchEvent(event);
@@ -206,6 +218,47 @@ test("pastes and submits a finalized image attachment with a comment", async ({ 
   await expect(dialog.getByText("The screenshot shows the edge case.")).toBeVisible();
   await expect(dialog.getByText("comment-image.png", { exact: true })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Download comment-image.png" })).toBeVisible();
+  const preview = dialog.getByRole("img", { name: "comment-image.png" });
+  await expect(preview).toBeVisible();
+  await expect(preview).toHaveAttribute("loading", "lazy");
+  await expect(preview).toHaveAttribute("src", /^blob:/);
+  await expect(dialog.getByText(/secure preview and download/)).toBeVisible();
+
+  const previewUrl = await preview.getAttribute("src");
+  expect(previewUrl).not.toBeNull();
+  await dialog.getByRole("button", { name: /close|back/i }).click();
+  await expect.poll(async () => await page.evaluate(async (url) => {
+    try {
+      await fetch(url);
+      return false;
+    } catch {
+      return true;
+    }
+  }, previewUrl!)).toBe(true);
+});
+
+test("keeps an SVG attachment on the secure download fallback", async ({ page }) => {
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  const dialog = workDetail(page, "Verify fixture search");
+  const comment = dialog.getByRole("textbox", { name: "Add a comment" });
+  await comment.evaluate((composer) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([
+      '<svg xmlns="http://www.w3.org/2000/svg"><text>untrusted</text></svg>',
+    ], "untrusted.svg", { type: "image/svg+xml" }));
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: transfer });
+    composer.dispatchEvent(event);
+  });
+
+  await expect(dialog.locator(".comment-form").getByText("ready", { exact: true })).toBeVisible();
+  await comment.press("Control+Enter");
+
+  const attachment = dialog.locator('.attachment-row:has-text("untrusted.svg")');
+  await expect(attachment.getByText("IMG", { exact: true })).toBeVisible();
+  await expect(attachment.getByText(/secure download/)).toBeVisible();
+  await expect(attachment.getByRole("button", { name: "Download untrusted.svg" })).toBeVisible();
+  await expect(attachment.getByRole("img", { name: "untrusted.svg" })).toHaveCount(0);
 });
 
 test("routes a detail drop to the comment instead of the Intake composer", async ({ page }) => {

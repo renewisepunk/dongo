@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  fetchHumanAttachmentPreview,
+  isInlineImagePreviewAvailable,
   mapAvailableProjects,
   mapIntakeDetail,
   mapOverviewSnapshot,
@@ -8,6 +10,106 @@ import {
   safeHumanAttachmentDownload,
   type OverviewSnapshot,
 } from "./project-data";
+
+describe("secure human attachment previews", () => {
+  it("limits inline previews to bounded browser-safe raster images", () => {
+    expect(isInlineImagePreviewAvailable({
+      id: "attachment-png",
+      filename: "review.png",
+      mimeType: "image/png",
+      byteSize: 1_024,
+    })).toBe(true);
+    expect(isInlineImagePreviewAvailable({
+      id: "attachment-svg",
+      filename: "untrusted.svg",
+      mimeType: "image/svg+xml",
+      byteSize: 1_024,
+    })).toBe(false);
+    expect(isInlineImagePreviewAvailable({
+      id: "attachment-large",
+      filename: "huge.png",
+      mimeType: "image/png",
+      byteSize: 26 * 1_024 * 1_024,
+    })).toBe(false);
+  });
+
+  it("exchanges a validated capability for an in-memory Blob without credentials", async () => {
+    const now = Date.now();
+    const bytes = new Uint8Array([137, 80, 78, 71]);
+    const attachment = {
+      id: "attachment-1",
+      filename: "review.png",
+      mimeType: "image/png",
+      byteSize: bytes.byteLength,
+    };
+    const access = {
+      attachmentId: attachment.id,
+      filename: attachment.filename,
+      contentType: attachment.mimeType,
+      byteSize: attachment.byteSize,
+      expiresAt: now + 300_000,
+      downloadUrl:
+        `https://dev.dongo.so/api/files/download/attachment-1?expires=${now + 300_000}&key=abcdefghijklmnop&signature=abcdefghijklmnopqrstuvwxyzABCDEF`,
+    };
+    let requestInit: RequestInit | undefined;
+    const fetcher = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestInit = init;
+      return new Response(new Blob([bytes], { type: "image/png" }), {
+        headers: {
+          "content-length": String(bytes.byteLength),
+          "content-type": "image/png",
+        },
+      });
+    }) as typeof fetch;
+
+    const result = await fetchHumanAttachmentPreview(
+      access,
+      attachment,
+      "https://dev.dongo.so",
+      undefined,
+      fetcher,
+    );
+
+    expect(result.type).toBe("image/png");
+    expect(result.size).toBe(bytes.byteLength);
+    expect(requestInit).toMatchObject({
+      cache: "no-store",
+      credentials: "omit",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+    });
+  });
+
+  it("rejects mismatched preview content", async () => {
+    const now = Date.now();
+    const attachment = {
+      id: "attachment-1",
+      filename: "review.png",
+      mimeType: "image/png",
+      byteSize: 4,
+    };
+    const access = {
+      attachmentId: attachment.id,
+      filename: attachment.filename,
+      contentType: attachment.mimeType,
+      byteSize: attachment.byteSize,
+      expiresAt: now + 300_000,
+      downloadUrl:
+        `https://dev.dongo.so/api/files/download/attachment-1?expires=${now + 300_000}&key=abcdefghijklmnop&signature=abcdefghijklmnopqrstuvwxyzABCDEF`,
+    };
+    const fetcher = (async () => new Response("html", {
+      headers: { "content-length": "4", "content-type": "text/html" },
+    })) as typeof fetch;
+
+    await expect(fetchHumanAttachmentPreview(
+      access,
+      attachment,
+      "https://dev.dongo.so",
+      undefined,
+      fetcher,
+    )).rejects.toThrow("invalid preview content");
+  });
+});
 
 describe("live project overview mapping", () => {
   it("maps only authorized active projects without crossing organization metadata", () => {

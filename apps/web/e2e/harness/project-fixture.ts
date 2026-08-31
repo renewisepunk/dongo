@@ -2,7 +2,7 @@ import type {
   OverviewConnection,
   OverviewSession,
 } from "../../src/features/overview/Overview";
-import type { Intake, WorkItem } from "../../src/features/overview/model";
+import type { AttachmentSummary, Intake, WorkItem } from "../../src/features/overview/model";
 import type {
   ProjectInfo,
   ProjectOverview,
@@ -173,7 +173,15 @@ const uploadedAttachments = new Map<string, {
   filename: string;
   mimeType: string;
   byteSize: number;
+  blob: Blob;
 }>();
+
+function attachmentSummary(attachmentId: string): AttachmentSummary | undefined {
+  const attachment = uploadedAttachments.get(attachmentId);
+  if (!attachment) return undefined;
+  const { blob: _blob, ...summary } = attachment;
+  return summary;
+}
 
 function overview(): ProjectOverview {
   return {
@@ -293,12 +301,10 @@ const connection: OverviewConnection = {
       status: "waiting",
       age: "now",
       attachmentCount: attachmentIds.length,
-      attachments: attachmentIds.map((attachmentId) => ({
-        id: attachmentId,
-        filename: "fixture.txt",
-        mimeType: "text/plain",
-        byteSize: 16,
-      })),
+      attachments: attachmentIds.flatMap((attachmentId) => {
+        const attachment = attachmentSummary(attachmentId);
+        return attachment ? [attachment] : [];
+      }),
       createdAt: Date.now(),
     };
     intakes = [next, ...intakes];
@@ -323,6 +329,7 @@ const connection: OverviewConnection = {
       filename: file.name,
       mimeType: file.type || "application/octet-stream",
       byteSize: file.size,
+      blob: file.slice(0, file.size, file.type || "application/octet-stream"),
     });
     return attachmentId;
   },
@@ -330,6 +337,12 @@ const connection: OverviewConnection = {
     uploadedAttachments.delete(attachmentId);
   },
   async downloadAttachment() {},
+  async loadAttachmentPreview(attachment, signal) {
+    if (signal?.aborted) throw new DOMException("Preview cancelled", "AbortError");
+    const uploaded = uploadedAttachments.get(attachment.id);
+    if (!uploaded) throw new Error("fixture attachment not found");
+    return uploaded.blob.slice(0, uploaded.blob.size, uploaded.mimeType);
+  },
   async reorderWork(item, rank) {
     updateWork(item.id, (current) => ({
       ...current,
@@ -375,7 +388,7 @@ const connection: OverviewConnection = {
           text: body ?? "",
           human: true,
           attachments: attachmentIds.flatMap((attachmentId) => {
-            const attachment = uploadedAttachments.get(attachmentId);
+            const attachment = attachmentSummary(attachmentId);
             return attachment ? [attachment] : [];
           }),
         },

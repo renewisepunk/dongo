@@ -21,7 +21,10 @@ import {
   createOptimisticIntake,
   mergeOptimisticIntakes,
 } from "../../lib/optimistic-intake";
-import { ProjectDataConnection } from "../../lib/project-data";
+import {
+  isInlineImagePreviewAvailable,
+  ProjectDataConnection,
+} from "../../lib/project-data";
 import type {
   ProjectInfo,
   ProjectSearchCursor,
@@ -45,6 +48,7 @@ export type OverviewConnection = Pick<
   | "uploadAttachment"
   | "discardAttachment"
   | "downloadAttachment"
+  | "loadAttachmentPreview"
   | "reorderWork"
   | "markAttentionSeen"
   | "respondToAttention"
@@ -889,6 +893,14 @@ export function Overview(props: OverviewProps) {
       announce("This attachment could not be downloaded");
       throw new Error("download_failed");
     }
+  };
+
+  const loadAttachmentPreview = async (
+    attachment: AttachmentSummary,
+    signal?: AbortSignal,
+  ) => {
+    if (!connection) throw new Error("preview_unavailable");
+    return await connection.loadAttachmentPreview(attachment, signal);
   };
 
   const loadMoreSearch = async () => {
@@ -1935,6 +1947,7 @@ export function Overview(props: OverviewProps) {
           onClose={closeDetail}
           onOpenIntake={openIntake}
           onDownload={downloadAttachment}
+          loadAttachmentPreview={loadAttachmentPreview}
           uploadAttachment={async (file, onProgress, signal) => {
             if (!connection) throw new Error("upload_unavailable");
             return await connection.uploadAttachment(file, onProgress, signal);
@@ -1980,7 +1993,7 @@ export function Overview(props: OverviewProps) {
       )}</Show>
 
       <Show when={selectedIntake()}>{(intake) => (
-        <IntakeDetail wide={wideDetailLayout()} initialFocus={detailInitialFocus()} intake={intake()} work={work()} onClose={closeDetail} onOpenWork={openWork} onDownload={downloadAttachment} />
+        <IntakeDetail wide={wideDetailLayout()} initialFocus={detailInitialFocus()} intake={intake()} work={work()} onClose={closeDetail} onOpenWork={openWork} onDownload={downloadAttachment} loadAttachmentPreview={loadAttachmentPreview} />
       )}</Show>
 
       <Show when={searchOpen()}>
@@ -2087,6 +2100,7 @@ type WorkDetailProps = {
   onClose: () => void;
   onOpenIntake: (id: string) => void;
   onDownload: (attachmentId: string) => Promise<void>;
+  loadAttachmentPreview: OverviewConnection["loadAttachmentPreview"];
   uploadAttachment: OverviewConnection["uploadAttachment"];
   discardAttachment: OverviewConnection["discardAttachment"];
   announce: (message: string) => void;
@@ -2282,7 +2296,7 @@ function WorkDetail(props: WorkDetailProps) {
                     <span class="mono">You · {source.age} →</span>
                   </button>
                   <For each={source.attachments}>{(attachment) => (
-                    <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} />
+                    <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} loadPreview={props.loadAttachmentPreview} />
                   )}</For>
                 </div>
               )}</For>
@@ -2295,7 +2309,7 @@ function WorkDetail(props: WorkDetailProps) {
             <div class="detail-section__label">attachments</div>
             <div class="detail-attachment-list">
               <For each={props.item.attachments}>{(attachment) => (
-                <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} />
+                <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} loadPreview={props.loadAttachmentPreview} />
               )}</For>
             </div>
           </section>
@@ -2337,7 +2351,7 @@ function WorkDetail(props: WorkDetailProps) {
                 <Show when={entry.attachments?.length}>
                   <div class="conversation-entry__attachments">
                     <For each={entry.attachments}>{(attachment) => (
-                      <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} />
+                      <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} loadPreview={props.loadAttachmentPreview} />
                     )}</For>
                   </div>
                 </Show>
@@ -2365,6 +2379,7 @@ type IntakeDetailProps = {
   onClose: () => void;
   onOpenWork: (id: string) => void;
   onDownload: (attachmentId: string) => Promise<void>;
+  loadAttachmentPreview: OverviewConnection["loadAttachmentPreview"];
 };
 
 function IntakeDetail(props: IntakeDetailProps) {
@@ -2412,7 +2427,7 @@ function IntakeDetail(props: IntakeDetailProps) {
             <Show when={props.intake.attachments?.length}>
               <div class="detail-attachment-list" style={{ "margin-top": "11px" }}>
                 <For each={props.intake.attachments}>{(attachment) => (
-                  <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} />
+                  <AttachmentDownloadRow attachment={attachment} onDownload={props.onDownload} loadPreview={props.loadAttachmentPreview} />
                 )}</For>
               </div>
             </Show>
@@ -2436,8 +2451,62 @@ function IntakeDetail(props: IntakeDetailProps) {
 function AttachmentDownloadRow(props: {
   attachment: AttachmentSummary;
   onDownload: (attachmentId: string) => Promise<void>;
+  loadPreview: OverviewConnection["loadAttachmentPreview"];
 }) {
   const [pending, setPending] = createSignal(false);
+  const [previewUrl, setPreviewUrl] = createSignal<string>();
+  const [previewState, setPreviewState] = createSignal<"idle" | "loading" | "ready" | "error">("idle");
+  let row: HTMLDivElement | undefined;
+  let previewObjectUrl: string | undefined;
+  let previewAbort: AbortController | undefined;
+
+  const releasePreview = () => {
+    if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = undefined;
+    setPreviewUrl(undefined);
+  };
+
+  const failPreview = () => {
+    previewAbort?.abort();
+    releasePreview();
+    setPreviewState("error");
+  };
+
+  const loadPreview = async () => {
+    if (previewState() !== "idle") return;
+    setPreviewState("loading");
+    previewAbort = new AbortController();
+    try {
+      const blob = await props.loadPreview(props.attachment, previewAbort.signal);
+      if (previewAbort.signal.aborted) return;
+      previewObjectUrl = URL.createObjectURL(blob);
+      setPreviewUrl(previewObjectUrl);
+      setPreviewState("ready");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      failPreview();
+    }
+  };
+
+  onMount(() => {
+    if (!isInlineImagePreviewAvailable(props.attachment)) return;
+    if (!("IntersectionObserver" in window)) {
+      void loadPreview();
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      void loadPreview();
+    }, { rootMargin: "160px 0px" });
+    if (row) observer.observe(row);
+    onCleanup(() => observer.disconnect());
+  });
+
+  onCleanup(() => {
+    previewAbort?.abort();
+    releasePreview();
+  });
 
   const download = async () => {
     if (pending()) return;
@@ -2452,17 +2521,43 @@ function AttachmentDownloadRow(props: {
   };
 
   return (
-    <div class="attachment-row">
-      <div class="attachment-row__icon">
-        {props.attachment.mimeType.startsWith("image/")
-          ? "IMG"
-          : props.attachment.mimeType.startsWith("video/")
-            ? "VID"
-            : "FILE"}
-      </div>
+    <div ref={row} class="attachment-row" data-preview={previewState()}>
+      <Show
+        when={previewUrl()}
+        fallback={
+          <div class="attachment-row__icon">
+            {props.attachment.mimeType.startsWith("image/")
+              ? "IMG"
+              : props.attachment.mimeType.startsWith("video/")
+                ? "VID"
+                : "FILE"}
+          </div>
+        }
+      >
+        {(source) => (
+          <button
+            class="attachment-row__image-preview"
+            type="button"
+            aria-label={`Download image ${props.attachment.filename}`}
+            title={`Download ${props.attachment.filename}`}
+            disabled={pending()}
+            onClick={() => void download()}
+          >
+            <img
+              src={source()}
+              alt={props.attachment.filename}
+              loading="lazy"
+              decoding="async"
+              onError={failPreview}
+            />
+          </button>
+        )}
+      </Show>
       <div class="attachment-row__copy">
         <div class="attachment-row__name">{props.attachment.filename}</div>
-        <div class="attachment-row__state">{formatAttachmentBytes(props.attachment.byteSize)} · secure download</div>
+        <div class="attachment-row__state">
+          {formatAttachmentBytes(props.attachment.byteSize)} · {previewState() === "ready" ? "secure preview and download" : "secure download"}
+        </div>
       </div>
       <button
         class="attachment-row__action"
