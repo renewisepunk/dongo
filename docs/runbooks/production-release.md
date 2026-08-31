@@ -6,7 +6,7 @@ Production is `https://dongo.so`, Convex `brainy-camel-172`, D1 `dongo-auth`, an
 
 - Release only a clean, committed revision that passed unit/integration tests, static/type checks, the complete browser matrix, secret/runtime-log scans, contract parity, and environment-boundary verification.
 - Prove the exact revision in development, including email OTP, CLI device authorization, Codex and Claude MCP authorization, refresh, isolated revocation, fresh-identity reauthorization, agent-authored work/comment lifecycle, attachments, and deterministic sync.
-- Keep Google disabled in the production UI until its exact production redirect is registered and proven. Email OTP is the production sign-in path for the first release.
+- Expose Google in the production UI only while its exact production redirect is registered and the complete journey is proven. Keep email OTP available as an independent fallback.
 - Send production OTP email from `auth@dongo.so`, using the apex domain onboarded in Cloudflare Email Service. The Worker binding permits only that exact production address; development remains restricted to `auth@dev.dongo.so`.
 - Send production notification email from `notifications@dongo.so`, using the apex domain verified through DKIM and SPF on the `rene@wisepunk.com` Resend account. Development remains on `notifications@dev.dongo.so`.
 - Record the current production landing Worker version and every new Worker version before cutover. Never print or retain secret values in release evidence.
@@ -32,7 +32,9 @@ The temporary secret files are owner-only, overwritten, and removed before the c
 - independent Better Auth secrets for the human Convex service and OAuth authorization Worker;
 - the Resend API key only in the notifications Worker.
 
-`DONGO_ENABLE_DEV_BOOTSTRAP`, development URLs, development secrets, APNs, and FCM are not configured in production. The proven Google client credentials may be staged in the production Convex environment while `VITE_DONGO_GOOGLE_AUTH_CONFIGURED` remains `false`; do not expose the production Google action until the exact callback is registered and the complete identity journey passes.
+`DONGO_ENABLE_DEV_BOOTSTRAP`, development URLs, development secrets, APNs, and FCM are not configured in production. The Google client credentials are isolated in production Convex. Set `VITE_DONGO_GOOGLE_AUTH_CONFIGURED` to `true` only after the exact callback is registered and the complete identity journey passes; if that proof regresses, set it back to `false` and redeploy the web Worker while leaving email OTP available.
+
+Google-to-OTP migration is same-email only. Keep `account.accountLinking` explicit: the provider and existing local account must both report verified email ownership, different-email linking is disabled, and no provider is force-trusted. After the first live migration, confirm the production user table still has one matching user and that the Google provider row references that existing user without printing provider tokens or account identifiers.
 
 ## Preflight
 

@@ -4,13 +4,13 @@
 
 The first Codex-first production release is live at `https://dongo.so` and is suitable for real use. Development remains independently available at `https://dev.dongo.so`.
 
-The release includes the public marketing, get-started, and help pages; email OTP authentication; responsive authenticated workspace; project-scoped remote MCP; packed CLI device authorization; issue lifecycle; human and agent comments; attention/continuation; repository export; and image attachment upload, inline preview, download, and agent metadata access. Native mobile applications and live push delivery remain outside this release.
+The release includes the public marketing, get-started, and help pages; Google and email OTP authentication; responsive authenticated workspace; project-scoped remote MCP; packed CLI device authorization; issue lifecycle; human and agent comments; attention/continuation; repository export; and image attachment upload, inline preview, download, and agent metadata access. Native mobile applications and live push delivery remain outside this release.
 
 ## Production topology
 
 | Component | Production target | Released version |
 |---|---|---|
-| Web | `dongo-web-production` | `650a94ae-f2c7-4ed3-9d38-a02e0a3e912e` |
+| Web | `dongo-web-production` | `a46d80ec-6d57-4c40-89a6-39ecec01d258` |
 | Authorization | `dongo-auth-production` | `ba80f3e5-7929-42e7-a616-167b68662003` |
 | Agent API | `dongo-api-production` | `f57a195e-efb5-4c82-8732-a11569f481a6` |
 | Remote MCP | `dongo-mcp-production` | `67583ee0-27cd-4233-9332-c225054f6cab` |
@@ -40,7 +40,9 @@ A fresh account completed email OTP authentication and reached first-project onb
 
 Production notifications are delivered from `notifications@dongo.so` through the correct Wisepunk Resend account. Resend verified DKIM, SPF MX, and SPF TXT for the apex domain, and a pre-cutover delivery from that exact sender reached the controlled mailbox with provider message `c2a077d5-12a7-4fde-b1a4-d1c0d5f0e56e`.
 
-Google remains intentionally disabled in the production UI until the exact production redirect URI is registered and proven. The already-proven client credentials are staged in the isolated production Convex environment, and a redirect-free provider probe generated Google's normal authorization origin with the exact callback `https://brainy-camel-172.convex.site/api/auth/callback/google`. Email OTP remains the supported first-release sign-in path.
+Google sign-in is enabled in production after the exact callback `https://brainy-camel-172.convex.site/api/auth/callback/google` was registered and the owner completed the live browser journey back into the existing project. A credential-free provider probe independently returned Google's authorization origin with that exact callback. A read-only production data audit found one verified `rene@wisepunk.com` user and the Google provider attached to that same user, proving that an account created by email OTP was linked rather than duplicated.
+
+The account-linking policy is explicit and fail-closed: implicit linking is allowed only when the provider verifies the same email and the existing local user is already email-verified. Forced trusted-provider linking, different-email linking, and profile replacement are disabled. Email OTP remains an independent sign-in fallback.
 
 ### Codex remote MCP
 
@@ -70,7 +72,7 @@ A fresh Codex MCP session resolved the same attachment through the agent contrac
 
 ## First-day use
 
-1. Open `https://dongo.so`, sign in by email code, and create the real project.
+1. Open `https://dongo.so`, sign in with Google or an email code, and create the real project.
 2. Use the project’s get-started instructions to add its project-scoped MCP URL to Codex.
 3. Authorize once in the browser. Codex then appears as its own agent identity and can create, update, comment on, and finish work.
 4. Use the web workspace for review, human comments, pasted images, dragged files, and keyboard navigation.
@@ -80,7 +82,6 @@ The production test account/project is disposable validation data and must not b
 ## Explicitly deferred, non-blocking items
 
 - Native iOS and Android clients and live push delivery.
-- Production Google login until the exact staged callback is registered in Google Cloud and the live `rene@wisepunk.com` identity is validated.
 - Manual VoiceOver review. Automated WCAG A/AA scans and keyboard journeys are green, but that does not substitute for the documented manual screen-reader pass.
 - Repeating the production host lifecycle with Claude Code. Claude Code’s complete lifecycle is already proven in development; this release’s required production agent was Codex.
 

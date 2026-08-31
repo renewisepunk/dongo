@@ -2,7 +2,7 @@
 
 ## Verdict
 
-The first web-and-Codex release is live at `https://dongo.so` and can be used for real work. Email one-time-code sign-in is the supported production path. The public site, first-project onboarding, project workspace, remote MCP, CLI device authorization, work lifecycle, comments, attachments, image previews, help, and keyboard navigation are deployed and proven.
+The first web-and-Codex release is live at `https://dongo.so` and can be used for real work. Google and email one-time-code sign-in are supported production paths. The public site, first-project onboarding, project workspace, remote MCP, CLI device authorization, work lifecycle, comments, attachments, image previews, help, and keyboard navigation are deployed and proven.
 
 ## Already proven
 
@@ -10,6 +10,7 @@ The first web-and-Codex release is live at `https://dongo.so` and can be used fo
 - Development/production resource isolation: 10/10 boundary checks.
 - First credential-free production availability run: [GitHub Actions 33437103370](https://github.com/renewisepunk/dongo/actions/runs/33437103370).
 - A fresh human account completed email OTP and first-project onboarding.
+- The same verified account then completed production Google sign-in through the registered callback and returned to its existing project; a read-only audit confirmed one user with Google linked to that identity rather than a duplicate account.
 - Both production email paths use apex senders: `auth@dongo.so` is onboarded in Cloudflare Email Service, and `notifications@dongo.so` passed Resend DKIM/SPF verification and controlled-mailbox delivery.
 - Codex authenticated as its own production installation actor, completed a real work lifecycle, and passed revoke/reauthorize isolation.
 - A human production comment uploaded a PNG to R2, rendered its secure inline preview, and exposed only safe attachment metadata to Codex.
@@ -27,7 +28,6 @@ Keep the synthetic project `ps8dhbky-dongo-production-e2e` only for bounded avai
 
 ## Visible follow-up work, not a first-day blocker
 
-- Production Google sign-in remains disabled in the UI until the staged callback `https://brainy-camel-172.convex.site/api/auth/callback/google` is added to the existing Wisepunk OAuth client and the live identity is proven. The production provider already generates that exact callback; email OTP is available now.
 - Paid plan checkout is not available yet; the free plan supports one active project.
 - Native clients and live push delivery remain outside this release.
 - Automated accessibility and keyboard gates are green; the documented manual VoiceOver pass remains outstanding.
