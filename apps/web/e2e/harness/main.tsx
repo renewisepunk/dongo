@@ -2,6 +2,7 @@ import { Route, Router } from "@solidjs/router";
 import { render } from "solid-js/web";
 import { Overview, type OverviewConnection } from "../../src/features/overview/Overview";
 import { HelpGuide } from "../../src/features/help/HelpGuide";
+import { MarketingHome } from "../../src/features/marketing/MarketingHome";
 import { GetStartedGuide } from "../../src/features/public-guides/GetStartedGuide";
 import { PublicHelpGuide } from "../../src/features/public-guides/PublicHelpGuide";
 import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
@@ -15,6 +16,7 @@ import LoginRoute from "../../src/routes/login";
 import OnboardingRoute from "../../src/routes/onboarding";
 import OAuthConsentRoute from "../../src/routes/oauth/consent";
 import OAuthProjectRoute from "../../src/routes/oauth/project";
+import OpenRoute from "../../src/routes/open";
 import { connectFixtureProject, fixtureSession } from "./project-fixture";
 import "../../src/styles/global.css";
 
@@ -630,12 +632,33 @@ function FixtureAuthCallback() {
   return <AuthCallbackRoute dependencies={authCallbackDependencies} />;
 }
 
+function FixtureOpen() {
+  return (
+    <OpenRoute
+      dependencies={{
+        async humanSession() {
+          document.documentElement.dataset.fixtureOpenSessionChecked = "true";
+          return oauthScenario() === "missing-session" ? null : fixtureSession();
+        },
+        async bootstrapHumanIdentity() {
+          document.documentElement.dataset.fixtureOpenIdentityBootstrapped = "true";
+        },
+        async listAuthorizableProjects() {
+          return oauthScenario() === "no-project" ? [] : oauthProjects;
+        },
+      }}
+    />
+  );
+}
+
 const root = document.getElementById("app");
 if (!root) throw new Error("E2E fixture root is unavailable");
 
 render(
   () => (
     <Router>
+      <Route path="/" component={MarketingHome} />
+      <Route path="/open" component={FixtureOpen} />
       <Route path="/get-started" component={GetStartedGuide} />
       <Route path="/help" component={PublicHelpGuide} />
       <Route path="/login" component={FixtureLogin} />

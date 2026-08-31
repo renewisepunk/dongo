@@ -15,14 +15,14 @@ export function PublicGuideShell(props: PublicGuideShellProps) {
       <a class="public-guide-skip" href="#public-guide-content">Skip to content</a>
       <header class="public-guide-header">
         <div class="public-guide-header__inner">
-          <Brand compact href="/get-started" />
+          <Brand compact href="/" />
           <nav class="public-guide-nav" aria-label="Public navigation">
             <A href="/get-started" aria-current={props.page === "get-started" ? "page" : undefined}>Get started</A>
             <A href="/help" aria-current={props.page === "help" ? "page" : undefined}>Help</A>
           </nav>
           <div class="public-guide-header__actions">
             <A class="public-guide-sign-in" href="/login">Sign in</A>
-            <A class="button public-guide-open" href="/">Open app <span aria-hidden="true">↗</span></A>
+            <A class="button public-guide-open" href="/open">Open app <span aria-hidden="true">↗</span></A>
           </div>
         </div>
       </header>

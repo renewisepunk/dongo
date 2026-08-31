@@ -436,7 +436,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   return (
     <main class="settings-page">
       <header class="settings-header">
-        <Brand compact href={project()?.archivedAt ? "/" : `/app/${props.orgSlug}/${props.projectSlug}`} />
+        <Brand compact href={project()?.archivedAt ? "/open" : `/app/${props.orgSlug}/${props.projectSlug}`} />
         <div class="settings-header__title">/ {props.projectSlug} / settings</div>
         <div style={{ flex: 1 }} />
         <Show when={!project()?.archivedAt}>

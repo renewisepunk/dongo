@@ -114,7 +114,7 @@ https://dev.dongo.so/p/<project-ref>/mcp`}</code></pre>
           </article>
           <article>
             <span>Revoke or remove</span>
-            <div><h3>These are separate actions</h3><p>Revoke the installation from <A href="/">Project settings → Agent access</A> to stop server access. Remove the named MCP entry only when you also want to delete local configuration.</p></div>
+            <div><h3>These are separate actions</h3><p>Revoke the installation from <A href="/open">Project settings → Agent access</A> to stop server access. Remove the named MCP entry only when you also want to delete local configuration.</p></div>
           </article>
         </div>
       </GuideSection>
@@ -129,7 +129,7 @@ https://dev.dongo.so/p/<project-ref>/mcp`}</code></pre>
         <div class="guide-verification">
           <div><span>CLI</span><strong>doctor passes</strong><p>Project marker, credential binding, resource, and API connectivity agree.</p></div>
           <div><span>MCP</span><strong><code>dongo_session_start</code> succeeds</strong><p>The host identifies its own actor and the intended project without copying a CLI token.</p></div>
-          <div><span>Human</span><strong>project opens</strong><p>Use <A href="/">Open app</A> to review Intake, work, comments, and agent updates.</p></div>
+          <div><span>Human</span><strong>project opens</strong><p>Use <A href="/open">Open app</A> to review Intake, work, comments, and agent updates.</p></div>
         </div>
       </GuideSection>
 
