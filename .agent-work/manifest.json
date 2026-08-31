@@ -16,6 +16,10 @@
     {
       "path": "work/DONGO-4-packed-cli-lifecycle-verification.md",
       "sha256": "8ac26471d8c499402bf055789731b8c2766a9b3a9e601cef8c7e7d54c0d9a21c"
+    },
+    {
+      "path": "work/DONGO-5-claude-mcp-human-attention-lifecycle-verification.md",
+      "sha256": "f561bc24e362035361c1c9f6f4a0ea6f4116298d500c7c71004a933ede6cc42a"
     }
   ]
 }
