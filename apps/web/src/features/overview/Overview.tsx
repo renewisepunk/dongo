@@ -1939,8 +1939,12 @@ function WorkDetail(props: WorkDetailProps) {
   const [choice, setChoice] = createSignal<string>();
   const [response, setResponse] = createSignal("");
   const [pending, setPending] = createSignal(false);
+  const [identifierCopied, setIdentifierCopied] = createSignal(false);
   let detailPanel: HTMLElement | undefined;
   let closeButton: HTMLButtonElement | undefined;
+  let identifierCopyTimer: number | undefined;
+
+  onCleanup(() => window.clearTimeout(identifierCopyTimer));
 
   onMount(() => {
     if (props.initialFocus === "respond") {
@@ -1990,6 +1994,19 @@ function WorkDetail(props: WorkDetailProps) {
     }
   };
 
+  const copyIdentifier = async () => {
+    try {
+      await navigator.clipboard.writeText(props.item.identifier);
+      window.clearTimeout(identifierCopyTimer);
+      setIdentifierCopied(true);
+      props.announce(`${props.item.identifier} copied`);
+      identifierCopyTimer = window.setTimeout(() => setIdentifierCopied(false), 2200);
+    } catch {
+      setIdentifierCopied(false);
+      props.announce("This issue ID could not be copied");
+    }
+  };
+
   return (
     <aside ref={detailPanel} class="detail" data-peek={props.peek} role="dialog" aria-modal="true" aria-labelledby="work-detail-title" onKeyDown={trapModalFocus}>
       <div class="detail__head">
@@ -1998,10 +2015,30 @@ function WorkDetail(props: WorkDetailProps) {
         </button>
         <div class="detail__head-spacer" />
         <Show when={props.peek}><span class="detail__peek">peek · esc closes</span></Show>
-        <span class="detail__identifier">{props.item.identifier}</span>
       </div>
       <div class="detail__scroll">
         <div class="detail__title-group">
+          <button
+            class="detail__identifier-copy"
+            data-copied={identifierCopied()}
+            type="button"
+            aria-label={`Copy issue ID ${props.item.identifier}`}
+            title={`Copy ${props.item.identifier}`}
+            onClick={() => void copyIdentifier()}
+          >
+            <span>{props.item.identifier}</span>
+            <Show
+              when={identifierCopied()}
+              fallback={
+                <svg class="detail__identifier-icon" aria-hidden="true" viewBox="0 0 16 16">
+                  <rect x="5.5" y="2.5" width="8" height="9" />
+                  <path d="M3.5 5.5h-1v8h7v-1" />
+                </svg>
+              }
+            >
+              <span class="detail__identifier-check" aria-hidden="true">✓</span>
+            </Show>
+          </button>
           <h2 class="detail__title" id="work-detail-title">{props.item.title}</h2>
           <div class="detail__state"><span class="detail__state-dot" data-state={props.item.state} /><span>{stateLine()}</span></div>
         </div>

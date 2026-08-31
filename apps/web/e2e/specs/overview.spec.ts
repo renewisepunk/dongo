@@ -419,6 +419,41 @@ test("renders attributed agent progress as safe reviewable Markdown", async ({ p
   await expect(dialog.getByText("<img src=x onerror=alert(1)>", { exact: true })).toBeVisible();
 });
 
+test("places a prominent copyable issue ID above the work title", async ({ page }) => {
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        async writeText(value: string) {
+          document.documentElement.dataset.copiedIssueId = value;
+        },
+      },
+    });
+  });
+  await page.locator('[data-work-id="work-done"]').click();
+  const dialog = page.getByRole("dialog", { name: "Complete the agent golden journey" });
+  const identifier = dialog.getByRole("button", { name: "Copy issue ID DONGO-6" });
+  const title = dialog.getByRole("heading", { name: "Complete the agent golden journey" });
+
+  await expect(identifier).toBeVisible();
+  const [identifierBox, titleBox, identifierFontSize] = await Promise.all([
+    identifier.boundingBox(),
+    title.boundingBox(),
+    identifier.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+  ]);
+  expect(identifierBox).not.toBeNull();
+  expect(titleBox).not.toBeNull();
+  expect(identifierBox!.y + identifierBox!.height).toBeLessThanOrEqual(titleBox!.y);
+  expect(identifierFontSize).toBeGreaterThanOrEqual(15);
+
+  await identifier.click();
+  await expect.poll(async () => page.evaluate(() =>
+    document.documentElement.dataset.copiedIssueId,
+  )).toBe("DONGO-6");
+  await expect(page.getByText("DONGO-6 copied", { exact: true })).toBeVisible();
+  await expect(identifier).toHaveAttribute("data-copied", "true");
+});
+
 test("traps keyboard focus inside work detail", async ({ page }) => {
   await page.locator('[data-work-id="work-ready-a"]').click();
   const dialog = page.getByRole("dialog", { name: "Verify fixture search" });
