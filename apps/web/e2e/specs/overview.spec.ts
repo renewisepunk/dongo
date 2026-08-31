@@ -385,6 +385,27 @@ test("moves from wide detail to the sidebar, selects with arrows, and re-enters 
   await expect(first.locator("..")).toHaveCSS("outline-style", "none");
   await expect(page).toHaveURL(/work=work-ready-a/);
 
+  await page.keyboard.press("Control+k");
+  const commands = page.getByRole("dialog", { name: "Command menu" });
+  await commands.getByRole("button", { name: /Issue \/ detail/ }).click();
+  await expect(firstDetail).toBeFocused();
+  await expect(page).toHaveURL(/work=work-ready-a/);
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(second).toBeFocused();
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(firstDetail).toBeFocused();
+  await expect(page).toHaveURL(/work=work-ready-a/);
+  await expect(second.locator("..")).toHaveCSS("outline-style", "none");
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(second).toBeFocused();
+
   await page.keyboard.press("Enter");
   const secondDetail = page.getByRole("region", { name: "Audit mobile controls" });
   await expect(secondDetail).toBeVisible();
@@ -460,7 +481,7 @@ test("opens the command menu and compact shortcut reference", async ({ page }) =
   const shortcuts = page.getByRole("dialog", { name: "Move at agent speed" });
   await expect(shortcuts).toBeVisible();
   await expect(shortcuts.getByText("Move to Working", { exact: true })).toBeVisible();
-  await expect(shortcuts.getByText("Issue list", { exact: true })).toBeVisible();
+  await expect(shortcuts.getByText("Issue / detail", { exact: true })).toBeVisible();
   await expect(shortcuts.getByText("Command menu", { exact: true })).toBeVisible();
   await shortcuts.getByRole("button", { name: "esc" }).click();
   await expect(searchButton).toBeFocused();

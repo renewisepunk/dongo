@@ -84,7 +84,7 @@ Visible elements:
 
 ### Desktop keyboard operation
 
-The web Overview supports `C` Capture, `/` Search, `J`/Down Next, `K`/Up Previous, Left to return from wide detail to the selected issue in the sidebar, `Enter` Open and return keyboard focus to wide detail, `Space` Peek without changing the route, `Esc` Close, `R` Respond/review, `W` Move to Working, `D` Mark Done, `E` Edit, Command/Ctrl+Enter Submit, Command/Ctrl+K Command menu, and `?` Show shortcuts.
+The web Overview supports `C` Capture, `/` Search, `J`/Down Next, `K`/Up Previous, Left to toggle focus between the open wide detail and its selected sidebar row without activating a different pending row, `Enter` Open and return keyboard focus to wide detail, `Space` Peek without changing the route, `Esc` Close, `R` Respond/review, `W` Move to Working, `D` Mark Done, `E` Edit, Command/Ctrl+Enter Submit, Command/Ctrl+K Command menu, and `?` Show shortcuts.
 
 Single-key shortcuts pause while the user is typing in an input, textarea, select, or editable region. Selection has a visible focus state, dialog focus is trapped and restored, and shortcuts do not invent unsupported mutations: `W` and `D` explain that canonical Run state is agent-owned, while `E` directs the human to add a corrective comment until human editing has a real contract.
 

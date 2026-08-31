@@ -969,6 +969,25 @@ export function Overview(props: OverviewProps) {
     selected.scrollIntoView({ block: "nearest" });
   };
 
+  const focusCurrentOpenDetail = () => {
+    const selected = selectedDetailNavItem();
+    const id = selected?.dataset.navId;
+    if (!selected || !id) {
+      announce("Open an issue before moving focus into its detail");
+      return;
+    }
+    const key = navKey(selected);
+    if (key) setKeyboardSelection(key);
+    const detail = [...document.querySelectorAll<HTMLElement>(".detail[data-detail-id]")]
+      .find((element) => element.dataset.detailId === id);
+    if (!detail) {
+      announce("The open issue detail is not available yet");
+      return;
+    }
+    detail.focus({ preventScroll: true });
+    detail.scrollIntoView({ block: "nearest" });
+  };
+
   const focusRelativeItem = (direction: -1 | 1) => {
     const items = navigableItems();
     if (items.length === 0) return;
@@ -1089,7 +1108,12 @@ export function Overview(props: OverviewProps) {
           focusRelativeItem(-1);
           break;
         case "sidebar":
-          focusSelectedDetailInSidebar();
+          if (
+            wideDetailLayout() &&
+            Boolean(selectedWorkId() || selectedIntakeId()) &&
+            Boolean(returnFocus?.closest("[data-nav-item]"))
+          ) focusCurrentOpenDetail();
+          else focusSelectedDetailInSidebar();
           break;
         case "open":
           openSelectedItem();
@@ -1198,7 +1222,10 @@ export function Overview(props: OverviewProps) {
         Boolean(selectedWorkId() || selectedIntakeId())
       ) {
         event.preventDefault();
-        focusSelectedDetailInSidebar();
+        const fromSidebarItem = event.target instanceof Element &&
+          Boolean(event.target.closest("[data-nav-item]"));
+        if (fromSidebarItem) focusCurrentOpenDetail();
+        else focusSelectedDetailInSidebar();
       } else if (key === "j" || event.key === "ArrowDown") {
         event.preventDefault();
         focusRelativeItem(1);
@@ -1711,7 +1738,7 @@ export function Overview(props: OverviewProps) {
                   data-nav-id={item.id}
                   data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
                   aria-current={selectedWorkId() === item.id ? "page" : undefined}
-                  aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
+                  aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
                   onFocus={() => setKeyboardSelection(`work:${item.id}`)}
                   onClick={(event) => handleWorkLink(event, item.id)}
                 >
@@ -1746,7 +1773,7 @@ export function Overview(props: OverviewProps) {
                   data-nav-id={item.id}
                   data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
                   aria-current={selectedWorkId() === item.id ? "page" : undefined}
-                  aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
+                  aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
                   onFocus={() => setKeyboardSelection(`work:${item.id}`)}
                   onClick={(event) => handleWorkLink(event, item.id)}
                 >
@@ -1804,7 +1831,7 @@ export function Overview(props: OverviewProps) {
                     data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
                     draggable="true"
                     aria-current={selectedWorkId() === item.id ? "page" : undefined}
-                    aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
+                    aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
                     onFocus={() => setKeyboardSelection(`work:${item.id}`)}
                     onClick={(event) => handleWorkLink(event, item.id)}
                   >
@@ -1832,7 +1859,7 @@ export function Overview(props: OverviewProps) {
                   data-keyboard-selected={keyboardSelection() === `intake:${intake.id}`}
                   aria-current={selectedIntakeId() === intake.id ? "page" : undefined}
                   aria-label={intake.text}
-                  aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space"
+                  aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space"
                   onFocus={() => setKeyboardSelection(`intake:${intake.id}`)}
                   onClick={(event) => handleIntakeLink(event, intake.id)}
                 >
@@ -1869,7 +1896,7 @@ export function Overview(props: OverviewProps) {
                   data-nav-id={item.id}
                   data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
                   aria-current={selectedWorkId() === item.id ? "page" : undefined}
-                  aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
+                  aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
                   onFocus={() => setKeyboardSelection(`work:${item.id}`)}
                   onClick={(event) => handleWorkLink(event, item.id)}
                 >
