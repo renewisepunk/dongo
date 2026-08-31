@@ -271,6 +271,7 @@ export async function resolveOAuthGrant(
   input: PinnedGrantContext,
 ): Promise<GrantBinding> {
   const result = await callOAuthGateway(env, "/internal/oauth/v1/resolve", {
+    oauthBindingId: input.binding.oauthBindingId,
     providerIssuer: input.providerIssuer,
     providerGrantId: input.providerGrantId,
     subject: input.subject,

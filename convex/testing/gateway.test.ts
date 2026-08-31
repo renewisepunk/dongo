@@ -130,7 +130,7 @@ describe("internal signed gateway", () => {
     expect(staleResponse.status).toBe(401);
   });
 
-  it("reactivates a deterministic revoked OAuth grant through the same boundary", async () => {
+  it("reuses an active OAuth grant but creates a fresh identity after revocation", async () => {
     const t = convexTest(schema, modules);
     const key = `oauth-${crypto.randomUUID()}`;
     const seeded = await t.mutation(internal.dev.bootstrap.createWalkingSkeleton, {
@@ -142,16 +142,15 @@ describe("internal signed gateway", () => {
     if (!project) throw new Error("fixture missing");
     const input = {
       providerIssuer: "https://auth.example.test",
-      providerGrantId: "deterministic-device-grant",
+      providerGrantId: "deterministic-codex-grant",
       subject: "oauth-user-1",
-      clientId: "dongo-cli",
-      resource: "https://dev.dongo.so/api/agent",
-      scopes: ["dongo:work:read", "dongo:work:write"],
-      kind: "cli",
+      clientId: "https://chatgpt.com/oauth/codex/client.json",
+      resource: `https://dev.dongo.so/p/${project.publicRef}/mcp`,
+      scopes: ["dongo:work:read", "dongo:work:write", "offline_access"],
+      kind: "mcp",
       authSubject: `development:${key}`,
       projectRef: project.publicRef,
-      label: "Test CLI",
-      machineLabel: "test-machine",
+      label: "Codex",
     };
     const first = await callSigned(t, "/internal/oauth/v1/bind", {
       version: 1,
@@ -161,11 +160,36 @@ describe("internal signed gateway", () => {
     expect(first.response.status).toBe(200);
     const firstPayload = (await first.response.json()) as {
       ok: boolean;
-      data: { installationId: string; oauthBindingId: string };
+      data: {
+        installationId: string;
+        oauthBindingId: string;
+        actorId: string;
+        created: boolean;
+        reactivated: boolean;
+      };
     };
     expect(firstPayload.ok).toBe(true);
+    expect(firstPayload.data).toMatchObject({ created: true, reactivated: false });
 
-    const resolveInput = {
+    const activeReplay = await callSigned(t, "/internal/oauth/v1/bind", {
+      version: 1,
+      requestId: "oauth-bind-active-replay",
+      input,
+    });
+    expect(activeReplay.response.status).toBe(200);
+    await expect(activeReplay.response.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        installationId: firstPayload.data.installationId,
+        oauthBindingId: firstPayload.data.oauthBindingId,
+        actorId: firstPayload.data.actorId,
+        created: false,
+        reactivated: false,
+      },
+    });
+
+    const firstResolveInput = {
+      oauthBindingId: firstPayload.data.oauthBindingId,
       providerIssuer: input.providerIssuer,
       providerGrantId: input.providerGrantId,
       subject: input.subject,
@@ -177,7 +201,7 @@ describe("internal signed gateway", () => {
     const activeResolution = await callSigned(t, "/internal/oauth/v1/resolve", {
       version: 1,
       requestId: "oauth-resolve-active",
-      input: resolveInput,
+      input: firstResolveInput,
     });
     expect(activeResolution.response.status).toBe(200);
     await expect(activeResolution.response.json()).resolves.toMatchObject({
@@ -185,7 +209,7 @@ describe("internal signed gateway", () => {
       data: {
         installationId: firstPayload.data.installationId,
         oauthBindingId: firstPayload.data.oauthBindingId,
-        kind: "cli",
+        kind: "mcp",
         scopes: input.scopes,
       },
     });
@@ -195,25 +219,40 @@ describe("internal signed gateway", () => {
       {
         version: 1,
         requestId: "oauth-resolve-mismatch",
-        input: { ...resolveInput, resource: "https://other.example.test" },
+        input: { ...firstResolveInput, resource: "https://other.example.test" },
       },
     );
     expect(mismatchedResolution.response.status).toBe(401);
 
-    await t.run(async (ctx) => {
-      await ctx.db.patch(
-        firstPayload.data.installationId as never,
-        { status: "revoked", revokedAt: Date.now() } as never,
-      );
-      await ctx.db.patch(
-        firstPayload.data.oauthBindingId as never,
-        { status: "revoked", revokedAt: Date.now() } as never,
-      );
+    const owner = t.withIdentity({
+      tokenIdentifier: `development:${key}`,
+      subject: `development:${key}`,
+      issuer: "https://human.example.test",
+    });
+    await owner.mutation(api.domains.installations.index.revoke, {
+      installationId: firstPayload.data.installationId as never,
+    });
+    const revokedState = await t.run(async (ctx) => ({
+      installation: await ctx.db.get(firstPayload.data.installationId as never),
+      binding: await ctx.db.get(firstPayload.data.oauthBindingId as never),
+      actor: await ctx.db.get(firstPayload.data.actorId as never),
+    }));
+    expect(revokedState.installation).toMatchObject({
+      status: "revoked",
+      actorId: firstPayload.data.actorId,
+    });
+    expect(revokedState.binding).toMatchObject({
+      status: "revoked",
+      installationId: firstPayload.data.installationId,
+    });
+    expect(revokedState.actor).toMatchObject({
+      installationId: firstPayload.data.installationId,
+      name: "Codex",
     });
     const revokedResolution = await callSigned(t, "/internal/oauth/v1/resolve", {
       version: 1,
       requestId: "oauth-resolve-revoked",
-      input: resolveInput,
+      input: firstResolveInput,
     });
     expect(revokedResolution.response.status).toBe(401);
     await expect(revokedResolution.response.json()).resolves.toMatchObject({
@@ -227,13 +266,94 @@ describe("internal signed gateway", () => {
       input,
     });
     expect(second.response.status).toBe(200);
-    await expect(second.response.json()).resolves.toMatchObject({
+    const secondPayload = (await second.response.json()) as typeof firstPayload;
+    expect(secondPayload).toMatchObject({
       ok: true,
       data: {
-        installationId: firstPayload.data.installationId,
-        oauthBindingId: firstPayload.data.oauthBindingId,
+        created: true,
+        reactivated: false,
+      },
+    });
+    expect(secondPayload.data.installationId).not.toBe(firstPayload.data.installationId);
+    expect(secondPayload.data.oauthBindingId).not.toBe(firstPayload.data.oauthBindingId);
+    expect(secondPayload.data.actorId).not.toBe(firstPayload.data.actorId);
+
+    const secondResolveInput = {
+      ...firstResolveInput,
+      oauthBindingId: secondPayload.data.oauthBindingId,
+    };
+    const newResolution = await callSigned(t, "/internal/oauth/v1/resolve", {
+      version: 1,
+      requestId: "oauth-resolve-new-installation",
+      input: secondResolveInput,
+    });
+    expect(newResolution.response.status).toBe(200);
+    await expect(newResolution.response.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        installationId: secondPayload.data.installationId,
+        oauthBindingId: secondPayload.data.oauthBindingId,
+        actorId: secondPayload.data.actorId,
+        kind: "mcp",
+      },
+    });
+
+    const oldResolutionAfterReauthorization = await callSigned(
+      t,
+      "/internal/oauth/v1/resolve",
+      {
+        version: 1,
+        requestId: "oauth-resolve-old-after-reauthorization",
+        input: firstResolveInput,
+      },
+    );
+    expect(oldResolutionAfterReauthorization.response.status).toBe(401);
+
+    const finalState = await t.run(async (ctx) => ({
+      oldInstallation: await ctx.db.get(firstPayload.data.installationId as never),
+      oldBinding: await ctx.db.get(firstPayload.data.oauthBindingId as never),
+      oldActor: await ctx.db.get(firstPayload.data.actorId as never),
+      newInstallation: await ctx.db.get(secondPayload.data.installationId as never),
+      newBinding: await ctx.db.get(secondPayload.data.oauthBindingId as never),
+      newActor: await ctx.db.get(secondPayload.data.actorId as never),
+      authorizedEvents: (await ctx.db.query("events").collect())
+        .filter((event) => event.type === "installation.authorized"),
+    }));
+    expect(finalState.oldInstallation).toEqual(revokedState.installation);
+    expect(finalState.oldBinding).toEqual(revokedState.binding);
+    expect(finalState.oldActor).toEqual(revokedState.actor);
+    expect(finalState.newInstallation).toMatchObject({
+      status: "active",
+      actorId: secondPayload.data.actorId,
+    });
+    expect(finalState.newBinding).toMatchObject({
+      status: "active",
+      installationId: secondPayload.data.installationId,
+      providerGrantId: input.providerGrantId,
+    });
+    expect(finalState.newActor).toMatchObject({
+      installationId: secondPayload.data.installationId,
+      name: "Codex",
+    });
+    expect(finalState.authorizedEvents.map((event) => event.actorId)).toEqual([
+      firstPayload.data.actorId,
+      secondPayload.data.actorId,
+    ]);
+
+    const freshActiveReplay = await callSigned(t, "/internal/oauth/v1/bind", {
+      version: 1,
+      requestId: "oauth-bind-fresh-active-replay",
+      input,
+    });
+    expect(freshActiveReplay.response.status).toBe(200);
+    await expect(freshActiveReplay.response.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        installationId: secondPayload.data.installationId,
+        oauthBindingId: secondPayload.data.oauthBindingId,
+        actorId: secondPayload.data.actorId,
         created: false,
-        reactivated: true,
+        reactivated: false,
       },
     });
   });

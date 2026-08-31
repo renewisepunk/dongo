@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import type { Doc } from "../../_generated/dataModel";
 import {
   internalMutation,
   internalQuery,
@@ -111,45 +112,71 @@ export const registerOAuthGrant = internalMutation({
       1_000,
     );
     const subject = requireString(args.subject, "subject", 1_000);
-    const existing = await ctx.db
+    const existingBindings = await ctx.db
       .query("oauthBindings")
       .withIndex("by_provider_grant", (q) =>
         q
           .eq("providerIssuer", providerIssuer)
           .eq("providerGrantId", providerGrantId),
       )
-      .unique();
-    if (existing) {
-      const installation = await ctx.db.get(existing.installationId);
+      .take(101);
+    if (existingBindings.length > 100) {
+      fail("internal", "OAuth grant history limit exceeded");
+    }
+    let activeExisting:
+      | {
+          binding: (typeof existingBindings)[number];
+          installation: Doc<"installations">;
+          actor: Doc<"actors">;
+        }
+      | undefined;
+    for (const binding of existingBindings) {
+      const installation = await ctx.db.get(binding.installationId);
+      const actor = installation ? await ctx.db.get(installation.actorId) : null;
       if (
         !installation ||
-        existing.projectId !== project._id ||
-        existing.organizationId !== project.organizationId ||
-        existing.authorizedByProfileId !== profile._id ||
-        existing.clientId !== clientId ||
-        existing.subject !== subject ||
-        existing.resource !== resource ||
+        !actor ||
+        binding.projectId !== project._id ||
+        binding.organizationId !== project.organizationId ||
+        binding.authorizedByProfileId !== profile._id ||
+        binding.clientId !== clientId ||
+        binding.subject !== subject ||
+        binding.resource !== resource ||
+        installation.projectId !== project._id ||
+        installation.organizationId !== project.organizationId ||
+        installation.authorizedByProfileId !== profile._id ||
+        installation.clientId !== clientId ||
         installation.resource !== resource ||
-        installation.kind !== args.kind
+        installation.kind !== args.kind ||
+        actor.organizationId !== project.organizationId ||
+        actor.type !== "agent" ||
+        actor.installationId !== installation._id
       ) {
         fail("forbidden", "OAuth grant is already bound to another installation");
       }
-      const reactivated =
-        existing.status === "revoked" || installation.status !== "active";
-      await ctx.db.patch(existing._id, {
+      if ((binding.status === "active") !== (installation.status === "active")) {
+        fail("internal", "OAuth grant state is inconsistent");
+      }
+      if (binding.status === "active") {
+        if (activeExisting) {
+          fail("internal", "OAuth grant has multiple active installations");
+        }
+        activeExisting = { binding, installation, actor };
+      }
+    }
+    if (activeExisting) {
+      const { binding, installation, actor } = activeExisting;
+      await ctx.db.patch(binding._id, {
         subject,
         clientId,
         resource,
         scopes,
-        status: "active",
         authorizedByProfileId: profile._id,
         updatedAt: now,
         lastValidatedAt: now,
         expiresAt: args.expiresAt,
-        revokedAt: undefined,
       });
       await ctx.db.patch(installation._id, {
-        status: "active",
         clientId,
         label,
         machineLabel: args.machineLabel,
@@ -157,31 +184,20 @@ export const registerOAuthGrant = internalMutation({
         scopes,
         authorizedByProfileId: profile._id,
         updatedAt: now,
-        revokedAt: undefined,
       });
-      await ctx.db.patch(installation.actorId, {
+      await ctx.db.patch(actor._id, {
         name: label,
         lastSeenAt: now,
       });
-      if (reactivated) {
-        await appendEvent(ctx, {
-          organizationId: project.organizationId,
-          projectId: project._id,
-          actorId: installation.actorId,
-          type: "installation.reauthorized",
-          data: { clientId, kind: args.kind, scopes },
-          createdAt: now,
-        });
-      }
       return {
-        installationId: existing.installationId,
-        oauthBindingId: existing._id,
+        installationId: installation._id,
+        oauthBindingId: binding._id,
         actorId: installation.actorId,
         organizationId: project.organizationId,
         projectId: project._id,
         projectRef: project.publicRef,
         created: false,
-        reactivated,
+        reactivated: false,
       };
     }
     const actorId = await ctx.db.insert("actors", {
@@ -248,6 +264,7 @@ export const registerOAuthGrant = internalMutation({
 
 export const resolveOAuthGrant = internalQuery({
   args: {
+    oauthBindingId: v.id("oauthBindings"),
     providerIssuer: v.string(),
     providerGrantId: v.string(),
     subject: v.string(),
@@ -306,22 +323,15 @@ export const resolveOAuthGrant = internalQuery({
       "providerGrantId",
       1_000,
     );
-    const binding = await ctx.db
-      .query("oauthBindings")
-      .withIndex("by_provider_grant", (q) =>
-        q
-          .eq("providerIssuer", providerIssuer)
-          .eq("providerGrantId", providerGrantId),
-      )
-      .unique();
-    const installation = binding
-      ? await ctx.db.get(binding.installationId)
-      : null;
+    const binding = await ctx.db.get(args.oauthBindingId);
+    const installation = binding ? await ctx.db.get(binding.installationId) : null;
     if (
       !binding ||
       !installation ||
       binding.status !== "active" ||
       installation.status !== "active" ||
+      binding.providerIssuer !== providerIssuer ||
+      binding.providerGrantId !== providerGrantId ||
       (installation.kind !== "cli" && installation.kind !== "mcp") ||
       binding.projectId !== project._id ||
       binding.organizationId !== project.organizationId ||

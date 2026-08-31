@@ -120,6 +120,7 @@ const oauthResolveEnvelopeSchema = z
     requestId: z.string().min(1).max(200),
     input: z
       .object({
+        oauthBindingId: identifier,
         providerIssuer: z.string().min(1).max(2_048),
         providerGrantId: z.string().min(1).max(1_000),
         subject: z.string().min(1).max(1_000),
@@ -1014,6 +1015,7 @@ export const resolveOAuth = httpAction(async (ctx, request) => {
     const result = await ctx.runQuery(
       internal.domains.installations.index.resolveOAuthGrant,
       {
+        oauthBindingId: input.oauthBindingId as Id<"oauthBindings">,
         providerIssuer: input.providerIssuer,
         providerGrantId: input.providerGrantId,
         subject: input.subject,
