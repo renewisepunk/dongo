@@ -4,6 +4,18 @@
     {
       "path": "work/DONGO-1-verify-important-attention-email.md",
       "sha256": "f4fba393b06d5d8a119ebef1e4fd615fc835ff2166302b2338ef02d53c56fede"
+    },
+    {
+      "path": "work/DONGO-2-claude-mcp-compatibility-verification.md",
+      "sha256": "7fa96e31b3cca9937e2c94330935949ba1bf52607b746f9c3437a65f74fd4ab1"
+    },
+    {
+      "path": "work/DONGO-3-generic-mcp-inspector-compatibility-verification.md",
+      "sha256": "c0a5caadbfff7e2e7d43e927094a1456846d94c9c3d51c77cd90905651247fb3"
+    },
+    {
+      "path": "work/DONGO-4-packed-cli-lifecycle-verification.md",
+      "sha256": "8ac26471d8c499402bf055789731b8c2766a9b3a9e601cef8c7e7d54c0d9a21c"
     }
   ]
 }
