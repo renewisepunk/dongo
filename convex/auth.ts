@@ -11,6 +11,15 @@ const siteUrl = process.env.SITE_URL!;
 
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
+export const accountLinkingPolicy = {
+  enabled: true,
+  disableImplicitLinking: false,
+  requireLocalEmailVerified: true,
+  trustedProviders: [],
+  allowDifferentEmails: false,
+  updateUserInfoOnLink: false,
+} satisfies NonNullable<NonNullable<BetterAuthOptions["account"]>["accountLinking"]>;
+
 export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
   const googleClientId = process.env.GOOGLE_CLIENT_ID;
   const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -21,6 +30,9 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     secret: process.env.BETTER_AUTH_SECRET,
     trustedOrigins: [siteUrl],
     database: authComponent.adapter(ctx),
+    account: {
+      accountLinking: accountLinkingPolicy,
+    },
     socialProviders: googleConfigured
       ? {
           google: {
