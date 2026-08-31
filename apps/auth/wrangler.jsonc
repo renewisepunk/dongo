@@ -54,11 +54,11 @@
       "send_email": [
         {
           "name": "EMAIL",
-          "allowed_sender_addresses": ["auth@dev.dongo.so"]
+          "allowed_sender_addresses": ["auth@dongo.so"]
         }
       ],
       "vars": {
-        "AUTH_FROM_EMAIL": "auth@dev.dongo.so",
+        "AUTH_FROM_EMAIL": "auth@dongo.so",
         "PUBLIC_ORIGIN": "https://dongo.so",
         "AUTH_ISSUER": "https://dongo.so/api/auth",
         "HUMAN_ASSERTION_ISSUER": "https://brainy-camel-172.convex.site",

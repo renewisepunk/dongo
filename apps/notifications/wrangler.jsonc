@@ -42,7 +42,7 @@
       "vars": {
         "ALLOWED_HOSTNAMES": "dongo.so",
         "PUBLIC_ORIGIN": "https://dongo.so",
-        "RESEND_FROM_EMAIL": "notifications@dev.dongo.so",
+        "RESEND_FROM_EMAIL": "notifications@dongo.so",
         "RESEND_FROM_NAME": "dongo",
         "REQUIRED_NOTIFICATION_PROVIDERS": "resend",
         "DONGO_APNS_CONFIG": "disabled",
