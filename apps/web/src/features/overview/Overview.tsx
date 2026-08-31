@@ -1767,6 +1767,7 @@ export function Overview(props: OverviewProps) {
                   data-nav-id={intake.id}
                   data-keyboard-selected={keyboardSelection() === `intake:${intake.id}`}
                   aria-current={selectedIntakeId() === intake.id ? "page" : undefined}
+                  aria-label={intake.text}
                   aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space"
                   onFocus={() => setKeyboardSelection(`intake:${intake.id}`)}
                   onClick={(event) => handleIntakeLink(event, intake.id)}

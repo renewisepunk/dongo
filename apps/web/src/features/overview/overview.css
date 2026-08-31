@@ -561,7 +561,7 @@
   line-height: 1.4;
 }
 
-.work-row__identifier { color: var(--text-ghost); }
+.work-row__identifier { color: var(--text-quiet); }
 
 .attention-kind {
   border: 1px solid var(--line-strong);

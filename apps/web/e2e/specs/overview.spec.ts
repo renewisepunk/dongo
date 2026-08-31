@@ -7,7 +7,7 @@ function workDetail(page: Page, name: string) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/app/fixture-studio/dongo");
   await expect(page.getByRole("region", { name: "Add something" })).toBeVisible();
 });
 
@@ -74,14 +74,14 @@ test("opens the route-backed help guide from the profile menu", async ({ page })
 });
 
 test("bounds overview connection and subscription failures", async ({ page }) => {
-  await page.goto("/?scenario=overview-connect-error");
+  await page.goto("/app/fixture-studio/dongo?scenario=overview-connect-error");
   await expect(page.getByRole("alert")).toContainText(
     "This project could not be loaded for your account.",
   );
   await expect(page.getByText("fixture overview connection detail must stay hidden")).toBeHidden();
   await expect(page.getByRole("button", { name: "Submit to Inbox" })).toBeDisabled();
 
-  await page.goto("/?scenario=overview-subscription-error");
+  await page.goto("/app/fixture-studio/dongo?scenario=overview-subscription-error");
   await expect(page.getByRole("alert")).toContainText(
     "Live project data is temporarily unavailable.",
   );

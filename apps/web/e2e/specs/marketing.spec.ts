@@ -33,7 +33,7 @@ test("resolves Open dongo to the last safe app route for a signed-in human", asy
 
   await expect(page.locator("html")).toHaveAttribute("data-fixture-open-identity-bootstrapped", "true");
   await expect(page).toHaveURL(/\/app\/fixture-studio\/dongo\?work=work-done$/);
-  await expect(page.getByRole("dialog", { name: "Complete the agent golden journey" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Complete the agent golden journey" })).toBeVisible();
 });
 
 test("keeps the essential product story readable at a mobile viewport", async ({ page }) => {

@@ -90,6 +90,7 @@
 
 .marketing-hero h1 {
   margin: 0;
+  color: var(--text);
   font-size: clamp(52px, 7.2vw, 88px);
   font-weight: 600;
   letter-spacing: -0.062em;
@@ -233,6 +234,7 @@
 .marketing-section h2,
 .marketing-final h2 {
   margin: 0;
+  color: var(--text);
   font-size: clamp(36px, 5vw, 58px);
   font-weight: 560;
   letter-spacing: -0.052em;

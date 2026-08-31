@@ -26,7 +26,7 @@ test("paginates completed work without duplicates and opens route-backed detail"
   await first.click();
   await expect(page).toHaveURL(/\/app\/fixture-studio\/dongo\?work=work-done$/);
   await expect(
-    page.getByRole("dialog", { name: "Complete the agent golden journey" }),
+    page.getByRole("region", { name: "Complete the agent golden journey" }),
   ).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-fixture-completed-closed", "true");
 });
