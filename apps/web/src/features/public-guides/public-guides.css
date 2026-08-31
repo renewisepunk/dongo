@@ -233,9 +233,11 @@
 .guide-inline-note > span { color: var(--amber); margin-right: 7px; }
 .guide-inline-note code,
 .guide-process code,
+.guide-mcp-lifecycle code,
 .guide-security code,
 .guide-troubleshooting code,
 .help-resource-grid code,
+.mcp-access-actions code,
 .help-detail-list code,
 .auth-help-grid code { color: var(--text-soft); font-family: var(--mono); font-size: 0.92em; }
 
@@ -327,6 +329,45 @@
 }
 
 .guide-host-grid pre { margin: 12px -18px -18px; border-top: 1px solid var(--line-soft); background: #08080a; padding: 15px 18px; font-size: 11px; }
+
+.guide-mcp-lifecycle,
+.mcp-access-actions {
+  border: 1px solid var(--line);
+  background: var(--surface-0);
+}
+
+.guide-mcp-lifecycle article,
+.mcp-access-actions article {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 24px;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 17px 18px;
+}
+
+.guide-mcp-lifecycle article:last-child,
+.mcp-access-actions article:last-child { border-bottom: 0; }
+
+.guide-mcp-lifecycle article > span,
+.mcp-access-actions article > span {
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.guide-mcp-lifecycle h3 {
+  margin: 0 0 5px;
+  color: var(--text-soft);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.guide-mcp-lifecycle p,
+.mcp-access-actions p { color: var(--text-muted); font-size: 14px; line-height: 1.6; }
+
+.guide-mcp-lifecycle p a { text-decoration: underline; text-underline-offset: 3px; }
 
 .guide-verification > div {
   min-height: 155px;
@@ -457,6 +498,8 @@
   .help-command-table > div { grid-template-columns: 1fr; gap: 6px; }
   .help-command-table__head { display: none; }
   .mcp-resource-line { grid-template-columns: 1fr; gap: 8px; }
+  .guide-mcp-lifecycle article,
+  .mcp-access-actions article { grid-template-columns: 1fr; gap: 7px; }
   .public-shortcuts .shortcut-reference__row { grid-template-columns: minmax(105px, 0.7fr) minmax(0, 1fr); }
   .public-shortcuts .shortcut-reference__description { grid-column: 2; }
   .public-resources { padding: 58px 0 0; }

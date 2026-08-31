@@ -3,9 +3,12 @@ import { expect, test } from "@playwright/test";
 test("keeps get started public and preserves routes into help, sign-in, and the app", async ({ page }) => {
   await page.goto("/get-started");
   await expect(page).toHaveURL(/\/get-started$/);
+  await expect(page.locator("html")).not.toHaveAttribute("data-fixture-human-session-checked", "true");
   await expect(page.getByRole("heading", { name: "Your agent can set up dongo." })).toBeVisible();
   await expect(page.getByText("No project yet?")).toBeVisible();
   await expect(page.getByText("The CLI does not invoke macOS Keychain", { exact: false })).toBeVisible();
+  await expect(page.getByText("Re-authenticate", { exact: true })).toBeVisible();
+  await expect(page.getByText("Revoke or remove", { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Help", exact: true }).first().click();
   await expect(page).toHaveURL(/\/help$/);
@@ -23,10 +26,16 @@ test("keeps get started public and preserves routes into help, sign-in, and the 
 test("keeps the complete help guide public without a project session", async ({ page }) => {
   await page.goto("/help");
   await expect(page).toHaveURL(/\/help$/);
+  await expect(page.locator("html")).not.toHaveAttribute("data-fixture-human-session-checked", "true");
   await expect(page.getByRole("heading", { name: "Attachments" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Keyboard shortcuts" })).toBeVisible();
   await expect(page.getByText("Paste images")).toBeVisible();
   await expect(page.getByText("Drop files anywhere")).toBeVisible();
   await expect(page.getByText("Command menu", { exact: true })).toBeVisible();
   await expect(page.getByText("dongo_session_start", { exact: true })).toBeVisible();
+  await expect(page.getByText("Re-authenticate this host", { exact: true })).toBeVisible();
+  await expect(page.getByText("Revoke server access", { exact: true })).toBeVisible();
+  await expect(page.locator(".shortcut-reference__row")).toHaveCount(14);
+  await expect(page.getByRole("link", { name: /Auth recovery runbook/ })).toHaveAttribute("href", /agent-auth\.md$/);
+  await expect(page.getByRole("link", { name: /MCP setup and recovery/ })).toHaveAttribute("href", "#mcp-resources");
 });

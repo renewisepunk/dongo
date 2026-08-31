@@ -21,6 +21,7 @@ import "../../src/styles/global.css";
 const authDependencies = {
   googleAuthConfigured: true,
   async humanSession() {
+    document.documentElement.dataset.fixtureHumanSessionChecked = "true";
     return null;
   },
   async requestEmailOtp(email: string) {

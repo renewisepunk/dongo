@@ -103,6 +103,20 @@ https://dev.dongo.so/p/<project-ref>/mcp`}</code></pre>
           </article>
         </div>
         <p class="guide-inline-note"><span aria-hidden="true">↳</span> Replace <code>&lt;project-ref&gt;</code> with the project reference printed by <code>dongo connect</code>. Each host receives its own independently revocable grant.</p>
+        <div class="guide-mcp-lifecycle" aria-label="MCP connection lifecycle">
+          <article>
+            <span>Verify</span>
+            <div><h3>Call <code>dongo_session_start</code></h3><p>Check the host’s MCP status, then make this read-only call. It must identify the intended project and that host’s own installation actor.</p></div>
+          </article>
+          <article>
+            <span>Re-authenticate</span>
+            <div><h3>Refresh only the affected host</h3><p>Log that MCP server out in Codex, Claude Code, or the generic host, then repeat its host-native login. Never paste or reuse the CLI credential.</p></div>
+          </article>
+          <article>
+            <span>Revoke or remove</span>
+            <div><h3>These are separate actions</h3><p>Revoke the installation from <A href="/">Project settings → Agent access</A> to stop server access. Remove the named MCP entry only when you also want to delete local configuration.</p></div>
+          </article>
+        </div>
       </GuideSection>
 
       <GuideSection
@@ -148,7 +162,7 @@ https://dev.dongo.so/p/<project-ref>/mcp`}</code></pre>
           <div><dt>Request denied or expired</dt><dd>Run <code>dongo connect</code> again. Authorization codes and links are short-lived and single-use.</dd></div>
           <div><dt>Approved, but not connected</dt><dd>Return to the terminal. Run <code>dongo auth status --json</code> and <code>dongo doctor --json</code> before approving another installation.</dd></div>
           <div><dt>Wrong project</dt><dd>Deny the request and reconnect with the exact <code>--project-ref</code>. The approval page confirms project choice; it does not silently switch it.</dd></div>
-          <div><dt>MCP login succeeds, tools fail</dt><dd>Compare the exact project resource URL and approved scopes, then reauthorize only that host.</dd></div>
+          <div><dt>MCP login succeeds, tools fail</dt><dd>Compare the exact project resource URL and approved scopes, then log out and reauthorize only that host. Revoking another installation will not repair this one.</dd></div>
         </dl>
         <div class="guide-next"><div><span>Need the command reference?</span><strong>Continue with the public help guide.</strong></div><A class="button button--primary" href="/help">Open help</A></div>
       </GuideSection>

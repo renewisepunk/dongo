@@ -72,6 +72,20 @@ export function PublicHelpGuide() {
           <div><span>Read tools</span><strong>Overview, work, Intake</strong><p>Inspect before creating duplicates or claiming anything.</p></div>
           <div><span>Attachment tool</span><strong><code>dongo_get_attachment</code></strong><p>Returns authorized metadata or a temporary download, never persistent public bytes.</p></div>
         </div>
+        <div class="mcp-access-actions">
+          <article>
+            <span>Re-authenticate this host</span>
+            <p>Use <code>codex mcp logout dongo-&lt;project-ref&gt;</code> or <code>claude mcp logout dongo-&lt;project-ref&gt;</code>, then repeat the login command printed by the integration preview. Generic hosts should forget only this resource’s OAuth session and reconnect.</p>
+          </article>
+          <article>
+            <span>Revoke server access</span>
+            <p>Open the project, go to <strong>Project settings → Agent access</strong>, and revoke the exact installation. Revocation takes effect on the next protected request but leaves local MCP configuration in place.</p>
+          </article>
+          <article>
+            <span>Remove local configuration</span>
+            <p>After revocation, optionally use <code>codex mcp remove dongo-&lt;project-ref&gt;</code> or <code>claude mcp remove --scope project dongo-&lt;project-ref&gt;</code>. For a generic host, remove only the named dongo entry.</p>
+          </article>
+        </div>
       </GuideSection>
 
       <GuideSection index="04" id="attachments" title="Attachments" lede="Files are first-class context on new Intake and in work comments.">
@@ -129,6 +143,8 @@ export function PublicHelpGuide() {
           <a href="https://github.com/renewisepunk/dongo/blob/main/README.md"><span>Repository guide</span><b aria-hidden="true">↗</b></a>
           <a href="https://github.com/renewisepunk/dongo/blob/main/docs/runbooks/agent-auth.md"><span>Auth recovery runbook</span><b aria-hidden="true">↗</b></a>
           <a href="https://github.com/renewisepunk/dongo/blob/main/build-plan/07-cli-credential-storage.md"><span>Credential storage decision</span><b aria-hidden="true">↗</b></a>
+          <a href="https://github.com/renewisepunk/dongo/blob/main/build-plan/05-agent-first-cli-mcp.md"><span>CLI and MCP architecture</span><b aria-hidden="true">↗</b></a>
+          <a href="#mcp-resources"><span>MCP setup and recovery</span><b aria-hidden="true">↑</b></a>
           <A href="/get-started"><span>Get started</span><b aria-hidden="true">→</b></A>
         </div>
       </section>
