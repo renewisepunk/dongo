@@ -54,6 +54,9 @@ jobs:
       - name: Build the web release artifact
         run: npm run build
 
+      - name: Verify the immutable CLI package
+        run: npm run verify:cli-package
+
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 25

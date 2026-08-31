@@ -31,6 +31,7 @@
     "verify:environment-boundaries": "node scripts/verify-environment-boundaries.mjs",
     "verify:contracts": "node scripts/generate-contract-artifacts.mjs --check",
     "verify:brand-case": "node scripts/verify-brand-case.mjs",
+    "verify:cli-package": "node scripts/verify-cli-package.mjs",
     "verify:no-secrets": "node scripts/verify-no-secrets.mjs",
     "verify:runtime-logs": "node scripts/verify-runtime-logs.mjs",
     "types": "wrangler types",
