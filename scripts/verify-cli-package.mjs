@@ -135,7 +135,7 @@ try {
   );
   invariant(
     payloadDigest === expectedPayloadDigest,
-    "CLI package payload changed without an explicit provenance update.",
+    `CLI package payload changed without an explicit provenance update (expected ${expectedPayloadDigest}, received ${payloadDigest}).`,
   );
   process.stdout.write(`${JSON.stringify({
     ok: true,

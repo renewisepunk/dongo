@@ -27,6 +27,14 @@ dongo --help
 
 The archive contains one executable JavaScript bundle and this README. It requires Node.js 20 or newer and contains no runtime dependency on dongo's private workspace packages.
 
+Before accepting a CLI change, run the same immutable-package gate used by CI:
+
+```sh
+npm run verify:cli-package
+```
+
+The gate inspects the archive, installs it into an isolated prefix, runs it from a clean Git repository with no credential, and compares a canonical file-content digest with `apps/cli/package-payload.sha256`. npm versions may encode different tar/gzip envelope metadata, so the archive digest identifies one exact artifact while the pinned payload digest proves that supported build hosts produced the same package contents. When an intentional CLI change alters the payload, review the built archive first and then update the pinned digest to the `received` value printed by the failing gate.
+
 ## Commands
 
 ```text
