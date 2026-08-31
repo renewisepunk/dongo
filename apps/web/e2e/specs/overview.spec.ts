@@ -416,6 +416,11 @@ test("moves from wide detail to the sidebar, selects with arrows, and re-enters 
   await page.keyboard.press("ArrowLeft");
   await expect(second).toBeFocused();
   await expect(second.locator("..")).toHaveCSS("outline-style", "solid");
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(secondDetail).toBeFocused();
+  await page.keyboard.press("r");
+  await expect(secondDetail.getByPlaceholder("Add a comment…")).toBeFocused();
 });
 
 test("moves keyboard selection into capture and draws one outer selection border", async ({ page }) => {

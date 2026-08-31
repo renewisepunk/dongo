@@ -988,6 +988,18 @@ export function Overview(props: OverviewProps) {
     detail.scrollIntoView({ block: "nearest" });
   };
 
+  const focusCurrentWorkResponse = (id: string): boolean => {
+    const detail = [...document.querySelectorAll<HTMLElement>(".detail[data-detail-id]")]
+      .find((element) => element.dataset.detailId === id);
+    const target = detail?.querySelector<HTMLElement>(
+      ".attention-option, [data-response-composer], [data-comment-composer]",
+    );
+    if (!target) return false;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: "nearest" });
+    return true;
+  };
+
   const focusRelativeItem = (direction: -1 | 1) => {
     const items = navigableItems();
     if (items.length === 0) return;
@@ -1033,6 +1045,9 @@ export function Overview(props: OverviewProps) {
     const id = selected.dataset.navId;
     if (!id) return;
     if (selected.dataset.navKind === "work") {
+      if (respond && wideDetailLayout() && selectedWorkId() === id && focusCurrentWorkResponse(id)) {
+        return;
+      }
       openWork(
         id,
         !peek,
