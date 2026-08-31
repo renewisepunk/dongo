@@ -1,10 +1,11 @@
 import { A } from "@solidjs/router";
 import { Brand } from "../../components/Brand";
-import "./marketing.css";
+import marketingStyles from "./marketing.css?inline";
 
 export function MarketingHome() {
   return (
     <div class="marketing-page">
+      <style>{marketingStyles}</style>
       <a class="marketing-skip" href="#marketing-content">Skip to content</a>
 
       <header class="marketing-header">

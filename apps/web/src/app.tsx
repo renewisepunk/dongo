@@ -3,7 +3,7 @@ import { Router } from "@solidjs/router";
 import { FileRoutes } from "@solidjs/start/router";
 import { ErrorBoundary, Show, Suspense } from "solid-js";
 import { AuthFrame } from "./components/AuthFrame";
-import "./styles/global.css";
+import globalStyles from "./styles/global.css?inline";
 
 function SafeApplicationError() {
   return (
@@ -42,6 +42,7 @@ export default function App() {
             name="description"
             content="Give coding agents work, see what they are doing, and answer when they need you."
           />
+          <style>{globalStyles}</style>
           <ErrorBoundary fallback={<SafeApplicationError />}>
             <Suspense>{props.children}</Suspense>
           </ErrorBoundary>
