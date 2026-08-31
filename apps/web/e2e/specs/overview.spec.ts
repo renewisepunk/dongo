@@ -364,6 +364,32 @@ test("uses a wide contextual navigator and non-modal detail article", async ({ p
   )).toBe(true);
 });
 
+test("moves from wide detail to the sidebar, selects with arrows, and re-enters with Enter", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const first = page.locator('[data-work-id="work-ready-a"]');
+  const second = page.locator('[data-work-id="work-ready-b"]');
+
+  await first.click();
+  const firstDetail = page.getByRole("region", { name: "Verify fixture search" });
+  await expect(firstDetail).toBeVisible();
+  await firstDetail.getByRole("button", { name: /close|back/i }).focus();
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(second).toBeFocused();
+  await expect(page).toHaveURL(/work=work-ready-a/);
+
+  await page.keyboard.press("Enter");
+  const secondDetail = page.getByRole("region", { name: "Audit mobile controls" });
+  await expect(secondDetail).toBeVisible();
+  await expect(second).toHaveAttribute("aria-current", "page");
+  await expect(secondDetail).toBeFocused();
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(second).toBeFocused();
+});
+
 test("moves keyboard selection into capture and draws one outer selection border", async ({ page }) => {
   const composer = page.getByRole("textbox", { name: "Add something…" });
   const first = page.locator('[data-work-id="work-needs"]');
@@ -427,6 +453,7 @@ test("opens the command menu and compact shortcut reference", async ({ page }) =
   const shortcuts = page.getByRole("dialog", { name: "Move at agent speed" });
   await expect(shortcuts).toBeVisible();
   await expect(shortcuts.getByText("Move to Working", { exact: true })).toBeVisible();
+  await expect(shortcuts.getByText("Issue list", { exact: true })).toBeVisible();
   await expect(shortcuts.getByText("Command menu", { exact: true })).toBeVisible();
   await shortcuts.getByRole("button", { name: "esc" }).click();
   await expect(searchButton).toBeFocused();

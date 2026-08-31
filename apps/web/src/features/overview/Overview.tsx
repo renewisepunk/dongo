@@ -137,7 +137,7 @@ type OverviewRouteState = {
   search?: string;
 };
 
-type DetailInitialFocus = "close" | "respond";
+type DetailInitialFocus = "close" | "respond" | "detail";
 
 const OVERVIEW_COMMANDS: readonly OverviewCommand[] = [
   ...DONGO_SHORTCUTS.map((shortcut) => ({
@@ -557,6 +557,7 @@ export function Overview(props: OverviewProps) {
     updateRoute = true,
     returnFocus?: HTMLElement,
     peek = false,
+    initialFocus: DetailInitialFocus = "close",
   ) => {
     if (!selectedWorkId() && !selectedIntakeId()) {
       const resolvedReturnFocus = returnFocus ?? (
@@ -578,7 +579,7 @@ export function Overview(props: OverviewProps) {
     setSelectedIntakeDetail(undefined);
     setSelectedWorkId(undefined);
     setDetailPeek(peek);
-    setDetailInitialFocus("close");
+    setDetailInitialFocus(initialFocus);
     setSelectedIntakeId(id);
     if (!connection || id.startsWith("optimistic:")) return;
     unsubscribeIntake = connection.subscribeIntakeDetail(
@@ -945,6 +946,29 @@ export function Overview(props: OverviewProps) {
       : undefined;
   };
 
+  const selectedDetailNavItem = (): HTMLElement | undefined => {
+    const key = selectedWorkId()
+      ? `work:${selectedWorkId()}`
+      : selectedIntakeId()
+        ? `intake:${selectedIntakeId()}`
+        : undefined;
+    return key
+      ? navigableItems().find((element) => navKey(element) === key)
+      : undefined;
+  };
+
+  const focusSelectedDetailInSidebar = () => {
+    const selected = selectedDetailNavItem();
+    if (!selected) {
+      announce("Open an issue before returning to the issue list");
+      return;
+    }
+    const key = navKey(selected);
+    if (key) setKeyboardSelection(key);
+    selected.focus({ preventScroll: true });
+    selected.scrollIntoView({ block: "nearest" });
+  };
+
   const focusRelativeItem = (direction: -1 | 1) => {
     const items = navigableItems();
     if (items.length === 0) return;
@@ -968,20 +992,50 @@ export function Overview(props: OverviewProps) {
     return selected;
   };
 
+  const focusWideDetailWhenReady = (id: string) => {
+    let remainingFrames = 12;
+    const focusRenderedDetail = () => {
+      if (!wideDetailLayout()) return;
+      const detail = [...document.querySelectorAll<HTMLElement>(".detail[data-detail-id]")]
+        .find((element) => element.dataset.detailId === id);
+      if (detail) {
+        detail.focus({ preventScroll: true });
+        return;
+      }
+      remainingFrames -= 1;
+      if (remainingFrames > 0) requestAnimationFrame(focusRenderedDetail);
+    };
+    requestAnimationFrame(focusRenderedDetail);
+  };
+
   const openSelectedItem = (peek = false, respond = false) => {
     const selected = requireSelectedItem();
     if (!selected) return;
     const id = selected.dataset.navId;
     if (!id) return;
     if (selected.dataset.navKind === "work") {
-      openWork(id, !peek, selected, peek, respond ? "respond" : "close");
+      openWork(
+        id,
+        !peek,
+        selected,
+        peek,
+        respond ? "respond" : wideDetailLayout() && !peek ? "detail" : "close",
+      );
+      if (wideDetailLayout() && !peek && !respond) focusWideDetailWhenReady(id);
       return;
     }
     if (respond) {
       announce("Respond and review are available on Work items");
       return;
     }
-    openIntake(id, !peek, selected, peek);
+    openIntake(
+      id,
+      !peek,
+      selected,
+      peek,
+      wideDetailLayout() && !peek ? "detail" : "close",
+    );
+    if (wideDetailLayout() && !peek) focusWideDetailWhenReady(id);
   };
 
   const explainAgentOwnedCommand = (command: "working" | "done" | "edit") => {
@@ -1033,6 +1087,9 @@ export function Overview(props: OverviewProps) {
           break;
         case "previous":
           focusRelativeItem(-1);
+          break;
+        case "sidebar":
+          focusSelectedDetailInSidebar();
           break;
         case "open":
           openSelectedItem();
@@ -1135,6 +1192,13 @@ export function Overview(props: OverviewProps) {
       } else if (key === "/") {
         event.preventDefault();
         openSearch();
+      } else if (
+        event.key === "ArrowLeft" &&
+        wideDetailLayout() &&
+        Boolean(selectedWorkId() || selectedIntakeId())
+      ) {
+        event.preventDefault();
+        focusSelectedDetailInSidebar();
       } else if (key === "j" || event.key === "ArrowDown") {
         event.preventDefault();
         focusRelativeItem(1);
@@ -1874,7 +1938,7 @@ export function Overview(props: OverviewProps) {
       )}</Show>
 
       <Show when={selectedIntake()}>{(intake) => (
-        <IntakeDetail wide={wideDetailLayout()} intake={intake()} work={work()} onClose={closeDetail} onOpenWork={openWork} onDownload={downloadAttachment} />
+        <IntakeDetail wide={wideDetailLayout()} initialFocus={detailInitialFocus()} intake={intake()} work={work()} onClose={closeDetail} onOpenWork={openWork} onDownload={downloadAttachment} />
       )}</Show>
 
       <Show when={searchOpen()}>
@@ -2010,6 +2074,10 @@ function WorkDetail(props: WorkDetailProps) {
       });
       return;
     }
+    if (props.wide && props.initialFocus === "detail") {
+      detailPanel?.focus({ preventScroll: true });
+      return;
+    }
     if (!props.wide) closeButton?.focus();
   });
 
@@ -2065,10 +2133,13 @@ function WorkDetail(props: WorkDetailProps) {
     <article
       ref={detailPanel}
       class="detail"
+      data-detail-id={props.item.id}
       data-peek={props.peek}
       role={props.wide ? "region" : "dialog"}
       aria-modal={props.wide ? undefined : "true"}
       aria-labelledby="work-detail-title"
+      aria-keyshortcuts={props.wide ? "ArrowLeft" : undefined}
+      tabIndex={props.wide ? -1 : undefined}
       onKeyDown={(event) => {
         if (!props.wide) trapModalFocus(event);
       }}
@@ -2246,6 +2317,7 @@ function WorkDetail(props: WorkDetailProps) {
 
 type IntakeDetailProps = {
   wide: boolean;
+  initialFocus: DetailInitialFocus;
   intake: Intake;
   work: WorkItem[];
   onClose: () => void;
@@ -2256,17 +2328,26 @@ type IntakeDetailProps = {
 function IntakeDetail(props: IntakeDetailProps) {
   const linked = () => props.work.filter((item) => props.intake.linkedWorkIds?.includes(item.id));
   let closeButton: HTMLButtonElement | undefined;
+  let detailPanel: HTMLElement | undefined;
 
   onMount(() => {
-    if (!props.wide) closeButton?.focus();
+    if (props.wide && props.initialFocus === "detail") {
+      detailPanel?.focus({ preventScroll: true });
+    } else if (!props.wide) {
+      closeButton?.focus();
+    }
   });
 
   return (
     <article
+      ref={detailPanel}
       class="detail"
+      data-detail-id={props.intake.id}
       role={props.wide ? "region" : "dialog"}
       aria-modal={props.wide ? undefined : "true"}
       aria-labelledby="intake-detail-title"
+      aria-keyshortcuts={props.wide ? "ArrowLeft" : undefined}
+      tabIndex={props.wide ? -1 : undefined}
       onKeyDown={(event) => {
         if (!props.wide) trapModalFocus(event);
       }}

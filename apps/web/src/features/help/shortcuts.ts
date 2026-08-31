@@ -4,6 +4,7 @@ export type DongoShortcut = {
     | "search"
     | "next"
     | "previous"
+    | "sidebar"
     | "open"
     | "peek"
     | "close"
@@ -24,6 +25,7 @@ export const DONGO_SHORTCUTS: readonly DongoShortcut[] = [
   { id: "search", keys: ["/"], label: "Search", description: "Search work, comments, and Intake." },
   { id: "next", keys: ["J", "↓"], label: "Next", description: "Select the next item; from an empty capture box, return to the list." },
   { id: "previous", keys: ["K", "↑"], label: "Previous", description: "Select the previous item; above the first item, focus the capture box." },
+  { id: "sidebar", keys: ["←"], label: "Issue list", description: "From wide detail, return keyboard focus to the selected issue in the sidebar." },
   { id: "open", keys: ["Enter"], label: "Open", description: "Open the selected item and keep it in the URL." },
   { id: "peek", keys: ["Space"], label: "Peek", description: "Preview the selected item without changing the URL." },
   { id: "close", keys: ["Esc"], label: "Close", description: "Close the current menu, preview, or panel." },
