@@ -80,6 +80,30 @@ test("Codex apply replaces only an exact stale dongo project table", async () =>
   assert.match(config, /mcp_servers\.dongo-abcdef/u);
 });
 
+test("Codex production apply replaces an exact stale development dongo project table", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "dongo-integrate-codex-promote-"));
+  await mkdir(path.join(root, ".codex"));
+  await import("node:fs/promises").then((fs) =>
+    fs.writeFile(
+      path.join(root, ".codex", "config.toml"),
+      [
+        "[mcp_servers.dongo-oldproject]",
+        'url = "https://dev.dongo.so/p/oldproject/mcp"',
+        "",
+      ].join("\n"),
+    ),
+  );
+  const applied = await configureIntegration({
+    ...input(root, "codex", true),
+    productOrigin: "https://dongo.so",
+  });
+  assert.deepEqual(applied.replacedServers, ["dongo-oldproject"]);
+  const config = await readFile(path.join(root, ".codex", "config.toml"), "utf8");
+  assert.doesNotMatch(config, /dongo-oldproject/u);
+  assert.match(config, /mcp_servers\.dongo-abcdef/u);
+  assert.match(config, /https:\/\/dongo\.so\/p\/project_abcdef\/mcp/u);
+});
+
 test("Claude JSON merge preserves unrelated servers and conflicting ownership changes nothing", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "dongo-integrate-claude-"));
   await import("node:fs/promises").then((fs) =>

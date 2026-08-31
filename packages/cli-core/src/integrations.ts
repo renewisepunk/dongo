@@ -27,6 +27,7 @@ export interface IntegrationResult {
 
 const MANAGED_START = "<!-- dongo-managed:v1:start -->";
 const MANAGED_END = "<!-- dongo-managed:v1:end -->";
+const FIRST_PARTY_ORIGINS = new Set(["https://dongo.so", "https://dev.dongo.so"]);
 
 function shortProjectReference(publicProjectRef: string): string {
   const withoutPrefix = publicProjectRef.replace(/^project[_-]/i, "");
@@ -138,9 +139,12 @@ function isExactManagedEndpoint(
   try {
     const endpoint = new URL(entry.url);
     const origin = new URL(productOrigin);
+    const allowedOrigins = FIRST_PARTY_ORIGINS.has(origin.origin)
+      ? FIRST_PARTY_ORIGINS
+      : new Set([origin.origin]);
     const match = /^\/p\/([A-Za-z0-9_-]{1,200})\/mcp$/u.exec(endpoint.pathname);
     if (
-      endpoint.origin !== origin.origin
+      !allowedOrigins.has(endpoint.origin)
       || endpoint.search
       || endpoint.hash
       || !match?.[1]
