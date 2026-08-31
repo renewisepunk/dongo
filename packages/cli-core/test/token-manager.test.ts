@@ -77,3 +77,34 @@ test("failed revocation retains local material for a safe retry", async () => {
   });
   assert.equal((await manager.load())?.refreshToken, "refresh-secret-1");
 });
+
+test("corrupted and unsupported credential records fail closed without reflecting contents", async () => {
+  const store = new MemorySecretStore();
+  const manager = new TokenManager({
+    profile: "profile",
+    store,
+    lockDirectory: await mkdtemp(path.join(os.tmpdir(), "dongo-corrupt-")),
+  });
+  await store.set("profile", "{not-json refresh-secret-must-not-escape");
+  await assert.rejects(manager.load(), (error: unknown) => {
+    assert.ok(error instanceof CliCoreError);
+    assert.equal(error.code, "authentication_required");
+    assert.match(error.message, /corrupted/);
+    assert.doesNotMatch(error.message, /refresh-secret-must-not-escape/);
+    return true;
+  });
+
+  await store.set("profile", JSON.stringify({
+    schemaVersion: 2,
+    clientId: "dongo-cli",
+    issuer: "https://dev.dongo.so/api/auth",
+    refreshToken: "unsupported-secret-must-not-escape",
+  }));
+  await assert.rejects(manager.load(), (error: unknown) => {
+    assert.ok(error instanceof CliCoreError);
+    assert.equal(error.code, "authentication_required");
+    assert.match(error.message, /unsupported format/);
+    assert.doesNotMatch(error.message, /unsupported-secret-must-not-escape/);
+    return true;
+  });
+});
