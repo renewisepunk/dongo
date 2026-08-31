@@ -1,7 +1,7 @@
 import { Link, Meta, MetaProvider, Title } from "@solidjs/meta";
 import { Router } from "@solidjs/router";
 import { FileRoutes } from "@solidjs/start/router";
-import { ErrorBoundary, Suspense } from "solid-js";
+import { ErrorBoundary, Show, Suspense } from "solid-js";
 import { AuthFrame } from "./components/AuthFrame";
 import "./styles/global.css";
 
@@ -32,6 +32,9 @@ export default function App() {
           <Title>dongo — agent work, without the project management</Title>
           <Meta name="color-scheme" content="dark" />
           <Meta name="theme-color" content="#08080a" />
+          <Show when={(import.meta.env.VITE_DONGO_ENVIRONMENT || "development") !== "production"}>
+            <Meta name="robots" content="noindex,nofollow,noarchive" />
+          </Show>
           <Link rel="icon" href="/favicon.svg" type="image/svg+xml" />
           <Link rel="icon" href="/favicon.ico" sizes="32x32" />
           <Link rel="apple-touch-icon" href="/apple-touch-icon.png" />
