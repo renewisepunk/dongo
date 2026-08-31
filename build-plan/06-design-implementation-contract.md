@@ -41,7 +41,7 @@ Implement the prototype's hierarchy and states for:
 - Needs You, Working, Ready, Inbox, and Recently Done;
 - Inbox and Ready/Working/Needs You/Done detail;
 - human Attention response and comments, including pasted/dropped comment attachments with upload progress, failure recovery, and conversation-entry attachment rows;
-- search overlay/sheet and toast/status feedback.
+- search overlay/sheet, command menu, shortcut reference dialog, route-backed Help guide, and toast/status feedback.
 
 The full journey document adds route-backed Completed, settings, installation access/revocation, members, plan/storage, archived/unavailable, offline/reconnecting/session-expired, conflict, and later native screens. Where the prototype omits one of those surfaces, extend its same typography, palette, spacing, borders, hierarchy, and interaction rules rather than introducing another visual system.
 

@@ -79,7 +79,14 @@ Visible elements:
 - current organization and role;
 - Organization settings;
 - Project settings;
+- Help;
 - Sign out.
+
+### Desktop keyboard operation
+
+The web Overview supports `C` Capture, `/` Search, `J`/Down Next, `K`/Up Previous, `Enter` Open, `Space` Peek without changing the route, `Esc` Close, `R` Respond/review, `W` Move to Working, `D` Mark Done, `E` Edit, Command/Ctrl+Enter Submit, Command/Ctrl+K Command menu, and `?` Show shortcuts.
+
+Single-key shortcuts pause while the user is typing in an input, textarea, select, or editable region. Selection has a visible focus state, dialog focus is trapped and restored, and shortcuts do not invent unsupported mutations: `W` and `D` explain that canonical Run state is agent-owned, while `E` directs the human to add a corrective comment until human editing has a real contract.
 
 ## 4. First-time journey
 
@@ -733,6 +740,19 @@ States:
 - Too-short query: prompt to type more.
 - Searching: inline progress in the results area.
 - No results: “Nothing found in this project.”
+
+### Screen 18A — Help and shortcut reference
+
+Entry: Help in the avatar menu, Help in the command menu, or `?` for the compact shortcut dialog.
+
+The route-backed Help page shows:
+
+- a concise explanation of the capture → agent work → Needs You → result loop;
+- how to connect the CLI and independently authorized MCP hosts;
+- the complete keyboard shortcut reference;
+- a return-to-Overview action.
+
+The `?` shortcut opens the same reference as a focus-trapped dialog over Overview. The dialog and command menu close with `Esc` and restore focus to the invoking control or selected row.
 - Offline/error: Retry and preserved query.
 
 Selecting a WorkItem result opens Work detail. Selecting Intake opens Intake detail. Escape/back returns focus to the original search trigger.
