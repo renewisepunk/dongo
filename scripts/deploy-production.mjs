@@ -11,7 +11,7 @@ const productionEnvironment = {
   CLOUDFLARE_ENV: "production",
 };
 const steps = [
-  ["Convex production functions", executable("npx"), ["convex", "deploy", "--message", "dongo production release"]],
+  ["Convex production functions", executable("npx"), ["convex", "deploy", "--yes", "--message", "dongo production release"]],
   ["production auth migrations", executable("npx"), ["wrangler", "d1", "migrations", "apply", "AUTH_DB", "--remote", "--config", "apps/auth/wrangler.jsonc", "--env", "production"]],
   ["production authorization Worker", executable("npx"), ["wrangler", "deploy", "--config", "apps/auth/wrangler.jsonc", "--env", "production"]],
   ["production agent API Worker", executable("npx"), ["wrangler", "deploy", "--config", "apps/api/wrangler.jsonc", "--env", "production"]],
