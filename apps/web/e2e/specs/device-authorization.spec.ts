@@ -17,6 +17,11 @@ test("reviews and approves the exact terminal, project, resource, and scopes", a
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("Approved — you can close this window", { exact: true })).toBeVisible();
   await expect(page.getByText("This page never displays access or refresh tokens.")).toBeVisible();
+  const outcome = page.locator('.approved-state[data-state="approved"]');
+  await expect(outcome).toBeVisible();
+  await expect.poll(async () => outcome.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+  await expect(outcome).toHaveCSS("border-top-style", "solid");
+  await expect(outcome).toHaveCSS("border-top-width", "1px");
 
   await expect(page.locator("html")).toHaveAttribute(
     "data-fixture-device-project",
@@ -44,6 +49,8 @@ test("denies without binding a project or issuing a token", async ({ page }) => 
   await page.goto("/device?user_code=DENY-0001");
   await page.getByRole("button", { name: "Deny" }).click();
   await expect(page.getByText("Authorization denied", { exact: true })).toBeVisible();
+  await expect(page.getByText("No token was issued. You can close this page or restart dongo connect.")).toBeVisible();
+  await expect(page.locator('.approved-state[data-state="denied"]')).toBeVisible();
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-device-project", /./);
   await expect(page.locator("html")).toHaveAttribute(
     "data-fixture-device-decision",

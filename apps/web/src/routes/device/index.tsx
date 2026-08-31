@@ -351,7 +351,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
 
       <Show when={state() === "approved" || state() === "denied"}>
         <div class="auth-stack">
-          <div class="approved-state">
+          <div class="approved-state" data-state={state()}>
             <div class="approved-state__title">
               <span style={{ color: state() === "approved" ? "var(--green)" : "var(--danger)" }}>{state() === "approved" ? "✓" : "✕"}</span>
               <span>{state() === "approved" ? "Approved — you can close this window" : "Authorization denied"}</span>

@@ -87,6 +87,17 @@ The consent screen and **Agent access** list must identify the actual registered
 
 Native host loopback callbacks must remain top-level redirects to the host-provided `redirect_uri`. Never embed, probe, proxy, or fetch a localhost callback from the dongo web app: Chrome's Local Network Access protection applies to public-origin fetches, subresources, and subframes that reach loopback and can show the suspicious device-access prompt. Authorization API fetches therefore use `redirect: "manual"` and accept only the provider's JSON continuation; `followOAuthResult` performs the one explicit top-level navigation. The plain final localhost page is served by the host, not dongo, and can only be branded when the host offers an explicit post-callback redirect or customizable callback response.
 
+### Completion-screen ownership
+
+| Surface | Served by | Required presentation |
+| --- | --- | --- |
+| CLI device approval or denial | dongo web app | Branded dark `AuthFrame` with a bordered success or denial box, explicit “you can close this window/page” copy, return-to-terminal guidance, and no token material. |
+| Browser sign-in continuation | dongo web app | Branded loading and bounded error states; a successful continuation returns to the intended dongo route rather than stopping on a completion page. |
+| MCP consent | dongo web app until the decision is saved | Branded consent, loading, and bounded error states. Success performs one top-level redirect to the exact validated host callback. |
+| Final `localhost` or `127.0.0.1` MCP callback | Codex, Claude Code, MCP Inspector, or another MCP host | Host-owned. dongo cannot style, script, fetch, frame, or proxy this response. The host should say authentication is complete and that the tab can be closed; any visual customization must be implemented by that host. |
+
+Do not describe a raw loopback callback as a missing dongo style. It is proof that the authorization code reached the native host at the registered redirect. Conversely, a dongo-origin request to loopback is a security regression even if its purpose is to replace that host page with branded HTML.
+
 If Chrome shows “Access other apps and services on this device,” deny it and treat the flow as a release-blocking regression. Do not teach the user to grant that permission. Confirm in DevTools that no `fetch`, XHR, iframe, image, script, preflight, or service-worker request from `dev.dongo.so` targets a loopback address. A single document navigation to the exact registered callback after consent is expected.
 
 ### Claude Code CIMD loopback compatibility
