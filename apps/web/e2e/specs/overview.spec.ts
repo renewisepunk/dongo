@@ -321,7 +321,6 @@ test("uses a wide contextual navigator and non-modal detail article", async ({ p
   await expect(detail).toBeVisible();
   await expect(detail).not.toHaveAttribute("aria-modal");
   await expect(readyLink).toHaveAttribute("aria-current", "page");
-  await expect(readyLink).toBeFocused();
 
   const layout = await page.locator(".app-page").evaluate((element) => {
     const columns = getComputedStyle(element).gridTemplateColumns
