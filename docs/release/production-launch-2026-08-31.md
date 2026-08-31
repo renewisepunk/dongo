@@ -10,7 +10,7 @@ The release includes the public marketing, get-started, and help pages; email OT
 
 | Component | Production target | Released version |
 |---|---|---|
-| Web | `dongo-web-production` | `519c05a6-b0da-4bcf-9a5a-37b900079874` |
+| Web | `dongo-web-production` | `1771d7f5-d03e-4ca4-8042-a6aed8dfd235` |
 | Authorization | `dongo-auth-production` | `d96dd602-f4b9-45fb-adf6-833aab5281ce` |
 | Agent API | `dongo-api-production` | `f57a195e-efb5-4c82-8732-a11569f481a6` |
 | Remote MCP | `dongo-mcp-production` | `67583ee0-27cd-4233-9332-c225054f6cab` |
@@ -30,6 +30,7 @@ The previous landing Worker versions recorded before cutover were `f956c68f-9fdd
 - Production smoke passed 18/18 with project-scoped MCP discovery and authentication enforcement.
 - Live development/production isolation passed 10/10 after cutover.
 - The production root, get-started, help, auth, API, MCP, files, notifications, and canonical `www` redirect all passed their public checks.
+- The credential-free production availability workflow checks the exact production services and project-scoped OAuth/MCP discovery boundaries twice an hour. Its first GitHub-hosted run passed on commit `a96317f` ([run 33437103370](https://github.com/renewisepunk/dongo/actions/runs/33437103370)).
 
 ## Live production journeys
 
@@ -72,7 +73,7 @@ A fresh Codex MCP session resolved the same attachment through the agent contrac
 3. Authorize once in the browser. Codex then appears as its own agent identity and can create, update, comment on, and finish work.
 4. Use the web workspace for review, human comments, pasted images, dragged files, and keyboard navigation.
 
-The production test account/project is disposable validation data and must not be treated as the owner’s permanent workspace.
+The production test account/project is disposable validation data and must not be treated as the owner’s permanent workspace. This repository's checked-in `.codex/config.toml`, `.mcp.json`, and `.agent-work/project.json` still identify the historical development project; replace them through the real production project's generated setup only after the owner has signed in and created that project.
 
 ## Explicitly deferred, non-blocking items
 
