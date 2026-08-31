@@ -27,6 +27,8 @@ export function renderOtpEmail(otp: string): { subject: string; text: string; ht
 export function authFromEmail(env: Pick<AuthWorkerEnv, "AUTH_FROM_EMAIL" | "PUBLIC_ORIGIN">): string {
   const email = z.email().max(320).parse(env.AUTH_FROM_EMAIL).toLowerCase();
   const origin = new URL(env.PUBLIC_ORIGIN);
+  const [localPart, senderHostname] = email.split("@");
+  const originHostname = origin.hostname.toLowerCase();
   if (
     origin.protocol !== "https:" ||
     origin.username !== "" ||
@@ -35,9 +37,11 @@ export function authFromEmail(env: Pick<AuthWorkerEnv, "AUTH_FROM_EMAIL" | "PUBL
     origin.pathname !== "/" ||
     origin.search !== "" ||
     origin.hash !== "" ||
-    email !== `auth@${origin.hostname.toLowerCase()}`
+    localPart !== "auth" ||
+    !senderHostname ||
+    (senderHostname !== originHostname && !senderHostname.endsWith(`.${originHostname}`))
   ) {
-    throw new Error("The dongo authentication sender must match PUBLIC_ORIGIN");
+    throw new Error("The dongo authentication sender must belong to PUBLIC_ORIGIN");
   }
   return email;
 }

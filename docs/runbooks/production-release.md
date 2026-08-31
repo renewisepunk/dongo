@@ -7,6 +7,7 @@ Production is `https://dongo.so`, Convex `brainy-camel-172`, D1 `dongo-auth`, an
 - Release only a clean, committed revision that passed unit/integration tests, static/type checks, the complete browser matrix, secret/runtime-log scans, contract parity, and environment-boundary verification.
 - Prove the exact revision in development, including email OTP, CLI device authorization, Codex and Claude MCP authorization, refresh, isolated revocation, fresh-identity reauthorization, agent-authored work/comment lifecycle, attachments, and deterministic sync.
 - Keep Google disabled in the production UI until its exact production redirect is registered and proven. Email OTP is the production sign-in path for the first release.
+- Send production OTP email from `auth@dev.dongo.so`, the deliverable sender already proven through Cloudflare Email Sending. The sender validation permits only the `auth` mailbox on the public origin or one of its subdomains; application links and the OAuth issuer remain on `https://dongo.so`.
 - Send production notification email from `notifications@dev.dongo.so`, the verified sending domain on the `rene@wisepunk.com` Resend account. Application links and auth remain on `https://dongo.so`; move the sender to `notifications@dongo.so` only after the apex domain is verified for sending in that same account.
 - Record the current production landing Worker version and every new Worker version before cutover. Never print or retain secret values in release evidence.
 

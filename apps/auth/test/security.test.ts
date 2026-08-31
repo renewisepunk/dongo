@@ -87,19 +87,23 @@ describe("authorization boundary security", () => {
       .toBe("/app");
   });
 
-  it("pins the OTP sender to the configured public origin", () => {
+  it("pins the OTP sender to the configured public origin or one of its subdomains", () => {
     expect(authFromEmail({
       AUTH_FROM_EMAIL: "auth@dev.dongo.so",
       PUBLIC_ORIGIN: "https://dev.dongo.so",
     })).toBe("auth@dev.dongo.so");
     expect(authFromEmail({
-      AUTH_FROM_EMAIL: "auth@dongo.so",
-      PUBLIC_ORIGIN: "https://dongo.so",
-    })).toBe("auth@dongo.so");
-    expect(() => authFromEmail({
       AUTH_FROM_EMAIL: "auth@dev.dongo.so",
       PUBLIC_ORIGIN: "https://dongo.so",
-    })).toThrow(/must match PUBLIC_ORIGIN/);
+    })).toBe("auth@dev.dongo.so");
+    expect(() => authFromEmail({
+      AUTH_FROM_EMAIL: "auth@attacker-dongo.so",
+      PUBLIC_ORIGIN: "https://dongo.so",
+    })).toThrow(/must belong to PUBLIC_ORIGIN/);
+    expect(() => authFromEmail({
+      AUTH_FROM_EMAIL: "support@dev.dongo.so",
+      PUBLIC_ORIGIN: "https://dongo.so",
+    })).toThrow(/must belong to PUBLIC_ORIGIN/);
   });
 
   it("allowlists metadata hosts without suffix confusion or IP literals", () => {
