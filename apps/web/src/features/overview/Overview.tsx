@@ -911,14 +911,13 @@ export function Overview(props: OverviewProps) {
 
   const focusRelativeItem = (direction: -1 | 1) => {
     const items = navigableItems();
-    if (items.length === 0) {
-      announce("There is no project activity to select");
-      return;
-    }
+    if (items.length === 0) return;
     const current = selectedNavItem();
     const currentIndex = current ? items.indexOf(current) : -1;
     const nextIndex = currentIndex < 0
-      ? direction === 1 ? 0 : items.length - 1
+      ? direction === 1
+        ? Math.min(1, items.length - 1)
+        : items.length - 1
       : Math.max(0, Math.min(items.length - 1, currentIndex + direction));
     const next = items[nextIndex]!;
     const key = navKey(next);
@@ -1415,9 +1414,14 @@ export function Overview(props: OverviewProps) {
             <textarea
               ref={composerInput}
               class="composer__input"
-              aria-keyshortcuts="C Meta+Enter Control+Enter"
+              data-nav-item
+              data-nav-kind="capture"
+              data-nav-id="composer"
+              data-keyboard-selected={keyboardSelection() === "capture:composer"}
+              aria-keyshortcuts="C ArrowDown Meta+Enter Control+Enter"
               rows={draft().length > 60 ? 4 : 2}
               value={draft()}
+              onFocus={() => setKeyboardSelection("capture:composer")}
               onInput={(event) => {
                 setDraft(event.currentTarget.value);
                 setSubmissionKey(crypto.randomUUID());
@@ -1428,6 +1432,16 @@ export function Overview(props: OverviewProps) {
               }}
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void submitIntake();
+                else if (
+                  event.key === "ArrowDown" &&
+                  !event.metaKey &&
+                  !event.ctrlKey &&
+                  !event.altKey &&
+                  draft().length === 0
+                ) {
+                  event.preventDefault();
+                  focusRelativeItem(1);
+                }
               }}
               placeholder="Add something…"
             />

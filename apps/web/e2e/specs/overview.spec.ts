@@ -302,6 +302,35 @@ test("navigates, peeks, opens, and restores selection by keyboard", async ({ pag
   await expect(page).toHaveURL(/work=work-needs/);
 });
 
+test("moves keyboard selection into capture and draws one outer selection border", async ({ page }) => {
+  const composer = page.getByRole("textbox", { name: "Add something…" });
+  const first = page.locator('[data-work-id="work-needs"]');
+
+  await page.keyboard.press("j");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("k");
+  await expect(composer).toBeFocused();
+  await expect.poll(async () => page.getByRole("region", { name: "Add something" }).evaluate(
+    (element) => getComputedStyle(element).borderColor ===
+      getComputedStyle(document.documentElement).getPropertyValue("--amber").trim(),
+  )).toBe(true);
+
+  await page.keyboard.press("ArrowDown");
+  await expect(first).toBeFocused();
+
+  await page.keyboard.press("j");
+  await page.keyboard.press("j");
+  const ready = page.locator('[data-ready-id="work-ready-a"]');
+  const readyOpen = ready.locator(".ready-row__open");
+  await expect(readyOpen).toBeFocused();
+  await expect.poll(async () => ready.evaluate(
+    (element) => getComputedStyle(element).borderColor ===
+      getComputedStyle(document.documentElement).getPropertyValue("--amber").trim(),
+  )).toBe(true);
+  await expect(readyOpen).toHaveCSS("outline-style", "none");
+  await expect(readyOpen).toHaveCSS("box-shadow", "none");
+});
+
 test("opens the response surface with R and submits composers with Control Enter", async ({ page }) => {
   await page.keyboard.press("j");
   await page.keyboard.press("r");

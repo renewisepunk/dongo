@@ -261,7 +261,7 @@
 }
 
 .composer:focus-within {
-  border-color: var(--line-strong);
+  border-color: var(--amber);
 }
 
 .composer__input {
@@ -644,11 +644,25 @@
 
 [data-nav-item][data-keyboard-selected="true"] {
   border-color: var(--amber);
-  box-shadow: inset 3px 0 0 var(--amber);
+  box-shadow: none;
+  outline: 0;
 }
 
+.composer .composer__input:focus-visible,
+.work-section .work-row:focus-visible,
+.ready-row .ready-row__open:focus-visible,
+.ready-row .reorder-button:focus-visible {
+  outline: 0;
+}
+
+.ready-row:focus-within,
 .ready-row:has(.ready-row__open[data-keyboard-selected="true"]) {
   border-color: var(--amber);
+}
+
+.reorder-button:focus-visible {
+  background: var(--surface-2);
+  color: var(--amber-bright);
 }
 
 .ready-row__position {
