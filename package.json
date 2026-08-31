@@ -10,7 +10,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspace @dongo/web",
-    "check": "npm run verify:brand-case && npm run check:landing && npm run check:workspaces && npm run typecheck:workspaces && npm run check:convex",
+    "check": "npm run build:check-dependencies && npm run verify:brand-case && npm run check:landing && npm run check:workspaces && npm run typecheck:workspaces && npm run check:convex",
+    "build:check-dependencies": "npm run build --workspace @dongo/mcp",
     "check:landing": "tsc --noEmit && wrangler deploy --dry-run",
     "check:workspaces": "npm run check --workspaces --if-present",
     "typecheck:workspaces": "npm run typecheck --workspaces --if-present",
