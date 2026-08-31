@@ -27,8 +27,9 @@ if (!existsSync(resolve(root, "apps/web/wrangler.jsonc"))) {
 }
 
 if (process.argv.includes("--plan")) {
-  for (const [label, command, args] of steps) {
-    console.log(`${label}: CLOUDFLARE_ENV=production ${command} ${args.join(" ")}`);
+  for (const [label, command, args, environment] of steps) {
+    const prefix = environment.CLOUDFLARE_ENV ? "CLOUDFLARE_ENV=production " : "";
+    console.log(`${label}: ${prefix}${command} ${args.join(" ")}`);
   }
   process.exit(0);
 }
