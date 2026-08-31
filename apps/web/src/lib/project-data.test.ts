@@ -185,7 +185,7 @@ describe("live project overview mapping", () => {
     });
   });
 
-  it("maps Work sources and every authorized attachment", () => {
+  it("maps Work, source, and attributed comment attachments without duplication", () => {
     const now = Date.now();
     const work = {
       _id: "work-detail",
@@ -209,16 +209,30 @@ describe("live project overview mapping", () => {
     }, {
       work,
       runs: [],
-      comments: [],
+      comments: [{
+        _id: "comment-review",
+        actorId: "actor-owner",
+        body: "See the pasted review image.",
+        attachmentIds: ["attachment-comment"],
+        createdAt: now - 30_000,
+      }],
       artifacts: [],
       attention: [],
-      actors: [],
-      attachments: [{
-        _id: "attachment-work",
-        filename: "result.log",
-        mimeType: "text/plain",
-        byteSize: 512,
-      }],
+      actors: [{ _id: "actor-owner", type: "human", name: "Fixture Owner" }],
+      attachments: [
+        {
+          _id: "attachment-work",
+          filename: "result.log",
+          mimeType: "text/plain",
+          byteSize: 512,
+        },
+        {
+          _id: "attachment-comment",
+          filename: "review.png",
+          mimeType: "image/png",
+          byteSize: 1_024,
+        },
+      ],
       sourceIntakes: [{
         intake: {
           _id: "intake-source",
@@ -238,6 +252,14 @@ describe("live project overview mapping", () => {
     expect(mapped.attachments).toEqual([expect.objectContaining({
       id: "attachment-work",
       filename: "result.log",
+    })]);
+    expect(mapped.conversation).toEqual([expect.objectContaining({
+      who: "Fixture Owner",
+      text: "See the pasted review image.",
+      attachments: [expect.objectContaining({
+        id: "attachment-comment",
+        filename: "review.png",
+      })],
     })]);
     expect(mapped.sources).toEqual([expect.objectContaining({
       id: "intake-source",
