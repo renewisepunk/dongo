@@ -356,7 +356,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
               <span style={{ color: state() === "approved" ? "var(--green)" : "var(--danger)" }}>{state() === "approved" ? "✓" : "✕"}</span>
               <span>{state() === "approved" ? "Approved — you can close this window" : "Authorization denied"}</span>
             </div>
-            <p class="auth-lede">{state() === "approved" ? `${selectedProject()?.name ?? "The project"} is approved. Return to your terminal while it finishes secure storage and its connection check; only the terminal will report Connected.` : "No token was issued. You can close this page or restart dongo connect."}</p>
+            <p class="auth-lede">{state() === "approved" ? "dongo is approved. Return to your terminal while it finishes secure storage and its connection check; only the terminal will report Connected." : "No token was issued. You can close this page or restart dongo connect."}</p>
           </div>
           <p class="security-note">This page never displays access or refresh tokens.</p>
         </div>
