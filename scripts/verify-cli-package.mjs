@@ -126,6 +126,17 @@ try {
     payloadHasher.update(contents);
   }
   const payloadDigest = payloadHasher.digest("hex");
+  const expectedPayloadDigest = (
+    await readFile(join(repositoryRoot, "apps", "cli", "package-payload.sha256"), "utf8")
+  ).trim();
+  invariant(
+    /^[a-f0-9]{64}$/u.test(expectedPayloadDigest),
+    "Pinned CLI payload digest must be a lowercase SHA-256 value.",
+  );
+  invariant(
+    payloadDigest === expectedPayloadDigest,
+    "CLI package payload changed without an explicit provenance update.",
+  );
   process.stdout.write(`${JSON.stringify({
     ok: true,
     archive: archives[0],
