@@ -38,7 +38,7 @@ The previous landing Worker versions recorded before cutover were `f956c68f-9fdd
 
 A fresh account completed email OTP authentication and reached first-project onboarding. Production OTP is currently delivered from `auth@dev.dongo.so`, a verified sender on the correct Wisepunk Resend account. The issuer, callback, browser links, and application remain entirely on `https://dongo.so`.
 
-Google remains intentionally disabled in production until the exact production redirect URI is registered and proven. Email OTP is the supported first-release sign-in path.
+Google remains intentionally disabled in the production UI until the exact production redirect URI is registered and proven. The already-proven client credentials are staged in the isolated production Convex environment, and a redirect-free provider probe generated Google's normal authorization origin with the exact callback `https://brainy-camel-172.convex.site/api/auth/callback/google`. Email OTP remains the supported first-release sign-in path.
 
 ### Codex remote MCP
 
@@ -78,7 +78,7 @@ The production test account/project is disposable validation data and must not b
 ## Explicitly deferred, non-blocking items
 
 - Native iOS and Android clients and live push delivery.
-- Production Google login until its exact redirect is configured and validated.
+- Production Google login until the exact staged callback is registered in Google Cloud and the live `rene@wisepunk.com` identity is validated.
 - Moving email senders from the verified `dev.dongo.so` subdomain to the apex after apex sender verification.
 - Manual VoiceOver review. Automated WCAG A/AA scans and keyboard journeys are green, but that does not substitute for the documented manual screen-reader pass.
 - Repeating the production host lifecycle with Claude Code. Claude Code’s complete lifecycle is already proven in development; this release’s required production agent was Codex.

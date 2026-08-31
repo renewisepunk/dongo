@@ -32,7 +32,7 @@ The temporary secret files are owner-only, overwritten, and removed before the c
 - independent Better Auth secrets for the human Convex service and OAuth authorization Worker;
 - the Resend API key only in the notifications Worker.
 
-`DONGO_ENABLE_DEV_BOOTSTRAP`, development URLs, development secrets, Google credentials, APNs, and FCM are not configured in production.
+`DONGO_ENABLE_DEV_BOOTSTRAP`, development URLs, development secrets, APNs, and FCM are not configured in production. The proven Google client credentials may be staged in the production Convex environment while `VITE_DONGO_GOOGLE_AUTH_CONFIGURED` remains `false`; do not expose the production Google action until the exact callback is registered and the complete identity journey passes.
 
 ## Preflight
 

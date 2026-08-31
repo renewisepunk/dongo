@@ -26,7 +26,7 @@ Do not reuse the synthetic project `ps8dhbky-dongo-production-e2e` as the owner'
 
 ## Visible follow-up work, not a first-day blocker
 
-- Production Google sign-in remains disabled until the exact production callback is added to the existing Wisepunk OAuth client and the live identity is proven. Email OTP is available now.
+- Production Google sign-in remains disabled in the UI until the staged callback `https://brainy-camel-172.convex.site/api/auth/callback/google` is added to the existing Wisepunk OAuth client and the live identity is proven. The production provider already generates that exact callback; email OTP is available now.
 - Paid plan checkout is not available yet; the free plan supports one active project.
 - Native clients and live push delivery remain outside this release.
 - Automated accessibility and keyboard gates are green; the documented manual VoiceOver pass remains outstanding.
