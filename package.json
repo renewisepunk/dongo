@@ -24,6 +24,7 @@
     "test": "npm run test:workspaces && npm run test:convex",
     "test:workspaces": "npm run test --workspaces --if-present",
     "test:convex": "vitest run convex/testing",
+    "smoke:boundaries": "node scripts/smoke-boundaries.mjs",
     "smoke:dev": "node scripts/smoke-dev.mjs",
     "verify:environment-boundaries": "node scripts/verify-environment-boundaries.mjs",
     "verify:contracts": "node scripts/generate-contract-artifacts.mjs --check",

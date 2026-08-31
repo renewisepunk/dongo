@@ -49,9 +49,10 @@ Run the public development smoke gate with a real project reference:
 
 ```sh
 npm run smoke:dev -- --project-ref <public-project-ref>
+npm run smoke:boundaries -- --project-ref <public-project-ref>
 ```
 
-The smoke gate requires every development service to be ready and validates OAuth authorization-server metadata, exact project Protected Resource Metadata, and the unauthenticated RFC 9728 MCP challenge.
+The development smoke gate requires every development service to be ready and validates OAuth authorization-server metadata, exact project Protected Resource Metadata, and the unauthenticated RFC 9728 MCP challenge. The boundary smoke gate proves the development product routes are live while the production apex remains landing-only and `www` redirects to it.
 
 ## Install the CLI from this checkout
 
