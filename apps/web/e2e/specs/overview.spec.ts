@@ -1,4 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+function workDetail(page: Page, name: string) {
+  return page.locator(".detail").filter({
+    has: page.getByRole("heading", { name }),
+  });
+}
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -86,7 +92,7 @@ test("bounds overview connection and subscription failures", async ({ page }) =>
 test("responds to Attention and reconciles the work lane", async ({ page }) => {
   const row = page.locator('[data-work-id="work-needs"]');
   await row.click();
-  const dialog = page.getByRole("dialog", { name: "Approve the release candidate" });
+  const dialog = workDetail(page, "Approve the release candidate");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Approve staging" }).click();
   await dialog.getByPlaceholder("Add anything the agent should know…").fill(
@@ -180,7 +186,7 @@ test("attaches a pasted clipboard image to the new issue", async ({ page }) => {
 
 test("pastes and submits a finalized image attachment with a comment", async ({ page }) => {
   await page.locator('[data-work-id="work-ready-a"]').click();
-  const dialog = page.getByRole("dialog", { name: "Verify fixture search" });
+  const dialog = workDetail(page, "Verify fixture search");
   const comment = dialog.getByRole("textbox", { name: "Add a comment" });
   await comment.evaluate((composer) => {
     const transfer = new DataTransfer();
@@ -204,7 +210,7 @@ test("pastes and submits a finalized image attachment with a comment", async ({ 
 
 test("routes a detail drop to the comment instead of the Intake composer", async ({ page }) => {
   await page.locator('[data-work-id="work-ready-a"]').click();
-  const dialog = page.getByRole("dialog", { name: "Verify fixture search" });
+  const dialog = workDetail(page, "Verify fixture search");
   const commentForm = dialog.locator(".comment-form");
   const dataTransfer = await page.evaluateHandle(() => {
     const transfer = new DataTransfer();
@@ -257,7 +263,7 @@ test("opens search by keyboard and restores focus after detail close", async ({ 
   await search.getByPlaceholder("Search work, comments and intake…").fill("fixture search");
   await expect(search.getByText("Verify fixture search", { exact: true })).toBeVisible();
   await search.getByRole("button", { name: /Verify fixture search/ }).click();
-  const detail = page.getByRole("dialog", { name: "Verify fixture search" });
+  const detail = workDetail(page, "Verify fixture search");
   await expect(detail).toBeVisible();
   await detail.getByRole("button", { name: /close|back/i }).click();
   await expect(searchButton).toBeFocused();
@@ -290,7 +296,7 @@ test("navigates, peeks, opens, and restores selection by keyboard", async ({ pag
   await expect(first).toBeFocused();
 
   await page.keyboard.press("Space");
-  const peek = page.getByRole("dialog", { name: "Approve the release candidate" });
+  const peek = workDetail(page, "Approve the release candidate");
   await expect(peek).toBeVisible();
   await expect(peek.getByText("peek · esc closes")).toBeVisible();
   await expect(page).not.toHaveURL(/work=work-needs/);
@@ -300,6 +306,63 @@ test("navigates, peeks, opens, and restores selection by keyboard", async ({ pag
   await page.keyboard.press("Enter");
   await expect(peek).toBeVisible();
   await expect(page).toHaveURL(/work=work-needs/);
+});
+
+test("uses a wide contextual navigator and non-modal detail article", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const readyLink = page.locator('[data-work-id="work-ready-a"]');
+  await expect(readyLink).toHaveAttribute(
+    "href",
+    "/app/fixture-studio/dongo?work=work-ready-a",
+  );
+
+  await readyLink.click();
+  const detail = page.getByRole("region", { name: "Verify fixture search" });
+  await expect(detail).toBeVisible();
+  await expect(detail).not.toHaveAttribute("aria-modal");
+  await expect(readyLink).toHaveAttribute("aria-current", "page");
+  await expect(readyLink).toBeFocused();
+
+  const layout = await page.locator(".app-page").evaluate((element) => {
+    const columns = getComputedStyle(element).gridTemplateColumns
+      .split(" ")
+      .map((value) => Number.parseFloat(value));
+    const overview = element.querySelector<HTMLElement>(".overview-scroll")!;
+    const detail = element.querySelector<HTMLElement>(".detail")!;
+    return {
+      display: getComputedStyle(element).display,
+      columns,
+      navigatorWidth: overview.getBoundingClientRect().width,
+      detailWidth: detail.getBoundingClientRect().width,
+      summaryDisplay: getComputedStyle(
+        overview.querySelector<HTMLElement>(".work-row__summary")!,
+      ).display,
+    };
+  });
+  expect(layout.display).toBe("grid");
+  expect(layout.columns).toHaveLength(2);
+  expect(layout.navigatorWidth).toBeGreaterThanOrEqual(304);
+  expect(layout.navigatorWidth).toBeLessThanOrEqual(384);
+  expect(layout.detailWidth).toBeGreaterThan(layout.navigatorWidth);
+  expect(layout.summaryDisplay).toBe("none");
+
+  const workingLink = page.locator('[data-work-id="work-working"]');
+  await workingLink.click();
+  await expect(page.getByRole("region", { name: "Harden attachment delivery" })).toBeVisible();
+  await expect(page).toHaveURL(/work=work-working/);
+  await expect(workingLink).toHaveAttribute("aria-current", "page");
+
+  await page.goBack();
+  await expect(page.getByRole("region", { name: "Verify fixture search" })).toBeVisible();
+  await expect(page).toHaveURL(/work=work-ready-a/);
+
+  const close = page.getByRole("region", { name: "Verify fixture search" })
+    .getByRole("button", { name: /close|back/i });
+  await close.focus();
+  await page.keyboard.press("Shift+Tab");
+  await expect.poll(async () => page.evaluate(() =>
+    !document.activeElement?.closest(".detail"),
+  )).toBe(true);
 });
 
 test("moves keyboard selection into capture and draws one outer selection border", async ({ page }) => {
@@ -334,7 +397,7 @@ test("moves keyboard selection into capture and draws one outer selection border
 test("opens the response surface with R and submits composers with Control Enter", async ({ page }) => {
   await page.keyboard.press("j");
   await page.keyboard.press("r");
-  const dialog = page.getByRole("dialog", { name: "Approve the release candidate" });
+  const dialog = workDetail(page, "Approve the release candidate");
   const firstOption = dialog.getByRole("button", { name: "Approve staging" });
   await expect(firstOption).toBeFocused();
   await firstOption.click();
@@ -392,7 +455,7 @@ test("reconciles browser Back and preserves the overview scroll position", async
   expect(scrollBefore).toBeGreaterThan(0);
 
   await row.click();
-  const dialog = page.getByRole("dialog", { name: "Complete the agent golden journey" });
+  const dialog = workDetail(page, "Complete the agent golden journey");
   await expect(dialog).toBeVisible();
   await expect(page).toHaveURL(/\?work=work-done$/);
   await page.goBack();
@@ -404,7 +467,7 @@ test("reconciles browser Back and preserves the overview scroll position", async
 
 test("renders attributed agent progress as safe reviewable Markdown", async ({ page }) => {
   await page.locator('[data-work-id="work-done"]').click();
-  const dialog = page.getByRole("dialog", { name: "Complete the agent golden journey" });
+  const dialog = workDetail(page, "Complete the agent golden journey");
   await expect(dialog.getByText("Codex", { exact: true })).toBeVisible();
   await expect(dialog.getByText("mcp agent", { exact: true })).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "Verification" })).toBeVisible();
@@ -431,7 +494,7 @@ test("places a prominent copyable issue ID above the work title", async ({ page 
     });
   });
   await page.locator('[data-work-id="work-done"]').click();
-  const dialog = page.getByRole("dialog", { name: "Complete the agent golden journey" });
+  const dialog = workDetail(page, "Complete the agent golden journey");
   const identifier = dialog.getByRole("button", { name: "Copy issue ID DONGO-6" });
   const title = dialog.getByRole("heading", { name: "Complete the agent golden journey" });
 
@@ -455,8 +518,11 @@ test("places a prominent copyable issue ID above the work title", async ({ page 
 });
 
 test("traps keyboard focus inside work detail", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 720 });
   await page.locator('[data-work-id="work-ready-a"]').click();
-  const dialog = page.getByRole("dialog", { name: "Verify fixture search" });
+  const dialog = workDetail(page, "Verify fixture search");
+  await expect(dialog).toHaveAttribute("role", "dialog");
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
   const close = dialog.getByRole("button", { name: /close|back/i });
   const attach = dialog.getByRole("button", { name: "+ Attach" });
   await expect(close).toBeFocused();

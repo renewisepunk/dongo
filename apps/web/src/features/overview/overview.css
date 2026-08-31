@@ -1673,6 +1673,179 @@
 
 .toast__check { color: var(--green); font-family: var(--mono); }
 
+@media (min-width: 1100px) {
+  .app-page[data-detail-open="true"] {
+    display: grid;
+    grid-template-columns: clamp(304px, 26vw, 384px) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .app-page[data-detail-open="true"] .app-header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .app-page[data-detail-open="true"] .overview-scroll {
+    min-width: 0;
+    min-height: 0;
+    grid-column: 1;
+    grid-row: 2;
+    border-right: 1px solid var(--line);
+    background: var(--surface-0);
+    padding: 0 0 32px;
+  }
+
+  .app-page[data-detail-open="true"] .overview-content {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .app-page[data-detail-open="true"] .composer,
+  .app-page[data-detail-open="true"] .empty-state {
+    display: none;
+  }
+
+  .app-page[data-detail-open="true"] .work-section,
+  .app-page[data-detail-open="true"] .work-section--attention {
+    gap: 0;
+    border-bottom: 1px solid var(--line);
+    margin-top: 0;
+  }
+
+  .app-page[data-detail-open="true"] .section-heading {
+    min-height: 42px;
+    padding: 12px 16px 9px;
+  }
+
+  .app-page[data-detail-open="true"] .section-heading__aside {
+    display: none;
+  }
+
+  .app-page[data-detail-open="true"] .work-row {
+    min-height: 54px;
+    gap: 3px;
+    justify-content: center;
+    border: 0;
+    border-top: 1px solid var(--line-soft);
+    background: transparent;
+    padding: 10px 16px;
+  }
+
+  .app-page[data-detail-open="true"] .work-row:hover,
+  .app-page[data-detail-open="true"] .work-row[aria-current="page"] {
+    border-color: var(--line-soft);
+    background: var(--surface-2);
+  }
+
+  .app-page[data-detail-open="true"] .work-row[aria-current="page"],
+  .app-page[data-detail-open="true"] .ready-row:has(.ready-row__open[aria-current="page"]) {
+    box-shadow: inset 2px 0 0 var(--amber);
+  }
+
+  .app-page[data-detail-open="true"] .work-row--attention {
+    border-color: oklch(0.84 0.19 78 / 0.32);
+    background: color-mix(in oklch, var(--surface-attention) 68%, transparent);
+    animation: none;
+  }
+
+  .app-page[data-detail-open="true"] .work-row--done {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+  }
+
+  .app-page[data-detail-open="true"] .work-row__title {
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-page[data-detail-open="true"] .work-row__head {
+    min-width: 0;
+  }
+
+  .app-page[data-detail-open="true"] .work-row__summary,
+  .app-page[data-detail-open="true"] .work-row__latest,
+  .app-page[data-detail-open="true"] .work-row__meta {
+    display: none;
+  }
+
+  .app-page[data-detail-open="true"] .work-row__identifier {
+    flex: none;
+    font-size: 10px;
+  }
+
+  .app-page[data-detail-open="true"] .ready-row {
+    min-height: 54px;
+    border: 0;
+    border-top: 1px solid var(--line-soft);
+    background: transparent;
+  }
+
+  .app-page[data-detail-open="true"] .ready-row:hover {
+    border-color: var(--line-soft);
+    background: var(--surface-2);
+  }
+
+  .app-page[data-detail-open="true"] .reorder-controls {
+    width: 32px;
+  }
+
+  .app-page[data-detail-open="true"] .ready-row__open {
+    min-width: 0;
+    min-height: 52px;
+    gap: 8px;
+    padding: 9px 12px;
+    text-decoration: none;
+  }
+
+  .app-page[data-detail-open="true"] .ready-row__position {
+    width: 18px;
+    font-size: 10px;
+  }
+
+  .app-page[data-detail-open="true"] .detail {
+    position: static;
+    min-width: 0;
+    width: auto;
+    height: 100%;
+    grid-column: 2;
+    grid-row: 2;
+    border-left: 0;
+    background: var(--surface-1);
+    box-shadow: none;
+    animation: none;
+  }
+
+  .app-page[data-detail-open="true"] .detail__head {
+    min-height: 50px;
+    padding: 8px clamp(28px, 4vw, 64px);
+  }
+
+  .app-page[data-detail-open="true"] .detail__scroll {
+    width: 100%;
+    max-width: 960px;
+    align-self: center;
+    gap: 30px;
+    padding: clamp(34px, 5vh, 58px) clamp(28px, 5vw, 78px) 72px;
+  }
+
+  .app-page[data-detail-open="true"] .detail__title {
+    max-width: 24ch;
+    font-size: clamp(28px, 2.5vw, 38px);
+    letter-spacing: -0.025em;
+    line-height: 1.12;
+  }
+
+  .app-page[data-detail-open="true"] .detail-section__body,
+  .app-page[data-detail-open="true"] .detail-card {
+    font-size: 17px;
+    line-height: 1.62;
+  }
+}
+
 @media (max-width: 700px) {
   .app-header {
     gap: 10px;

@@ -216,6 +216,7 @@ export function Overview(props: OverviewProps) {
   const [detailInitialFocus, setDetailInitialFocus] = createSignal<DetailInitialFocus>("close");
   const [draggedReadyId, setDraggedReadyId] = createSignal<string>();
   const [fileDropActive, setFileDropActive] = createSignal(false);
+  const [wideDetailLayout, setWideDetailLayout] = createSignal(false);
   let connection: OverviewConnection | undefined;
   let unsubscribeOverview: (() => void) | undefined;
   let unsubscribeWork: (() => void) | undefined;
@@ -588,6 +589,41 @@ export function Overview(props: OverviewProps) {
         closeDetail();
       },
     );
+  };
+
+  const overviewPath = () =>
+    `/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}`;
+  const workDetailHref = (id: string) =>
+    `${overviewPath()}?work=${encodeURIComponent(id)}`;
+  const intakeDetailHref = (id: string) =>
+    `${overviewPath()}?intake=${encodeURIComponent(id)}`;
+  const handleWorkLink = (
+    event: MouseEvent & { currentTarget: HTMLAnchorElement },
+    id: string,
+  ) => {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) return;
+    event.preventDefault();
+    openWork(id, true, event.currentTarget);
+  };
+  const handleIntakeLink = (
+    event: MouseEvent & { currentTarget: HTMLAnchorElement },
+    id: string,
+  ) => {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) return;
+    event.preventDefault();
+    openIntake(id, true, event.currentTarget);
   };
 
   createEffect(() => {
@@ -1030,6 +1066,10 @@ export function Overview(props: OverviewProps) {
   };
 
   onMount(() => {
+    const wideDetailMedia = window.matchMedia("(min-width: 1100px)");
+    const updateWideDetailLayout = () => setWideDetailLayout(wideDetailMedia.matches);
+    updateWideDetailLayout();
+    wideDetailMedia.addEventListener("change", updateWideDetailLayout);
     const previousScrollRestoration = window.history.scrollRestoration;
     window.history.scrollRestoration = "manual";
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1076,8 +1116,7 @@ export function Overview(props: OverviewProps) {
         projectMenuOpen() ||
         profileMenuOpen() ||
         searchOpen() ||
-        selectedWorkId() ||
-        selectedIntakeId() ||
+        ((selectedWorkId() || selectedIntakeId()) && !wideDetailLayout()) ||
         loading() ||
         Boolean(loadError()) ||
         isTextEntryTarget(event.target) ||
@@ -1236,6 +1275,7 @@ export function Overview(props: OverviewProps) {
       }
     })();
     onCleanup(() => {
+      wideDetailMedia.removeEventListener("change", updateWideDetailLayout);
       window.history.scrollRestoration = previousScrollRestoration;
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("pointerdown", onPointerDown);
@@ -1272,7 +1312,11 @@ export function Overview(props: OverviewProps) {
   });
 
   return (
-    <main class="app-page">
+    <main
+      class="app-page"
+      data-detail-open={Boolean(selectedWorkId() || selectedIntakeId())}
+      data-wide-detail={wideDetailLayout()}
+    >
       <Show when={fileDropActive()}>
         <div class="file-drop-zone" role="status" aria-live="polite">
           <div class="file-drop-zone__message">
@@ -1594,20 +1638,22 @@ export function Overview(props: OverviewProps) {
                 <span>needs you</span><span class="section-heading__count">{needs().length}</span>
               </div>
               <For each={needs()}>{(item) => (
-                <button
+                <a
                   class="work-row work-row--attention"
+                  href={workDetailHref(item.id)}
                   data-work-id={item.id}
                   data-nav-item
                   data-nav-kind="work"
                   data-nav-id={item.id}
                   data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
-                  type="button"
+                  aria-current={selectedWorkId() === item.id ? "page" : undefined}
                   aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
                   onFocus={() => setKeyboardSelection(`work:${item.id}`)}
-                  onClick={() => openWork(item.id)}
+                  onClick={(event) => handleWorkLink(event, item.id)}
                 >
                   <span class="work-row__head">
                     <span class="work-row__title">{item.title}</span>
+                    <span class="work-row__identifier mono">{item.identifier}</span>
                     <Show when={item.unseen}><span class="unseen-dot" aria-label="Unseen" /></Show>
                   </span>
                   <span class="work-row__summary">{item.agent} needs a {item.attention?.kind.toLowerCase()}</span>
@@ -1616,7 +1662,7 @@ export function Overview(props: OverviewProps) {
                     <Show when={item.attention?.important}><span class="attention-important">important</span></Show>
                     <span>{item.agent}</span><span>·</span><span>{item.age}</span>
                   </span>
-                </button>
+                </a>
               )}</For>
             </section>
           </Show>
@@ -1627,17 +1673,18 @@ export function Overview(props: OverviewProps) {
                 <span>working</span><span class="section-heading__count">{working().length}</span>
               </div>
               <For each={working()}>{(item) => (
-                <button
+                <a
                   class="work-row"
+                  href={workDetailHref(item.id)}
                   data-work-id={item.id}
                   data-nav-item
                   data-nav-kind="work"
                   data-nav-id={item.id}
                   data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
-                  type="button"
+                  aria-current={selectedWorkId() === item.id ? "page" : undefined}
                   aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
                   onFocus={() => setKeyboardSelection(`work:${item.id}`)}
-                  onClick={() => openWork(item.id)}
+                  onClick={(event) => handleWorkLink(event, item.id)}
                 >
                   <span class="work-row__head">
                     <span class="work-row__title">{item.title}</span>
@@ -1647,7 +1694,7 @@ export function Overview(props: OverviewProps) {
                     <span class="activity-dot" aria-hidden="true" /><span>{item.agent}</span><span>·</span><span>{item.elapsed}</span>
                   </span>
                   <Show when={item.latest}><span class="work-row__latest">{item.latest}</span></Show>
-                </button>
+                </a>
               )}</For>
             </section>
           </Show>
@@ -1683,23 +1730,24 @@ export function Overview(props: OverviewProps) {
                     <button class="reorder-button" type="button" disabled={index() === 0} aria-label={`Move ${item.title} up`} onClick={() => moveReady(item.id, -1)}>▲</button>
                     <button class="reorder-button" type="button" disabled={index() === ready().length - 1} aria-label={`Move ${item.title} down`} onClick={() => moveReady(item.id, 1)}>▼</button>
                   </div>
-                  <button
+                  <a
                     class="ready-row__open"
+                    href={workDetailHref(item.id)}
                     data-work-id={item.id}
                     data-nav-item
                     data-nav-kind="work"
                     data-nav-id={item.id}
                     data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
                     draggable="true"
-                    type="button"
+                    aria-current={selectedWorkId() === item.id ? "page" : undefined}
                     aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
                     onFocus={() => setKeyboardSelection(`work:${item.id}`)}
-                    onClick={() => openWork(item.id)}
+                    onClick={(event) => handleWorkLink(event, item.id)}
                   >
                     <span class="ready-row__position">{String(index() + 1).padStart(2, "0")}</span>
                     <span class="work-row__title">{item.title}</span>
                     <span class="work-row__identifier mono">{item.identifier}</span>
-                  </button>
+                  </a>
                 </div>
               )}</For>
             </section>
@@ -1711,16 +1759,17 @@ export function Overview(props: OverviewProps) {
                 <span>inbox</span><span class="section-heading__count">{visibleIntakes().length}</span>
               </div>
               <For each={visibleIntakes()}>{(intake) => (
-                <button
+                <a
                   class="work-row"
+                  href={intakeDetailHref(intake.id)}
                   data-nav-item
                   data-nav-kind="intake"
                   data-nav-id={intake.id}
                   data-keyboard-selected={keyboardSelection() === `intake:${intake.id}`}
-                  type="button"
+                  aria-current={selectedIntakeId() === intake.id ? "page" : undefined}
                   aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space"
                   onFocus={() => setKeyboardSelection(`intake:${intake.id}`)}
-                  onClick={() => openIntake(intake.id)}
+                  onClick={(event) => handleIntakeLink(event, intake.id)}
                 >
                   <span class="work-row__summary">{intake.text}</span>
                   <span class="work-row__meta">
@@ -1735,7 +1784,7 @@ export function Overview(props: OverviewProps) {
                     </span>
                     <span>·</span><span>{intake.attachmentCount ? `${intake.attachmentCount} attachment${intake.attachmentCount === 1 ? "" : "s"}` : "no attachment"}</span><span>·</span><span>{intake.age}</span>
                   </span>
-                </button>
+                </a>
               )}</For>
             </section>
           </Show>
@@ -1746,22 +1795,23 @@ export function Overview(props: OverviewProps) {
                 <span>recently done</span><span class="section-heading__aside"><button class="view-all" type="button" onClick={() => navigate(`/app/${props.orgSlug}/${props.projectSlug}/done`)}>view all →</button></span>
               </div>
               <For each={done()}>{(item) => (
-                <button
+                <a
                   class="work-row work-row--done"
+                  href={workDetailHref(item.id)}
                   data-work-id={item.id}
                   data-nav-item
                   data-nav-kind="work"
                   data-nav-id={item.id}
                   data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
-                  type="button"
+                  aria-current={selectedWorkId() === item.id ? "page" : undefined}
                   aria-keyshortcuts="J ArrowDown K ArrowUp Enter Space R W D E"
                   onFocus={() => setKeyboardSelection(`work:${item.id}`)}
-                  onClick={() => openWork(item.id)}
+                  onClick={(event) => handleWorkLink(event, item.id)}
                 >
                   <span style={{ color: "var(--green)" }} class="mono">✓</span>
                   <span class="work-row__title work-row__title--done">{item.title}</span>
                   <span class="work-row__identifier mono">{item.completedAt}</span>
-                </button>
+                </a>
               )}</For>
             </section>
           </Show>
@@ -1771,6 +1821,7 @@ export function Overview(props: OverviewProps) {
       <Show when={selectedWork()}>{(item) => (
         <WorkDetail
           item={item()}
+          wide={wideDetailLayout()}
           peek={detailPeek()}
           initialFocus={detailInitialFocus()}
           mobileCloseLabel="←  back"
@@ -1822,7 +1873,7 @@ export function Overview(props: OverviewProps) {
       )}</Show>
 
       <Show when={selectedIntake()}>{(intake) => (
-        <IntakeDetail intake={intake()} work={work()} onClose={closeDetail} onOpenWork={openWork} onDownload={downloadAttachment} />
+        <IntakeDetail wide={wideDetailLayout()} intake={intake()} work={work()} onClose={closeDetail} onOpenWork={openWork} onDownload={downloadAttachment} />
       )}</Show>
 
       <Show when={searchOpen()}>
@@ -1922,6 +1973,7 @@ export function Overview(props: OverviewProps) {
 
 type WorkDetailProps = {
   item: WorkItem;
+  wide: boolean;
   peek: boolean;
   initialFocus: DetailInitialFocus;
   mobileCloseLabel: string;
@@ -1957,7 +2009,7 @@ function WorkDetail(props: WorkDetailProps) {
       });
       return;
     }
-    closeButton?.focus();
+    if (!props.wide) closeButton?.focus();
   });
 
   const stateLine = () => {
@@ -2009,7 +2061,17 @@ function WorkDetail(props: WorkDetailProps) {
   };
 
   return (
-    <aside ref={detailPanel} class="detail" data-peek={props.peek} role="dialog" aria-modal="true" aria-labelledby="work-detail-title" onKeyDown={trapModalFocus}>
+    <article
+      ref={detailPanel}
+      class="detail"
+      data-peek={props.peek}
+      role={props.wide ? "region" : "dialog"}
+      aria-modal={props.wide ? undefined : "true"}
+      aria-labelledby="work-detail-title"
+      onKeyDown={(event) => {
+        if (!props.wide) trapModalFocus(event);
+      }}
+    >
       <div class="detail__head">
         <button ref={closeButton} class="detail__close" type="button" onClick={props.onClose}>
           <span class="detail-close-desktop">✕&nbsp; close</span><span class="detail-close-mobile">{props.mobileCloseLabel}</span>
@@ -2177,11 +2239,12 @@ function WorkDetail(props: WorkDetailProps) {
           announce={props.announce}
         />
       </div>
-    </aside>
+    </article>
   );
 }
 
 type IntakeDetailProps = {
+  wide: boolean;
   intake: Intake;
   work: WorkItem[];
   onClose: () => void;
@@ -2193,10 +2256,20 @@ function IntakeDetail(props: IntakeDetailProps) {
   const linked = () => props.work.filter((item) => props.intake.linkedWorkIds?.includes(item.id));
   let closeButton: HTMLButtonElement | undefined;
 
-  onMount(() => closeButton?.focus());
+  onMount(() => {
+    if (!props.wide) closeButton?.focus();
+  });
 
   return (
-    <aside class="detail" role="dialog" aria-modal="true" aria-labelledby="intake-detail-title" onKeyDown={trapModalFocus}>
+    <article
+      class="detail"
+      role={props.wide ? "region" : "dialog"}
+      aria-modal={props.wide ? undefined : "true"}
+      aria-labelledby="intake-detail-title"
+      onKeyDown={(event) => {
+        if (!props.wide) trapModalFocus(event);
+      }}
+    >
       <div class="detail__head">
         <button ref={closeButton} class="detail__close" type="button" onClick={props.onClose}>
           <span class="detail-close-desktop">✕&nbsp; close</span><span class="detail-close-mobile">←&nbsp; back</span>
@@ -2232,7 +2305,7 @@ function IntakeDetail(props: IntakeDetailProps) {
           </section>
         </Show>
       </div>
-    </aside>
+    </article>
   );
 }
 
