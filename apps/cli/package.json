@@ -23,6 +23,6 @@
     "build": "node scripts/build.mjs",
     "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --test test/*.test.ts"
+    "test": "npm run build && node --test test/*.test.ts"
   }
 }

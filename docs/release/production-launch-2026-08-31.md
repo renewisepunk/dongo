@@ -25,7 +25,7 @@ The previous landing Worker versions recorded before cutover were `f956c68f-9fdd
 ## Release gates
 
 - Complete source checks and tests passed after the final CLI branding change.
-- The exact CLI archive gate passed with archive SHA-256 `645dec2dec439d1ca342333da656678b55fa401d6af35fe042def644619abe0b` and canonical payload SHA-256 `8027c6af5d178d583737f56ed3729cd04c822182b7ab9e2d2394f0757912f135`.
+- The exact CLI archive gate passed with archive SHA-256 `09ca4bec55ea1eb5bd1224bf5c2464f6853cd592ce5c590e518ba398ece95061` and canonical payload SHA-256 `9335a9272c996a3fadcb0f105d47f1640333fe010e05ba601dc8ae4185315105`.
 - The current web candidate previously passed 249/249 Playwright cases across Chromium, Firefox, and WebKit.
 - Production smoke passed 18/18 with project-scoped MCP discovery and authentication enforcement.
 - Live development/production isolation passed 10/10 after cutover.
