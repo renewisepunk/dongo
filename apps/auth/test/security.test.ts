@@ -22,9 +22,10 @@ import {
   REFRESH_TOKEN_PREFIX,
   projectRefForGrant,
   providerGrantId,
+  resolveOAuthGrant,
   type PinnedGrantContext,
 } from "../src/grant-binding";
-import { renderOtpEmail } from "../src/otp-email";
+import { authFromEmail, renderOtpEmail } from "../src/otp-email";
 import { createAuthorizationServer, oauthClientLabel } from "../src/auth";
 import type { AuthWorkerEnv } from "../src/env";
 
@@ -38,6 +39,7 @@ describe("authorization boundary security", () => {
     const env = {
       AUTH_DB: database,
       EMAIL: {},
+      AUTH_FROM_EMAIL: "auth@dev.dongo.so",
       PUBLIC_ORIGIN: "https://dev.dongo.so",
       AUTH_ISSUER: "https://dev.dongo.so/api/auth",
       HUMAN_ASSERTION_ISSUER: "https://convex.example",
@@ -83,6 +85,21 @@ describe("authorization boundary security", () => {
       .toBe("/device?user_code=ABCD");
     expect(safeReturnTo("https://attacker.example/x", "https://dev.dongo.so"))
       .toBe("/app");
+  });
+
+  it("pins the OTP sender to the configured public origin", () => {
+    expect(authFromEmail({
+      AUTH_FROM_EMAIL: "auth@dev.dongo.so",
+      PUBLIC_ORIGIN: "https://dev.dongo.so",
+    })).toBe("auth@dev.dongo.so");
+    expect(authFromEmail({
+      AUTH_FROM_EMAIL: "auth@dongo.so",
+      PUBLIC_ORIGIN: "https://dongo.so",
+    })).toBe("auth@dongo.so");
+    expect(() => authFromEmail({
+      AUTH_FROM_EMAIL: "auth@dev.dongo.so",
+      PUBLIC_ORIGIN: "https://dongo.so",
+    })).toThrow(/must match PUBLIC_ORIGIN/);
   });
 
   it("allowlists metadata hosts without suffix confusion or IP literals", () => {
@@ -430,5 +447,60 @@ describe("authorization boundary security", () => {
     const malformed = await handlers.decrypt("[object Promise]");
     expect(malformed.token).not.toBe("[object Promise]");
     expect(activeGrant).toBeUndefined();
+  });
+
+  it("resolves an opaque token against its exact OAuth binding", async () => {
+    const grant: PinnedGrantContext = {
+      providerIssuer: "https://dev.dongo.so/api/auth",
+      providerGrantId: "dongo-oauth:deterministic",
+      subject: "oauth-user-1",
+      clientId: "https://chatgpt.com/oauth/codex/client.json",
+      label: "Codex",
+      resource: "https://dev.dongo.so/p/project-1/mcp",
+      scopes: ["dongo:work:read", "offline_access"],
+      kind: "mcp",
+      profileId: "profile-1",
+      projectRef: "project-1",
+      binding: {
+        installationId: "installation-1",
+        oauthBindingId: "binding-1",
+        installationActorId: "actor-1",
+        organizationId: "organization-1",
+        projectId: "project-id-1",
+        projectRef: "project-1",
+      },
+    };
+    const gateway = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(new TextDecoder().decode(init?.body as Uint8Array)) as {
+        input: Record<string, unknown>;
+      };
+      expect(body.input).toMatchObject({
+        oauthBindingId: grant.binding.oauthBindingId,
+        providerGrantId: grant.providerGrantId,
+        clientId: grant.clientId,
+        resource: grant.resource,
+      });
+      return Response.json({
+        ok: true,
+        requestId: JSON.parse(new TextDecoder().decode(init?.body as Uint8Array)).requestId,
+        apiVersion: "v1",
+        data: {
+          installationId: grant.binding.installationId,
+          oauthBindingId: grant.binding.oauthBindingId,
+          actorId: grant.binding.installationActorId,
+          organizationId: grant.binding.organizationId,
+          projectId: grant.binding.projectId,
+          projectRef: grant.binding.projectRef,
+        },
+      });
+    });
+    vi.stubGlobal("fetch", gateway);
+    const env = {
+      CONVEX_INTERNAL_SITE_URL: "https://convex.example",
+      DONGO_INTERNAL_GATEWAY_SECRET: "g".repeat(48),
+    } as unknown as AuthWorkerEnv;
+
+    await expect(resolveOAuthGrant(env, grant)).resolves.toEqual(grant.binding);
+    expect(gateway).toHaveBeenCalledOnce();
   });
 });

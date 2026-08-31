@@ -1,6 +1,7 @@
 export interface AuthWorkerEnv {
   AUTH_DB: D1Database;
   EMAIL: SendEmail;
+  AUTH_FROM_EMAIL: string;
   PUBLIC_ORIGIN: string;
   AUTH_ISSUER: string;
   HUMAN_ASSERTION_ISSUER: string;
