@@ -34,7 +34,7 @@
   "env": {
     "production": {
       "name": "dongo-web-production",
-      "workers_dev": true,
+      "workers_dev": false,
       "preview_urls": true,
       "routes": [
         {

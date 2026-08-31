@@ -36,6 +36,7 @@
   "env": {
     "production": {
       "name": "dongo-mcp-production",
+      "workers_dev": false,
       "routes": [
         { "pattern": "dongo.so/api/mcp/*", "zone_name": "dongo.so" },
         { "pattern": "dongo.so/p/*", "zone_name": "dongo.so" },

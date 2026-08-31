@@ -35,6 +35,7 @@
   "env": {
     "production": {
       "name": "dongo-notifications-production",
+      "workers_dev": false,
       "routes": [
         { "pattern": "dongo.so/api/notifications/*", "zone_name": "dongo.so" }
       ],

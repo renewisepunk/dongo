@@ -17,7 +17,7 @@ const resendApiKey = process.env.DONGO_RESEND_API_KEY;
 
 if (!apply) {
   console.log("Production preparation is inert without --apply.");
-  console.log("It creates inactive Worker versions with isolated secrets, then configures the empty production Convex deployment.");
+  console.log("It creates route-free production Workers with isolated secrets, then configures the empty production Convex deployment.");
   process.exit(0);
 }
 if (!resendApiKey || !/^re_[A-Za-z0-9_-]{13,}$/u.test(resendApiKey)) {
@@ -73,20 +73,20 @@ function writeSecretFile(name, contents) {
 }
 
 function uploadVersion(label, config, secrets) {
-  console.log(`Preparing inactive ${label} version…`);
+  console.log(`Preparing route-free ${label} Worker…`);
   const secretFile = writeSecretFile(`${label}.json`, secrets);
   run("npx", [
     "wrangler",
-    "versions",
-    "upload",
+    "deploy",
     "--config",
     config,
     "--env",
     "production",
+    "--routes=[]",
     "--secrets-file",
     secretFile,
     "--message",
-    "dongo production bootstrap; not deployed",
+    "dongo production bootstrap; no triggers",
   ]);
 }
 
@@ -138,7 +138,7 @@ try {
   );
   chmodSync(envPath, 0o600);
   run("npx", ["convex", "env", "set", "--prod", "--from-file", envPath]);
-  console.log("Production is prepared with inactive Worker versions and an isolated Convex environment.");
+  console.log("Production is prepared with route-free Workers and an isolated Convex environment.");
   console.log("No production routes or traffic were activated by this command.");
 } finally {
   for (const name of ["auth.json", "api.json", "mcp.json", "files.json", "notifications.json", "convex.env"]) {

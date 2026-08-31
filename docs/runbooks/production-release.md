@@ -12,7 +12,7 @@ Production is `https://dongo.so`, Convex `brainy-camel-172`, D1 `dongo-auth`, an
 
 ## One-time preparation
 
-The preparation command creates cryptographically independent production secrets, uploads inactive Worker versions so secrets can be attached without routing traffic, and configures the previously empty production Convex environment. It refuses to run when production Convex variables already exist.
+The preparation command creates cryptographically independent production secrets, bootstraps each new Worker with no routes and `workers_dev` disabled, and configures the previously empty production Convex environment. It refuses to run when production Convex variables already exist.
 
 The correct Wisepunk Resend credential is supplied only through the process environment:
 
@@ -21,7 +21,7 @@ DONGO_RESEND_API_KEY="$(/Users/Workspace/CLI-TOOLS/scripts/get-secret.sh RESEND_
   npm run prepare:production -- --apply
 ```
 
-The temporary secret files are owner-only, overwritten, and removed before the command exits. The prepared Worker versions receive no traffic. Required secret relationships are:
+The temporary secret files are owner-only, overwritten, and removed before the command exits. The prepared Workers have no public trigger and receive no traffic. Required secret relationships are:
 
 - one internal gateway secret shared by Convex, auth, API, MCP, and files;
 - one human-assertion secret shared by auth and Convex;

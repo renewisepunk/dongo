@@ -37,6 +37,7 @@
   "env": {
     "production": {
       "name": "dongo-auth-production",
+      "workers_dev": false,
       "routes": [
         { "pattern": "dongo.so/api/auth/*", "zone_name": "dongo.so" },
         { "pattern": "dongo.so/.well-known/oauth-authorization-server*", "zone_name": "dongo.so" },

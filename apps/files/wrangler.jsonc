@@ -31,6 +31,7 @@
   "env": {
     "production": {
       "name": "dongo-files-production",
+      "workers_dev": false,
       "routes": [
         { "pattern": "dongo.so/api/files/*", "zone_name": "dongo.so" }
       ],
