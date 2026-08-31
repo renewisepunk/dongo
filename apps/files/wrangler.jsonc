@@ -28,6 +28,41 @@
       }
     }
   ],
+  "env": {
+    "production": {
+      "name": "dongo-files-production",
+      "routes": [
+        { "pattern": "dongo.so/api/files/*", "zone_name": "dongo.so" }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ATTACHMENTS",
+          "bucket_name": "dongo-attachments"
+        }
+      ],
+      "vars": {
+        "PUBLIC_ORIGIN": "https://dongo.so",
+        "ALLOWED_BROWSER_ORIGIN": "https://dongo.so",
+        "CONVEX_SITE_URL": "https://brainy-camel-172.convex.site"
+      },
+      "secrets": {
+        "required": [
+          "DONGO_ATTACHMENT_URL_SIGNING_SECRET",
+          "DONGO_INTERNAL_GATEWAY_SECRET"
+        ]
+      },
+      "ratelimits": [
+        {
+          "name": "FILES_RATE_LIMITER",
+          "namespace_id": "2003",
+          "simple": {
+            "limit": 180,
+            "period": 60
+          }
+        }
+      ]
+    }
+  },
   "observability": {
     "enabled": true,
     "logs": {

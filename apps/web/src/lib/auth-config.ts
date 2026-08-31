@@ -1,7 +1,6 @@
-const DEVELOPMENT_CONVEX_SITE_URL = "https://wandering-camel-662.convex.site";
-
-function configuredUrl(value: string | undefined, fallback: string): string {
-  const candidate = value?.trim() || fallback;
+function configuredUrl(value: string | undefined, variable: string): string {
+  const candidate = value?.trim();
+  if (!candidate) throw new Error(`${variable} is required.`);
   const url = new URL(candidate);
   if (url.protocol !== "https:" && !(url.protocol === "http:" && url.hostname === "localhost")) {
     throw new Error("dongo authentication URLs must use HTTPS outside localhost.");
@@ -11,20 +10,23 @@ function configuredUrl(value: string | undefined, fallback: string): string {
 
 export const convexSiteUrl = configuredUrl(
   import.meta.env.VITE_CONVEX_SITE_URL,
-  DEVELOPMENT_CONVEX_SITE_URL,
+  "VITE_CONVEX_SITE_URL",
 );
 
 export const convexDeploymentUrl = configuredUrl(
   import.meta.env.VITE_CONVEX_URL,
-  convexSiteUrl.replace(/\.convex\.site$/, ".convex.cloud"),
+  "VITE_CONVEX_URL",
 );
 
-const publicEnvironment = import.meta.env.VITE_DONGO_ENVIRONMENT || "development";
+const publicEnvironment = import.meta.env.VITE_DONGO_ENVIRONMENT;
+if (publicEnvironment !== "development" && publicEnvironment !== "production") {
+  throw new Error("VITE_DONGO_ENVIRONMENT must be development or production.");
+}
 const googleCapabilityFlag = import.meta.env.VITE_DONGO_GOOGLE_AUTH_CONFIGURED;
 
 export const dongoPublicOrigin = configuredUrl(
   import.meta.env.VITE_DONGO_PUBLIC_ORIGIN,
-  "https://dev.dongo.so",
+  "VITE_DONGO_PUBLIC_ORIGIN",
 );
 
 export const googleAuthConfigured = googleCapabilityFlag === "true" ||

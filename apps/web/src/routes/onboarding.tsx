@@ -6,6 +6,7 @@ import { SignOutButton } from "../components/SignOutButton";
 import { humanSession } from "../lib/auth-client";
 import { AuthorizationFlowError, createFirstProject } from "../lib/authorization-client";
 import { personalOrganizationSlug, safeReturnTo } from "../lib/auth-flow";
+import { dongoPublicOrigin } from "../lib/auth-config";
 import { slugify } from "../lib/slug";
 
 type ExecutionMode = "manual" | "autonomous";
@@ -113,7 +114,7 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
             onInput={(event) => { setName(event.currentTarget.value); setError(""); }}
             placeholder="Checkout service"
           />
-          <div class="slug-preview">dev.dongo.so/{organizationSlug()}/{slug()}</div>
+          <div class="slug-preview">{new URL(dongoPublicOrigin).host}/{organizationSlug()}/{slug()}</div>
         </div>
 
         <div class="field-group">

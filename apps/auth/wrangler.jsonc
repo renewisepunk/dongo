@@ -34,6 +34,50 @@
     "CIMD_ALLOWED_HOST_SUFFIXES": "openai.com,chatgpt.com,anthropic.com,claude.ai",
     "ENVIRONMENT": "development"
   },
+  "env": {
+    "production": {
+      "name": "dongo-auth-production",
+      "routes": [
+        { "pattern": "dongo.so/api/auth/*", "zone_name": "dongo.so" },
+        { "pattern": "dongo.so/.well-known/oauth-authorization-server*", "zone_name": "dongo.so" },
+        { "pattern": "dongo.so/.well-known/openid-configuration*", "zone_name": "dongo.so" }
+      ],
+      "d1_databases": [
+        {
+          "binding": "AUTH_DB",
+          "database_name": "dongo-auth",
+          "database_id": "c9196a02-287c-4095-ac1f-d243aa26e93c",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["auth@dongo.so"]
+        }
+      ],
+      "vars": {
+        "AUTH_FROM_EMAIL": "auth@dongo.so",
+        "PUBLIC_ORIGIN": "https://dongo.so",
+        "AUTH_ISSUER": "https://dongo.so/api/auth",
+        "HUMAN_ASSERTION_ISSUER": "https://brainy-camel-172.convex.site",
+        "CONVEX_INTERNAL_SITE_URL": "https://brainy-camel-172.convex.site",
+        "BETTER_AUTH_RESOURCE_CLIENT_ID": "dongo-mcp-resource-production",
+        "DONGO_API_RESOURCE_CLIENT_ID": "dongo-api-resource-production",
+        "CIMD_ALLOWED_HOST_SUFFIXES": "openai.com,chatgpt.com,anthropic.com,claude.ai",
+        "ENVIRONMENT": "production"
+      },
+      "secrets": {
+        "required": [
+          "BETTER_AUTH_SECRET",
+          "HUMAN_ASSERTION_SECRET",
+          "DONGO_INTERNAL_GATEWAY_SECRET",
+          "BETTER_AUTH_RESOURCE_CLIENT_SECRET",
+          "DONGO_API_RESOURCE_CLIENT_SECRET"
+        ]
+      }
+    }
+  },
   "observability": {
     "enabled": true,
     "logs": {

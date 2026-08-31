@@ -1,4 +1,5 @@
 import { A } from "@solidjs/router";
+import { dongoPublicOrigin } from "../../lib/auth-config";
 import { GuideCode, GuideSection, PublicGuideShell } from "./PublicGuideShell";
 
 const INSTALL_COMMANDS = `git clone https://github.com/renewisepunk/dongo.git
@@ -9,7 +10,7 @@ npm install --global ./dongo-cli-0.1.0.tgz
 dongo --version`;
 
 const CONNECT_COMMAND = `cd /path/to/your/repository
-dongo connect --environment development --origin https://dev.dongo.so`;
+dongo connect`;
 
 const VERIFY_COMMANDS = `dongo auth status --json
 dongo doctor --json
@@ -30,7 +31,7 @@ export function GetStartedGuide() {
         </div>
         <div class="agent-brief" aria-label="Agent setup brief">
           <div class="agent-brief__top"><span>setup brief</span><span>01 / agent</span></div>
-          <div class="agent-brief__prompt"><span aria-hidden="true">›</span> Install dongo in this repository, connect it to development, preview the MCP configuration, and verify each connection.</div>
+          <div class="agent-brief__prompt"><span aria-hidden="true">›</span> Install dongo in this repository, connect it, preview the MCP configuration, and verify each connection.</div>
           <div class="agent-brief__status">
             <span><i data-state="done" /> CLI installed</span>
             <span><i data-state="active" /> browser approval</span>
@@ -46,8 +47,8 @@ export function GetStartedGuide() {
       <GuideSection
         index="01"
         id="install"
-        title="Install the development CLI"
-        lede="The current development build is installed from the dongo source checkout. Node.js 20 or newer is required for the packed CLI."
+        title="Install the CLI"
+        lede="The first release is installed from the dongo source checkout. Node.js 20 or newer is required for the packed CLI."
       >
         <GuideCode label="install from source">{INSTALL_COMMANDS}</GuideCode>
         <p class="guide-inline-note"><span aria-hidden="true">↳</span> Run the final <code>dongo</code> commands inside the repository you want the agent to use.</p>
@@ -99,7 +100,7 @@ claude mcp login dongo-<project-ref>`}</code></pre>
             <pre tabindex="0"><code>{`dongo integrate generic
 dongo integrate generic --apply
 
-https://dev.dongo.so/p/<project-ref>/mcp`}</code></pre>
+${dongoPublicOrigin}/p/<project-ref>/mcp`}</code></pre>
           </article>
         </div>
         <p class="guide-inline-note"><span aria-hidden="true">↳</span> Replace <code>&lt;project-ref&gt;</code> with the project reference printed by <code>dongo connect</code>. Each host receives its own independently revocable grant.</p>

@@ -1,8 +1,8 @@
 # dongo operational runbooks
 
-These runbooks cover the development stack at `https://dev.dongo.so` and Convex deployment `wandering-camel-662`. They are diagnosis-first: preserve evidence, avoid copying credentials or user content into tickets, and prefer revocation or rollback over manual database repair.
+These runbooks cover production at `https://dongo.so` / Convex `brainy-camel-172` and development at `https://dev.dongo.so` / Convex `wandering-camel-662`. They are diagnosis-first: preserve evidence, avoid copying credentials or user content into tickets, and prefer revocation or rollback over manual database repair.
 
-The root `wrangler.jsonc` owns the existing production landing Worker on `dongo.so`. Do not run the root deploy command while operating the development product stack. Production promotion requires a separately reviewed production configuration and an immutable artifact already accepted in development or staging.
+Use [production release and rollback](production-release.md) for live changes. Development remains an independently deployable staging environment.
 
 ## First response
 
@@ -32,7 +32,8 @@ The root `wrangler.jsonc` owns the existing production landing Worker on `dongo.
 | CLI device authorization, token refresh, logout, or repository marker | [Agent authentication](agent-auth.md) |
 | MCP discovery, OAuth login, scopes, project binding, or host configuration | [Agent authentication](agent-auth.md) |
 | Expired claims, export conflicts, uploads, attachments, or notifications | [Data delivery](data-delivery.md) |
-| Worker/Convex outage, migration, bad release, or package rollback | [Deployment and rollback](deploy-rollback.md) |
+| Production release, cutover, or live rollback | [Production release and rollback](production-release.md) |
+| Development deployment, Worker/Convex outage, migration, or package rollback | [Development deployment and rollback](deploy-rollback.md) |
 | Failure-spike detection, alert routing, or observability coverage | [Development alerting](alerting.md) |
 
 After recovery, run `npm run verify:no-secrets`, `npm run check`, `npm test`, and `npm run build`; then repeat the exact failed public journey.

@@ -4,6 +4,12 @@ import test from "node:test";
 import { CliCoreError, resolveEnvironment } from "../src/index.ts";
 
 test("fixed and localhost environments resolve one issuer and API audience", () => {
+  const production = resolveEnvironment();
+  assert.equal(production.environment, "production");
+  assert.equal(production.productOrigin, "https://dongo.so");
+  assert.equal(production.issuer, "https://dongo.so/api/auth");
+  assert.equal(production.apiResource, "https://dongo.so/api/agent/v1");
+
   const development = resolveEnvironment({ environment: "development" });
   assert.equal(development.productOrigin, "https://dev.dongo.so");
   assert.equal(development.issuer, "https://dev.dongo.so/api/auth");

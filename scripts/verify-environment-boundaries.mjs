@@ -1,91 +1,110 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 
 const failures = [];
-const expectedWorkerNames = new Map([
-  ["apps/api/wrangler.jsonc", "dongo-api-dev"],
-  ["apps/auth/wrangler.jsonc", "dongo-auth-dev"],
-  ["apps/files/wrangler.jsonc", "dongo-files-dev"],
-  ["apps/mcp/wrangler.jsonc", "dongo-mcp"],
-  ["apps/notifications/wrangler.jsonc", "dongo-notifications-dev"],
-  ["apps/web/wrangler.jsonc", "dongo-web-dev"],
-]);
-const appConfigs = readdirSync("apps", { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => join("apps", entry.name, "wrangler.jsonc"))
-  .filter((path) => existsSync(path))
-  .sort();
+const DEVELOPMENT_HOST = "dev.dongo.so";
+const PRODUCTION_HOST = "dongo.so";
+const DEVELOPMENT_CONVEX = "wandering-camel-662";
+const PRODUCTION_CONVEX = "brainy-camel-172";
 
-for (const path of appConfigs) {
-  const contents = readFileSync(path, "utf8");
-  const workerName = contents.match(/"name"\s*:\s*"([^"]+)"/u)?.[1];
-  if (workerName !== expectedWorkerNames.get(path)) {
-    failures.push(`${path}: development Worker identity changed`);
+const workers = [
+  ["apps/api/wrangler.jsonc", "dongo-api-dev", "dongo-api-production"],
+  ["apps/auth/wrangler.jsonc", "dongo-auth-dev", "dongo-auth-production"],
+  ["apps/files/wrangler.jsonc", "dongo-files-dev", "dongo-files-production"],
+  ["apps/mcp/wrangler.jsonc", "dongo-mcp", "dongo-mcp-production"],
+  ["apps/notifications/wrangler.jsonc", "dongo-notifications-dev", "dongo-notifications-production"],
+  ["apps/web/wrangler.jsonc", "dongo-web-dev", "dongo-web-production"],
+];
+
+function readJson(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    failures.push(`${path}: cannot parse configuration (${error instanceof Error ? error.message : "unknown error"})`);
+    return undefined;
   }
-  for (const match of contents.matchAll(/"pattern"\s*:\s*"([^"]+)"/gu)) {
-    const pattern = match[1];
-    if (pattern !== "dev.dongo.so" && !pattern?.startsWith("dev.dongo.so/")) {
-      failures.push(`${path}: development route targets ${pattern}`);
-    }
-  }
-  if (/"https:\/\/dongo\.so(?:\/|"|$)/u.test(contents)) {
-    failures.push(`${path}: development config contains the production origin`);
-  }
-  if (
-    /"CONVEX_[A-Z_]+"\s*:/u.test(contents) &&
-    !contents.includes("wandering-camel-662")
-  ) {
-    failures.push(`${path}: Convex binding is not the named development deployment`);
-  }
-}
-for (const path of expectedWorkerNames.keys()) {
-  if (!appConfigs.includes(path)) failures.push(`${path}: development Worker config is missing`);
 }
 
-const landingConfig = readFileSync("wrangler.jsonc", "utf8");
-const landingRoutes = [...landingConfig.matchAll(/"pattern"\s*:\s*"([^"]+)"/gu)]
-  .map((match) => match[1])
-  .sort();
-if (!/"name"\s*:\s*"dongo-coming-soon"/u.test(landingConfig)) {
-  failures.push("wrangler.jsonc: production landing Worker identity changed");
-}
-if (JSON.stringify(landingRoutes) !== JSON.stringify(["dongo.so", "www.dongo.so"])) {
-  failures.push("wrangler.jsonc: production landing routes changed");
+function routePatterns(configuration) {
+  return (configuration.routes ?? []).map((route) => route.pattern);
 }
 
-const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
-if (packageJson.scripts?.deploy !== "npm run deploy:landing") {
-  failures.push("package.json: default deploy must remain the landing deploy");
+function validateRoutes(path, label, configuration, host, allowWww = false) {
+  const patterns = routePatterns(configuration);
+  if (patterns.length === 0) failures.push(`${path}: ${label} has no routes`);
+  for (const pattern of patterns) {
+    const valid = pattern === host || pattern.startsWith(`${host}/`) || (allowWww && pattern === `www.${host}`);
+    if (!valid) failures.push(`${path}: ${label} route targets ${pattern}`);
+  }
 }
-if (packageJson.scripts?.["deploy:dev"] !== "node scripts/deploy-dev.mjs") {
+
+for (const [path, developmentName, productionName] of workers) {
+  if (!existsSync(path)) {
+    failures.push(`${path}: Worker config is missing`);
+    continue;
+  }
+  const configuration = readJson(path);
+  if (!configuration) continue;
+  const production = configuration.env?.production;
+  if (configuration.name !== developmentName) failures.push(`${path}: development Worker identity changed`);
+  if (production?.name !== productionName) failures.push(`${path}: production Worker identity is missing or changed`);
+  validateRoutes(path, "development", configuration, DEVELOPMENT_HOST);
+  if (production) validateRoutes(path, "production", production, PRODUCTION_HOST, path === "apps/web/wrangler.jsonc");
+
+  const development = JSON.stringify({ routes: configuration.routes, vars: configuration.vars, services: configuration.services, d1: configuration.d1_databases, r2: configuration.r2_buckets });
+  const live = JSON.stringify(production ?? {});
+  if (development.includes(`https://${PRODUCTION_HOST}`) || development.includes(PRODUCTION_CONVEX)) {
+    failures.push(`${path}: development bindings contain production resources`);
+  }
+  if (live.includes(`https://${DEVELOPMENT_HOST}`) || live.includes(DEVELOPMENT_CONVEX)) {
+    failures.push(`${path}: production bindings contain development resources`);
+  }
+  if (/CONVEX_(?:SITE_URL|DEPLOYMENT)/u.test(development) && !development.includes(DEVELOPMENT_CONVEX)) {
+    failures.push(`${path}: development Convex binding is not ${DEVELOPMENT_CONVEX}`);
+  }
+  if (/CONVEX_(?:SITE_URL|DEPLOYMENT)/u.test(live) && !live.includes(PRODUCTION_CONVEX)) {
+    failures.push(`${path}: production Convex binding is not ${PRODUCTION_CONVEX}`);
+  }
+}
+
+const auth = readJson("apps/auth/wrangler.jsonc");
+if (auth?.env?.production?.d1_databases?.[0]?.database_name !== "dongo-auth") {
+  failures.push("apps/auth/wrangler.jsonc: production auth does not bind dongo-auth");
+}
+const files = readJson("apps/files/wrangler.jsonc");
+if (files?.env?.production?.r2_buckets?.[0]?.bucket_name !== "dongo-attachments") {
+  failures.push("apps/files/wrangler.jsonc: production files does not bind dongo-attachments");
+}
+
+const packageJson = readJson("package.json");
+if (packageJson?.scripts?.deploy !== "npm run deploy:production") {
+  failures.push("package.json: default deploy must run the coherent production release");
+}
+if (packageJson?.scripts?.["deploy:dev"] !== "node scripts/deploy-dev.mjs") {
   failures.push("package.json: development deploy must use the coherent development-stack runner");
 }
-if (packageJson.scripts?.["deploy:dev:web"] !== "npm run deploy --workspace @dongo/web") {
-  failures.push("package.json: web-only development deploy must remain explicitly scoped to the web app");
+if (packageJson?.scripts?.["deploy:production"] !== "node scripts/deploy-production.mjs") {
+  failures.push("package.json: production deploy must use the coherent production-stack runner");
 }
+
 const devDeploy = readFileSync("scripts/deploy-dev.mjs", "utf8");
-for (const path of expectedWorkerNames.keys()) {
-  if (path === "apps/web/wrangler.jsonc") continue;
-  if (!devDeploy.includes(path)) {
+const productionDeploy = readFileSync("scripts/deploy-production.mjs", "utf8");
+for (const [path] of workers) {
+  if (path !== "apps/web/wrangler.jsonc" && !devDeploy.includes(path)) {
     failures.push(`scripts/deploy-dev.mjs: coherent development deploy omits ${path}`);
   }
+  if (path !== "apps/web/wrangler.jsonc" && !productionDeploy.includes(path)) {
+    failures.push(`scripts/deploy-production.mjs: coherent production deploy omits ${path}`);
+  }
 }
-if (!devDeploy.includes('"@dongo/web"')) {
-  failures.push("scripts/deploy-dev.mjs: coherent development deploy omits the built web Worker");
-}
-if (!devDeploy.includes('"convex", "dev", "--once"')) {
-  failures.push("scripts/deploy-dev.mjs: coherent development deploy omits Convex dev functions");
-}
-if (/deploy:landing|wrangler\.jsonc"\]\s*[,)]/u.test(devDeploy.replaceAll(/apps\/[a-z]+\/wrangler\.jsonc/gu, ""))) {
-  failures.push("scripts/deploy-dev.mjs: coherent development deploy may target the production landing Worker");
-}
+if (!devDeploy.includes('"convex", "dev", "--once"')) failures.push("scripts/deploy-dev.mjs: Convex development deploy is missing");
+if (!productionDeploy.includes('"convex", "deploy"')) failures.push("scripts/deploy-production.mjs: Convex production deploy is missing");
+if (!productionDeploy.includes('"d1", "migrations", "apply"')) failures.push("scripts/deploy-production.mjs: production D1 migration is missing");
+if (!productionDeploy.includes("scripts/deploy-production-web.mjs")) failures.push("scripts/deploy-production.mjs: production web deploy is missing");
 
 if (failures.length > 0) {
   console.error("Environment boundary verification failed:");
   for (const failure of failures) console.error(`- ${failure}`);
   process.exitCode = 1;
 } else {
-  console.log(
-    `Development routes are isolated across ${appConfigs.length} Workers; production remains the landing Worker.`,
-  );
+  console.log(`Development and production routes, Workers, Convex deployments, D1, and R2 are isolated across ${workers.length} services.`);
 }

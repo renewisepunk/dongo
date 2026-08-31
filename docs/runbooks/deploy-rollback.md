@@ -3,7 +3,7 @@
 ## Guardrails
 
 - This runbook targets `dev.dongo.so`, Convex `wandering-camel-662`, D1 `dongo-auth-dev`, and R2 `dongo-dev-attachments` only.
-- Do not run `npm run deploy`, `npm run deploy:landing`, or `wrangler deploy` with the root `wrangler.jsonc`; those commands own the existing `dongo.so`/`www.dongo.so` production landing Worker.
+- Do not run `npm run deploy` while operating development; it runs the coherent production release. `npm run deploy:landing` is the explicit first-cutover root rollback.
 - Never point a development Worker at production Convex, D1, R2, OAuth issuer/resource, secrets, routes, or cookies.
 - Deploy an immutable commit after CI passes. Record the commit and returned Worker version IDs.
 

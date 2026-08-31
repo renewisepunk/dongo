@@ -28,6 +28,41 @@
       }
     }
   ],
+  "env": {
+    "production": {
+      "name": "dongo-api-production",
+      "routes": [
+        { "pattern": "dongo.so/api/agent/v1/*", "zone_name": "dongo.so" }
+      ],
+      "services": [
+        { "binding": "AUTH_SERVICE", "service": "dongo-auth-production" }
+      ],
+      "vars": {
+        "API_RESOURCE": "https://dongo.so/api/agent/v1",
+        "ALLOWED_HOSTNAMES": "dongo.so",
+        "AUTHORIZATION_SERVER_ISSUER": "https://dongo.so/api/auth",
+        "BETTER_AUTH_INTROSPECTION_URL": "https://dongo.so/api/auth/oauth2/introspect",
+        "BETTER_AUTH_RESOURCE_CLIENT_ID": "dongo-api-resource-production",
+        "CONVEX_SITE_URL": "https://brainy-camel-172.convex.site"
+      },
+      "secrets": {
+        "required": [
+          "BETTER_AUTH_RESOURCE_CLIENT_SECRET",
+          "DONGO_INTERNAL_GATEWAY_SECRET"
+        ]
+      },
+      "ratelimits": [
+        {
+          "name": "API_RATE_LIMITER",
+          "namespace_id": "2002",
+          "simple": {
+            "limit": 120,
+            "period": 60
+          }
+        }
+      ]
+    }
+  },
   "observability": {
     "enabled": true,
     "logs": {

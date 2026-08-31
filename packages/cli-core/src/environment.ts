@@ -38,7 +38,7 @@ export function resolveEnvironment(options: {
   origin?: string;
   clientId?: string;
 } = {}): EnvironmentConfig {
-  const environment = options.origin ? "custom" : (options.environment ?? "development");
+  const environment = options.origin ? "custom" : (options.environment ?? "production");
   const rawOrigin = options.origin ?? (environment === "custom" ? undefined : ORIGINS[environment]);
   if (!rawOrigin) throw new CliCoreError({ code: "validation", message: "A custom environment requires --origin." });
   const productOrigin = validateOrigin(rawOrigin);

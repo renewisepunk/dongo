@@ -1,5 +1,6 @@
 import { A } from "@solidjs/router";
 import { For } from "solid-js";
+import { dongoPublicOrigin } from "../../lib/auth-config";
 import { DONGO_SHORTCUTS } from "../help/shortcuts";
 import { GuideSection, PublicGuideShell } from "./PublicGuideShell";
 
@@ -61,7 +62,7 @@ export function PublicHelpGuide() {
       </GuideSection>
 
       <GuideSection index="03" id="mcp-resources" title="MCP resources" lede="Every project has one remote Streamable HTTP resource. Every host authorizes independently against that exact URL.">
-        <div class="mcp-resource-line"><span>development resource</span><code>https://dev.dongo.so/p/&lt;project-ref&gt;/mcp</code></div>
+        <div class="mcp-resource-line"><span>project resource</span><code>{dongoPublicOrigin}/p/&lt;project-ref&gt;/mcp</code></div>
         <div class="help-resource-grid">
           <article><span>Codex</span><h3>Managed project entry</h3><p>Preview with <code>dongo integrate codex</code>, apply with <code>--apply</code>, then use the printed <code>codex mcp login</code> command.</p></article>
           <article><span>Claude Code</span><h3>Remote HTTP project entry</h3><p>Preview with <code>dongo integrate claude</code>, apply with <code>--apply</code>, then run <code>claude mcp login dongo-&lt;project-ref&gt;</code>.</p></article>

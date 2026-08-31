@@ -30,5 +30,32 @@
     "CONVEX_DEPLOYMENT": "dev:wandering-camel-662",
     "VITE_DONGO_ENVIRONMENT": "development",
     "VITE_DONGO_GOOGLE_AUTH_CONFIGURED": "true"
+  },
+  "env": {
+    "production": {
+      "name": "dongo-web-production",
+      "workers_dev": true,
+      "preview_urls": true,
+      "routes": [
+        {
+          "pattern": "dongo.so",
+          "custom_domain": true
+        },
+        {
+          "pattern": "www.dongo.so",
+          "custom_domain": true
+        }
+      ],
+      "vars": {
+        "DONGO_ENVIRONMENT": "production",
+        "DONGO_PUBLIC_ORIGIN": "https://dongo.so",
+        "CONVEX_DEPLOYMENT": "prod:brainy-camel-172",
+        "VITE_CONVEX_URL": "https://brainy-camel-172.convex.cloud",
+        "VITE_CONVEX_SITE_URL": "https://brainy-camel-172.convex.site",
+        "VITE_DONGO_ENVIRONMENT": "production",
+        "VITE_DONGO_PUBLIC_ORIGIN": "https://dongo.so",
+        "VITE_DONGO_GOOGLE_AUTH_CONFIGURED": "false"
+      }
+    }
   }
 }

@@ -176,8 +176,8 @@ test("CI setup authenticates from the environment and writes only a non-secret p
     assert.equal((await service.authStatus()).credential?.source, "environment");
     assert.deepEqual((await service.overview()).ready, []);
     assert.deepEqual(calls, [
-      "https://dev.dongo.so/api/agent/v1/session_start",
-      "https://dev.dongo.so/api/agent/v1/get_overview",
+      "https://dongo.so/api/agent/v1/session_start",
+      "https://dongo.so/api/agent/v1/get_overview",
     ]);
   } finally {
     if (previousToken === undefined) delete process.env.DONGO_TOKEN;

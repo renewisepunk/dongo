@@ -240,7 +240,7 @@ export class CoreService {
     const repositoryRoot = await findRepositoryRoot(this.#cwd);
     await this.#validateConfigDirectory(repositoryRoot);
     const environment = resolveEnvironment({
-      environment: options.environment ?? "development",
+      environment: options.environment ?? "production",
     });
     const profile = credentialProfile(environment.productOrigin, repositoryRoot);
     const bootstrapClient = new DongoClient({
