@@ -102,7 +102,7 @@ Freeze typed aggregates for:
 - current viewer, organization, project, role, and entitlement;
 - Overview with Needs You precedence and stable section ordering;
 - Intake with finalized attachments;
-- Work detail with source Intake, current/latest Run, comments, artifacts, and Attention;
+- Work detail with source Intake, current/latest Run, comments (including finalized attachment references), artifacts, and Attention;
 - search result union;
 - installation/grant metadata and Advanced CI/service one-time secret result;
 - media upload initiation/finalization;

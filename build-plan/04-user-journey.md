@@ -539,6 +539,7 @@ Visible elements:
 - Conversation history.
 - Existing artifacts, if any.
 - Comment composer with Add comment action.
+- Comment attachments using the same secure upload lifecycle as Intake: paste an image, drop one or more files on the composer, or choose files explicitly. Each file shows preview/type, progress, ready/error state, Retry, and Remove. The comment remains disabled while uploads are pending or failed and may contain text, finalized attachments, or both.
 - Latest Events/history summary appropriate for humans.
 
 The screen does not show a human assignment or status-management form. A human may comment or return to Overview and reorder the item.
@@ -605,7 +606,7 @@ Visible elements:
 - Respond button.
 - Owner/member-only Resolve without response action, visually secondary.
 - Relevant goal, latest Run update, artifacts/preview/PR links, source Intake, and conversation history below the Attention card.
-- General comment composer.
+- General comment composer with pasted-image, file-drop, and file-picker attachments. Submitted attachment references appear on the attributed conversation entry and are available to authorized agents through the canonical attachment API.
 
 The screen does not imply that submitting an answer wakes a stopped local agent.
 
