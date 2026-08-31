@@ -35,7 +35,7 @@ test("keeps the complete help guide public without a project session", async ({ 
   await expect(page.getByText("dongo_session_start", { exact: true })).toBeVisible();
   await expect(page.getByText("Re-authenticate this host", { exact: true })).toBeVisible();
   await expect(page.getByText("Revoke server access", { exact: true })).toBeVisible();
-  await expect(page.locator(".shortcut-reference__row")).toHaveCount(14);
+  await expect(page.locator(".shortcut-reference__row")).toHaveCount(15);
   await expect(page.getByRole("link", { name: /Auth recovery runbook/ })).toHaveAttribute("href", /agent-auth\.md$/);
   await expect(page.getByRole("link", { name: /MCP setup and recovery/ })).toHaveAttribute("href", "#mcp-resources");
 });
