@@ -45,6 +45,59 @@ function commaSeparated(value: string): string[] {
     .filter(Boolean);
 }
 
+export function validateApiBoundary(input: {
+  readonly resource: string;
+  readonly allowedHostnames: string;
+  readonly issuer: string;
+  readonly introspectionUrl: string;
+}): {
+  readonly resource: URL;
+  readonly allowedHostnames: readonly string[];
+  readonly issuer: string;
+  readonly introspectionUrl: URL;
+} {
+  const resource = new URL(input.resource);
+  const allowedHostnames = commaSeparated(input.allowedHostnames);
+  const issuer = new URL(input.issuer);
+  const introspectionUrl = new URL(input.introspectionUrl);
+  const isSafeHttpsUrl = (url: URL) =>
+    url.protocol === "https:" &&
+    url.username === "" &&
+    url.password === "" &&
+    url.port === "" &&
+    url.search === "" &&
+    url.hash === "";
+
+  if (
+    !isSafeHttpsUrl(resource) ||
+    resource.pathname !== "/api/agent/v1" ||
+    allowedHostnames.length === 0 ||
+    !allowedHostnames.includes(resource.hostname.toLowerCase())
+  ) {
+    throw new Error("API_RESOURCE is outside the configured API boundary");
+  }
+  if (
+    !isSafeHttpsUrl(issuer) ||
+    issuer.origin !== resource.origin ||
+    issuer.pathname !== "/api/auth"
+  ) {
+    throw new Error("AUTHORIZATION_SERVER_ISSUER is outside the configured API boundary");
+  }
+  if (
+    !isSafeHttpsUrl(introspectionUrl) ||
+    introspectionUrl.origin !== resource.origin ||
+    introspectionUrl.pathname !== "/api/auth/oauth2/introspect"
+  ) {
+    throw new Error("BETTER_AUTH_INTROSPECTION_URL is outside the configured API boundary");
+  }
+  return {
+    resource,
+    allowedHostnames,
+    issuer: issuer.toString().replace(/\/$/, ""),
+    introspectionUrl,
+  };
+}
+
 class CloudflareApiRateLimiter implements ApiRateLimiter {
   constructor(private readonly binding: RateLimit) {}
 
@@ -59,27 +112,26 @@ class CloudflareApiRateLimiter implements ApiRateLimiter {
 }
 
 function configuredWorker(env: DongoApiEnv): DongoApiWorker {
-  const resource = new URL(requiredBinding(env, "API_RESOURCE"));
-  const expectedResource = "https://dev.dongo.so/api/agent/v1";
-  if (resource.toString() !== expectedResource) {
-    throw new Error("API_RESOURCE does not match the pinned development audience");
-  }
+  const boundary = validateApiBoundary({
+    resource: requiredBinding(env, "API_RESOURCE"),
+    allowedHostnames: requiredBinding(env, "ALLOWED_HOSTNAMES"),
+    issuer: requiredBinding(env, "AUTHORIZATION_SERVER_ISSUER"),
+    introspectionUrl: requiredBinding(env, "BETTER_AUTH_INTROSPECTION_URL"),
+  });
+  const { resource, allowedHostnames, issuer, introspectionUrl } = boundary;
   const rateLimitBinding = env.API_RATE_LIMITER;
   if (rateLimitBinding === undefined) {
     throw new Error("Required Worker binding API_RATE_LIMITER is absent");
   }
-  const issuer = requiredBinding(env, "AUTHORIZATION_SERVER_ISSUER");
   if (env.AUTH_SERVICE === undefined) {
     throw new Error("Required Worker binding AUTH_SERVICE is absent");
   }
   return createDongoApiGateway({
     resource,
-    allowedHostnames: commaSeparated(requiredBinding(env, "ALLOWED_HOSTNAMES")),
+    allowedHostnames,
     tokenVerifier: new ApiRoutedTokenVerifier(
       new ApiIntrospectionTokenVerifier({
-        introspectionUrl: new URL(
-          requiredBinding(env, "BETTER_AUTH_INTROSPECTION_URL"),
-        ),
+        introspectionUrl,
         issuer,
         resource,
         resourceClientId: requiredBinding(env, "BETTER_AUTH_RESOURCE_CLIENT_ID"),
