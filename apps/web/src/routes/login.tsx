@@ -1,4 +1,4 @@
-import { useLocation, useNavigate, useSearchParams } from "@solidjs/router";
+import { A, useLocation, useNavigate, useSearchParams } from "@solidjs/router";
 import { createSignal, onMount, Show } from "solid-js";
 import { AuthFrame } from "../components/AuthFrame";
 import { googleAuthConfigured } from "../lib/auth-config";
@@ -119,6 +119,11 @@ export default function LoginRoute(props: LoginRouteProps = {}) {
         </form>
 
         <p class="note">dongo sends a one-time code. There is no password to create or remember.</p>
+        <nav class="auth-resource-links" aria-label="Public resources">
+          <A href="/get-started">Get started</A>
+          <span aria-hidden="true">·</span>
+          <A href="/help">Help</A>
+        </nav>
       </div>
     </AuthFrame>
   );

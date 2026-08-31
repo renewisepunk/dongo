@@ -235,6 +235,19 @@ p { margin: 0; }
   text-wrap: pretty;
 }
 
+.auth-resource-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.auth-resource-links a { color: var(--text-muted); }
+.auth-resource-links a:hover { color: var(--text); }
+
 .field-group {
   display: flex;
   flex-direction: column;

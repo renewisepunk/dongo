@@ -36,3 +36,12 @@ test("keeps the authenticated overview and work detail free of detectable WCAG A
   await expect(page.getByRole("dialog", { name: "Verify fixture search" })).toBeVisible();
   await expectWcagConformance(page);
 });
+
+test("keeps the public get started and help guides free of detectable WCAG A/AA violations", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const route of ["/get-started", "/help"]) {
+    await page.goto(route);
+    await expect(page.locator("main")).toBeVisible();
+    await expectWcagConformance(page);
+  }
+});

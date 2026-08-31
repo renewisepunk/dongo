@@ -2,6 +2,8 @@ import { Route, Router } from "@solidjs/router";
 import { render } from "solid-js/web";
 import { Overview, type OverviewConnection } from "../../src/features/overview/Overview";
 import { HelpGuide } from "../../src/features/help/HelpGuide";
+import { GetStartedGuide } from "../../src/features/public-guides/GetStartedGuide";
+import { PublicHelpGuide } from "../../src/features/public-guides/PublicHelpGuide";
 import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
 import type { WorkItem } from "../../src/features/overview/model";
 import { CompletedWork } from "../../src/routes/app/[orgSlug]/[projectSlug]/done";
@@ -633,6 +635,8 @@ if (!root) throw new Error("E2E fixture root is unavailable");
 render(
   () => (
     <Router>
+      <Route path="/get-started" component={GetStartedGuide} />
+      <Route path="/help" component={PublicHelpGuide} />
       <Route path="/login" component={FixtureLogin} />
       <Route path="/auth/code" component={FixtureEmailCode} />
       <Route path="/auth/callback" component={FixtureAuthCallback} />
