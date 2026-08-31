@@ -14,9 +14,11 @@ const productionEnvironment = {
   VITE_DONGO_PUBLIC_ORIGIN: "https://dongo.so",
   VITE_DONGO_GOOGLE_AUTH_CONFIGURED: "false",
 };
+const deployEnvironment = { ...productionEnvironment };
+delete deployEnvironment.CLOUDFLARE_ENV;
 const steps = [
-  ["production web build", executable("npm"), ["run", "build", "--workspace", "@dongo/web"]],
-  ["production web Worker", executable("npx"), ["wrangler", "deploy", "--config", "apps/web/dist/server/wrangler.json"]],
+  ["production web build", executable("npm"), ["run", "build", "--workspace", "@dongo/web"], productionEnvironment],
+  ["production web Worker", executable("npx"), ["wrangler", "deploy", "--config", "apps/web/dist/server/wrangler.json"], deployEnvironment],
 ];
 
 if (!existsSync(resolve(root, "apps/web/wrangler.jsonc"))) {
@@ -31,11 +33,11 @@ if (process.argv.includes("--plan")) {
   process.exit(0);
 }
 
-for (const [label, command, args] of steps) {
+for (const [label, command, args, environment] of steps) {
   console.log(`\n==> ${label}`);
   const result = spawnSync(command, args, {
     cwd: root,
-    env: productionEnvironment,
+    env: environment,
     stdio: "inherit",
   });
   if (result.error) {
