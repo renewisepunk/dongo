@@ -45,5 +45,5 @@ The current thresholds and the distinction between laboratory and field evidence
 ## Evidence boundary
 
 - Proven: the public root is fast and visually stable in both the unthrottled and controlled mobile/Slow-4G/4×-CPU Chrome laboratory traces.
-- Not proven: field percentiles, INP, authenticated workspace performance, or manual screen-reader behavior.
-- Next performance gate: record the authenticated workspace under representative mobile CPU/network throttling and include one real interaction so INP or its laboratory proxy can be assessed.
+- Not proven here: field percentiles, INP, authenticated workspace performance, or manual screen-reader behavior.
+- The separate [`authenticated-workspace-performance-2026-08-31.md`](authenticated-workspace-performance-2026-08-31.md) audit now proves the signed-in desktop workflow under 4× CPU and Slow-4G-style network conditions, including the real keyboard selection/open path. It is a laboratory interaction proxy, not field INP.
