@@ -23,6 +23,9 @@ type AgentContext = {
 beforeEach(() => {
   process.env.DONGO_ENABLE_DEV_BOOTSTRAP = "true";
   process.env.DONGO_INTERNAL_GATEWAY_SECRET = gatewaySecret;
+  process.env.DONGO_ATTACHMENT_URL_SIGNING_SECRET = gatewaySecret;
+  process.env.DONGO_ATTACHMENT_DOWNLOAD_BASE_URL =
+    "https://dev.dongo.so/api/files/download";
 });
 
 describe("agent lifecycle reliability", () => {
@@ -140,6 +143,18 @@ describe("agent lifecycle reliability", () => {
         body: "",
         attachmentIds: [attachmentId],
       }),
+    );
+    const attachmentAccess = await successfulData(t, context, "get_attachment", {
+      attachmentId,
+    });
+    expect(attachmentAccess).toMatchObject({
+      attachmentId,
+      filename: "pasted-review.png",
+      contentType: "image/png",
+      byteSize: 27,
+    });
+    expect(new URL(attachmentAccess.downloadUrl).pathname).toBe(
+      `/api/files/download/${attachmentId}`,
     );
     await expect(
       human.mutation(internal.domains.attachments.index.discard, { attachmentId }),
