@@ -1527,6 +1527,7 @@ export function Overview(props: OverviewProps) {
                 type="file"
                 multiple
                 tabindex="-1"
+                aria-label="Choose files to attach to intake"
                 onChange={(event) => {
                   addFiles([...(event.currentTarget.files ?? [])]);
                   event.currentTarget.value = "";
