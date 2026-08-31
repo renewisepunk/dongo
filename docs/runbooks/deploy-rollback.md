@@ -43,7 +43,7 @@ Run the public unauthenticated smoke gate with a real development project refere
 
 ```sh
 npm run smoke:dev -- --project-ref <public-project-ref>
-npm run smoke:boundaries -- --project-ref <public-project-ref>
+npm run smoke:boundaries -- --development-project-ref <dev-ref> --production-project-ref <prod-ref>
 ```
 
 Every check must pass. In particular, notification readiness is a release blocker even when its separate health endpoint is live, and the boundary gate must continue to prove that development routes do not appear on the production origin.

@@ -12,9 +12,16 @@ function option(name) {
   return value;
 }
 
-const projectRef = option("project-ref") ?? process.env.DONGO_PROJECT_REF;
-if (!projectRef || !/^[a-z0-9][a-z0-9-]{2,199}$/.test(projectRef)) {
-  console.error("Usage: npm run smoke:boundaries -- --project-ref <public-project-ref>");
+const developmentProjectRef =
+  option("development-project-ref") ?? option("project-ref") ?? process.env.DONGO_PROJECT_REF;
+const productionProjectRef =
+  option("production-project-ref") ?? process.env.DONGO_PRODUCTION_PROJECT_REF;
+if (!developmentProjectRef || !/^[a-z0-9][a-z0-9-]{2,199}$/.test(developmentProjectRef)) {
+  console.error("Usage: npm run smoke:boundaries -- --development-project-ref <dev-ref> [--production-project-ref <prod-ref>]");
+  process.exit(2);
+}
+if (productionProjectRef && !/^[a-z0-9][a-z0-9-]{2,199}$/.test(productionProjectRef)) {
+  console.error("--production-project-ref must be a valid public project reference");
   process.exit(2);
 }
 
@@ -49,11 +56,15 @@ checks.push(
   ...(await Promise.all([
     statusCheck("development web", `${DEVELOPMENT_ORIGIN}/`, 200),
     statusCheck("development auth", `${DEVELOPMENT_ORIGIN}/api/auth/healthz`, 200),
-    statusCheck("development MCP requires auth", `${DEVELOPMENT_ORIGIN}/p/${projectRef}/mcp`, 401),
-    statusCheck("production landing", `${PRODUCTION_ORIGIN}/`, 200),
-    statusCheck("production has no auth route", `${PRODUCTION_ORIGIN}/api/auth/healthz`, 404),
-    statusCheck("production has no agent API route", `${PRODUCTION_ORIGIN}/api/agent/v1/healthz`, 404),
-    statusCheck("production has no MCP route", `${PRODUCTION_ORIGIN}/p/${projectRef}/mcp`, 404),
+    statusCheck("development agent API", `${DEVELOPMENT_ORIGIN}/api/agent/v1/healthz`, 200),
+    statusCheck("development MCP requires auth", `${DEVELOPMENT_ORIGIN}/p/${developmentProjectRef}/mcp`, 401),
+    statusCheck("production web", `${PRODUCTION_ORIGIN}/`, 200),
+    statusCheck("production auth", `${PRODUCTION_ORIGIN}/api/auth/healthz`, 200),
+    statusCheck("production agent API", `${PRODUCTION_ORIGIN}/api/agent/v1/healthz`, 200),
+    statusCheck("production notifications", `${PRODUCTION_ORIGIN}/api/notifications/healthz`, 200),
+    ...(productionProjectRef
+      ? [statusCheck("production MCP requires auth", `${PRODUCTION_ORIGIN}/p/${productionProjectRef}/mcp`, 401)]
+      : []),
   ])),
 );
 
