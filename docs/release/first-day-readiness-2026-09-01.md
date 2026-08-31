@@ -10,6 +10,7 @@ The first web-and-Codex release is live at `https://dongo.so` and can be used fo
 - Development/production resource isolation: 10/10 boundary checks.
 - First credential-free production availability run: [GitHub Actions 33437103370](https://github.com/renewisepunk/dongo/actions/runs/33437103370).
 - A fresh human account completed email OTP and first-project onboarding.
+- Both production email paths use apex senders: `auth@dongo.so` is onboarded in Cloudflare Email Service, and `notifications@dongo.so` passed Resend DKIM/SPF verification and controlled-mailbox delivery.
 - Codex authenticated as its own production installation actor, completed a real work lifecycle, and passed revoke/reauthorize isolation.
 - A human production comment uploaded a PNG to R2, rendered its secure inline preview, and exposed only safe attachment metadata to Codex.
 - The exact packed CLI completed browser authorization without a project picker, token copy, Keychain prompt, or platform credential helper.

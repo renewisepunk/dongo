@@ -11,11 +11,11 @@ The release includes the public marketing, get-started, and help pages; email OT
 | Component | Production target | Released version |
 |---|---|---|
 | Web | `dongo-web-production` | `650a94ae-f2c7-4ed3-9d38-a02e0a3e912e` |
-| Authorization | `dongo-auth-production` | `d96dd602-f4b9-45fb-adf6-833aab5281ce` |
+| Authorization | `dongo-auth-production` | `ba80f3e5-7929-42e7-a616-167b68662003` |
 | Agent API | `dongo-api-production` | `f57a195e-efb5-4c82-8732-a11569f481a6` |
 | Remote MCP | `dongo-mcp-production` | `67583ee0-27cd-4233-9332-c225054f6cab` |
 | Attachment edge | `dongo-files-production` | `b5540728-32c2-427a-939e-db2148773630` |
-| Notifications | `dongo-notifications-production` | `6f112da9-4ba8-40dd-b674-79507138e266` |
+| Notifications | `dongo-notifications-production` | `1604a362-7be2-4eae-a84a-57f17cf5d8da` |
 | Domain state | Convex `brainy-camel-172` | production deployment |
 | OAuth database | D1 `dongo-auth` | production binding |
 | Attachment storage | R2 `dongo-attachments` | production binding |
@@ -36,7 +36,9 @@ The previous landing Worker versions recorded before cutover were `f956c68f-9fdd
 
 ### Human authentication
 
-A fresh account completed email OTP authentication and reached first-project onboarding. Production OTP is currently delivered from `auth@dev.dongo.so`, a verified sender on the correct Wisepunk Resend account. The issuer, callback, browser links, and application remain entirely on `https://dongo.so`.
+A fresh account completed email OTP authentication and reached first-project onboarding. Production OTP is delivered from `auth@dongo.so` through the apex domain onboarded in Cloudflare Email Service. A post-cutover request through the live Better Auth endpoint returned success. The issuer, callback, browser links, and application remain entirely on `https://dongo.so`.
+
+Production notifications are delivered from `notifications@dongo.so` through the correct Wisepunk Resend account. Resend verified DKIM, SPF MX, and SPF TXT for the apex domain, and a pre-cutover delivery from that exact sender reached the controlled mailbox with provider message `c2a077d5-12a7-4fde-b1a4-d1c0d5f0e56e`.
 
 Google remains intentionally disabled in the production UI until the exact production redirect URI is registered and proven. The already-proven client credentials are staged in the isolated production Convex environment, and a redirect-free provider probe generated Google's normal authorization origin with the exact callback `https://brainy-camel-172.convex.site/api/auth/callback/google`. Email OTP remains the supported first-release sign-in path.
 
@@ -79,7 +81,6 @@ The production test account/project is disposable validation data and must not b
 
 - Native iOS and Android clients and live push delivery.
 - Production Google login until the exact staged callback is registered in Google Cloud and the live `rene@wisepunk.com` identity is validated.
-- Moving email senders from the verified `dev.dongo.so` subdomain to the apex after apex sender verification.
 - Manual VoiceOver review. Automated WCAG A/AA scans and keyboard journeys are green, but that does not substitute for the documented manual screen-reader pass.
 - Repeating the production host lifecycle with Claude Code. Claude Code’s complete lifecycle is already proven in development; this release’s required production agent was Codex.
 
