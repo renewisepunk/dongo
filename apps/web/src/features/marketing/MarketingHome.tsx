@@ -13,7 +13,8 @@ export function MarketingHome() {
           <Brand compact />
           <nav class="marketing-nav" aria-label="Main navigation">
             <a href="#how-it-works">How it works</a>
-            <a href="#for-agents">For agents</a>
+            <a href="#why-dongo">Why dongo</a>
+            <a href="#who-its-for">Who it’s for</a>
             <A href="/security">Security</A>
             <A href="/get-started">Get started</A>
             <A href="/help">Help</A>
@@ -28,14 +29,14 @@ export function MarketingHome() {
       <main id="marketing-content">
         <section class="marketing-hero" aria-labelledby="marketing-title">
           <div class="marketing-hero__copy">
-            <p class="eyebrow eyebrow--amber">Work tracking for humans + agents</p>
-            <h1 id="marketing-title">Install the skills. Let your agent set up dongo.</h1>
+            <p class="eyebrow eyebrow--amber">The work tracker for coding agents</p>
+            <h1 id="marketing-title">Like Linear, but for coding agents.</h1>
             <p class="marketing-hero__lede">
-              dongo gives you and your coding agents one shared work queue. Install the dongo skills in the agent you already use, ask it to set up this repository, then approve the connection in your browser.
+              Give a coding agent work. See what it is doing. Step in only when it needs a decision. Dongo is the shared place for you and your agents to keep development moving.
             </p>
             <div class="marketing-hero__actions">
               <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install dongo skills <span aria-hidden="true">↗</span></a>
-              <A class="button" href="/get-started">See the setup</A>
+              <A class="button" href="/get-started">See how to start</A>
               <a class="button" href="#how-it-works">See how it works</a>
             </div>
           </div>
@@ -67,75 +68,100 @@ export function MarketingHome() {
         </section>
 
         <div class="marketing-answer-strip" aria-label="Questions dongo answers">
-          <span><b>01</b> What needs me?</span>
-          <span><b>02</b> What is happening?</span>
-          <span><b>03</b> What is waiting?</span>
+          <span><b>01</b> Give an agent a task</span>
+          <span><b>02</b> See work as it happens</span>
+          <span><b>03</b> Answer decisions, not status pings</span>
         </div>
 
         <section class="marketing-section" id="how-it-works" aria-labelledby="how-it-works-title">
           <div class="marketing-section__intro">
-            <p class="eyebrow">How it works</p>
-            <h2 id="how-it-works-title">You add intent.<br />The agent handles the tracker.</h2>
+            <p class="eyebrow">Start here</p>
+            <h2 id="how-it-works-title">Start with the agent you already use.</h2>
           </div>
           <ol class="marketing-steps">
             <li>
-              <span>01 / capture</span>
-              <h3>Say what you need</h3>
-              <p>Write naturally. Paste an image into the composer or drop a file anywhere on the page. No issue type, status, assignee, or acceptance criteria required.</p>
+              <span>01 / install</span>
+              <h3>Install the Dongo skills</h3>
+              <p>Add the skills to Codex, Claude Code, or another compatible agent. This is the only setup step you need to do yourself.</p>
             </li>
             <li>
-              <span>02 / work</span>
-              <h3>Your agent takes it from there</h3>
-              <p>The agent reads the repository, turns raw Intake into work, claims it, and leaves useful updates while it works.</p>
+              <span>02 / connect</span>
+              <h3>Ask your agent to set up Dongo</h3>
+              <p>It installs the CLI when needed, connects the repository, and configures its own MCP connection.</p>
             </li>
             <li>
-              <span>03 / attention</span>
-              <h3>You decide when it matters</h3>
-              <p>Questions and reviews move into Needs you. Answer once, then the agent continues with the decision attached to the work.</p>
+              <span>03 / approve</span>
+              <h3>Approve once in the browser</h3>
+              <p>Dongo asks for your approval. Then the agent verifies its connection and starts keeping work visible.</p>
             </li>
           </ol>
         </section>
 
-        <section class="marketing-section marketing-section--agents" id="for-agents" aria-labelledby="for-agents-title">
+        <section class="marketing-section marketing-section--agents" id="why-dongo" aria-labelledby="why-dongo-title">
           <div class="marketing-section__intro">
-            <p class="eyebrow">Agent-first by design</p>
-            <h2 id="for-agents-title">One prompt gets you connected.</h2>
+            <p class="eyebrow">Why Dongo</p>
+            <h2 id="why-dongo-title">Development changed. The tracker did not.</h2>
             <p class="marketing-section__lede">
-              The skills teach your local agent how to install the CLI, connect dongo, configure its MCP host, and work safely. You only approve the browser prompts.
+              Coding agents now plan, write, and ship real work. But most trackers still assume people create tickets, write updates, and carry context between chats. Dongo gives agent work a record you can actually follow.
             </p>
           </div>
 
           <div class="marketing-agent-grid">
             <article class="marketing-terminal">
-              <div class="marketing-terminal__top"><span>agent</span><span>setup brief</span></div>
-              <pre aria-label="Example dongo agent setup"><code><span>›</span> Install the dongo skills{`\n`}<b>✓</b> skills available{`\n`}{`\n`}<span>›</span> Set up dongo for this repository{`\n`}<span>status</span>  waiting for browser approval{`\n`}<span>next</span>    agent connects and verifies</code></pre>
+              <div class="marketing-terminal__top"><span>work</span><span>in progress</span></div>
+              <pre aria-label="Example Dongo work update"><code><span>agent</span>   Codex{`\n`}<span>work</span>    Improve sign-in recovery{`\n`}<span>status</span>  waiting on you{`\n`}{`\n`}<span>question</span> Ship email recovery first?{`\n`}<b>✓</b> context and progress are attached</code></pre>
             </article>
 
             <div class="marketing-agent-points">
               <article>
-                <span>Skills first</span>
-                <h3>The agent handles setup</h3>
-                <p>It installs dongo, connects the repository, configures its own MCP host, and checks the result. You approve each scoped installation in the browser.</p>
+                <span>Chat loses the thread</span>
+                <h3>Work needs a record</h3>
+                <p>Prompts, progress, decisions, files, and outcomes stay with the work instead of disappearing into a long agent conversation.</p>
               </article>
               <article>
-                <span>Separate identity</span>
-                <h3>The agent acts like itself</h3>
-                <p>Agent comments, claims, and updates are attributed to its own installation—not posted under the human who authorized it.</p>
+                <span>Agents are not a black box</span>
+                <h3>See what is happening</h3>
+                <p>Each agent updates work under its own identity. You can see what it picked up, where it is blocked, and what it finished.</p>
               </article>
               <article>
-                <span>Manual when useful</span>
-                <h3>CLI and MCP stay available</h3>
-                <p>Prefer the direct commands when you want to inspect or control setup yourself. Every installation still has its own project-scoped grant.</p>
+                <span>People should decide</span>
+                <h3>Only get pulled in when it matters</h3>
+                <p>Reviews, choices, and blockers rise to you. Answer once, and the agent continues with that decision attached to the work.</p>
               </article>
             </div>
           </div>
         </section>
 
+        <section class="marketing-section" id="who-its-for" aria-labelledby="who-its-for-title">
+          <div class="marketing-section__intro">
+            <p class="eyebrow">Who it’s for</p>
+            <h2 id="who-its-for-title">For people who lead development with agents.</h2>
+            <p class="marketing-section__lede">Dongo is for anyone who has moved beyond one-off coding prompts and wants agent work to be clear, durable, and easy to steer.</p>
+          </div>
+          <ol class="marketing-steps">
+            <li>
+              <span>01 / builders</span>
+              <h3>Solo developers shipping with agents</h3>
+              <p>Keep a reliable view of the work without turning every prompt into a ticket or a status update.</p>
+            </li>
+            <li>
+              <span>02 / leads</span>
+              <h3>Technical leaders directing parallel work</h3>
+              <p>See what each agent is doing, answer the decisions that need you, and keep context from getting lost between sessions.</p>
+            </li>
+            <li>
+              <span>03 / teams</span>
+              <h3>Teams adding agents to their development process</h3>
+              <p>Give people and agents one shared view of requests, progress, decisions, and finished work.</p>
+            </li>
+          </ol>
+        </section>
+
         <section class="marketing-final" aria-labelledby="marketing-final-title">
           <div>
             <p class="eyebrow eyebrow--amber">Start with one repository</p>
-            <h2 id="marketing-final-title">Let the agent set it up.</h2>
-            <p>Install the skills, tell your agent to set up dongo, approve in the browser, then get back to the work.</p>
+            <h2 id="marketing-final-title">Put agent work where you can see it.</h2>
+            <p>Install the Dongo skills, tell your agent to set up this repository, approve in the browser, then get back to the work.</p>
           </div>
           <div class="marketing-final__actions">
             <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install dongo skills <span aria-hidden="true">↗</span></a>
@@ -147,7 +173,7 @@ export function MarketingHome() {
       <footer class="marketing-footer">
         <div class="marketing-footer__inner">
           <Brand compact />
-          <p>Agent work, without the project management.</p>
+          <p>Development work, led by agents. Kept clear for you.</p>
           <nav aria-label="Footer navigation">
             <A href="/get-started">Get started</A>
             <A href="/help">Help</A>
