@@ -14,13 +14,21 @@ local credential store.
 
 The dongo CLI connects a Git repository through OAuth Device Authorization, exposes the complete agent operation surface, and writes deterministic repository exports.
 
-## Install from a checkout
+## Install
+
+```sh
+npm install --global @wisepunk/dongo
+dongo --version
+dongo --help
+```
+
+## Build a package from a checkout
 
 Build and install the self-contained package archive so the command does not depend on workspace source files:
 
 ```sh
-npm pack --workspace @dongo/cli
-npm install --global ./dongo-cli-0.1.0.tgz
+npm pack --workspace @wisepunk/dongo
+npm install --global ./wisepunk-dongo-0.1.0.tgz
 dongo --version
 dongo --help
 ```

@@ -16,7 +16,7 @@ test("the packed CLI installs and runs without workspace dependencies", async ()
   try {
     const { stdout: packedName } = await execute(
       npm,
-      ["pack", "--silent", "--workspace", "@dongo/cli", "--pack-destination", temporaryDirectory],
+      ["pack", "--silent", "--workspace", "@wisepunk/dongo", "--pack-destination", temporaryDirectory],
       { cwd: repositoryRoot },
     );
     const archive = path.join(temporaryDirectory, packedName.trim());

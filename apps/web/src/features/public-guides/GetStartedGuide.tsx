@@ -2,11 +2,7 @@ import { A } from "@solidjs/router";
 import { dongoPublicOrigin } from "../../lib/auth-config";
 import { GuideCode, GuideSection, PublicGuideShell } from "./PublicGuideShell";
 
-const INSTALL_COMMANDS = `git clone https://github.com/renewisepunk/dongo.git
-cd dongo
-npm ci
-npm pack --workspace @dongo/cli
-npm install --global ./dongo-cli-0.1.0.tgz
+const INSTALL_COMMANDS = `npm install --global @wisepunk/dongo
 dongo --version`;
 
 const CONNECT_COMMAND = `cd /path/to/your/repository
@@ -48,9 +44,9 @@ export function GetStartedGuide() {
         index="01"
         id="install"
         title="Install the CLI"
-        lede="The first release is installed from the dongo source checkout. Node.js 20 or newer is required for the packed CLI."
+        lede="Install the published CLI from npm. Node.js 20 or newer is required. The package installs the dongo command globally."
       >
-        <GuideCode label="install from source">{INSTALL_COMMANDS}</GuideCode>
+        <GuideCode label="install from npm">{INSTALL_COMMANDS}</GuideCode>
         <p class="guide-inline-note"><span aria-hidden="true">↳</span> Run the final <code>dongo</code> commands inside the repository you want the agent to use.</p>
       </GuideSection>
 

@@ -75,11 +75,10 @@ npm run deploy:production
 
 The default `npm run deploy` points to that production release path. Rollback and environment checks are documented in [`docs/runbooks/production-release.md`](docs/runbooks/production-release.md).
 
-## Install the CLI from this checkout
+## Install the CLI
 
 ```sh
-npm pack --workspace @dongo/cli
-npm install --global ./dongo-cli-0.1.0.tgz
+npm install --global @wisepunk/dongo
 dongo --version
 dongo connect
 dongo doctor

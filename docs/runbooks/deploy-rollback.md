@@ -76,7 +76,7 @@ Recheck the affected readiness route and its upstream/downstream dependencies. A
 The CLI release artifact must be the exact packed archive accepted by CI:
 
 ```sh
-npm pack --workspace @dongo/cli
+npm pack --workspace @wisepunk/dongo
 ```
 
 Before publishing, install that archive into an isolated prefix and run `dongo --help`, `dongo auth status --json`, and the package test suite. Record the archive checksum and provenance.

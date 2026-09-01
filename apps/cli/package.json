@@ -1,10 +1,28 @@
 {
-  "name": "@dongo/cli",
+  "name": "@wisepunk/dongo",
   "version": "0.1.0",
-  "private": true,
+  "description": "Agent-first project management from the terminal and MCP hosts.",
   "type": "module",
+  "homepage": "https://dongo.so/get-started",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/renewisepunk/dongo.git",
+    "directory": "apps/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/renewisepunk/dongo/issues"
+  },
+  "keywords": [
+    "dongo",
+    "mcp",
+    "agents",
+    "project-management"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
-    "dongo": "./dist/dongo.js"
+    "dongo": "dist/dongo.js"
   },
   "files": [
     "dist",

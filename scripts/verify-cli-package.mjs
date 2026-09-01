@@ -74,7 +74,7 @@ try {
   ]);
   await chmod(configDirectory, 0o700);
 
-  run("npm", ["pack", "--workspace", "@dongo/cli", "--pack-destination", packageDirectory]);
+  run("npm", ["pack", "--workspace", "@wisepunk/dongo", "--pack-destination", packageDirectory]);
   const archives = (await readdir(packageDirectory)).filter((name) => name.endsWith(".tgz"));
   invariant(archives.length === 1, "CLI packaging must create exactly one archive.");
 
