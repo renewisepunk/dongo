@@ -6,6 +6,15 @@ function workDetail(page: Page, name: string) {
   });
 }
 
+async function openWideOverview(page: Page) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/app/fixture-studio/dongo");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const composer = page.getByRole("textbox", { name: "Add something…" });
+  await expect(composer).toBeVisible();
+  await composer.blur();
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo");
   await expect(page.getByRole("button", { name: "New", exact: true })).toHaveText("+ New");
@@ -635,16 +644,32 @@ test("uses capture and search shortcuts without hijacking text entry", async ({ 
   await expect(page.getByRole("dialog", { name: "Search this project" })).toBeVisible();
 });
 
-test("navigates, peeks, opens, and restores selection by keyboard", async ({ page }) => {
+test("opens the active issue as keyboard navigation moves through the list", async ({ page }) => {
+  await openWideOverview(page);
   const first = page.locator('[data-work-id="work-needs"]');
   const second = page.locator('[data-work-id="work-working"]');
 
   await page.keyboard.press("j");
   await expect(first).toBeFocused();
+  await expect(workDetail(page, "Approve the release candidate")).toBeVisible();
+  await expect(first).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(/work=dong007/);
+
   await page.keyboard.press("ArrowDown");
   await expect(second).toBeFocused();
+  await expect(workDetail(page, "Harden attachment delivery")).toBeVisible();
+  await expect(second).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(/work=dong008/);
+
   await page.keyboard.press("k");
   await expect(first).toBeFocused();
+  await expect(workDetail(page, "Approve the release candidate")).toBeVisible();
+  await expect(first).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(/work=dong007/);
+
+  await page.keyboard.press("Escape");
+  await expect(first).toBeFocused();
+  await expect(page).not.toHaveURL(/work=/);
 
   await page.keyboard.press("Space");
   const peek = workDetail(page, "Approve the release candidate");
@@ -783,8 +808,8 @@ test("keeps a human draft when an agent wins a simultaneous Attention edit", asy
   );
 });
 
-test("moves from wide detail to the sidebar, selects with arrows, and re-enters with Enter", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+test("keeps wide detail synchronized while arrows move through the sidebar", async ({ page }) => {
+  await openWideOverview(page);
   const first = page.locator('[data-work-id="work-ready-a"]');
   const second = page.locator('[data-work-id="work-ready-b"]');
 
@@ -802,11 +827,25 @@ test("moves from wide detail to the sidebar, selects with arrows, and re-enters 
   await expect(second.locator("..")).toHaveCSS("outline-style", "solid");
   await expect(second.locator("..")).toHaveCSS("outline-width", "2px");
   await expect(first.locator("..")).toHaveCSS("outline-style", "none");
-  await expect(page).toHaveURL(/work=dong009/);
+  const secondDetail = page.getByRole("region", { name: "Audit mobile controls" });
+  await expect(secondDetail).toBeVisible();
+  await expect(second).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(/work=dong010/);
 
   await page.keyboard.press("Control+k");
   const commands = page.getByRole("dialog", { name: "Command menu" });
   await commands.getByRole("button", { name: /Issue \/ detail/ }).click();
+  await expect(secondDetail).toBeFocused();
+  await expect(page).toHaveURL(/work=dong010/);
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(second).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(first).toBeFocused();
+  await expect(firstDetail).toBeVisible();
+  await expect(page).toHaveURL(/work=dong009/);
+
+  await page.keyboard.press("ArrowLeft");
   await expect(firstDetail).toBeFocused();
   await expect(page).toHaveURL(/work=dong009/);
 
@@ -814,23 +853,13 @@ test("moves from wide detail to the sidebar, selects with arrows, and re-enters 
   await expect(first).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(second).toBeFocused();
-
-  await page.keyboard.press("ArrowLeft");
-  await expect(firstDetail).toBeFocused();
-  await expect(page).toHaveURL(/work=dong009/);
-  await expect(second.locator("..")).toHaveCSS("outline-style", "none");
-
-  await page.keyboard.press("ArrowLeft");
-  await expect(first).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await expect(second).toBeFocused();
+  await expect(secondDetail).toBeVisible();
+  await expect(page).toHaveURL(/work=dong010/);
 
   await page.keyboard.press("Enter");
-  const secondDetail = page.getByRole("region", { name: "Audit mobile controls" });
   await expect(secondDetail).toBeVisible();
   await expect(second).toHaveAttribute("aria-current", "page");
   await expect(secondDetail.getByPlaceholder("Add a comment…")).toBeFocused();
-  await expect(second.locator("..")).toHaveCSS("outline-style", "none");
 
   await secondDetail.focus();
   await page.keyboard.press("ArrowLeft");
@@ -844,10 +873,15 @@ test("moves from wide detail to the sidebar, selects with arrows, and re-enters 
 });
 
 test("moves keyboard selection into capture and draws one outer selection border", async ({ page }) => {
+  await openWideOverview(page);
   const composer = page.getByRole("textbox", { name: "Add something…" });
   const first = page.locator('[data-work-id="work-needs"]');
 
   await page.keyboard.press("j");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("k");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("Escape");
   await expect(first).toBeFocused();
   await page.keyboard.press("k");
   await expect(composer).toBeFocused();
@@ -864,15 +898,14 @@ test("moves keyboard selection into capture and draws one outer selection border
   const ready = page.locator('[data-ready-id="work-ready-a"]');
   const readyOpen = ready.locator(".ready-row__open");
   await expect(readyOpen).toBeFocused();
-  await expect.poll(async () => ready.evaluate(
-    (element) => getComputedStyle(element).borderColor ===
-      getComputedStyle(document.documentElement).getPropertyValue("--amber").trim(),
-  )).toBe(true);
+  await expect(ready).toHaveCSS("outline-style", "solid");
+  await expect(ready).toHaveCSS("outline-width", "2px");
   await expect(readyOpen).toHaveCSS("outline-style", "none");
   await expect(readyOpen).toHaveCSS("box-shadow", "none");
 });
 
 test("opens the response surface with R and submits composers with Control Enter", async ({ page }) => {
+  await openWideOverview(page);
   await page.keyboard.press("j");
   await page.keyboard.press("r");
   const dialog = workDetail(page, "Approve the release candidate");
@@ -913,6 +946,7 @@ test("opens the command menu and compact shortcut reference", async ({ page }) =
 });
 
 test("keeps agent-owned state shortcuts truthful", async ({ page }) => {
+  await openWideOverview(page);
   await page.keyboard.press("j");
   await page.keyboard.press("j");
   await page.keyboard.press("j");

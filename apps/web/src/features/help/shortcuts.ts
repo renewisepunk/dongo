@@ -23,8 +23,8 @@ export type DongoShortcut = {
 export const DONGO_SHORTCUTS: readonly DongoShortcut[] = [
   { id: "capture", keys: ["C"], label: "Capture", description: "Focus the Intake composer." },
   { id: "search", keys: ["/"], label: "Search", description: "Search work, comments, and Intake." },
-  { id: "next", keys: ["J", "↓"], label: "Next", description: "Select the next item; from an empty capture box, return to the list." },
-  { id: "previous", keys: ["K", "↑"], label: "Previous", description: "Select the previous item; above the first item, focus the capture box." },
+  { id: "next", keys: ["J", "↓"], label: "Next", description: "Open the next issue immediately; from an empty capture box, return to the list." },
+  { id: "previous", keys: ["K", "↑"], label: "Previous", description: "Open the previous issue immediately; when detail is closed, move above the first issue to New Intake." },
   { id: "sidebar", keys: ["←"], label: "Issue / detail", description: "In the wide layout, toggle focus between the open issue detail and its sidebar row." },
   { id: "open", keys: ["Enter"], label: "Open", description: "Open the selected item and keep it in the URL." },
   { id: "peek", keys: ["Space"], label: "Peek", description: "Preview the selected item without changing the URL." },

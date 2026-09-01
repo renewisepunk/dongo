@@ -165,7 +165,7 @@ type OverviewRouteState = {
   search?: string;
 };
 
-type DetailInitialFocus = "close" | "respond" | "comment" | "detail";
+type DetailInitialFocus = "close" | "respond" | "comment" | "detail" | "preserve";
 
 class ConcurrentWorkChangeError extends Error {
   constructor() {
@@ -530,7 +530,7 @@ export function Overview(props: OverviewProps) {
     }
   };
 
-  const closeDetail = (updateRoute = true) => {
+  const closeDetail = (updateRoute = true, restoreFocus = true) => {
     const returnFocus = detailReturnFocus;
     const returnWorkId = selectedWorkId();
     const returnToSearch = detailReturnToSearch;
@@ -552,16 +552,18 @@ export function Overview(props: OverviewProps) {
     setSelectedIntakeId(undefined);
     setDetailPeek(false);
     setDetailInitialFocus("close");
-    restoreFocusAfterRender(returnToSearch ? undefined : returnFocus, () => {
-      if (returnToSearch) return searchButton;
-      if (returnWorkId) {
-        const replacement = [...document.querySelectorAll<HTMLElement>("[data-work-id]")]
-          .find((element) => element.dataset.workId === returnWorkId);
-        if (replacement) return replacement;
-      }
-      return searchButton;
-    });
-    restoreScrollAfterRender(returnScroll);
+    if (restoreFocus) {
+      restoreFocusAfterRender(returnToSearch ? undefined : returnFocus, () => {
+        if (returnToSearch) return searchButton;
+        if (returnWorkId) {
+          const replacement = [...document.querySelectorAll<HTMLElement>("[data-work-id]")]
+            .find((element) => element.dataset.workId === returnWorkId);
+          if (replacement) return replacement;
+        }
+        return searchButton;
+      });
+      restoreScrollAfterRender(returnScroll);
+    }
   };
 
   const openWork = (
@@ -581,6 +583,10 @@ export function Overview(props: OverviewProps) {
       detailReturnToSearch = resolvedReturnFocus === searchButton ||
         resolvedReturnFocus?.classList.contains("search-button") === true;
       detailReturnScroll = { x: window.scrollX, y: window.scrollY };
+    } else {
+      detailReturnFocus = returnFocus;
+      detailReturnToSearch = returnFocus === searchButton ||
+        returnFocus?.classList.contains("search-button") === true;
     }
     const item = work().find((candidate) =>
       candidate.id === reference ||
@@ -602,6 +608,7 @@ export function Overview(props: OverviewProps) {
     );
     setSelectedWorkReference(updateRoute ? routeReference : reference);
     setSelectedWorkId(item?.id ?? reference);
+    if (item) setKeyboardSelection(`work:${item.id}`);
     if (!connection) return;
     if (item?.unseen && item.attention) {
       void connection.markAttentionSeen(item.attention.id).catch(() => {
@@ -623,6 +630,7 @@ export function Overview(props: OverviewProps) {
           (detail) => {
             setSelectedWorkId(detail.id);
             setSelectedWorkDetail(detail);
+            setKeyboardSelection(`work:${detail.id}`);
           },
           () => {
             announce("This Work item is unavailable");
@@ -634,6 +642,7 @@ export function Overview(props: OverviewProps) {
           (detail) => {
             setSelectedWorkId(detail.id);
             setSelectedWorkDetail(detail);
+            setKeyboardSelection(`work:${detail.id}`);
           },
           () => {
             announce("This Work item is unavailable");
@@ -659,6 +668,10 @@ export function Overview(props: OverviewProps) {
       detailReturnToSearch = resolvedReturnFocus === searchButton ||
         resolvedReturnFocus?.classList.contains("search-button") === true;
       detailReturnScroll = { x: window.scrollX, y: window.scrollY };
+    } else {
+      detailReturnFocus = returnFocus;
+      detailReturnToSearch = returnFocus === searchButton ||
+        returnFocus?.classList.contains("search-button") === true;
     }
     if (updateRoute) applyRouteUpdate({ work: undefined, intake: id });
     unsubscribeWork?.();
@@ -671,6 +684,7 @@ export function Overview(props: OverviewProps) {
     setDetailPeek(peek);
     setDetailInitialFocus(initialFocus);
     setSelectedIntakeId(id);
+    setKeyboardSelection(`intake:${id}`);
     if (!connection || id.startsWith("optimistic:")) return;
     unsubscribeIntake = connection.subscribeIntakeDetail(
       id,
@@ -715,6 +729,47 @@ export function Overview(props: OverviewProps) {
     ) return;
     event.preventDefault();
     openIntake(id, true, event.currentTarget);
+  };
+
+  const activateNavigationItem = (
+    kind: "work" | "intake",
+    id: string,
+    element: HTMLElement,
+    initialFocus: DetailInitialFocus = "close",
+  ) => {
+    setKeyboardSelection(`${kind}:${id}`);
+    if (kind === "work") {
+      const item = work().find((candidate) => candidate.id === id);
+      const routeReference = item?.identifier ?? id;
+      if (
+        selectedWorkId() !== id ||
+        Boolean(selectedIntakeId()) ||
+        currentRouteState().work !== routeReference
+      ) {
+        openWork(id, true, element, false, initialFocus);
+      }
+      return;
+    }
+    if (
+      selectedIntakeId() !== id ||
+      Boolean(selectedWorkId()) ||
+      currentRouteState().intake !== id
+    ) {
+      openIntake(id, true, element, false, initialFocus);
+    }
+  };
+
+  const trackNavigationItemFocus = (kind: "work" | "intake", id: string) => {
+    const noActiveIssue = !selectedWorkId() && !selectedIntakeId();
+    const alreadyActive = kind === "work"
+      ? selectedWorkId() === id && !selectedIntakeId()
+      : selectedIntakeId() === id && !selectedWorkId();
+    if (noActiveIssue || alreadyActive) setKeyboardSelection(`${kind}:${id}`);
+  };
+
+  const activateCaptureNavigation = () => {
+    setKeyboardSelection("capture:composer");
+    if (selectedWorkId() || selectedIntakeId()) closeDetail(true, false);
   };
 
   createEffect(() => {
@@ -1039,14 +1094,15 @@ export function Overview(props: OverviewProps) {
   };
 
   const selectedNavItem = (): HTMLElement | undefined => {
+    const selected = keyboardSelection();
+    if (selected) {
+      const matching = navigableItems().find((element) => navKey(element) === selected);
+      if (matching) return matching;
+    }
     const focused = document.activeElement instanceof Element
       ? document.activeElement.closest<HTMLElement>("[data-nav-item]")
       : null;
-    if (focused) return focused;
-    const selected = keyboardSelection();
-    return selected
-      ? navigableItems().find((element) => navKey(element) === selected)
-      : undefined;
+    return focused ?? undefined;
   };
 
   const selectedDetailNavItem = (): HTMLElement | undefined => {
@@ -1128,6 +1184,22 @@ export function Overview(props: OverviewProps) {
     if (key) setKeyboardSelection(key);
     next.focus({ preventScroll: true });
     next.scrollIntoView({ block: "nearest" });
+    const kind = next.dataset.navKind;
+    const id = next.dataset.navId;
+    if ((kind === "work" || kind === "intake") && id) {
+      const preserveSidebarFocus = window.matchMedia("(min-width: 1100px)").matches;
+      activateNavigationItem(kind, id, next, preserveSidebarFocus ? "preserve" : "close");
+      if (preserveSidebarFocus) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (keyboardSelection() !== key) return;
+            if (document.activeElement instanceof Element && document.activeElement.closest(".detail")) return;
+            const activeRow = navigableItems().find((element) => navKey(element) === key);
+            activeRow?.focus({ preventScroll: true });
+          });
+        });
+      }
+    }
   };
 
   const requireSelectedItem = (): HTMLElement | undefined => {
@@ -1158,8 +1230,12 @@ export function Overview(props: OverviewProps) {
     const id = selected.dataset.navId;
     if (!id) return;
     if (selected.dataset.navKind === "work") {
-      if (respond && wideDetailLayout() && selectedWorkId() === id && focusCurrentWorkResponse(id)) {
-        return;
+      if (!peek && wideDetailLayout() && selectedWorkId() === id) {
+        const item = work().find((candidate) => candidate.id === id);
+        const focused = respond || (item?.attention && !item.attention.response)
+          ? focusCurrentWorkResponse(id)
+          : focusCurrentWorkComment(id);
+        if (focused) return;
       }
       openWork(
         id,
@@ -1172,6 +1248,10 @@ export function Overview(props: OverviewProps) {
     }
     if (respond) {
       announce("Respond and review are available on Work items");
+      return;
+    }
+    if (!peek && wideDetailLayout() && selectedIntakeId() === id) {
+      focusCurrentOpenDetail();
       return;
     }
     openIntake(
@@ -1215,7 +1295,7 @@ export function Overview(props: OverviewProps) {
 
   const focusCapture = () => {
     if (searchOpen()) closeSearch(true, false);
-    if (selectedWorkId() || selectedIntakeId()) closeDetail();
+    if (selectedWorkId() || selectedIntakeId()) closeDetail(true, false);
     setComposerOpen(true);
     queueMicrotask(() => {
       composerInput?.focus({ preventScroll: true });
@@ -1727,7 +1807,7 @@ export function Overview(props: OverviewProps) {
                   data-keyboard-selected={keyboardSelection() === "capture:composer"}
                   aria-keyshortcuts="C ArrowDown"
                   disabled={loading() || Boolean(loadError())}
-                  onFocus={() => setKeyboardSelection("capture:composer")}
+                  onFocus={activateCaptureNavigation}
                   onClick={focusCapture}
                 >
                   <span aria-hidden="true">+</span> New
@@ -1758,7 +1838,7 @@ export function Overview(props: OverviewProps) {
               aria-keyshortcuts="C ArrowDown Meta+Enter Control+Enter"
               rows={draft().length > 60 ? 4 : 2}
               value={draft()}
-              onFocus={() => setKeyboardSelection("capture:composer")}
+              onFocus={activateCaptureNavigation}
               onInput={(event) => {
                 setDraft(event.currentTarget.value);
                 setSubmissionKey(crypto.randomUUID());
@@ -1952,7 +2032,7 @@ export function Overview(props: OverviewProps) {
                   data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
                   aria-current={selectedWorkId() === item.id ? "page" : undefined}
                   aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
-                  onFocus={() => setKeyboardSelection(`work:${item.id}`)}
+                  onFocus={() => trackNavigationItemFocus("work", item.id)}
                   onClick={(event) => handleWorkLink(event, item.identifier)}
                 >
                   <span class="work-row__head">
@@ -1987,7 +2067,7 @@ export function Overview(props: OverviewProps) {
                   data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
                   aria-current={selectedWorkId() === item.id ? "page" : undefined}
                   aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
-                  onFocus={() => setKeyboardSelection(`work:${item.id}`)}
+                  onFocus={() => trackNavigationItemFocus("work", item.id)}
                   onClick={(event) => handleWorkLink(event, item.identifier)}
                 >
                   <span class="work-row__head">
@@ -2045,7 +2125,7 @@ export function Overview(props: OverviewProps) {
                     draggable="true"
                     aria-current={selectedWorkId() === item.id ? "page" : undefined}
                     aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
-                    onFocus={() => setKeyboardSelection(`work:${item.id}`)}
+                    onFocus={() => trackNavigationItemFocus("work", item.id)}
                     onClick={(event) => handleWorkLink(event, item.identifier)}
                   >
                     <span class="ready-row__position">{String(index() + 1).padStart(2, "0")}</span>
@@ -2073,7 +2153,7 @@ export function Overview(props: OverviewProps) {
                   aria-current={selectedIntakeId() === intake.id ? "page" : undefined}
                   aria-label={intake.text}
                   aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space"
-                  onFocus={() => setKeyboardSelection(`intake:${intake.id}`)}
+                  onFocus={() => trackNavigationItemFocus("intake", intake.id)}
                   onClick={(event) => handleIntakeLink(event, intake.id)}
                 >
                   <span class="work-row__summary">{intake.text}</span>
@@ -2110,7 +2190,7 @@ export function Overview(props: OverviewProps) {
                   data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
                   aria-current={selectedWorkId() === item.id ? "page" : undefined}
                   aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
-                  onFocus={() => setKeyboardSelection(`work:${item.id}`)}
+                  onFocus={() => trackNavigationItemFocus("work", item.id)}
                   onClick={(event) => handleWorkLink(event, item.identifier)}
                 >
                   <span style={{ color: "var(--green)" }} class="mono">✓</span>
