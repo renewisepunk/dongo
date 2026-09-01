@@ -13,6 +13,7 @@ import type * as crons from "../crons.js";
 import type * as dev_bootstrap from "../dev/bootstrap.js";
 import type * as dev_bootstrapAction from "../dev/bootstrapAction.js";
 import type * as dev_brandMigration from "../dev/brandMigration.js";
+import type * as domains_agent_privacy from "../domains/agent/privacy.js";
 import type * as domains_agentUpdates_index from "../domains/agentUpdates/index.js";
 import type * as domains_artifacts_index from "../domains/artifacts/index.js";
 import type * as domains_attachments_actions from "../domains/attachments/actions.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   "dev/bootstrap": typeof dev_bootstrap;
   "dev/bootstrapAction": typeof dev_bootstrapAction;
   "dev/brandMigration": typeof dev_brandMigration;
+  "domains/agent/privacy": typeof domains_agent_privacy;
   "domains/agentUpdates/index": typeof domains_agentUpdates_index;
   "domains/artifacts/index": typeof domains_artifacts_index;
   "domains/attachments/actions": typeof domains_attachments_actions;
