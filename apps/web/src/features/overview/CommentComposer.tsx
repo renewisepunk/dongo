@@ -253,7 +253,11 @@ export function CommentComposer(props: CommentComposerProps) {
         data-comment-composer
         aria-keyshortcuts="Meta+Enter Control+Enter"
         value={body()}
-        onInput={(event) => setBody(event.currentTarget.value)}
+        onInput={(event) => {
+          const nextBody = event.currentTarget.value;
+          setBody(nextBody);
+          writeLocalDraft(props.draftKey, nextBody);
+        }}
         onPaste={(event) => {
           const files = pastedFiles(event.clipboardData);
           if (files.length === 0) return;

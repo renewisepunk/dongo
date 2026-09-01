@@ -2417,6 +2417,15 @@ function WorkDetail(props: WorkDetailProps) {
   let identifierCopyTimer: number | undefined;
   let activeResponseDraftKey = responseDraftKey();
 
+  const persistResponseDraft = (key: string, savedChoice: string | undefined, savedResponse: string) => {
+    writeLocalDraft(
+      key,
+      savedChoice || savedResponse
+        ? JSON.stringify({ choice: savedChoice, response: savedResponse })
+        : "",
+    );
+  };
+
   createEffect(() => {
     const key = responseDraftKey();
     if (key !== activeResponseDraftKey) {
@@ -2429,12 +2438,7 @@ function WorkDetail(props: WorkDetailProps) {
     }
     const savedChoice = choice();
     const savedResponse = response();
-    writeLocalDraft(
-      key,
-      savedChoice || savedResponse
-        ? JSON.stringify({ choice: savedChoice, response: savedResponse })
-        : "",
-    );
+    persistResponseDraft(key, savedChoice, savedResponse);
   });
 
   onCleanup(() => window.clearTimeout(identifierCopyTimer));
@@ -2611,7 +2615,10 @@ function WorkDetail(props: WorkDetailProps) {
             }>
               <div class="attention-options">
                 <For each={attention().options ?? []}>{(option) => (
-                  <button class="attention-option" data-selected={choice() === option} type="button" onClick={() => setChoice(option)}>
+                  <button class="attention-option" data-selected={choice() === option} type="button" onClick={() => {
+                    setChoice(option);
+                    persistResponseDraft(responseDraftKey(), option, response());
+                  }}>
                     <span class="attention-option__dot" /><span>{option}</span>
                   </button>
                 )}</For>
@@ -2620,7 +2627,11 @@ function WorkDetail(props: WorkDetailProps) {
                   data-response-composer
                   aria-keyshortcuts="Meta+Enter Control+Enter"
                   value={response()}
-                  onInput={(event) => setResponse(event.currentTarget.value)}
+                  onInput={(event) => {
+                    const nextResponse = event.currentTarget.value;
+                    setResponse(nextResponse);
+                    persistResponseDraft(responseDraftKey(), choice(), nextResponse);
+                  }}
                   onKeyDown={(event) => {
                     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                       event.preventDefault();
