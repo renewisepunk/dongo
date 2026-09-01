@@ -25,13 +25,9 @@ may call `dongo_get_attention` immediately and then after 5, 10, 20, and at most
 30 seconds between checks, stopping after five minutes. A stopped host does not
 restart itself.
 
-New Intake uses a separate bounded pull. After `dongo_session_start`, call
-`dongo_get_updates` once without a cursor to drain retained signals from version
-0, then preserve the returned cursor. Each wait is capped at 20 seconds; drain
-`hasMore` without waiting. Refetch Intake because a retained signal may be stale.
-**Notify agent** raises a priority hint but does not assign Intake or restart
-Codex.
-When Codex is using the CLI adapter instead, use `dongo updates get` for one
-pull or `dongo updates wait --timeout-seconds N` while the process remains live.
+New Intake becomes visible when Codex starts or resumes and calls
+`dongo_session_start` or otherwise explicitly pulls current dongo state. dongo
+does not wake or restart Codex, and the web app exposes no agent-notification
+action.
 
 To remove local configuration, run `codex mcp logout dongo-{{shortProjectRef}}` and `codex mcp remove dongo-{{shortProjectRef}}`. Revoke the project installation separately in dongo when server-side invalidation is intended.

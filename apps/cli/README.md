@@ -121,14 +121,11 @@ claims to restart a stopped process. A new agent session must call
 `dongo_session_start`, which returns newly resolved Attention for that
 installation, before continuing prior work.
 
-`dongo updates get` performs one immediate pull for project update signals.
-`dongo updates wait` registers a live bounded waiter and waits up to five
-minutes by default for new Intake signals; use `--cursor` to resume after the
-last processed update and `--timeout-seconds` to choose a 1–3600 second bound.
-Each server wait is capped at 20 seconds and checks with 1, 2, 4, then 5 second
-backoff. Drain immediately while `hasMore` is true. The web app may describe a
-nudge as promptly deliverable only while a waiter is live; a stopped CLI does
-not restart itself, and queued signals are returned on its next explicit pull.
+`dongo updates get` and `dongo updates wait` retain compatibility with the
+bounded project-update stream. The web app does not expose an agent-notification
+action, and these commands do not wake, restart, prompt, assign, or prove
+delivery to an agent harness. A stopped CLI receives nothing until its process
+is started again and explicitly pulls current dongo state.
 
 Every installed CLI connection targets the live service at `https://dongo.so`. There is no environment picker or custom-origin flag. Development infrastructure is available only to dongo's source-level internal harnesses, and a released CLI refuses a repository marker from any non-production origin before sending credentials.
 

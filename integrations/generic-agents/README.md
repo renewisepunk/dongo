@@ -12,11 +12,7 @@ different repository still needs `dongo connect`; an active-project plan limit
 requires an upgrade, archive, or exact existing-project choice rather than a new
 account login.
 
-For new Intake while the host remains active, call `dongo_get_updates` after
-`dongo_session_start`. Omit the cursor once to drain retained signals from
-version 0, preserve every returned cursor, cap each wait at 20 seconds, and drain
-`hasMore` with no wait. Refetch Intake and ignore stale signals. The UI's
-**Notify agent** action is only a priority hint; it cannot assign work or restart
-a stopped host.
-CLI adapters use `dongo updates get [--cursor N]` for one pull or `dongo updates
-wait [--cursor N] [--timeout-seconds N]` while the process remains active.
+New Intake becomes visible when the agent host starts or resumes and calls
+`dongo_session_start` or otherwise explicitly pulls current dongo state. dongo
+does not wake or restart an arbitrary host, and the web app exposes no
+agent-notification action.

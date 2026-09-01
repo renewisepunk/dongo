@@ -27,21 +27,13 @@ import {
   ProjectDataConnection,
 } from "../../lib/project-data";
 import {
-  agentPresenceFeedback,
-  nudgeDeliveryFeedback,
-  nudgePriorityHelp,
-} from "../../lib/agent-update-feedback";
-import {
   clearLocalDraft,
   readLocalDraft,
   writeLocalDraft,
 } from "../../lib/local-drafts";
 import type {
-  AgentUpdatePresence,
   IntakeUpdateInput,
   IntakeUpdateResult,
-  IntakeNudgePriority,
-  IntakeNudgeResult,
   ProjectInfo,
   ProjectSearchCursor,
   ProjectSearchResult,
@@ -64,11 +56,9 @@ export type OverviewConnection = Pick<
   | "subscribeWorkById"
   | "subscribeWorkByIdentifier"
   | "subscribeIntakeDetail"
-  | "subscribeAgentUpdatePresence"
   | "searchProject"
   | "createIntake"
   | "updateIntake"
-  | "nudgeIntake"
   | "uploadAttachment"
   | "discardAttachment"
   | "downloadAttachment"
@@ -245,8 +235,6 @@ export function Overview(props: OverviewProps) {
   const [selectedWorkDetail, setSelectedWorkDetail] = createSignal<WorkItem>();
   const [selectedIntakeId, setSelectedIntakeId] = createSignal<string>();
   const [selectedIntakeDetail, setSelectedIntakeDetail] = createSignal<Intake>();
-  const [agentPresence, setAgentPresence] = createSignal<AgentUpdatePresence>();
-  const [agentPresenceStatus, setAgentPresenceStatus] = createSignal<"loading" | "ready" | "error">("loading");
   const [concurrency, setConcurrency] = createSignal<ProjectConcurrencySnapshot>();
   const [concurrencyStatus, setConcurrencyStatus] = createSignal<"loading" | "ready" | "error">("loading");
   const [searchOpen, setSearchOpen] = createSignal(false);
@@ -280,7 +268,6 @@ export function Overview(props: OverviewProps) {
   let unsubscribeConcurrency: (() => void) | undefined;
   let unsubscribeWork: (() => void) | undefined;
   let unsubscribeIntake: (() => void) | undefined;
-  let unsubscribeAgentPresence: (() => void) | undefined;
   let fileInput: HTMLInputElement | undefined;
   let projectMenuButton: HTMLButtonElement | undefined;
   let projectMenu: HTMLDivElement | undefined;
@@ -1589,13 +1576,6 @@ export function Overview(props: OverviewProps) {
           },
           () => setConcurrencyStatus("error"),
         );
-        unsubscribeAgentPresence = connected.subscribeAgentUpdatePresence(
-          (presence) => {
-            setAgentPresence(presence);
-            setAgentPresenceStatus("ready");
-          },
-          () => setAgentPresenceStatus("error"),
-        );
       } catch {
         setLoadError("This project could not be loaded for your account.");
         setLoading(false);
@@ -1626,7 +1606,6 @@ export function Overview(props: OverviewProps) {
     unsubscribeConcurrency?.();
     unsubscribeWork?.();
     unsubscribeIntake?.();
-    unsubscribeAgentPresence?.();
     void (async () => {
       await Promise.allSettled([...pendingUploads.values()]);
       if (connected) {
@@ -2282,8 +2261,6 @@ export function Overview(props: OverviewProps) {
           intake={intake()}
           ideasHref={`/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/ideas`}
           work={work()}
-          agentPresence={agentPresence()}
-          agentPresenceStatus={agentPresenceStatus()}
           onClose={closeDetail}
           onOpenWork={openWork}
           onDownload={downloadAttachment}
@@ -2294,10 +2271,6 @@ export function Overview(props: OverviewProps) {
           onSave={async (input) => {
             if (!connection) throw new Error("intake_update_unavailable");
             return await connection.updateIntake(input);
-          }}
-          onNudge={async (priority, idempotencyKey) => {
-            if (!connection) throw new Error("nudge_unavailable");
-            return await connection.nudgeIntake(intake().id, priority, idempotencyKey);
           }}
         />
       )}</Show>
@@ -2771,8 +2744,6 @@ type IntakeDetailProps = {
   intake: Intake;
   ideasHref: string;
   work: WorkItem[];
-  agentPresence?: AgentUpdatePresence;
-  agentPresenceStatus: "loading" | "ready" | "error";
   onClose: () => void;
   onOpenWork: (id: string) => void;
   onDownload: (attachmentId: string) => Promise<void>;
@@ -2781,27 +2752,11 @@ type IntakeDetailProps = {
   discardAttachment?: OverviewConnection["discardAttachment"];
   announce: (message: string) => void;
   onSave: (input: IntakeUpdateInput) => Promise<IntakeUpdateResult>;
-  onNudge: (
-    priority: IntakeNudgePriority,
-    idempotencyKey: string,
-  ) => Promise<IntakeNudgeResult>;
 };
 
 function IntakeDetail(props: IntakeDetailProps) {
   const linked = () => props.work.filter((item) => props.intake.linkedWorkIds?.includes(item.id));
   const [editorVisible, setEditorVisible] = createSignal(props.intake.editable);
-  const [nudgePriority, setNudgePriority] = createSignal<IntakeNudgePriority>("normal");
-  const [nudgePending, setNudgePending] = createSignal(false);
-  const [nudgeError, setNudgeError] = createSignal("");
-  const [nudgeResult, setNudgeResult] = createSignal<IntakeNudgeResult>();
-  const [nudgeKey, setNudgeKey] = createSignal(crypto.randomUUID());
-  let nudgeIntakeId = props.intake.id;
-  let nudgeGeneration = 0;
-  const presenceFeedback = createMemo(() => agentPresenceFeedback(props.agentPresence));
-  const deliveryFeedback = createMemo(() => {
-    const result = nudgeResult();
-    return result ? nudgeDeliveryFeedback(result) : undefined;
-  });
   let closeButton: HTMLButtonElement | undefined;
   let detailPanel: HTMLElement | undefined;
 
@@ -2814,38 +2769,8 @@ function IntakeDetail(props: IntakeDetailProps) {
   });
 
   createEffect(() => {
-    const intakeId = props.intake.id;
-    if (intakeId === nudgeIntakeId) {
-      if (props.intake.editable) setEditorVisible(true);
-      return;
-    }
-    nudgeIntakeId = intakeId;
     setEditorVisible(props.intake.editable);
-    nudgeGeneration += 1;
-    setNudgePriority("normal");
-    setNudgePending(false);
-    setNudgeError("");
-    setNudgeResult(undefined);
-    setNudgeKey(crypto.randomUUID());
   });
-
-  const notifyAgent = async () => {
-    if (nudgePending() || props.intake.status !== "waiting") return;
-    const generation = ++nudgeGeneration;
-    setNudgePending(true);
-    setNudgeError("");
-    try {
-      const result = await props.onNudge(nudgePriority(), nudgeKey());
-      if (generation !== nudgeGeneration) return;
-      setNudgeResult(result);
-      setNudgeKey(crypto.randomUUID());
-    } catch {
-      if (generation !== nudgeGeneration) return;
-      setNudgeError("The agent notification could not be saved. Try again; dongo will safely reuse the same request.");
-    } finally {
-      if (generation === nudgeGeneration) setNudgePending(false);
-    }
-  };
 
   return (
     <article
@@ -2896,42 +2821,6 @@ function IntakeDetail(props: IntakeDetailProps) {
             discardAttachment={props.discardAttachment!}
             announce={props.announce}
           />
-        </Show>
-        <Show when={props.intake.status === "waiting"}>
-          <section class="detail-section" aria-labelledby="notify-agent-label">
-            <div class="detail-section__label" id="notify-agent-label">notify agent</div>
-            <div class="detail-card agent-nudge-card">
-              <Show
-                when={props.agentPresenceStatus !== "loading"}
-                fallback={<div class="note" role="status">Checking whether an agent is waiting for updates…</div>}
-              >
-                <div class="agent-nudge-presence" data-prompt-delivery={presenceFeedback().promptDeliveryAvailable} aria-live="polite">
-                  <strong>{props.agentPresenceStatus === "error" ? "Live agent status is unavailable." : presenceFeedback().title}</strong>
-                  <span>{props.agentPresenceStatus === "error"
-                    ? "You can still notify the agent. dongo will report the actual delivery result after saving it."
-                    : presenceFeedback().body}</span>
-                </div>
-              </Show>
-              <div class="choice-list choice-list--compact" role="radiogroup" aria-label="Notification priority">
-                <button class="choice" type="button" role="radio" aria-checked={nudgePriority() === "normal"} data-selected={nudgePriority() === "normal"} disabled={nudgePending()} onClick={() => { setNudgePriority("normal"); setNudgeError(""); }}>
-                  <span class="choice__dot" aria-hidden="true" /><span class="choice__copy"><span class="choice__title">Normal</span></span>
-                </button>
-                <button class="choice" type="button" role="radio" aria-checked={nudgePriority() === "important"} data-selected={nudgePriority() === "important"} disabled={nudgePending()} onClick={() => { setNudgePriority("important"); setNudgeError(""); }}>
-                  <span class="choice__dot" aria-hidden="true" /><span class="choice__copy"><span class="choice__title">Important</span></span>
-                </button>
-              </div>
-              <p class="note">{nudgePriorityHelp(nudgePriority())}</p>
-              <Show when={deliveryFeedback()}>{(feedback) => (
-                <div class="agent-nudge-result" data-prompt-delivery={feedback().promptDeliveryAvailable} role="status" aria-live="polite">
-                  <strong>{feedback().title}</strong><span>{feedback().body}</span>
-                </div>
-              )}</Show>
-              <Show when={nudgeError()}><div class="error" role="alert">{nudgeError()}</div></Show>
-              <button class="button" type="button" disabled={nudgePending() || props.agentPresenceStatus === "loading"} onClick={() => void notifyAgent()}>
-                {nudgePending() ? "Notifying…" : nudgeResult() ? "Notify again" : "Notify agent"}
-              </button>
-            </div>
-          </section>
         </Show>
         <Show when={linked().length}>
           <section class="detail-section">

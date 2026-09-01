@@ -335,57 +335,12 @@ test("retains the draft when an agent finishes processing during save", async ({
   await expect(detail.getByText(/submitted details are read-only/i)).toBeVisible();
 });
 
-test("notifies a live bounded waiter with explicit priority semantics", async ({ page }) => {
+test("does not offer a false agent notification action for waiting Intake", async ({ page }) => {
   await page.getByText("Investigate the fixture login screen", { exact: true }).click();
   const detail = workDetail(page, "Investigate the fixture login screen");
 
-  await expect(detail.getByText("An agent is waiting for updates.", { exact: true })).toBeVisible();
-  await expect(detail.getByText("dongo can deliver this promptly through the live bounded wait.", { exact: true })).toBeVisible();
-  await detail.getByRole("radio", { name: "Important" }).click();
-  await expect(detail.getByText(/does not bypass bounded pull or restart a stopped agent/i)).toBeVisible();
-  await detail.getByRole("button", { name: "Notify agent" }).click();
-
-  await expect(detail.getByText("Notification is ready for a waiting agent.", { exact: true })).toBeVisible();
-  const nudge = JSON.parse(await page.locator("html").getAttribute("data-fixture-intake-nudge") ?? "null");
-  expect(nudge).toMatchObject({ intakeId: "intake-waiting", priority: "important" });
-});
-
-test("queues a notification for the next explicit pull without overstating recent activity", async ({ page }) => {
-  await page.goto("/app/fixture-studio/dongo?scenario=presence-next-pull");
-  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
-  const detail = workDetail(page, "Investigate the fixture login screen");
-
-  await expect(detail.getByText("No agent is waiting for live updates.", { exact: true })).toBeVisible();
-  await expect(detail.getByText("This Intake will be available on the agent’s next explicit pull.", { exact: true })).toBeVisible();
-  await detail.getByRole("button", { name: "Notify agent" }).click();
-  await expect(detail.getByText("Notification queued for the next agent pull.", { exact: true })).toBeVisible();
-  await expect(detail.getByText(/delivered promptly/i)).toBeHidden();
-});
-
-test("states that stopped agents do not restart and follows live waiter changes", async ({ page }) => {
-  await page.goto("/app/fixture-studio/dongo?scenario=presence-live-change");
-  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
-  const detail = workDetail(page, "Investigate the fixture login screen");
-
-  await expect(detail.getByText(/A stopped agent will not restart/)).toBeVisible();
-  await expect(detail.getByText("An agent is waiting for updates.", { exact: true })).toBeVisible();
-});
-
-test("disables notification while presence loads and keeps a safe retry after failure", async ({ page }) => {
-  await page.goto("/app/fixture-studio/dongo?scenario=presence-slow");
-  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
-  const detail = workDetail(page, "Investigate the fixture login screen");
-  await expect(detail.getByText("Checking whether an agent is waiting for updates…", { exact: true })).toBeVisible();
-  await expect(detail.getByRole("button", { name: "Notify agent" })).toBeDisabled();
-  await expect(detail.getByRole("button", { name: "Notify agent" })).toBeEnabled();
-
-  await page.goto("/app/fixture-studio/dongo?scenario=nudge-error");
-  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
-  const failedDetail = workDetail(page, "Investigate the fixture login screen");
-  await failedDetail.getByRole("button", { name: "Notify agent" }).click();
-  await expect(failedDetail.getByRole("alert")).toContainText("could not be saved");
-  await expect(failedDetail.getByText("fixture nudge detail must stay hidden")).toBeHidden();
-  await expect(failedDetail.getByRole("button", { name: "Notify agent" })).toBeEnabled();
+  await expect(detail.getByRole("button", { name: /notify agent/i })).toHaveCount(0);
+  await expect(detail.getByText(/agent is waiting for updates|next explicit pull|stopped agent/i)).toHaveCount(0);
 });
 
 test("reorders Ready work by drag and by accessible controls", async ({ page }) => {

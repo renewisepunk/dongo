@@ -105,21 +105,21 @@ Never create a second Intake for one Idea, even after a timeout or lost response
 Refetch the Idea before recovery. Promotion creates waiting Intake only; it does
 not claim, assign, notify, or authorize an agent to start work.
 
-## New Intake update delivery
+## Retained Intake update stream
 
-The **Notify agent** action creates a durable, versioned `intake_available`
-signal. It does not send work directly to an agent, claim Intake, authorize
-execution, bypass manual mode, or restart a stopped process. `Important` changes
-only the signal priority; it does not bypass bounded delivery.
+The versioned `intake_available` stream remains deployed for backward
+compatibility, but the web app does not expose a human notification action.
+The stream is bounded pull infrastructure, not a cross-harness wake mechanism,
+and no UI may imply that it restarts, prompts, assigns, or reaches an agent.
 
 For an active MCP or CLI host:
 
 1. Start with `dongo_session_start`; its Overview is authoritative for existing
    Inbox Intake.
-2. Call MCP `dongo_get_updates` or CLI `dongo updates get` without a cursor. The
-   cursorless pull starts at version 0 and drains retained signals so a nudge
-   cannot be lost between session start and the first pull. Refetch the Intake
-   and ignore a signal whose item is no longer waiting in Inbox.
+2. Legacy adapters may call MCP `dongo_get_updates` or CLI `dongo updates get`
+   without a cursor. The cursorless pull starts at version 0 and drains retained
+   signals. Refetch the Intake and ignore a signal whose item is no longer
+   waiting in Inbox.
 3. Pass the returned cursor unchanged. MCP may set `waitSeconds` between 0 and
    20. CLI may run `dongo updates wait --cursor N --timeout-seconds N` with a
    1–3600 second caller bound, defaulting to 300 seconds. The CLI composes server
@@ -132,17 +132,10 @@ For an active MCP or CLI host:
    bounded wait only while the host remains active.
 
 Never increment or guess the cursor, substitute an update ID for it, or use it
-as an idempotency key. Reads require no idempotency key. The Notify mutation uses
-one stable key per user request: the same key replays the same signal, while a
-deliberate later re-nudge uses a new key and creates a new version. Prevent an
-accidental double-submit from generating two keys.
-
-The UI may say **Notification delivered to a waiting agent** only when backend
-presence reports at least one waiting installation. Otherwise it must say
-**Notification queued for the next agent pull**. Queueing does not imply a push
-channel or background daemon. A stopped agent learns about current Inbox on its
-next `dongo updates get`, `dongo session-start --json`, or other explicit pull;
-`dongo updates wait` works only while its CLI process remains running.
+as an idempotency key. Reads require no idempotency key. A stopped agent learns
+about current Inbox only when its host starts or resumes it and explicitly pulls
+current dongo state. `dongo updates wait` works only while its CLI process
+remains running.
 
 Likewise, **An agent is waiting for updates** means the backend has a live
 bounded wait for that installation. **No agent is waiting for live updates**

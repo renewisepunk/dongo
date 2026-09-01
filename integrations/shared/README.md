@@ -23,19 +23,10 @@ limit is not an authentication failure: preserve the session and offer upgrade,
 archive, or an exact existing-project binding instead of logging out or retrying
 OAuth.
 
-Active MCP hosts learn about new Intake through `dongo_get_updates`. Call it
-once without a cursor after `dongo_session_start`; that first pull starts at
-version 0 and drains retained signals. Then pass each returned cursor unchanged.
-One call may wait for at most 20 seconds and uses bounded 1/2/4/5 second server
-checks; drain `hasMore` with `waitSeconds: 0`. The UI's **Notify agent** action
-adds a `normal` or `important` signal only. Refetch Intake and ignore stale
-signals; a nudge does not assign, claim, or restart an agent. Without a live
-waiter, the signal remains available for the next explicit pull.
-
-CLI hosts use `dongo updates get [--cursor N]` for one pull or `dongo updates
-wait [--cursor N] [--timeout-seconds N]` for the same stream. CLI wait defaults
-to five minutes, accepts a 1–3600 second caller bound, and composes server waits
-of at most 20 seconds. It cannot receive anything after its process stops.
+New Intake becomes visible when a host starts or resumes and calls
+`dongo_session_start` or otherwise explicitly pulls current dongo state. dongo
+does not provide a universal cross-harness wake mechanism, and the web app
+exposes no agent-notification action.
 
 Humans may enrich waiting or claimed Intake with text, context, links, and
 additional finalized attachments. The save preserves an existing claim but

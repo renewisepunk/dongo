@@ -135,12 +135,10 @@ The response contains `cursor`, `updates`, `hasMore`, `wait`, `delivery`, and
 elapsed milliseconds. `delivery.mechanism` is `bounded_pull`, and
 `delivery.stoppedAgentsRestarted` is always false.
 
-The web action **Notify agent** creates the hint with a separate stable
-idempotency key for that click/request. Replaying the same key returns the same
-signal; a deliberate later re-nudge uses a new key and creates a new versioned
-update. The UI reports delivery only when the backend observed a waiting
-installation; otherwise it truthfully queues the hint for the next explicit
-pull.
+The versioned Intake signal and nudge mutation remain available for backward
+compatibility with already-loaded clients, but the web app exposes no human
+notification action. A signal is never evidence that an agent harness was
+woken, restarted, prompted, assigned, or that it consumed the update.
 
 ## Human Intake enrichment and agent revisions
 

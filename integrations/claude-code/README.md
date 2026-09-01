@@ -33,15 +33,10 @@ may call `dongo_get_attention` immediately and then after 5, 10, 20, and at most
 30 seconds between checks, stopping after five minutes. A stopped host does not
 restart itself.
 
-New Intake uses `dongo_get_updates`. After `dongo_session_start`, establish a
-retained-signal drain from version 0 by omitting the cursor once, then pass each
-returned cursor unchanged. Each wait is capped at 20 seconds and `hasMore` must
-be drained without waiting. Refetch Intake because signals may be stale.
-**Notify agent** creates a priority hint; it does not assign Intake or restart a
-stopped Claude Code process.
-When Claude Code is using the CLI adapter instead, use `dongo updates get` for
-one pull or `dongo updates wait --timeout-seconds N` only while that process
-remains live.
+New Intake becomes visible when Claude Code starts or resumes and calls
+`dongo_session_start` or otherwise explicitly pulls current dongo state. dongo
+does not wake or restart Claude Code, and the web app exposes no
+agent-notification action.
 
 The logout command printed by the integration clears Claude Code's local login.
 The removal command deletes only this repository's dongo connection. Revoke the

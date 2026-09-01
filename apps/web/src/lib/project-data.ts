@@ -171,45 +171,6 @@ export type ProjectInstallation = {
   lastUsedAt?: number;
 };
 
-export type AgentUpdatePresence = {
-  serverTime: number;
-  installations: Array<{
-    installationId: string;
-    actor: {
-      id: string;
-      displayName: string;
-      agentType?: string;
-      machineLabel?: string;
-    };
-    capability: "get_updates" | "unknown";
-    state: "waiting" | "recently_active" | "stopped";
-    delivery: "bounded_wait" | "next_pull" | "offline";
-    lastPulledAt?: number;
-    waitingUntil?: number;
-  }>;
-  truth: { stoppedAgentsRestarted: false };
-};
-
-export type IntakeNudgePriority = "normal" | "important";
-
-export type IntakeNudgeResult = {
-  signal: {
-    id: string;
-    version: number;
-    kind: "intake_available";
-    intakeId: string;
-    priority: IntakeNudgePriority;
-    createdAt: number;
-  };
-  delivery: {
-    mechanism: "bounded_pull";
-    waitingInstallations: number;
-    recentlyActiveInstallations: number;
-    stoppedInstallations: number;
-    stoppedAgentsRestarted: false;
-  };
-};
-
 export type IntakeUpdateInput = {
   intakeId: string;
   expectedRevision: number;
@@ -625,21 +586,6 @@ const updateIntakeReference = makeFunctionReference<
   },
   { intakeId: string; revision: number; updatedAt: number; addedAttachmentIds: string[] }
 >("domains/intake/index:updateForHuman");
-const agentUpdatePresenceReference = makeFunctionReference<
-  "query",
-  { projectId: string },
-  AgentUpdatePresence
->("domains/agentUpdates/index:presence");
-const nudgeIntakeReference = makeFunctionReference<
-  "mutation",
-  {
-    projectId: string;
-    intakeId: string;
-    priority: IntakeNudgePriority;
-    idempotencyKey: string;
-  },
-  IntakeNudgeResult
->("domains/agentUpdates/index:nudgeForIntake");
 const reorderWorkReference = makeFunctionReference<
   "mutation",
   { workItemId: string; expectedRevision: number; rank: number; idempotencyKey: string },
@@ -1353,18 +1299,6 @@ export class ProjectDataConnection {
     );
   }
 
-  subscribeAgentUpdatePresence(
-    onUpdate: (presence: AgentUpdatePresence) => void,
-    onError: (error: Error) => void,
-  ): () => void {
-    return this.#client.onUpdate(
-      agentUpdatePresenceReference,
-      { projectId: this.projectId },
-      onUpdate,
-      onError,
-    );
-  }
-
   async listCompleted(cursor: string | null = null): Promise<ProjectCompletedPage> {
     const page = await this.#client.query(completedWorkReference, {
       projectId: this.projectId,
@@ -1524,19 +1458,6 @@ export class ProjectDataConnection {
 
   async promoteIdea(ideaId: string, expectedRevision: number, idempotencyKey: string): Promise<IdeaPromotionResult> {
     return await this.#client.mutation(promoteIdeaReference, { ideaId, expectedRevision, idempotencyKey });
-  }
-
-  async nudgeIntake(
-    intakeId: string,
-    priority: IntakeNudgePriority,
-    idempotencyKey: string,
-  ): Promise<IntakeNudgeResult> {
-    return await this.#client.mutation(nudgeIntakeReference, {
-      projectId: this.projectId,
-      intakeId,
-      priority,
-      idempotencyKey,
-    });
   }
 
   async uploadAttachment(

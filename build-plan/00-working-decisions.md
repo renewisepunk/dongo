@@ -193,7 +193,19 @@ agents, create Git worktrees, choose branches, or inspect repository paths. The
 host owns those actions and must report capability and bounded workspace
 metadata truthfully. Never transmit an absolute local path. Human live views are
 derived from authoritative active Runs and subscriptions, not inferred from
-host presence or generic CLI activity.
+transport labels, host presence, or generic CLI activity.
+
+### D-22 — No generic agent-notification control
+
+Decided: the Inbox does not show a **Notify agent** action. dongo has no
+universal primitive that can wake Codex, Claude Code, a CLI process, or an
+arbitrary agent harness, so a human control must not imply that it can. Existing
+bounded update-stream operations remain deployed for backward compatibility,
+but they are pull infrastructure rather than proof of wake-up, delivery,
+assignment, or consumption. A stopped agent sees current Intake only after its
+host starts or resumes it and explicitly pulls dongo state. A future control may
+return only after each supported harness has a separately implemented,
+observable, and tested wake-and-pickup adapter with truthful unavailable states.
 
 ### D-21 — Human Ideas backlog
 

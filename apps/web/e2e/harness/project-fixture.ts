@@ -234,7 +234,6 @@ type IntakeListener = (item: Intake) => void;
 const overviewListeners = new Set<(overview: ProjectOverview) => void>();
 const workListeners = new Map<string, Set<WorkListener>>();
 const intakeListeners = new Map<string, Set<IntakeListener>>();
-let fixtureAgentWaiting = true;
 let fixtureIntakeConflictRaised = false;
 const uploadAttempts = new Map<string, number>();
 const uploadedAttachments = new Map<string, {
@@ -383,50 +382,6 @@ const connection: OverviewConnection = {
       }, 650);
       return () => window.clearTimeout(timer);
     }
-    return () => undefined;
-  },
-  subscribeAgentUpdatePresence(onUpdate, onError) {
-    const scenario = fixtureScenario();
-    if (scenario === "presence-error") {
-      queueMicrotask(() => onError(new Error("fixture presence detail must stay hidden")));
-      return () => undefined;
-    }
-    const emit = (state: "waiting" | "recently_active" | "stopped") => {
-      fixtureAgentWaiting = state === "waiting";
-      onUpdate({
-        serverTime: Date.now(),
-        installations: [{
-          installationId: "installation-codex",
-          actor: {
-            id: "actor-codex",
-            displayName: "Codex",
-            agentType: "Codex",
-          },
-          capability: "get_updates",
-          state,
-          delivery: state === "waiting" ? "bounded_wait" : state === "recently_active" ? "next_pull" : "offline",
-          lastPulledAt: Date.now() - 1_000,
-          ...(state === "waiting" ? { waitingUntil: Date.now() + 20_000 } : {}),
-        }],
-        truth: { stoppedAgentsRestarted: false },
-      });
-    };
-    if (scenario === "presence-live-change") {
-      queueMicrotask(() => emit("stopped"));
-      const timer = window.setTimeout(() => emit("waiting"), 700);
-      return () => window.clearTimeout(timer);
-    }
-    if (scenario === "presence-slow") {
-      const timer = window.setTimeout(() => emit("waiting"), 250);
-      return () => window.clearTimeout(timer);
-    }
-    queueMicrotask(() => emit(
-      scenario === "presence-next-pull"
-        ? "recently_active"
-        : scenario === "presence-stopped"
-          ? "stopped"
-          : "waiting",
-    ));
     return () => undefined;
   },
   subscribeWorkDetail(item, onUpdate) {
@@ -603,31 +558,6 @@ const connection: OverviewConnection = {
       revision: nextRevision,
       updatedAt: Date.now(),
       addedAttachmentIds: added.map((attachment) => attachment.id),
-    };
-  },
-  async nudgeIntake(intakeId, priority, idempotencyKey) {
-    if (fixtureScenario() === "nudge-error") throw new Error("fixture nudge detail must stay hidden");
-    document.documentElement.dataset.fixtureIntakeNudge = JSON.stringify({
-      intakeId,
-      priority,
-      idempotencyKey,
-    });
-    return {
-      signal: {
-        id: `signal-${idempotencyKey}`,
-        version: 1,
-        kind: "intake_available" as const,
-        intakeId,
-        priority,
-        createdAt: Date.now(),
-      },
-      delivery: {
-        mechanism: "bounded_pull" as const,
-        waitingInstallations: fixtureAgentWaiting ? 1 : 0,
-        recentlyActiveInstallations: fixtureScenario() === "presence-next-pull" ? 1 : 0,
-        stoppedInstallations: fixtureScenario() === "presence-stopped" ? 1 : 0,
-        stoppedAgentsRestarted: false as const,
-      },
     };
   },
   async uploadAttachment(file, onProgress, signal) {
