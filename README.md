@@ -84,7 +84,7 @@ use, then ask it to set up dongo for the current repository:
 Install the dongo-onboarding and dongo-workflow skills from
 https://github.com/renewisepunk/dongo-skills
 
-Set up Dongo for this repository.
+Set up dongo for this repository.
 ```
 
 The agent installs the CLI when needed, connects the repository, configures its

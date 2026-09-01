@@ -1,8 +1,31 @@
 import { A } from "@solidjs/router";
+import { createSignal, onCleanup } from "solid-js";
 import { Brand } from "../../components/Brand";
 import marketingStyles from "./marketing.css?inline";
 
+const SETUP_PROMPT = `Install the dongo-onboarding and dongo-workflow skills from
+https://github.com/renewisepunk/dongo-skills
+
+Then set up dongo for this repository. Install anything needed, connect dongo,
+configure the agent connection, and tell me when you need browser approval.`;
+
 export function MarketingHome() {
+  const [copied, setCopied] = createSignal(false);
+  let copyTimer: number | undefined;
+
+  onCleanup(() => window.clearTimeout(copyTimer));
+
+  const copySetupPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(SETUP_PROMPT);
+      setCopied(true);
+      window.clearTimeout(copyTimer);
+      copyTimer = window.setTimeout(() => setCopied(false), 2400);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
     <div class="marketing-page">
       <style>{marketingStyles}</style>
@@ -32,13 +55,12 @@ export function MarketingHome() {
             <p class="eyebrow eyebrow--amber">The work tracker for coding agents</p>
             <h1 id="marketing-title">Like Linear, but for coding agents.</h1>
             <p class="marketing-hero__lede">
-              Give a coding agent work. See what it is doing. Step in only when it needs a decision. Dongo is the shared place for you and your agents to keep development moving.
+              Give a coding agent work. See what it is doing. Step in only when it needs a decision. dongo is the shared place for you and your agents to keep development moving.
             </p>
             <div class="marketing-hero__actions">
-              <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install dongo skills <span aria-hidden="true">↗</span></a>
-              <A class="button" href="/get-started">See how to start</A>
-              <a class="button" href="#how-it-works">See how it works</a>
+              <button class="button button--primary" type="button" onClick={() => void copySetupPrompt()}>{copied() ? "Setup prompt copied" : "Copy setup prompt"}</button>
             </div>
+            <p class="marketing-hero__note">Works with any agent that supports Agent Skills. Paste the prompt into your agent, then approve dongo in the browser when it asks.</p>
           </div>
 
           <div class="marketing-overview" aria-label="Example dongo overview">
@@ -81,35 +103,35 @@ export function MarketingHome() {
           <ol class="marketing-steps">
             <li>
               <span>01 / install</span>
-              <h3>Install the Dongo skills</h3>
+              <h3>Install the dongo skills</h3>
               <p>Add the skills to Codex, Claude Code, or another compatible agent. This is the only setup step you need to do yourself.</p>
             </li>
             <li>
               <span>02 / connect</span>
-              <h3>Ask your agent to set up Dongo</h3>
+              <h3>Ask your agent to set up dongo</h3>
               <p>It installs the CLI when needed, connects the repository, and configures its own MCP connection.</p>
             </li>
             <li>
               <span>03 / approve</span>
               <h3>Approve once in the browser</h3>
-              <p>Dongo asks for your approval. Then the agent verifies its connection and starts keeping work visible.</p>
+              <p>dongo asks for your approval. Then the agent verifies its connection and starts keeping work visible.</p>
             </li>
           </ol>
         </section>
 
         <section class="marketing-section marketing-section--agents" id="why-dongo" aria-labelledby="why-dongo-title">
           <div class="marketing-section__intro">
-            <p class="eyebrow">Why Dongo</p>
+            <p class="eyebrow">Why dongo</p>
             <h2 id="why-dongo-title">Development changed. The tracker did not.</h2>
             <p class="marketing-section__lede">
-              Coding agents now plan, write, and ship real work. But most trackers still assume people create tickets, write updates, and carry context between chats. Dongo gives agent work a record you can actually follow.
+              Coding agents now plan, write, and ship real work. But most trackers still assume people create tickets, write updates, and carry context between chats. dongo gives agent work a record you can actually follow.
             </p>
           </div>
 
           <div class="marketing-agent-grid">
             <article class="marketing-terminal">
               <div class="marketing-terminal__top"><span>work</span><span>in progress</span></div>
-              <pre aria-label="Example Dongo work update"><code><span>agent</span>   Codex{`\n`}<span>work</span>    Improve sign-in recovery{`\n`}<span>status</span>  waiting on you{`\n`}{`\n`}<span>question</span> Ship email recovery first?{`\n`}<b>✓</b> context and progress are attached</code></pre>
+              <pre aria-label="Example dongo work update"><code><span>agent</span>   Codex{`\n`}<span>work</span>    Improve sign-in recovery{`\n`}<span>status</span>  waiting on you{`\n`}{`\n`}<span>question</span> Ship email recovery first?{`\n`}<b>✓</b> context and progress are attached</code></pre>
             </article>
 
             <div class="marketing-agent-points">
@@ -136,7 +158,7 @@ export function MarketingHome() {
           <div class="marketing-section__intro">
             <p class="eyebrow">Who it’s for</p>
             <h2 id="who-its-for-title">For people who lead development with agents.</h2>
-            <p class="marketing-section__lede">Dongo is for anyone who has moved beyond one-off coding prompts and wants agent work to be clear, durable, and easy to steer.</p>
+            <p class="marketing-section__lede">dongo is for anyone who has moved beyond one-off coding prompts and wants agent work to be clear, durable, and easy to steer.</p>
           </div>
           <ol class="marketing-steps">
             <li>
@@ -161,10 +183,10 @@ export function MarketingHome() {
           <div>
             <p class="eyebrow eyebrow--amber">Start with one repository</p>
             <h2 id="marketing-final-title">Put agent work where you can see it.</h2>
-            <p>Install the Dongo skills, tell your agent to set up this repository, approve in the browser, then get back to the work.</p>
+            <p>Copy the setup prompt, paste it into your agent, approve in the browser, then get back to the work.</p>
           </div>
           <div class="marketing-final__actions">
-            <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install dongo skills <span aria-hidden="true">↗</span></a>
+            <button class="button button--primary" type="button" onClick={() => void copySetupPrompt()}>{copied() ? "Setup prompt copied" : "Copy setup prompt"}</button>
             <A class="button" href="/login">Sign in</A>
           </div>
         </section>

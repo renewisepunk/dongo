@@ -113,6 +113,14 @@
   padding-top: 6px;
 }
 
+.marketing-hero__note {
+  max-width: 560px;
+  margin: -10px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .marketing-overview {
   border: 1px solid var(--line-strong);
   background: var(--surface-0);

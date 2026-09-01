@@ -1,13 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-test("explains Dongo as the work tracker for coding agents", async ({ page }) => {
+test("explains dongo as the work tracker for coding agents", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Like Linear, but for coding agents." })).toBeVisible();
   await expect(page.getByText("Start with the agent you already use.", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Development changed. The tracker did not." })).toBeVisible();
   await expect(page.getByRole("heading", { name: "For people who lead development with agents." })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Install dongo skills/ }).first()).toHaveAttribute("href", "https://github.com/renewisepunk/dongo-skills");
+  await expect(page.getByRole("button", { name: "Copy setup prompt" }).first()).toBeVisible();
+  await expect(page.getByText("Works with any agent that supports Agent Skills.")).toBeVisible();
 });
 
 test("keeps get started public and preserves routes into help, sign-in, and the app", async ({ page }) => {
