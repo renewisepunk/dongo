@@ -77,8 +77,8 @@ The default `npm run deploy` points to that production release path. Rollback an
 
 ## Get started with skills
 
-The shortest path is to install the Dongo skills in the coding agent you already
-use, then ask it to set up Dongo for the current repository:
+The shortest path is to install the dongo skills in the coding agent you already
+use, then ask it to set up dongo for the current repository:
 
 ```text
 Install the dongo-onboarding and dongo-workflow skills from
@@ -88,7 +88,7 @@ Set up Dongo for this repository.
 ```
 
 The agent installs the CLI when needed, connects the repository, configures its
-own MCP host, and verifies the result. You approve the Dongo project and agent
+own MCP host, and verifies the result. You approve the dongo project and agent
 installation in the browser. CLI and MCP grants remain separate, and a host that
 cannot reload MCP servers dynamically may need one restart.
 

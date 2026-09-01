@@ -31,10 +31,10 @@ export function MarketingHome() {
             <p class="eyebrow eyebrow--amber">Work tracking for humans + agents</p>
             <h1 id="marketing-title">Install the skills. Let your agent set up dongo.</h1>
             <p class="marketing-hero__lede">
-              dongo gives you and your coding agents one shared work queue. Install the Dongo skills in the agent you already use, ask it to set up this repository, then approve the connection in your browser.
+              dongo gives you and your coding agents one shared work queue. Install the dongo skills in the agent you already use, ask it to set up this repository, then approve the connection in your browser.
             </p>
             <div class="marketing-hero__actions">
-              <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install Dongo skills <span aria-hidden="true">↗</span></a>
+              <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install dongo skills <span aria-hidden="true">↗</span></a>
               <A class="button" href="/get-started">See the setup</A>
               <a class="button" href="#how-it-works">See how it works</a>
             </div>
@@ -108,14 +108,14 @@ export function MarketingHome() {
           <div class="marketing-agent-grid">
             <article class="marketing-terminal">
               <div class="marketing-terminal__top"><span>agent</span><span>setup brief</span></div>
-              <pre aria-label="Example Dongo agent setup"><code><span>›</span> Install the Dongo skills{`\n`}<b>✓</b> skills available{`\n`}{`\n`}<span>›</span> Set up Dongo for this repository{`\n`}<span>status</span>  waiting for browser approval{`\n`}<span>next</span>    agent connects and verifies</code></pre>
+              <pre aria-label="Example dongo agent setup"><code><span>›</span> Install the dongo skills{`\n`}<b>✓</b> skills available{`\n`}{`\n`}<span>›</span> Set up dongo for this repository{`\n`}<span>status</span>  waiting for browser approval{`\n`}<span>next</span>    agent connects and verifies</code></pre>
             </article>
 
             <div class="marketing-agent-points">
               <article>
                 <span>Skills first</span>
                 <h3>The agent handles setup</h3>
-                <p>It installs Dongo, connects the repository, configures its own MCP host, and checks the result. You approve each scoped installation in the browser.</p>
+                <p>It installs dongo, connects the repository, configures its own MCP host, and checks the result. You approve each scoped installation in the browser.</p>
               </article>
               <article>
                 <span>Separate identity</span>
@@ -138,7 +138,7 @@ export function MarketingHome() {
             <p>Install the skills, tell your agent to set up dongo, approve in the browser, then get back to the work.</p>
           </div>
           <div class="marketing-final__actions">
-            <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install Dongo skills <span aria-hidden="true">↗</span></a>
+            <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install dongo skills <span aria-hidden="true">↗</span></a>
             <A class="button" href="/login">Sign in</A>
           </div>
         </section>

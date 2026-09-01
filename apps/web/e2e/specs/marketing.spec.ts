@@ -6,11 +6,11 @@ test("keeps the marketing homepage static and public without checking a human se
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-human-session-checked");
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-open-session-checked");
-  await expect(page.getByRole("heading", { name: "Give agents work. See what they’re doing. Answer when they need you." })).toBeVisible();
-  await expect(page.getByText("Your local agent turns it into structured work", { exact: false })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Install the skills. Let your agent set up dongo." })).toBeVisible();
+  await expect(page.getByText("one shared work queue", { exact: false })).toBeVisible();
   await expect(page.getByRole("heading", { name: "The agent acts like itself" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in", exact: true }).first()).toHaveAttribute("href", "/login");
-  await expect(page.getByRole("link", { name: "Connect a repository", exact: true }).first()).toHaveAttribute("href", "/get-started");
+  await expect(page.getByRole("link", { name: /Install dongo skills/ }).first()).toHaveAttribute("href", "https://github.com/renewisepunk/dongo-skills");
   await expect(page.getByRole("link", { name: /Open dongo/ })).toHaveAttribute("href", "/open");
   await expect(page.getByRole("link", { name: "Source" })).toHaveAttribute("rel", "external");
 });
@@ -40,8 +40,8 @@ test("keeps the essential product story readable at a mobile viewport", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Give agents work. See what they’re doing. Answer when they need you." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Install the skills. Let your agent set up dongo." })).toBeVisible();
   await expect(page.getByLabel("Example dongo overview")).toBeVisible();
   await expect(page.getByRole("heading", { name: "You add intent. The agent handles the tracker." })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "A tool for agents. A clear view for humans." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Let the agent set it up." })).toBeVisible();
 });

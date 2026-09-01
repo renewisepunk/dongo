@@ -29,9 +29,9 @@ export function PublicHelpGuide() {
         <div class="public-guide-hero__copy">
           <div class="eyebrow eyebrow--amber">Public help</div>
           <h1 id="public-help-title">Keep the human–agent loop moving.</h1>
-          <p>New to Dongo? Install the skills and let your agent handle connection. Use this guide for the everyday workflow, manual CLI and MCP commands, attachments, shortcuts, and safe recovery.</p>
+          <p>New to dongo? Install the skills and let your agent handle connection. Use this guide for the everyday workflow, manual CLI and MCP commands, attachments, shortcuts, and safe recovery.</p>
           <div class="public-guide-hero__actions">
-            <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install Dongo skills <span aria-hidden="true">↗</span></a>
+            <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install dongo skills <span aria-hidden="true">↗</span></a>
             <A class="button" href="/get-started">See the setup</A>
             <a class="button" href="#shortcuts">View shortcuts</a>
           </div>
@@ -48,8 +48,8 @@ export function PublicHelpGuide() {
         </nav>
       </section>
 
-      <GuideSection index="01" id="skills" title="Start by installing the Dongo skills" lede="This is the recommended setup route. Your agent learns how to install the CLI, connect the repository, configure its own MCP host, and work safely with Dongo.">
-        <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">Your next message</div><div><h3>“Set up Dongo for this repository.”</h3><p>Install <code>dongo-onboarding</code> and <code>dongo-workflow</code> from the Dongo skills repository, then send that prompt to your agent. Approve the browser prompts it opens; the agent handles the remaining setup.</p></div></aside>
+      <GuideSection index="01" id="skills" title="Start by installing the dongo skills" lede="This is the recommended setup route. Your agent learns how to install the CLI, connect the repository, configure its own MCP host, and work safely with dongo.">
+        <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">Your next message</div><div><h3>“Set up dongo for this repository.”</h3><p>Install <code>dongo-onboarding</code> and <code>dongo-workflow</code> from the dongo skills repository, then send that prompt to your agent. Approve the browser prompts it opens; the agent handles the remaining setup.</p></div></aside>
         <A class="button button--primary" href="/get-started">Open the skills-first setup</A>
       </GuideSection>
 
@@ -149,7 +149,7 @@ export function PublicHelpGuide() {
         <div><div class="eyebrow eyebrow--amber">Useful links</div><h2 id="resources-title">Keep the right guidance close.</h2></div>
         <div class="public-resources__links">
           <a href="https://github.com/renewisepunk/dongo/blob/main/README.md"><span>Repository guide</span><b aria-hidden="true">↗</b></a>
-          <a href="https://github.com/renewisepunk/dongo-skills"><span>Dongo skills</span><b aria-hidden="true">↗</b></a>
+          <a href="https://github.com/renewisepunk/dongo-skills"><span>dongo skills</span><b aria-hidden="true">↗</b></a>
           <A href="/security"><span>Security and privacy</span><b aria-hidden="true">→</b></A>
           <a href="https://github.com/renewisepunk/dongo/blob/main/SECURITY.md"><span>Report a vulnerability</span><b aria-hidden="true">↗</b></a>
           <a href="#mcp-resources"><span>MCP setup and recovery</span><b aria-hidden="true">↑</b></a>

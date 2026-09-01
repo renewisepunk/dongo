@@ -5,7 +5,7 @@ import { GuideCode, GuideSection, PublicGuideShell } from "./PublicGuideShell";
 const SKILL_PROMPT = `Install the dongo-onboarding and dongo-workflow skills from
 https://github.com/renewisepunk/dongo-skills
 
-Set up Dongo for this repository.`;
+Set up dongo for this repository.`;
 
 const INSTALL_COMMANDS = `npm install --global @wisepunk/dongo
 dongo --version
@@ -24,15 +24,15 @@ export function GetStartedGuide() {
         <div class="public-guide-hero__copy">
           <div class="eyebrow eyebrow--amber">Agent-first setup</div>
           <h1 id="get-started-title">Install the skills. Approve once. Start working.</h1>
-          <p>Install Dongo’s skills in the coding agent you already use. Then tell it to set up Dongo for this repository. It handles the CLI and MCP connection; you approve each scoped installation in your browser.</p>
+          <p>Install dongo’s skills in the coding agent you already use. Then tell it to set up dongo for this repository. It handles the CLI and MCP connection; you approve each scoped installation in your browser.</p>
           <div class="public-guide-hero__actions">
-            <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install Dongo skills <span aria-hidden="true">↗</span></a>
+            <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install dongo skills <span aria-hidden="true">↗</span></a>
             <A class="button" href="/help">Read the help guide</A>
           </div>
         </div>
         <div class="agent-brief" aria-label="Agent setup brief">
           <div class="agent-brief__top"><span>setup brief</span><span>01 / agent</span></div>
-          <div class="agent-brief__prompt"><span aria-hidden="true">›</span> Install the Dongo skills, then set up Dongo for this repository.</div>
+          <div class="agent-brief__prompt"><span aria-hidden="true">›</span> Install the dongo skills, then set up dongo for this repository.</div>
           <div class="agent-brief__status">
             <span><i data-state="done" /> skills installed</span>
             <span><i data-state="done" /> agent prepares CLI + MCP</span>
@@ -43,24 +43,24 @@ export function GetStartedGuide() {
       </section>
 
       <div class="public-guide-flow" aria-label="Connection sequence">
-        <span>Dongo skills</span><b aria-hidden="true">→</b><span>tell your agent</span><b aria-hidden="true">→</b><span>browser approval</span><b aria-hidden="true">→</b><span>ready to work</span>
+        <span>dongo skills</span><b aria-hidden="true">→</b><span>tell your agent</span><b aria-hidden="true">→</b><span>browser approval</span><b aria-hidden="true">→</b><span>ready to work</span>
       </div>
 
       <GuideSection
         index="01"
         id="skills"
-        title="Install the Dongo skills"
-        lede="Use your agent’s normal skill installer to add both Dongo skills from the public repository. This is the only setup step you need to perform before asking the agent to help."
+        title="Install the dongo skills"
+        lede="Use your agent’s normal skill installer to add both dongo skills from the public repository. This is the only setup step you need to perform before asking the agent to help."
       >
         <GuideCode label="tell your agent">{SKILL_PROMPT}</GuideCode>
-        <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">What happens next</div><div><h3>Your agent owns the mechanical setup.</h3><p>It installs the published CLI if needed, connects this repository, previews and applies its own MCP configuration, and checks the resulting connection. You approve the Dongo browser prompts.</p></div></aside>
+        <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">What happens next</div><div><h3>Your agent owns the mechanical setup.</h3><p>It installs the published CLI if needed, connects this repository, previews and applies its own MCP configuration, and checks the resulting connection. You approve the dongo browser prompts.</p></div></aside>
       </GuideSection>
 
       <GuideSection
         index="02"
         id="authorize"
         title="Approve the connection"
-        lede="Dongo authentication moves from your agent to the browser for your approval, then back to the agent for verification."
+        lede="dongo authentication moves from your agent to the browser for your approval, then back to the agent for verification."
       >
         <aside class="guide-callout guide-callout--green">
           <div class="guide-callout__label">One live service</div>
