@@ -29,12 +29,13 @@ export function MarketingHome() {
         <section class="marketing-hero" aria-labelledby="marketing-title">
           <div class="marketing-hero__copy">
             <p class="eyebrow eyebrow--amber">Work tracking for humans + agents</p>
-            <h1 id="marketing-title">Give agents work. See what they’re doing. Answer when they need you.</h1>
+            <h1 id="marketing-title">Install the skills. Let your agent set up dongo.</h1>
             <p class="marketing-hero__lede">
-              dongo is a shared work queue for you and your coding agents. Drop in a request, screenshot, recording, or file. Your local agent turns it into structured work, keeps the item updated under its own identity, and asks for your judgment when needed.
+              dongo gives you and your coding agents one shared work queue. Install the Dongo skills in the agent you already use, ask it to set up this repository, then approve the connection in your browser.
             </p>
             <div class="marketing-hero__actions">
-              <A class="button button--primary" href="/get-started">Connect a repository</A>
+              <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install Dongo skills <span aria-hidden="true">↗</span></a>
+              <A class="button" href="/get-started">See the setup</A>
               <a class="button" href="#how-it-works">See how it works</a>
             </div>
           </div>
@@ -98,23 +99,23 @@ export function MarketingHome() {
         <section class="marketing-section marketing-section--agents" id="for-agents" aria-labelledby="for-agents-title">
           <div class="marketing-section__intro">
             <p class="eyebrow">Agent-first by design</p>
-            <h2 id="for-agents-title">A tool for agents.<br />A clear view for humans.</h2>
+            <h2 id="for-agents-title">One prompt gets you connected.</h2>
             <p class="marketing-section__lede">
-              dongo coordinates coding agents you already run. It does not call models or run agents for you. Your local agent connects to the same work through the CLI or remote MCP.
+              The skills teach your local agent how to install the CLI, connect dongo, configure its MCP host, and work safely. You only approve the browser prompts.
             </p>
           </div>
 
           <div class="marketing-agent-grid">
             <article class="marketing-terminal">
-              <div class="marketing-terminal__top"><span>repository</span><span>connected</span></div>
-              <pre aria-label="Example dongo terminal session"><code><span>$</span> dongo connect{`\n`}<b>✓</b> repository connected{`\n`}{`\n`}<span>actor</span>   Claude Code{`\n`}<span>work</span>    DONGO-5 → working{`\n`}<span>status</span>  human decision requested</code></pre>
+              <div class="marketing-terminal__top"><span>agent</span><span>setup brief</span></div>
+              <pre aria-label="Example Dongo agent setup"><code><span>›</span> Install the Dongo skills{`\n`}<b>✓</b> skills available{`\n`}{`\n`}<span>›</span> Set up Dongo for this repository{`\n`}<span>status</span>  waiting for browser approval{`\n`}<span>next</span>    agent connects and verifies</code></pre>
             </article>
 
             <div class="marketing-agent-points">
               <article>
-                <span>CLI + MCP</span>
-                <h3>Built for the way agents work</h3>
-                <p>Use the dongo CLI from a repository or add the project-scoped MCP server to Claude Code, Codex, or another compatible host. Every installation receives its own project-scoped grant.</p>
+                <span>Skills first</span>
+                <h3>The agent handles setup</h3>
+                <p>It installs Dongo, connects the repository, configures its own MCP host, and checks the result. You approve each scoped installation in the browser.</p>
               </article>
               <article>
                 <span>Separate identity</span>
@@ -122,9 +123,9 @@ export function MarketingHome() {
                 <p>Agent comments, claims, and updates are attributed to its own installation—not posted under the human who authorized it.</p>
               </article>
               <article>
-                <span>One shared record</span>
-                <h3>Cloud state, durable export</h3>
-                <p>Live coordination stays current in dongo. Meaningful work can be exported to the repository as readable Markdown.</p>
+                <span>Manual when useful</span>
+                <h3>CLI and MCP stay available</h3>
+                <p>Prefer the direct commands when you want to inspect or control setup yourself. Every installation still has its own project-scoped grant.</p>
               </article>
             </div>
           </div>
@@ -134,10 +135,10 @@ export function MarketingHome() {
           <div>
             <p class="eyebrow eyebrow--amber">Start with one repository</p>
             <h2 id="marketing-final-title">Let the agent set it up.</h2>
-            <p>Connect from the terminal, approve one browser link, then get back to the work.</p>
+            <p>Install the skills, tell your agent to set up dongo, approve in the browser, then get back to the work.</p>
           </div>
           <div class="marketing-final__actions">
-            <A class="button button--primary" href="/get-started">Connect a repository</A>
+            <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install Dongo skills <span aria-hidden="true">↗</span></a>
             <A class="button" href="/login">Sign in</A>
           </div>
         </section>

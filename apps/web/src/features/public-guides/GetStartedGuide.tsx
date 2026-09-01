@@ -2,10 +2,15 @@ import { A } from "@solidjs/router";
 import { dongoPublicOrigin } from "../../lib/auth-config";
 import { GuideCode, GuideSection, PublicGuideShell } from "./PublicGuideShell";
 
-const INSTALL_COMMANDS = `npm install --global @wisepunk/dongo
-dongo --version`;
+const SKILL_PROMPT = `Install the dongo-onboarding and dongo-workflow skills from
+https://github.com/renewisepunk/dongo-skills
 
-const CONNECT_COMMAND = `cd /path/to/your/repository
+Set up Dongo for this repository.`;
+
+const INSTALL_COMMANDS = `npm install --global @wisepunk/dongo
+dongo --version
+
+cd /path/to/your/repository
 dongo connect`;
 
 const VERIFY_COMMANDS = `dongo auth status --json
@@ -18,67 +23,68 @@ export function GetStartedGuide() {
       <section class="public-guide-hero public-guide-hero--start" aria-labelledby="get-started-title">
         <div class="public-guide-hero__copy">
           <div class="eyebrow eyebrow--amber">Agent-first setup</div>
-          <h1 id="get-started-title">Your agent can set up dongo.</h1>
-          <p>Connect a repository from the terminal, approve one browser link, and let the CLI create or bind the project. Add MCP only when the local connection is healthy.</p>
+          <h1 id="get-started-title">Install the skills. Approve once. Start working.</h1>
+          <p>Install Dongo’s skills in the coding agent you already use. Then tell it to set up Dongo for this repository. It handles the CLI and MCP connection; you approve each scoped installation in your browser.</p>
           <div class="public-guide-hero__actions">
-            <a class="button button--primary" href="#install">Start with the CLI</a>
+            <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install Dongo skills <span aria-hidden="true">↗</span></a>
             <A class="button" href="/help">Read the help guide</A>
           </div>
         </div>
         <div class="agent-brief" aria-label="Agent setup brief">
           <div class="agent-brief__top"><span>setup brief</span><span>01 / agent</span></div>
-          <div class="agent-brief__prompt"><span aria-hidden="true">›</span> Install dongo in this repository, connect it, preview the MCP configuration, and verify each connection.</div>
+          <div class="agent-brief__prompt"><span aria-hidden="true">›</span> Install the Dongo skills, then set up Dongo for this repository.</div>
           <div class="agent-brief__status">
-            <span><i data-state="done" /> CLI installed</span>
+            <span><i data-state="done" /> skills installed</span>
+            <span><i data-state="done" /> agent prepares CLI + MCP</span>
             <span><i data-state="active" /> browser approval</span>
-            <span><i /> MCP after verification</span>
+            <span><i /> agent verifies connection</span>
           </div>
         </div>
       </section>
 
       <div class="public-guide-flow" aria-label="Connection sequence">
-        <span>terminal</span><b aria-hidden="true">→</b><span>browser approval</span><b aria-hidden="true">→</b><span>terminal connected</span><b aria-hidden="true">→</b><span>MCP host</span>
+        <span>Dongo skills</span><b aria-hidden="true">→</b><span>tell your agent</span><b aria-hidden="true">→</b><span>browser approval</span><b aria-hidden="true">→</b><span>ready to work</span>
       </div>
 
       <GuideSection
         index="01"
-        id="install"
-        title="Install the CLI"
-        lede="Install the published CLI from npm. Node.js 20 or newer is required. The package installs the dongo command globally."
+        id="skills"
+        title="Install the Dongo skills"
+        lede="Use your agent’s normal skill installer to add both Dongo skills from the public repository. This is the only setup step you need to perform before asking the agent to help."
       >
-        <GuideCode label="install from npm">{INSTALL_COMMANDS}</GuideCode>
-        <p class="guide-inline-note"><span aria-hidden="true">↳</span> Run the final <code>dongo</code> commands inside the repository you want the agent to use.</p>
+        <GuideCode label="tell your agent">{SKILL_PROMPT}</GuideCode>
+        <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">What happens next</div><div><h3>Your agent owns the mechanical setup.</h3><p>It installs the published CLI if needed, connects this repository, previews and applies its own MCP configuration, and checks the resulting connection. You approve the Dongo browser prompts.</p></div></aside>
       </GuideSection>
 
       <GuideSection
         index="02"
         id="authorize"
-        title="Authorize with one link"
-        lede="Authentication begins in the terminal, moves to the web for human approval, then finishes back in the terminal."
+        title="Approve the connection"
+        lede="Dongo authentication moves from your agent to the browser for your approval, then back to the agent for verification."
       >
-        <GuideCode label="connect this repository">{CONNECT_COMMAND}</GuideCode>
         <aside class="guide-callout guide-callout--green">
           <div class="guide-callout__label">One live service</div>
           <div><h3>There is no environment choice.</h3><p>The installed CLI always connects to <code>dongo.so</code>. Development infrastructure is private to dongo's own testing and cannot be selected by a user or agent.</p></div>
         </aside>
         <div class="guide-process" role="list" aria-label="Browser authorization steps">
-          <article role="listitem"><span>1</span><h3>Terminal opens the link</h3><p>The CLI prints and opens a complete approval URL. Over SSH, add <code>--no-browser</code> and open that same URL yourself.</p></article>
-          <article role="listitem"><span>2</span><h3>You compare the code</h3><p>Sign in if needed, confirm the matching short code, account, proposed project, API resource, and requested access.</p></article>
-          <article role="listitem"><span>3</span><h3>Terminal verifies</h3><p>The page reports “Approved”; only the CLI reports “Connected” after credential storage, repository marking, and diagnostics succeed.</p></article>
+          <article role="listitem"><span>1</span><h3>Your agent opens the link</h3><p>The CLI opens a complete approval URL. Over SSH, the agent gives you that same URL to open in a trusted browser.</p></article>
+          <article role="listitem"><span>2</span><h3>You approve the scoped install</h3><p>Sign in if needed, confirm the account, proposed project, resource, and requested access.</p></article>
+          <article role="listitem"><span>3</span><h3>Your agent verifies</h3><p>The page reports “Approved”; the agent only proceeds after the CLI and MCP diagnostics succeed.</p></article>
         </div>
         <aside class="guide-callout guide-callout--green">
           <div class="guide-callout__label">No project yet?</div>
           <div><h3>That is a supported first-run path.</h3><p>The CLI proposes a project from the repository. The approval page shows <strong>Create &amp; approve</strong>; the first project is created and bound before the grant is issued. You do not need to create a project in the app first.</p></div>
         </aside>
-        <p class="guide-inline-note"><span aria-hidden="true">↳</span> To override the inferred values, use <code>--project-name</code>, <code>--repository-url</code>, or <code>--execution-mode manual|autonomous</code>. For an existing project, use <code>--project-ref</code>.</p>
+        <p class="guide-inline-note"><span aria-hidden="true">↳</span> A newly configured MCP host may need one restart before it can load its new tools.</p>
       </GuideSection>
 
       <GuideSection
         index="03"
-        id="mcp"
-        title="Add an MCP host"
-        lede="CLI and MCP access are separate installations. Preview the exact files first, apply only the named dongo entry, then let the host complete its own OAuth flow."
+        id="manual"
+        title="Prefer manual setup? Use the CLI and MCP directly."
+        lede="The skills are the recommended path. These commands remain available when you want to install, connect, or configure a host yourself."
       >
+        <GuideCode label="install and connect the CLI">{INSTALL_COMMANDS}</GuideCode>
         <div class="guide-host-grid">
           <article>
             <div class="guide-host-grid__label">Codex</div>
@@ -124,7 +130,7 @@ ${dongoPublicOrigin}/p/<project-ref>/mcp`}</code></pre>
         index="04"
         id="verify"
         title="Verify before doing work"
-        lede="Connection checks are read-only. Run them before asking an agent to create, claim, or update work."
+        lede="The skills perform these read-only checks for you. Run them manually only when diagnosing a connection."
       >
         <GuideCode label="verify the CLI">{VERIFY_COMMANDS}</GuideCode>
         <div class="guide-verification">
@@ -138,7 +144,7 @@ ${dongoPublicOrigin}/p/<project-ref>/mcp`}</code></pre>
         index="05"
         id="security"
         title="Credential storage should feel uneventful"
-        lede="The npm CLI uses its own private user file. It does not ask to change or repair an operating-system credential store."
+        lede="The agent uses the npm CLI’s private user file. It does not ask to change or repair an operating-system credential store."
       >
         <div class="guide-security">
           <div class="guide-security__path"><span>POSIX location</span><code>${`{XDG_CONFIG_HOME:-~/.config}`}/dongo/credentials/</code></div>

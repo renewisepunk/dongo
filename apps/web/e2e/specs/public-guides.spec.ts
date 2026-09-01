@@ -4,7 +4,8 @@ test("keeps get started public and preserves routes into help, sign-in, and the 
   await page.goto("/get-started");
   await expect(page).toHaveURL(/\/get-started$/);
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-human-session-checked", "true");
-  await expect(page.getByRole("heading", { name: "Your agent can set up dongo." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Install the skills. Approve once. Start working." })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Install Dongo skills/ }).first()).toHaveAttribute("href", "https://github.com/renewisepunk/dongo-skills");
   await expect(page.getByText("No project yet?")).toBeVisible();
   await expect(page.getByText("The CLI does not invoke macOS Keychain", { exact: false })).toBeVisible();
   await expect(page.getByText("Re-authenticate", { exact: true })).toBeVisible();

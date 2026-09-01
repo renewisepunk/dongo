@@ -29,31 +29,38 @@ export function PublicHelpGuide() {
         <div class="public-guide-hero__copy">
           <div class="eyebrow eyebrow--amber">Public help</div>
           <h1 id="public-help-title">Keep the human–agent loop moving.</h1>
-          <p>Use this guide for the everyday workflow, CLI and MCP commands, attachments, shortcuts, and safe recovery. No sign-in is required to read it.</p>
+          <p>New to Dongo? Install the skills and let your agent handle connection. Use this guide for the everyday workflow, manual CLI and MCP commands, attachments, shortcuts, and safe recovery.</p>
           <div class="public-guide-hero__actions">
-            <A class="button button--primary" href="/get-started">Set up dongo</A>
+            <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install Dongo skills <span aria-hidden="true">↗</span></a>
+            <A class="button" href="/get-started">See the setup</A>
             <a class="button" href="#shortcuts">View shortcuts</a>
           </div>
         </div>
         <nav class="help-index" aria-label="Help topics">
-          <a href="#core-loop"><span>01</span>Core loop</a>
-          <a href="#cli"><span>02</span>CLI reference</a>
-          <a href="#mcp-resources"><span>03</span>MCP resources</a>
-          <a href="#attachments"><span>04</span>Attachments</a>
-          <a href="#auth"><span>05</span>Authentication</a>
-          <a href="#shortcuts"><span>06</span>Shortcuts</a>
-          <a href="#help-recovery"><span>07</span>Troubleshooting</a>
+          <a href="#skills"><span>01</span>Start with skills</a>
+          <a href="#core-loop"><span>02</span>Core loop</a>
+          <a href="#cli"><span>03</span>Manual CLI reference</a>
+          <a href="#mcp-resources"><span>04</span>MCP resources</a>
+          <a href="#attachments"><span>05</span>Attachments</a>
+          <a href="#auth"><span>06</span>Authentication</a>
+          <a href="#shortcuts"><span>07</span>Shortcuts</a>
+          <a href="#help-recovery"><span>08</span>Troubleshooting</a>
         </nav>
       </section>
 
-      <GuideSection index="01" id="core-loop" title="The core loop" lede="dongo separates durable work from chat while keeping agents accountable under their own identities.">
+      <GuideSection index="01" id="skills" title="Start by installing the Dongo skills" lede="This is the recommended setup route. Your agent learns how to install the CLI, connect the repository, configure its own MCP host, and work safely with Dongo.">
+        <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">Your next message</div><div><h3>“Set up Dongo for this repository.”</h3><p>Install <code>dongo-onboarding</code> and <code>dongo-workflow</code> from the Dongo skills repository, then send that prompt to your agent. Approve the browser prompts it opens; the agent handles the remaining setup.</p></div></aside>
+        <A class="button button--primary" href="/get-started">Open the skills-first setup</A>
+      </GuideSection>
+
+      <GuideSection index="02" id="core-loop" title="The core loop" lede="dongo separates durable work from chat while keeping agents accountable under their own identities.">
         <div class="help-loop">
           <For each={CORE_LOOP}>{(item, index) => <article><span>{String(index() + 1).padStart(2, "0")}</span><h3>{item[0]}</h3><p>{item[1]}</p></article>}</For>
         </div>
         <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">Actor identity</div><div><h3>The agent acts as itself.</h3><p>Agent comments and lifecycle updates use the installation actor for Codex, Claude Code, the CLI, or another MCP host. The agent does not impersonate the human who authorized it.</p></div></aside>
       </GuideSection>
 
-      <GuideSection index="02" id="cli" title="CLI reference" lede="Run commands from the connected repository. Add --json when another agent or script needs stable machine-readable output.">
+      <GuideSection index="03" id="cli" title="Manual CLI reference" lede="The skills normally run these commands for you. Run them from the connected repository when you want direct control; add --json when another agent or script needs stable machine-readable output.">
         <div class="help-command-table" role="table" aria-label="CLI command reference">
           <div class="help-command-table__head" role="row"><span role="columnheader">Command</span><span role="columnheader">Use</span></div>
           <For each={CLI_REFERENCE}>{(row) => <div role="row"><code role="cell">{row[0]}</code><span role="cell">{row[1]}</span></div>}</For>
@@ -61,7 +68,7 @@ export function PublicHelpGuide() {
         <p class="guide-inline-note"><span aria-hidden="true">↳</span> Mutation commands support idempotency and revision checks. Do not retry a conflict blindly; refetch the item and confirm the current claim or revision.</p>
       </GuideSection>
 
-      <GuideSection index="03" id="mcp-resources" title="MCP resources" lede="Every project has one remote Streamable HTTP resource. Every host authorizes independently against that exact URL.">
+      <GuideSection index="04" id="mcp-resources" title="MCP resources" lede="Every project has one remote Streamable HTTP resource. Every host authorizes independently against that exact URL.">
         <div class="mcp-resource-line"><span>project resource</span><code>{dongoPublicOrigin}/p/&lt;project-ref&gt;/mcp</code></div>
         <div class="help-resource-grid">
           <article><span>Codex</span><h3>Managed project entry</h3><p>Preview with <code>dongo integrate codex</code>, apply with <code>--apply</code>, then use the printed <code>codex mcp login</code> command.</p></article>
@@ -89,7 +96,7 @@ export function PublicHelpGuide() {
         </div>
       </GuideSection>
 
-      <GuideSection index="04" id="attachments" title="Attachments" lede="Files are first-class context on new Intake and in work comments.">
+      <GuideSection index="05" id="attachments" title="Attachments" lede="Files are first-class context on new Intake and in work comments.">
         <div class="attachment-guide">
           <article><div aria-hidden="true">⌘V</div><h3>Paste images</h3><p>Copy an image, focus the Intake or comment composer, and paste. The image appears as an attachment draft before submission.</p></article>
           <article><div aria-hidden="true">⇣</div><h3>Drop files anywhere</h3><p>While composing, drag a file over the page. The page becomes a drop zone and attaches the file to the active Intake or comment.</p></article>
@@ -103,7 +110,7 @@ export function PublicHelpGuide() {
         </ul>
       </GuideSection>
 
-      <GuideSection index="05" id="auth" title="Authentication and approval" lede="Human browser sessions, CLI grants, and MCP-host grants are intentionally separate.">
+      <GuideSection index="06" id="auth" title="Authentication and approval" lede="Human browser sessions, CLI grants, and MCP-host grants are intentionally separate.">
         <div class="auth-help-grid">
           <article><span>CLI</span><h3>Device authorization</h3><p><code>dongo connect</code> opens one complete browser link to <code>dongo.so</code>. There is no dev or production choice. Compare the terminal and browser code, account, project proposal, resource, and requested access.</p></article>
           <article><span>MCP</span><h3>Host-owned OAuth</h3><p>Codex, Claude Code, and generic clients follow discovery and PKCE. Revoking one host does not revoke the CLI or another host.</p></article>
@@ -112,7 +119,7 @@ export function PublicHelpGuide() {
         <aside class="guide-callout guide-callout--warning"><div class="guide-callout__label">Stop on surprise</div><div><h3>No Keychain or local-network permission is required.</h3><p>Deny operating-system credential-repair prompts and browser requests to access other apps and services on the device. Those are not normal dongo authorization steps.</p></div></aside>
       </GuideSection>
 
-      <GuideSection index="06" id="shortcuts" title="Keyboard shortcuts" lede="Shortcuts work outside text fields. Use ⌘ on macOS or Ctrl on Windows and Linux.">
+      <GuideSection index="07" id="shortcuts" title="Keyboard shortcuts" lede="Shortcuts work outside text fields. Use ⌘ on macOS or Ctrl on Windows and Linux.">
         <div class="shortcut-reference public-shortcuts">
           <For each={DONGO_SHORTCUTS}>{(shortcut) => (
             <div class="shortcut-reference__row">
@@ -126,7 +133,7 @@ export function PublicHelpGuide() {
         </div>
       </GuideSection>
 
-      <GuideSection index="07" id="help-recovery" title="Troubleshooting" lede="Recover the affected installation only. Never move tokens between the CLI and an MCP host.">
+      <GuideSection index="08" id="help-recovery" title="Troubleshooting" lede="Recover the affected installation only. Never move tokens between the CLI and an MCP host.">
         <dl class="guide-troubleshooting">
           <div><dt>Sign-in code did not arrive</dt><dd>Confirm the email address, request a new one-time code, and use only the newest code within its expiry window.</dd></div>
           <div><dt>CLI browser approval expired</dt><dd>Run <code>dongo connect</code> again for a new link and comparison code. Never reuse or forward the old link.</dd></div>
@@ -142,6 +149,7 @@ export function PublicHelpGuide() {
         <div><div class="eyebrow eyebrow--amber">Useful links</div><h2 id="resources-title">Keep the right guidance close.</h2></div>
         <div class="public-resources__links">
           <a href="https://github.com/renewisepunk/dongo/blob/main/README.md"><span>Repository guide</span><b aria-hidden="true">↗</b></a>
+          <a href="https://github.com/renewisepunk/dongo-skills"><span>Dongo skills</span><b aria-hidden="true">↗</b></a>
           <A href="/security"><span>Security and privacy</span><b aria-hidden="true">→</b></A>
           <a href="https://github.com/renewisepunk/dongo/blob/main/SECURITY.md"><span>Report a vulnerability</span><b aria-hidden="true">↗</b></a>
           <a href="#mcp-resources"><span>MCP setup and recovery</span><b aria-hidden="true">↑</b></a>

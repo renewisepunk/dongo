@@ -75,7 +75,24 @@ npm run deploy:production
 
 The default `npm run deploy` points to that production release path. Rollback and environment checks are documented in [`docs/runbooks/production-release.md`](docs/runbooks/production-release.md).
 
-## Install the CLI
+## Get started with skills
+
+The shortest path is to install the Dongo skills in the coding agent you already
+use, then ask it to set up Dongo for the current repository:
+
+```text
+Install the dongo-onboarding and dongo-workflow skills from
+https://github.com/renewisepunk/dongo-skills
+
+Set up Dongo for this repository.
+```
+
+The agent installs the CLI when needed, connects the repository, configures its
+own MCP host, and verifies the result. You approve the Dongo project and agent
+installation in the browser. CLI and MCP grants remain separate, and a host that
+cannot reload MCP servers dynamically may need one restart.
+
+## Manual CLI setup
 
 ```sh
 npm install --global @wisepunk/dongo
@@ -86,7 +103,7 @@ dongo doctor
 
 `dongo connect` always connects to the live service at `dongo.so` and opens a browser for project approval. Authentication stays outside the repository, which receives only a non-secret connection marker. SSH and headless environments can use `--no-browser`. Development infrastructure is private to dongo's own source-level test harnesses and is not selectable from the installed CLI.
 
-## Connect an MCP host
+## Manual MCP setup
 
 Each project exposes a unique resource URL:
 
