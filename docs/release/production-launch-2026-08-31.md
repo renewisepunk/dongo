@@ -4,13 +4,13 @@
 
 The first Codex-first production release is live at `https://dongo.so` and is suitable for real use. Development remains independently available at `https://dev.dongo.so`.
 
-The release includes the public marketing, get-started, and help pages; Google and email OTP authentication; responsive authenticated workspace; project-scoped remote MCP; packed CLI device authorization; issue lifecycle; human and agent comments; attention/continuation; repository export; and image attachment upload, inline preview, download, and agent metadata access. Native mobile applications and live push delivery remain outside this release.
+The release includes the public marketing, get-started, help, and security pages; Google and email OTP authentication; responsive authenticated workspace; project-scoped remote MCP; packed CLI device authorization; issue lifecycle; human and agent comments; attention/continuation; repository export; and image attachment upload, inline preview, download, and agent metadata access. Native mobile applications and live push delivery remain outside this release.
 
 ## Production topology
 
 | Component | Production target | Released version |
 |---|---|---|
-| Web | `dongo-web-production` | `a46d80ec-6d57-4c40-89a6-39ecec01d258` |
+| Web | `dongo-web-production` | `694083b5-b930-4746-bc2b-7d6f31635073` |
 | Authorization | `dongo-auth-production` | `ba80f3e5-7929-42e7-a616-167b68662003` |
 | Agent API | `dongo-api-production` | `f57a195e-efb5-4c82-8732-a11569f481a6` |
 | Remote MCP | `dongo-mcp-production` | `67583ee0-27cd-4233-9332-c225054f6cab` |
@@ -26,11 +26,12 @@ The previous landing Worker versions recorded before cutover were `f956c68f-9fdd
 
 - Complete source checks and tests passed after the final CLI branding change.
 - The exact CLI archive gate passed with archive SHA-256 `385fae240e01e39145c2d53a2d47c4530c8684eda0e055c8f18a8c083486aab8` and canonical payload SHA-256 `6cde031f44e20b14e5a3c6882885dedab1bacb7e475177998bdc2b471de5b7fe`.
-- The current web candidate previously passed 249/249 Playwright cases across Chromium, Firefox, and WebKit.
+- The current web candidate passed 255/255 Playwright cases across Chromium, Firefox, and WebKit, including the public security and retention boundary on desktop and mobile.
 - Production smoke passed 18/18 with project-scoped MCP discovery and authentication enforcement.
 - Live development/production isolation passed 10/10 after cutover.
 - The production root, get-started, help, auth, API, MCP, files, notifications, and canonical `www` redirect all passed their public checks.
 - The credential-free production availability workflow checks the exact production services and project-scoped OAuth/MCP discovery boundaries twice an hour. Its first GitHub-hosted run passed on commit `a96317f` ([run 33437103370](https://github.com/renewisepunk/dongo/actions/runs/33437103370)).
+- Main-branch CI passed for the public security release on commit `095979b` ([run 33455335131](https://github.com/renewisepunk/dongo/actions/runs/33455335131)).
 
 ## Live production journeys
 
@@ -69,6 +70,14 @@ A fresh Codex MCP session resolved the same attachment through the agent contrac
 - CLI authorization authenticates the installation. Project selection and creation are handled by the agent/CLI proposal and server, not by asking the human to choose a project on the consent screen.
 - Production and development use different Workers, OAuth resources, origins, Convex deployments, and agent audiences.
 - Attachment URLs are short-lived and capability-bound; issue data retains opaque attachment IDs.
+
+### Published security boundary
+
+`https://dongo.so/security` now publishes the repository-access boundary, project-scoped authorization model, exact data and retention matrix, infrastructure isolation, current assurance evidence, and controls dongo does not yet claim. The accompanying repository documents are [`../security/README.md`](../security/README.md), [`../security/architecture-and-isolation.md`](../security/architecture-and-isolation.md), [`../security/data-and-retention.md`](../security/data-and-retention.md), and [`../../SECURITY.md`](../../SECURITY.md).
+
+The claim is deliberately narrow: dongo has zero repository-content ingestion by default, not zero product-data retention. Work, comments, attention state, authorization installations, and explicitly uploaded attachments persist because they are product state. Current v1 does not claim configurable retention, self-service project erasure, a contractual deletion SLA, customer-managed encryption keys, independent dongo SOC 2/ISO certification, or a complete-service penetration test.
+
+GitHub private vulnerability reporting is enabled and verified for `renewisepunk/dongo`. The live page and security policy route reports to the confidential advisory form rather than a public issue.
 
 ## First-day use
 

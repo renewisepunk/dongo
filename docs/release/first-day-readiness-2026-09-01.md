@@ -2,7 +2,7 @@
 
 ## Verdict
 
-The first web-and-Codex release is live at `https://dongo.so` and can be used for real work. Google and email one-time-code sign-in are supported production paths. The public site, first-project onboarding, project workspace, remote MCP, CLI device authorization, work lifecycle, comments, attachments, image previews, help, and keyboard navigation are deployed and proven.
+The first web-and-Codex release is live at `https://dongo.so` and can be used for real work. Google and email one-time-code sign-in are supported production paths. The public site, first-project onboarding, project workspace, remote MCP, CLI device authorization, work lifecycle, comments, attachments, image previews, help, security boundary, and keyboard navigation are deployed and proven.
 
 ## Already proven
 
@@ -19,6 +19,9 @@ The first web-and-Codex release is live at `https://dongo.so` and can be used fo
 - The owner account `rene@wisepunk.com` created the real production project `en8dgh2y-dongo`, set its repository to `https://github.com/renewisepunk/dongo`, and kept agent execution in Manual mode.
 - This repository now points to that real project in `.agent-work/project.json`, `.codex/config.toml`, and `.mcp.json`; the historical development MCP entries were replaced without touching unrelated host configuration.
 - A fresh Codex grant started a real production session as the independently attributed `Codex` installation, and CLI `auth status`, `doctor`, and `session-start` all passed against the same project.
+- The public `https://dongo.so/security` route is live on Worker version `694083b5-b930-4746-bc2b-7d6f31635073`; it passed the 255-case cross-browser suite, automated WCAG A/AA checks, mobile layout checks, and an 18/18 post-deploy production smoke.
+- The security material distinguishes zero repository-content ingestion by default from persistent product data, lists current retention behavior and missing enterprise controls, and links to the public architecture, retention, reporting, and release evidence.
+- GitHub private vulnerability reporting is enabled for confidential disclosure. Main-branch CI passed on security release commit `095979b` ([run 33455335131](https://github.com/renewisepunk/dongo/actions/runs/33455335131)).
 
 ## Owner workspace — complete
 
