@@ -29,6 +29,269 @@ beforeEach(() => {
 });
 
 describe("agent lifecycle reliability", () => {
+  it("delivers idempotent Inbox nudges through a truthful cursor and waiter presence", async () => {
+    const t = convexTest(schema, modules);
+    const key = `updates-${crypto.randomUUID()}`;
+    const context = await seededContext(t, key);
+    const human = t.withIdentity({
+      tokenIdentifier: `development:${key}`,
+      subject: key,
+      issuer: "https://human.example.test",
+      name: "dongo developer",
+    });
+    const intake = await human.mutation(api.domains.intake.index.create, {
+      projectId: context.projectId,
+      text: "A new Inbox item needs an active agent.",
+      attachmentIds: [],
+      idempotencyKey: "create-intake-for-update",
+    });
+
+    const baseline = await successfulData(t, context, "get_updates", {
+      waitSeconds: 0,
+    });
+    expect(baseline).toMatchObject({
+      cursor: 0,
+      updates: [],
+      hasMore: false,
+      wait: { status: "not_requested", requestedSeconds: 0 },
+      delivery: {
+        mechanism: "bounded_pull",
+        stoppedAgentsRestarted: false,
+      },
+    });
+
+    const waitAuthorization = { ...context, requestId: crypto.randomUUID() };
+    await t.mutation(internal.domains.agentUpdates.index.beginPull, {
+      authorization: waitAuthorization,
+      waitSeconds: 20,
+    });
+    const waiting = await human.query(
+      api.domains.agentUpdates.index.presence,
+      { projectId: context.projectId },
+    );
+    expect(waiting.installations).toEqual([
+      expect.objectContaining({
+        installationId: context.installationId,
+        capability: "get_updates",
+        state: "waiting",
+        delivery: "bounded_wait",
+      }),
+    ]);
+
+    const input = {
+      projectId: context.projectId,
+      intakeId: intake.intakeId,
+      priority: "important" as const,
+      idempotencyKey: "nudge-intake-once",
+    };
+    const nudged = await human.mutation(
+      api.domains.agentUpdates.index.nudgeForIntake,
+      input,
+    );
+    await t.run((ctx) => ctx.db.patch(intake.intakeId, {
+      status: "processed",
+      updatedAt: Date.now(),
+    }));
+    const replay = await human.mutation(
+      api.domains.agentUpdates.index.nudgeForIntake,
+      input,
+    );
+    expect(replay).toEqual(nudged);
+    expect(nudged).toMatchObject({
+      signal: {
+        version: 1,
+        kind: "intake_available",
+        intakeId: intake.intakeId,
+        priority: "important",
+      },
+      delivery: {
+        waitingInstallations: 1,
+        recentlyActiveInstallations: 0,
+        stoppedInstallations: 0,
+        stoppedAgentsRestarted: false,
+      },
+    });
+
+    await t.mutation(internal.domains.agentUpdates.index.finishPull, {
+      authorization: waitAuthorization,
+    });
+    const updates = await successfulData(t, context, "get_updates", {
+      cursor: baseline.cursor,
+      waitSeconds: 0,
+    });
+    expect(updates).toMatchObject({
+      cursor: 1,
+      hasMore: false,
+      updates: [{
+        version: 1,
+        kind: "intake_available",
+        intakeId: intake.intakeId,
+        priority: "important",
+      }],
+      wait: { status: "updates_available" },
+    });
+    const recent = await human.query(
+      api.domains.agentUpdates.index.presence,
+      { projectId: context.projectId },
+    );
+    expect(recent.installations[0]).toMatchObject({
+      state: "recently_active",
+      delivery: "next_pull",
+    });
+
+    const timedOut = await successfulData(t, context, "get_updates", {
+      cursor: updates.cursor,
+      waitSeconds: 1,
+    });
+    expect(timedOut).toMatchObject({
+      cursor: updates.cursor,
+      updates: [],
+      hasMore: false,
+      wait: {
+        status: "timed_out",
+        requestedSeconds: 1,
+      },
+    });
+    expect(timedOut.wait.elapsedMilliseconds).toBeGreaterThanOrEqual(1_000);
+    expect(timedOut.wait.elapsedMilliseconds).toBeLessThan(3_000);
+  });
+
+  it("creates multiple planned Work items with durable context, links, and an initial comment", async () => {
+    const t = convexTest(schema, modules);
+    const context = await seededContext(t, `work-context-${crypto.randomUUID()}`);
+    const createInput = {
+      title: "Plan the compatibility migration",
+      goal: "Preserve old consumers while the new contract rolls out.",
+      context: "The legacy field remains available for one compatibility cycle.",
+      links: [
+        "https://example.com/design",
+        "https://example.com/migration?phase=1",
+      ],
+      initialComment: "Start by inventorying existing clients.",
+      idempotencyKey: "create-work-with-context",
+    };
+
+    const first = await successfulData(t, context, "create_work", createInput);
+    const replayed = await successfulData(t, context, "create_work", createInput);
+    expect(replayed).toEqual(first);
+    expect(first).toMatchObject({
+      title: createInput.title,
+      goal: createInput.goal,
+      context: createInput.context,
+      links: createInput.links,
+      conversation: [
+        expect.objectContaining({ body: createInput.initialComment }),
+      ],
+    });
+
+    const second = await successfulData(t, context, "create_work", {
+      title: "Plan the dependent client rollout",
+      goal: "Create a separate plan without starting it.",
+      idempotencyKey: "create-second-planned-work",
+    });
+    expect(second.id).not.toBe(first.id);
+
+    const persisted = await t.run(async (ctx) => ({
+      workCount: (await ctx.db
+        .query("workItems")
+        .withIndex("by_project_state_rank", (q) =>
+          q.eq("projectId", context.projectId).eq("state", "ready"),
+        )
+        .collect()).length,
+      firstComments: (await ctx.db
+        .query("comments")
+        .withIndex("by_work_created", (q) =>
+          q.eq("workItemId", first.id as Id<"workItems">),
+        )
+        .collect()).length,
+    }));
+    expect(persisted).toEqual({ workCount: 2, firstComments: 1 });
+
+    const session = await successfulData(t, context, "session_start", {
+      externalSessionId: "planning-session",
+    });
+    expect(session.instructions).toEqual({
+      executionMode: "manual",
+      maxStartedWorkItemsPerSession: 1,
+      maxNewWorkItemsPerSession: 1,
+      wakeUpSemantics: "next_pull",
+      parallelExecution: {
+        policy: {
+          enabled: false,
+          maxConcurrentRuns: 1,
+          requiresIsolatedWorkspaces: true,
+        },
+        hostCapabilities: {
+          parallelExecution: "undisclosed",
+          worktreeIsolation: "undisclosed",
+        },
+        mode: "serial",
+        reason: "project_disabled",
+      },
+    });
+    const verifiedInstallation = await t.run((ctx) =>
+      ctx.db.get(context.installationId),
+    );
+    expect(verifiedInstallation?.lastUsedAt).toEqual(expect.any(Number));
+  });
+
+  it("returns a stable already-resolved Attention conflict while replaying the original success", async () => {
+    const t = convexTest(schema, modules);
+    const context = await seededContext(t, `attention-resolved-${crypto.randomUUID()}`);
+    const work = await successfulData(t, context, "create_work", {
+      title: "Resolve a redundant question",
+      goal: "Prove exact idempotent resolution behavior.",
+      idempotencyKey: "create-resolved-attention-work",
+    });
+    const started = await successfulData(t, context, "start_work", {
+      workItemId: work.id,
+      expectedRevision: work.revision,
+      externalSessionId: "resolve-attention-session",
+      idempotencyKey: "start-resolved-attention-work",
+    });
+    const attention = await successfulData(t, context, "request_attention", {
+      workItemId: work.id,
+      expectedRevision: started.revision,
+      kind: "question",
+      title: "Is this still needed?",
+      body: "The implementation no longer depends on this answer.",
+      idempotencyKey: "request-resolved-attention",
+    });
+    const resolutionInput = {
+      attentionId: attention.id,
+      resolveWithoutResponse: true,
+      idempotencyKey: "resolve-attention-once",
+    };
+
+    const resolved = await successfulData(
+      t,
+      context,
+      "resolve_attention",
+      resolutionInput,
+    );
+    const replayed = await successfulData(
+      t,
+      context,
+      "resolve_attention",
+      resolutionInput,
+    );
+    expect(replayed).toEqual(resolved);
+
+    const duplicate = await callAgent(t, context, "resolve_attention", {
+      ...resolutionInput,
+      idempotencyKey: "resolve-attention-again",
+    });
+    expect(duplicate.response.status).toBe(409);
+    expect(duplicate.payload).toMatchObject({
+      ok: false,
+      error: {
+        code: "already_resolved",
+        message: "Attention already resolved.",
+        retryable: false,
+      },
+    });
+  });
+
   it("exposes finalized human comment attachments to the authorized agent", async () => {
     const t = convexTest(schema, modules);
     const seedKey = `comment-attachment-${crypto.randomUUID()}`;

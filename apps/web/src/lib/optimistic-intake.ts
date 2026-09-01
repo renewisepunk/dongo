@@ -1,4 +1,5 @@
 import type { Intake } from "../features/overview/model";
+import { intakeDisplayLabel } from "./intake-editing";
 
 export type OptimisticIntakeInput = {
   submissionKey: string;
@@ -13,7 +14,12 @@ export function createOptimisticIntake(input: OptimisticIntakeInput): Intake {
     id: `optimistic:${input.submissionKey}`,
     submissionKey: input.submissionKey,
     optimistic: true,
-    text: input.text || input.firstAttachmentName || "Attachment",
+    text: intakeDisplayLabel(
+      input.text,
+      input.firstAttachmentName ? [{ filename: input.firstAttachmentName }] : [],
+    ),
+    submittedText: input.text,
+    editable: true,
     ...(input.firstAttachmentName
       ? { attachment: input.firstAttachmentName }
       : {}),

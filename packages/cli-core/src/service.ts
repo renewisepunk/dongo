@@ -53,6 +53,8 @@ export interface ConnectOptions {
   projectRef?: string;
   repositoryUrl?: string;
   executionMode?: "manual" | "autonomous";
+  /** Explicitly propose creating a new project instead of matching an existing one. */
+  createProject?: boolean;
   events?: DeviceAuthorizationEvents;
   signal?: AbortSignal;
 }
@@ -65,6 +67,11 @@ export interface ConnectResult {
   scopes: string[];
   credentialStore: string;
 }
+
+export type CreateProjectOptions = Omit<
+  ConnectOptions,
+  "projectRef" | "createProject"
+>;
 
 async function resolveProspectivePath(target: string): Promise<string> {
   let existing = path.resolve(target);
@@ -150,6 +157,13 @@ export class CoreService {
     }
     const profile = credentialProfile(environment.productOrigin, repositoryRoot);
     const requestedProjectRef = options.projectRef?.trim();
+    if (options.createProject && requestedProjectRef) {
+      throw new CliCoreError({
+        code: "validation",
+        message: "A new project cannot also bind to --project-ref.",
+        exitCode: 2,
+      });
+    }
     if (requestedProjectRef !== undefined && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/u.test(requestedProjectRef)) {
       throw new CliCoreError({ code: "validation", message: "--project-ref must be a valid dongo public project reference.", exitCode: 2 });
     }
@@ -160,7 +174,9 @@ export class CoreService {
       && existingMarker.apiBaseUrl === environment.apiBaseUrl
       && existingMarker.apiResource === environment.apiResource
       && existingMarker.credentialProfile === profile;
-    const projectRef = requestedProjectRef || (markerMatchesEnvironment ? existingMarker.publicProjectRef : undefined);
+    const projectRef = options.createProject
+      ? undefined
+      : requestedProjectRef || (markerMatchesEnvironment ? existingMarker.publicProjectRef : undefined);
     const store = this.#secretStore();
     const auth = new DeviceAuthorizationClient({
       deviceAuthorizationEndpoint: environment.deviceAuthorizationEndpoint,
@@ -177,6 +193,7 @@ export class CoreService {
         repositoryUrl,
         executionMode: options.executionMode ?? "manual",
         projectRef,
+        projectAction: options.createProject ? "create" : undefined,
       },
       events: options.events,
       signal: options.signal,
@@ -233,6 +250,10 @@ export class CoreService {
       scopes: tokenSet.scope,
       credentialStore: store.kind,
     };
+  }
+
+  async createProject(options: CreateProjectOptions = {}): Promise<ConnectResult> {
+    return await this.connect({ ...options, createProject: true });
   }
 
   async setupCi(options: CiSetupOptions = {}): Promise<CiSetupResult> {
@@ -566,7 +587,12 @@ export function mapClientError(error: unknown): never {
                 : error.retryable
                   ? 5
                   : 1,
-      details: { requestId: error.requestId },
+      details: {
+        ...(error.details && typeof error.details === "object"
+          ? error.details
+          : {}),
+        ...(error.requestId ? { requestId: error.requestId } : {}),
+      },
       cause: error,
     });
   }

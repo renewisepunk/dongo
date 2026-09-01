@@ -23,7 +23,7 @@ export function GetStartedGuide() {
       <section class="public-guide-hero public-guide-hero--start" aria-labelledby="get-started-title">
         <div class="public-guide-hero__copy">
           <div class="eyebrow eyebrow--amber">Agent-first setup</div>
-          <h1 id="get-started-title">Install the skills. Approve once. Start working.</h1>
+          <h1 id="get-started-title">Install the skills. Follow the prompts. Start working.</h1>
           <p>Install dongo’s skills in the coding agent you already use. Then tell it to set up dongo for this repository. It handles the CLI and MCP connection; you approve each scoped installation in your browser.</p>
           <div class="public-guide-hero__actions">
             <a class="button button--primary" href="https://github.com/renewisepunk/dongo-skills" rel="external">Install dongo skills <span aria-hidden="true">↗</span></a>
@@ -68,7 +68,7 @@ export function GetStartedGuide() {
         </aside>
         <div class="guide-process" role="list" aria-label="Browser authorization steps">
           <article role="listitem"><span>1</span><h3>Your agent opens the link</h3><p>The CLI opens a complete approval URL. Over SSH, the agent gives you that same URL to open in a trusted browser.</p></article>
-          <article role="listitem"><span>2</span><h3>You approve the scoped install</h3><p>Sign in if needed, confirm the account, proposed project, resource, and requested access.</p></article>
+          <article role="listitem"><span>2</span><h3>You approve the scoped install</h3><p>Sign in if needed, confirm the account, proposed project, and requested access.</p></article>
           <article role="listitem"><span>3</span><h3>Your agent verifies</h3><p>The page reports “Approved”; the agent only proceeds after the CLI and MCP diagnostics succeed.</p></article>
         </div>
         <aside class="guide-callout guide-callout--green">
@@ -85,6 +85,14 @@ export function GetStartedGuide() {
         lede="The skills are the recommended path. These commands remain available when you want to install, connect, or configure a host yourself."
       >
         <GuideCode label="install and connect the CLI">{INSTALL_COMMANDS}</GuideCode>
+        <p class="guide-inline-note"><span aria-hidden="true">↳</span> During the initial release window, npm or your agent may warn that <code>@wisepunk/dongo</code> is newly published. Verify the exact scoped package and repository metadata; approve the warning when your host requires it, but do not use a lookalike package or bypass the host’s security policy.</p>
+        <div class="guide-process" role="list" aria-label="MCP host setup sequence">
+          <article role="listitem"><span>1</span><h3>Apply configuration</h3><p>Review the generated project-scoped change, then apply it.</p></article>
+          <article role="listitem"><span>2</span><h3>Approve if required</h3><p>Approve the project-scoped server only when your host asks.</p></article>
+          <article role="listitem"><span>3</span><h3>Log in if required</h3><p>Complete the host login only when it is not already authenticated.</p></article>
+          <article role="listitem"><span>4</span><h3>Restart only if necessary</h3><p>Keep the current repository session unless the host cannot load the new connection.</p></article>
+          <article role="listitem"><span>5</span><h3>Verify</h3><p>Finish only after <code>dongo_session_start</code> identifies the intended project.</p></article>
+        </div>
         <div class="guide-host-grid">
           <article>
             <div class="guide-host-grid__label">Codex</div>
@@ -134,7 +142,7 @@ ${dongoPublicOrigin}/p/<project-ref>/mcp`}</code></pre>
       >
         <GuideCode label="verify the CLI">{VERIFY_COMMANDS}</GuideCode>
         <div class="guide-verification">
-          <div><span>CLI</span><strong>doctor passes</strong><p>Project marker, credential binding, resource, and API connectivity agree.</p></div>
+          <div><span>CLI</span><strong>doctor passes</strong><p>Project marker, credential binding, and API connectivity agree.</p></div>
           <div><span>MCP</span><strong><code>dongo_session_start</code> succeeds</strong><p>The host identifies its own actor and the intended project without copying a CLI token.</p></div>
           <div><span>Human</span><strong>project opens</strong><p>Use <A href="/open">Open app</A> to review Intake, work, comments, and agent updates.</p></div>
         </div>

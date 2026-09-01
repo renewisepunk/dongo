@@ -7,13 +7,45 @@ import {
   MAX_DESCRIPTION_LENGTH,
   MAX_TITLE_LENGTH,
 } from "../../lib/validators";
+import {
+  canonicalWorkIdentifier,
+  compactIdentifierPrefix,
+  legacyWorkIdentifiers,
+  MAX_WORK_SEQUENCE,
+} from "./identifiers";
 
 export type NewWorkInput = {
   title: string;
   description?: string;
+  context?: string;
+  links?: string[];
   kind: "task" | "bug" | "feature" | "investigation" | "decision";
   parentId?: Id<"workItems">;
 };
+
+const MAX_WORK_LINKS = 100;
+const MAX_WORK_LINK_LENGTH = 2_048;
+
+function normalizedWorkLinks(values: string[] | undefined): string[] | undefined {
+  if (values === undefined) return undefined;
+  if (values.length > MAX_WORK_LINKS) {
+    fail("validation", `Work may include at most ${MAX_WORK_LINKS} links`);
+  }
+  const links = values.map((value, index) => {
+    const raw = requireString(value, `links[${index}]`, MAX_WORK_LINK_LENGTH);
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      fail("validation", `links[${index}] must be a valid URL`);
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      fail("validation", `links[${index}] must use HTTP or HTTPS`);
+    }
+    return parsed.toString();
+  });
+  return [...new Set(links)];
+}
 
 export async function createWorkItem(
   ctx: MutationCtx,
@@ -39,8 +71,49 @@ export async function createWorkItem(
     fail("forbidden", "Actor does not belong to this project");
   }
   const number = project.nextWorkNumber;
-  const identifier = `${project.identifierPrefix}-${number}`;
+  if (!Number.isSafeInteger(number) || number < 1) {
+    fail("identifier_conflict", "The project work sequence is invalid", {
+      nextSequence: number,
+    });
+  }
+  if (number > MAX_WORK_SEQUENCE) {
+    fail(
+      "identifier_exhausted",
+      "This project has used all 999 work identifiers",
+      {
+        maxSequence: MAX_WORK_SEQUENCE,
+        nextSequence: number,
+        action: "use_another_project",
+      },
+    );
+  }
+  const identifier = canonicalWorkIdentifier(project, number);
+  const [numberCollision, identifierCollision] = await Promise.all([
+    ctx.db
+      .query("workItems")
+      .withIndex("by_project_number", (q) =>
+        q.eq("projectId", project._id).eq("number", number),
+      )
+      .unique(),
+    ctx.db
+      .query("workItems")
+      .withIndex("by_project_identifier", (q) =>
+        q.eq("projectId", project._id).eq("identifier", identifier),
+      )
+      .unique(),
+  ]);
+  if (numberCollision || identifierCollision) {
+    fail("identifier_conflict", "The next work identifier is already in use", {
+      identifier,
+      sequence: number,
+    });
+  }
+  const legacyIdentifiers = legacyWorkIdentifiers(project, {
+    identifier,
+    number,
+  });
   await ctx.db.patch(project._id, {
+    compactIdentifierPrefix: compactIdentifierPrefix(project),
     nextWorkNumber: number + 1,
     updatedAt: options.now,
   });
@@ -55,6 +128,12 @@ export async function createWorkItem(
       "description",
       MAX_DESCRIPTION_LENGTH,
     ),
+    context: optionalString(
+      options.input.context,
+      "context",
+      MAX_DESCRIPTION_LENGTH,
+    ),
+    links: normalizedWorkLinks(options.input.links),
     kind: options.input.kind,
     state: "ready",
     rank: number * 1_024,
@@ -70,7 +149,7 @@ export async function createWorkItem(
     workItemId,
     actorId: options.actorId,
     type: "work.created",
-    data: { identifier, kind: options.input.kind },
+    data: { identifier, legacyIdentifiers, kind: options.input.kind },
     requestId: options.requestId,
     createdAt: options.now,
   });

@@ -91,4 +91,12 @@ describe("generated agent API artifacts", () => {
       expect(references.filter((reference) => !resolvesPointer(artifact, reference))).toEqual([]);
     }
   });
+
+  it("keeps generated product titles and descriptions lowercase", () => {
+    for (const artifact of [createAgentApiOpenApi(), createAgentApiJsonSchema()]) {
+      expect(JSON.stringify(artifact)).not.toMatch(
+        /\b(?:Dongo|DONGO)\b(?![-_.])/u,
+      );
+    }
+  });
 });

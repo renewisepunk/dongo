@@ -10,12 +10,17 @@ const PRESENTATION = {
   session_start: {
     title: "Start dongo session",
     description:
-      "Fetch startup context. This starts no work and should be the first dongo call in a coding session. Supply a caller-chosen externalSessionId that remains stable for this host session.",
+      "Fetch startup context. This starts no work and should be the first dongo call in a coding session. Supply a stable externalSessionId and disclose host parallel/worktree capabilities only when known.",
   },
   get_overview: {
     title: "Get project overview",
     description:
       "Read bounded Needs You, Working, Ready, Inbox, and recently completed project context.",
+  },
+  get_updates: {
+    title: "Get project updates",
+    description:
+      "Pull versioned project signals, optionally waiting up to 20 seconds. This bounded waiter does not restart a stopped agent; pass the returned cursor to the next call.",
   },
   get_intake: {
     title: "Get intake",
@@ -50,7 +55,7 @@ const PRESENTATION = {
   start_work: {
     title: "Start work",
     description:
-      "Atomically acquire the execution lease, create a Run, and start one Ready WorkItem.",
+      "Atomically acquire the execution lease, create a Run, and start one Ready WorkItem. Parallel starts require project opt-in and an isolated worktree.",
   },
   update_work: {
     title: "Update work",

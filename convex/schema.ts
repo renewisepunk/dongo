@@ -90,8 +90,12 @@ export default defineSchema({
     publicRef: v.string(),
     repositoryUrl: v.optional(v.string()),
     identifierPrefix: v.string(),
+    compactIdentifierPrefix: v.optional(v.string()),
     nextWorkNumber: v.number(),
     executionMode,
+    parallelExecutionEnabled: v.optional(v.boolean()),
+    maxConcurrentRuns: v.optional(v.number()),
+    agentUpdateVersion: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
     archivedAt: v.optional(v.number()),
@@ -139,6 +143,51 @@ export default defineSchema({
     .index("by_actor", ["actorId"])
     .index("by_project_client", ["projectId", "clientId"]),
 
+  agentUpdateSignals: defineTable({
+    organizationId: v.id("organizations"),
+    projectId: v.id("projects"),
+    version: v.number(),
+    kind: v.literal("intake_available"),
+    intakeId: v.id("intakes"),
+    priority: v.union(v.literal("normal"), v.literal("important")),
+    createdByActorId: v.id("actors"),
+    createdAt: v.number(),
+  })
+    .index("by_project_version", ["projectId", "version"])
+    .index("by_project_created", ["projectId", "createdAt"]),
+
+  agentUpdatePresence: defineTable({
+    organizationId: v.id("organizations"),
+    projectId: v.id("projects"),
+    installationId: v.id("installations"),
+    actorId: v.id("actors"),
+    capability: v.literal("get_updates"),
+    lastPulledAt: v.number(),
+    waitingUntil: v.optional(v.number()),
+    waitRequestId: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_installation", ["installationId"])
+    .index("by_project_updated", ["projectId", "updatedAt"]),
+
+  agentSessions: defineTable({
+    organizationId: v.id("organizations"),
+    projectId: v.id("projects"),
+    installationId: v.id("installations"),
+    actorId: v.id("actors"),
+    externalSessionId: v.string(),
+    parallelExecutionCapability: v.optional(
+      v.union(v.literal("supported"), v.literal("unsupported")),
+    ),
+    worktreeIsolationCapability: v.optional(
+      v.union(v.literal("supported"), v.literal("unsupported")),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_installation_session", ["installationId", "externalSessionId"])
+    .index("by_project_updated", ["projectId", "updatedAt"]),
+
   oauthBindings: defineTable({
     organizationId: v.id("organizations"),
     projectId: v.id("projects"),
@@ -175,13 +224,42 @@ export default defineSchema({
     .index("by_token_prefix", ["tokenPrefix"])
     .index("by_installation", ["installationId"]),
 
+  ideas: defineTable({
+    organizationId: v.id("organizations"),
+    projectId: v.id("projects"),
+    title: v.string(),
+    text: v.optional(v.string()),
+    context: v.optional(v.string()),
+    links: v.optional(v.array(v.string())),
+    state: v.union(
+      v.literal("open"),
+      v.literal("archived"),
+      v.literal("promoted"),
+    ),
+    position: v.number(),
+    revision: v.number(),
+    createdByProfileId: v.id("humanProfiles"),
+    createdByActorId: v.id("actors"),
+    updatedByActorId: v.id("actors"),
+    archivedAt: v.optional(v.number()),
+    promotedAt: v.optional(v.number()),
+    promotedIntakeId: v.optional(v.id("intakes")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project_state_position", ["projectId", "state", "position"])
+    .index("by_project_created", ["projectId", "createdAt"]),
+
   intakes: defineTable({
     organizationId: v.id("organizations"),
     projectId: v.id("projects"),
     createdByProfileId: v.id("humanProfiles"),
     createdByActorId: v.id("actors"),
+    sourceIdeaId: v.optional(v.id("ideas")),
     clientRequestId: v.optional(v.string()),
     text: v.optional(v.string()),
+    context: v.optional(v.string()),
+    links: v.optional(v.array(v.string())),
     status: v.union(
       v.literal("new"),
       v.literal("claimed"),
@@ -208,6 +286,7 @@ export default defineSchema({
   attachments: defineTable({
     organizationId: v.id("organizations"),
     projectId: v.id("projects"),
+    ideaId: v.optional(v.id("ideas")),
     intakeId: v.optional(v.id("intakes")),
     workItemId: v.optional(v.id("workItems")),
     createdByProfileId: v.id("humanProfiles"),
@@ -225,6 +304,7 @@ export default defineSchema({
     finalizedAt: v.optional(v.number()),
     expiresAt: v.optional(v.number()),
   })
+    .index("by_idea", ["ideaId"])
     .index("by_intake", ["intakeId"])
     .index("by_work", ["workItemId"])
     .index("by_project_status", ["projectId", "status"])
@@ -244,6 +324,8 @@ export default defineSchema({
     identifier: v.string(),
     title: v.string(),
     description: v.optional(v.string()),
+    context: v.optional(v.string()),
+    links: v.optional(v.array(v.string())),
     kind: workKind,
     state: workState,
     rank: v.number(),
@@ -261,6 +343,7 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
   })
     .index("by_project_identifier", ["projectId", "identifier"])
+    .index("by_project_number", ["projectId", "number"])
     .index("by_project_state_rank", ["projectId", "state", "rank"])
     .index("by_project_state_updated", ["projectId", "state", "updatedAt"])
     .index("by_project_claim_expiry", ["projectId", "claimExpiresAt"])
@@ -296,12 +379,28 @@ export default defineSchema({
     status: runStatus,
     summary: v.optional(v.string()),
     externalSessionId: v.optional(v.string()),
+    parallelExecutionCapability: v.optional(
+      v.union(v.literal("supported"), v.literal("unsupported")),
+    ),
+    worktreeIsolationCapability: v.optional(
+      v.union(v.literal("supported"), v.literal("unsupported")),
+    ),
+    workspaceKind: v.optional(
+      v.union(
+        v.literal("worktree"),
+        v.literal("shared_checkout"),
+        v.literal("undisclosed"),
+      ),
+    ),
+    worktreeName: v.optional(v.string()),
+    branch: v.optional(v.string()),
     failureCode: v.optional(v.string()),
     startedAt: v.number(),
     lastHeartbeatAt: v.number(),
     finishedAt: v.optional(v.number()),
   })
     .index("by_work_started", ["workItemId", "startedAt"])
+    .index("by_project_status", ["projectId", "status"])
     .index("by_actor_status", ["actorId", "status"])
     .index("by_installation_status", ["installationId", "status"]),
 
@@ -438,6 +537,7 @@ export default defineSchema({
   events: defineTable({
     organizationId: v.id("organizations"),
     projectId: v.optional(v.id("projects")),
+    ideaId: v.optional(v.id("ideas")),
     intakeId: v.optional(v.id("intakes")),
     workItemId: v.optional(v.id("workItems")),
     runId: v.optional(v.id("runs")),
@@ -448,6 +548,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_project_created", ["projectId", "createdAt"])
+    .index("by_idea_created", ["ideaId", "createdAt"])
     .index("by_work_created", ["workItemId", "createdAt"])
     .index("by_intake_created", ["intakeId", "createdAt"])
     .index("by_run_created", ["runId", "createdAt"]),

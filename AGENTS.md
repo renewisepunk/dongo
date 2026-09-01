@@ -1,6 +1,12 @@
 ## Brand rule
 
-Always write the product name as lowercase `dongo`. This applies at the start of sentences and in headings, buttons, labels, documentation, tests, prompts, commit messages, and user-facing output. Never write `Dongo`.
+Always write the product name as lowercase `dongo`. This applies at the start of sentences and in headings, buttons, labels, documentation, tests, prompts, commit messages, and user-facing output. Never title-case or capitalize the product name.
+
+## Work coordination
+
+Use dongo as the durable system of record for planning and executing repository work. Before changing the repository, start the dongo session, inspect existing Intake and Work for relevant or duplicate items, and attach the change to one active Run. Continue the matching WorkItem when one exists; otherwise create a focused WorkItem only when the user's request authorizes implementation, then start it before editing files.
+
+Keep the WorkItem goal, Run updates, Attention requests, artifacts, and final outcome aligned with the work actually performed. Record meaningful progress or blockers during substantial work, request Attention when human judgment is required, and finish the WorkItem only after the requested change and relevant verification are complete. Chat plans and local checklists may support execution, but they do not replace dongo as the repository's work record.
 
 ## Development guide
 

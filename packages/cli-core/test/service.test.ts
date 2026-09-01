@@ -60,11 +60,11 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
         return envelope(session, "req_session");
       }
       if (url.endsWith("/get_overview")) {
-        return envelope({ needsYou: [], working: [], ready: [{ identifier: "DON-1" }], inbox: [], recentlyDone: [] }, "req_overview");
+        return envelope({ needsYou: [], working: [], ready: [{ identifier: "dong001", legacyIdentifiers: ["DON-1"] }], inbox: [], recentlyDone: [] }, "req_overview");
       }
       if (url.endsWith("/sync_snapshot")) {
         return envelope(
-          { workItems: [{ identifier: "DON-1", title: "Safe export", state: "done", outcome: "Complete." }] },
+          { workItems: [{ identifier: "dong001", legacyIdentifiers: ["DON-1"], title: "Safe export", state: "done", outcome: "Complete." }] },
           "req_sync",
         );
       }
@@ -92,6 +92,15 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
   await service.connect({ origin: "http://localhost:8787" });
   assert.match(opened[1] ?? "", /[?&]project_ref=pub_dongo(?:&|$)/u);
 
+  await service.createProject({
+    origin: "http://localhost:8787",
+    projectName: "Another project",
+  });
+  const creationUrl = new URL(opened[2] ?? "");
+  assert.equal(creationUrl.searchParams.get("project_action"), "create");
+  assert.equal(creationUrl.searchParams.get("project_name"), "Another project");
+  assert.equal(creationUrl.searchParams.has("project_ref"), false);
+
   const markerRecord = JSON.parse(marker) as ProjectMarker;
   await writeProjectMarker(repositoryRoot, { ...markerRecord, apiBaseUrl: "https://credential-thief.example/api" });
   const callsBeforeTamperCheck = calls.length;
@@ -108,8 +117,8 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
   assert.equal((await service.doctor()).ok, true);
   assert.equal((await service.overview()).ready.length, 1);
   const synced = await service.sync();
-  assert.equal(synced.export.files[0]?.path, "work/DON-1-safe-export.md");
-  assert.match(await readFile(path.join(repositoryRoot, ".agent-work", "work", "DON-1-safe-export.md"), "utf8"), /Complete\./);
+  assert.equal(synced.export.files[0]?.path, "work/dong001-safe-export.md");
+  assert.match(await readFile(path.join(repositoryRoot, ".agent-work", "work", "dong001-safe-export.md"), "utf8"), /Complete\./);
 
   assert.equal((await service.logout()).revoked, true);
   assert.equal((await service.authStatus()).authenticated, false);
@@ -226,6 +235,29 @@ test("the released service rejects non-production connection options", async () 
   await assert.rejects(
     service.setupCi({ environment: "development" }),
     (error: unknown) => error instanceof CliCoreError && error.code === "validation" && /internal-only/u.test(error.message),
+  );
+});
+
+test("explicit project creation cannot also select an existing project", async () => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-create-project-"));
+  await mkdir(path.join(repositoryRoot, ".git"));
+  const service = new CoreService({
+    cwd: repositoryRoot,
+    allowNonProduction: true,
+    fetch: async () => {
+      throw new Error("conflicting creation intent must fail before network access");
+    },
+  });
+  await assert.rejects(
+    service.connect({
+      origin: "http://localhost:8787",
+      createProject: true,
+      projectRef: "existing_project",
+    }),
+    (error: unknown) =>
+      error instanceof CliCoreError
+      && error.code === "validation"
+      && /cannot also bind/u.test(error.message),
   );
 });
 

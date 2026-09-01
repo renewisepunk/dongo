@@ -59,7 +59,8 @@ test("snapshot export refuses symlinked work directories", async () => {
 
 test("canonical artifacts, source IDs, and conversation notes export without temporary URLs", () => {
   const markdown = renderWorkItem({
-    identifier: "DON-8",
+    identifier: "dong008",
+    legacyIdentifiers: ["DON-8"],
     title: "Canonical snapshot",
     state: "done",
     goal: "Use the shared contract.",
@@ -80,6 +81,8 @@ test("canonical artifacts, source IDs, and conversation notes export without tem
   assert.match(markdown, /Report: `reports\/final\.md`/);
   assert.match(markdown, /Agent: Verified\./);
   assert.match(markdown, /Attachments: attachment_image, attachment_trace/);
+  assert.match(markdown, /id: "dong008"/);
+  assert.doesNotMatch(markdown, /DON-8/);
   assert.doesNotMatch(markdown, /signature=/);
 });
 

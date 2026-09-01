@@ -17,6 +17,39 @@ Your local agent keeps the permissions granted by its host. Only the work and fi
 - **Access is revocable.** An installation can be disconnected when it should no longer access a project.
 - **Sharing is intentional.** Work records and explicitly attached files cross the boundary; local development data does not cross automatically.
 
+## Parallel execution boundary
+
+dongo may coordinate several active Runs only after a project owner enables
+parallel work. The configured 2–8 concurrent-Run value is a safety cap, not a
+paid-plan entitlement; disabled projects remain single-agent. Every WorkItem is
+still claimed atomically, and one host session may own at most one active item.
+
+The coding-agent host—not dongo—creates agents, Git worktrees, and branches.
+Parallel admission requires the host to explicitly report support for parallel
+execution and worktree isolation and to identify the Run as using an isolated
+worktree. Unsupported, missing, or undisclosed capability stays on the safe
+serial path. Reported capability is never trusted as authorization and never
+overrides project policy, claim ownership, capacity, revision, or lease checks.
+
+Workspace reporting is intentionally bounded. dongo may retain a worktree name
+and branch for Run visualization, but never an absolute repository or worktree
+path. Repository contents, diffs, and Git history remain local unless a person
+or authorized agent explicitly adds them to the project.
+
+## Ideas privacy boundary
+
+Ideas are a human-only project backlog. Agent installations cannot list, search,
+download, claim, sync, or mutate them, and Ideas do not appear in agent Overview
+or update delivery. Files attached only to an Idea remain outside agent
+attachment access.
+
+Only an authenticated project member can deliberately promote an open Idea.
+That atomic action creates one Intake, preserves a permanent link in both
+records, and makes the promoted attachments available through the Intake's
+normal project-scoped controls. Retries and later promotion attempts resolve to
+the original Intake rather than creating duplicates. Promotion does not grant
+an agent additional repository access or permission to begin work.
+
 ## Data and retention
 
 dongo retains the shared project record needed for people and agents to continue work across sessions. This includes work, comments, status, decisions, account and access records, and files explicitly attached to the project.

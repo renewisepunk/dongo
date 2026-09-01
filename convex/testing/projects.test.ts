@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { convexTest } from "convex-test";
 import schema from "../schema";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { modules } from "../test.setup";
 
 const gatewaySecret = "test-gateway-secret-with-at-least-32-characters";
@@ -17,6 +17,78 @@ afterEach(() => {
 });
 
 describe("project resource provisioning", () => {
+  it("exposes the free-plan allowance and returns an actionable project limit", async () => {
+    const t = convexTest(schema, modules).withIdentity({
+      tokenIdentifier: "https://human.example.test|plan-owner",
+      subject: "plan-owner",
+      issuer: "https://human.example.test",
+      email: "plan-owner@example.test",
+      name: "Plan Owner",
+    });
+    await t.mutation(api.domains.identity.index.bootstrapCurrentUser, {});
+    const organization = await t.mutation(
+      api.domains.projects.index.createPersonalOrganization,
+      { name: "Plan Test", slug: `plan-${crypto.randomUUID()}` },
+    );
+
+    const before = await t.query(api.domains.projects.index.listMine, {});
+    expect(before[0]?.projectAllowance).toEqual({
+      resource: "active_projects",
+      plan: "free",
+      activeProjectCount: 0,
+      limit: 1,
+      remaining: 1,
+      canCreate: true,
+      actions: ["use_existing", "archive_existing", "upgrade"],
+    });
+
+    await t.mutation(internal.domains.projects.index.createProject, {
+      organizationId: organization.organizationId,
+      name: "Existing Project",
+      slug: "existing",
+      identifierPrefix: "EXIST",
+      executionMode: "manual",
+      parallelExecution: {
+        enabled: false,
+        maxConcurrentRuns: 1,
+        requiresIsolatedWorkspaces: true,
+      },
+    });
+    const after = await t.query(api.domains.projects.index.listMine, {});
+    expect(after[0]?.projectAllowance).toMatchObject({
+      activeProjectCount: 1,
+      remaining: 0,
+      canCreate: false,
+    });
+    expect(after[0]?.projects[0]?.parallelExecution).toEqual({
+      enabled: false,
+      maxConcurrentRuns: 1,
+      requiresIsolatedWorkspaces: true,
+    });
+
+    await expect(t.mutation(internal.domains.projects.index.createProject, {
+      organizationId: organization.organizationId,
+      name: "Second Project",
+      slug: "second",
+      identifierPrefix: "SEC",
+      executionMode: "manual",
+    })).rejects.toMatchObject({
+      data: {
+        code: "plan_limit",
+        message: expect.stringMatching(/use the existing project, archive it, or upgrade/i),
+        details: {
+          resource: "active_projects",
+          plan: "free",
+          activeProjectCount: 1,
+          limit: 1,
+          remaining: 0,
+          retryable: false,
+          actions: ["use_existing", "archive_existing", "upgrade"],
+        },
+      },
+    });
+  });
+
   it("recovers an external provisioning failure without duplicating the project", async () => {
     const requests: Request[] = [];
     let attempts = 0;
@@ -47,6 +119,11 @@ describe("project resource provisioning", () => {
       identifierPrefix: "PROV",
       repositoryUrl: "https://github.com/example/provisioned",
       executionMode: "manual" as const,
+      parallelExecution: {
+        enabled: true,
+        maxConcurrentRuns: 3,
+        requiresIsolatedWorkspaces: true as const,
+      },
     };
 
     await expect(
@@ -66,6 +143,11 @@ describe("project resource provisioning", () => {
       resourceProvisioned: true,
     });
     const afterRecovery = await t.query(api.domains.projects.index.listMine, {});
+    expect(afterRecovery[0]?.projects[0]?.parallelExecution).toEqual({
+      enabled: true,
+      maxConcurrentRuns: 3,
+      requiresIsolatedWorkspaces: true,
+    });
     expect(afterRecovery[0]?.projects).toHaveLength(1);
     expect(requests).toHaveLength(2);
     for (const request of requests) {

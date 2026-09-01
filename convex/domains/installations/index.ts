@@ -12,6 +12,7 @@ import {
   requireOwner,
 } from "../../lib/authz";
 import { appendEvent } from "../../lib/events";
+import { lowercaseDongoBrand } from "../../lib/brand";
 import { fail, requireString } from "../../lib/errors";
 
 const allowedScopes = new Set([
@@ -20,6 +21,25 @@ const allowedScopes = new Set([
   "dongo:attachments:read",
   "offline_access",
 ]);
+
+const genericTransportLabels = new Set(["dongo CLI", "MCP host"]);
+
+function oauthActorName(label: string): string {
+  return genericTransportLabels.has(label) ? "Agent" : label;
+}
+
+function installationDisplayLabel(
+  installation: Pick<Doc<"installations">, "kind" | "label">,
+): string {
+  const label = lowercaseDongoBrand(installation.label.trim());
+  if (label) return label;
+  switch (installation.kind) {
+    case "cli": return "dongo CLI";
+    case "mcp": return "MCP host";
+    case "service": return "Service credential";
+    case "development": return "Development agent";
+  }
+}
 
 function validateScopes(scopes: string[]): string[] {
   const unique = [...new Set(scopes)];
@@ -99,7 +119,10 @@ export const registerOAuthGrant = internalMutation({
     const now = Date.now();
     const scopes = validateScopes(args.scopes);
     const clientId = requireString(args.clientId, "clientId", 500);
-    const label = requireString(args.label, "label", 240);
+    const label = lowercaseDongoBrand(requireString(args.label, "label", 240));
+    const machineLabel = args.machineLabel?.trim()
+      ? lowercaseDongoBrand(args.machineLabel.trim())
+      : undefined;
     const resource = requireString(args.resource, "resource", 2_048);
     const providerIssuer = requireString(
       args.providerIssuer,
@@ -179,14 +202,17 @@ export const registerOAuthGrant = internalMutation({
       await ctx.db.patch(installation._id, {
         clientId,
         label,
-        machineLabel: args.machineLabel,
+        machineLabel,
         resource,
         scopes,
         authorizedByProfileId: profile._id,
         updatedAt: now,
       });
       await ctx.db.patch(actor._id, {
-        name: label,
+        name: oauthActorName(label),
+        agentType: actor.agentType === installation.kind
+          ? undefined
+          : actor.agentType,
         lastSeenAt: now,
       });
       return {
@@ -203,8 +229,7 @@ export const registerOAuthGrant = internalMutation({
     const actorId = await ctx.db.insert("actors", {
       organizationId: project.organizationId,
       type: "agent",
-      name: label,
-      agentType: args.kind,
+      name: oauthActorName(label),
       createdAt: now,
       lastSeenAt: now,
     });
@@ -216,7 +241,7 @@ export const registerOAuthGrant = internalMutation({
       status: "active",
       clientId,
       label,
-      machineLabel: args.machineLabel,
+      machineLabel,
       resource,
       scopes,
       authorizedByProfileId: profile._id,
@@ -372,7 +397,7 @@ export const persistServiceCredential = internalMutation({
     const principal = await requireHumanProject(ctx, args.projectId, {
       owner: true,
     });
-    const label = requireString(args.label, "label", 240);
+    const label = lowercaseDongoBrand(requireString(args.label, "label", 240));
     const resource = requireString(args.resource, "resource", 2_048);
     const scopes = validateServiceScopes(args.scopes);
     if (!/^[A-Za-z0-9_-]{11}$/u.test(args.tokenPrefix)) {
@@ -398,7 +423,6 @@ export const persistServiceCredential = internalMutation({
       organizationId: principal.project!.organizationId,
       type: "agent",
       name: label,
-      agentType: "service",
       createdAt: now,
     });
     const installationId = await ctx.db.insert("installations", {
@@ -524,8 +548,10 @@ export const listForProject = query({
       kind: installation.kind,
       status: installation.status,
       clientId: installation.clientId,
-      label: installation.label,
-      machineLabel: installation.machineLabel,
+      label: installationDisplayLabel(installation),
+      machineLabel: installation.machineLabel?.trim()
+        ? lowercaseDongoBrand(installation.machineLabel.trim())
+        : undefined,
       scopes: installation.scopes,
       createdAt: installation.createdAt,
       lastUsedAt: installation.lastUsedAt,

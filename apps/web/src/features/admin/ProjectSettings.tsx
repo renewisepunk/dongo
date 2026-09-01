@@ -10,6 +10,11 @@ import {
   type ProjectInfo,
   type ProjectInstallation,
 } from "../../lib/project-data";
+import { lowercaseDongoBrand } from "../../lib/brand-case";
+import {
+  DEFAULT_PARALLEL_RUN_LIMIT,
+  parallelExecutionPolicy,
+} from "../../lib/parallel-execution";
 import "./admin.css";
 
 type ProjectSettingsConnection = {
@@ -23,6 +28,11 @@ type ProjectSettingsConnection = {
     name: string;
     repositoryUrl?: string;
     executionMode: "manual" | "autonomous";
+    parallelExecution: {
+      enabled: boolean;
+      maxConcurrentRuns: number;
+      requiresIsolatedWorkspaces: true;
+    };
   }) => Promise<void>;
   updateOrganization: (name: string) => Promise<void>;
   revokeInstallation: (installationId: string) => Promise<void>;
@@ -128,6 +138,8 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   const [projectName, setProjectName] = createSignal("");
   const [repositoryUrl, setRepositoryUrl] = createSignal("");
   const [executionMode, setExecutionMode] = createSignal<"manual" | "autonomous">("manual");
+  const [allowParallelWork, setAllowParallelWork] = createSignal(false);
+  const [maxConcurrentRuns, setMaxConcurrentRuns] = createSignal(DEFAULT_PARALLEL_RUN_LIMIT);
   const [organizationName, setOrganizationName] = createSignal("");
   const [memberEmail, setMemberEmail] = createSignal("");
   const [loading, setLoading] = createSignal(true);
@@ -198,10 +210,17 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   };
 
   const applyAdministration = (next: ProjectAdministration) => {
+    const parallelExecution = next.project.parallelExecution ?? parallelExecutionPolicy(false);
     setAdministration(next);
     setProjectName(next.project.name);
     setRepositoryUrl(next.project.repositoryUrl ?? "");
     setExecutionMode(next.project.executionMode);
+    setAllowParallelWork(parallelExecution.enabled);
+    setMaxConcurrentRuns(
+      parallelExecution.enabled
+        ? parallelExecution.maxConcurrentRuns
+        : DEFAULT_PARALLEL_RUN_LIMIT,
+    );
     setOrganizationName(next.organization.name);
   };
 
@@ -266,6 +285,10 @@ export function ProjectSettings(props: ProjectSettingsProps) {
         name,
         repositoryUrl: repository,
         executionMode: executionMode(),
+        parallelExecution: parallelExecutionPolicy(
+          allowParallelWork(),
+          maxConcurrentRuns(),
+        ),
       });
       setProject({ ...connection.project });
       await refreshAdministration();
@@ -472,12 +495,43 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 </div>
                 <div class="settings-grid">
                   <div class="field-group"><label class="field-label" for="settings-repo">Repository URL</label><input class="input mono" id="settings-repo" value={repositoryUrl()} disabled={!owner()} onInput={(event) => setRepositoryUrl(event.currentTarget.value)} placeholder="https://github.com/owner/repository" /></div>
-                  <div class="field-group"><label class="field-label" for="settings-prefix">Identifier prefix</label><input class="input mono" id="settings-prefix" value={admin().project.identifierPrefix} disabled /></div>
+                  <div class="field-group"><label class="field-label" for="settings-prefix">Work identifier code</label><input class="input mono" id="settings-prefix" value={admin().project.compactIdentifierPrefix} disabled /></div>
                 </div>
                 <div class="field-label" id="settings-mode">Agent execution mode</div>
                 <div class="choice-list" role="radiogroup" aria-labelledby="settings-mode">
                   <button ref={manualModeButton} class="choice" data-selected={executionMode() === "manual"} type="button" role="radio" aria-checked={executionMode() === "manual"} tabindex={executionMode() === "manual" ? 0 : -1} disabled={!owner()} onClick={() => selectExecutionMode("manual")} onKeyDown={moveExecutionMode}><span class="choice__dot" /><span class="choice__copy"><span class="choice__title">Manual</span><span class="choice__body">Agents triage and suggest work, then wait for you.</span></span></button>
                   <button ref={autonomousModeButton} class="choice" data-selected={executionMode() === "autonomous"} type="button" role="radio" aria-checked={executionMode() === "autonomous"} tabindex={executionMode() === "autonomous" ? 0 : -1} disabled={!owner()} onClick={() => selectExecutionMode("autonomous")} onKeyDown={moveExecutionMode}><span class="choice__dot" /><span class="choice__copy"><span class="choice__title">Autonomous</span><span class="choice__body">Agents may claim and begin the highest suitable Ready work.</span></span></button>
+                </div>
+                <div class="parallel-option" data-enabled={allowParallelWork()}>
+                  <div class="parallel-option__status" aria-live="polite">{allowParallelWork() ? "Parallel work enabled" : "Single-agent"}</div>
+                  <label class="parallel-option__toggle" for="settings-parallel-work">
+                    <input
+                      id="settings-parallel-work"
+                      type="checkbox"
+                      checked={allowParallelWork()}
+                      disabled={!owner()}
+                      onChange={(event) => setAllowParallelWork(event.currentTarget.checked)}
+                    />
+                    <span>
+                      <strong>Allow parallel work</strong>
+                      <span>Agents may work on separate claimed items at the same time when their host supports isolated workspaces.</span>
+                    </span>
+                  </label>
+                  <Show when={allowParallelWork()}>
+                    <label class="parallel-option__limit" for="settings-parallel-run-limit">
+                      <span>Maximum concurrent runs <small>Safety cap</small></span>
+                      <select
+                        class="input mono"
+                        id="settings-parallel-run-limit"
+                        value={maxConcurrentRuns()}
+                        disabled={!owner()}
+                        onChange={(event) => setMaxConcurrentRuns(Number(event.currentTarget.value))}
+                      >
+                        {[2, 3, 4, 5, 6, 7, 8].map((limit) => <option value={limit}>{limit}</option>)}
+                      </select>
+                    </label>
+                  </Show>
+                  <p class="security-note">This is a safety cap, not a plan limit. dongo coordinates claims; each agent host creates its agents and isolated worktrees. Unsupported or undisclosed hosts remain usable one item at a time.</p>
                 </div>
                 <Show when={owner()}><button class="button button--primary" type="submit" disabled={savingProject()} style={{ "align-self": "flex-start" }}>{savingProject() ? "Saving…" : "Save project"}</button></Show>
               </form>
@@ -501,7 +555,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 <div class="installation-list">
                   <For each={installations()}>{(installation) => (
                     <div class="installation-row">
-                      <div class="installation-row__name"><span>{installation.label}</span><span class="installation-row__meta">{installationType(installation)} · {installation.scopes.join(", ")}</span></div>
+                      <div class="installation-row__name"><span>{lowercaseDongoBrand(installation.label)}</span><span class="installation-row__meta">{installationType(installation)} · {installation.scopes.join(", ")}</span></div>
                       <div class="installation-row__meta">{relativeTime(installation.lastUsedAt)} · {installation.status}</div>
                       <Show when={installation.status !== "revoked"} fallback={<span class="installation-row__meta">revoked</span>}>
                         <Show when={confirmRevoke() === installation.id} fallback={<button class="button button--quiet button--danger" type="button" onClick={() => setConfirmRevoke(installation.id)}>Revoke</button>}>
@@ -611,7 +665,19 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 <div class="plan-stat"><span class="plan-stat__value">{admin().activeProjectCount} / {admin().organization.plan === "free" ? "1" : "∞"}</span><span class="plan-stat__label">active projects</span></div>
                 <div class="plan-stat"><span class="plan-stat__value">{formatBytes(admin().storage.activeBytes + admin().storage.reservedBytes)} / {formatBytes(admin().storage.limitBytes)}</span><span class="plan-stat__label">media storage</span></div>
               </div>
-              <section class="settings-section"><div class="settings-section__title">{admin().organization.plan === "free" ? "Free" : "Paid"} plan</div><p class="note">Individual uploads are limited to {formatBytes(admin().storage.maximumAttachmentBytes)}. dongo does not meter people, agents, or WorkItems.</p><Show when={admin().organization.plan === "free"}><p class="security-note">Plan upgrades are not available yet.</p></Show></section>
+              <section class="settings-section">
+                <div class="settings-section__title">{admin().organization.plan === "free" ? "Free" : "Paid"} plan</div>
+                <Show when={admin().organization.plan === "free"} fallback={<p class="note">This organization can create multiple active projects.</p>}>
+                  <p class="note">Free includes 1 active project. This organization is using {admin().activeProjectCount} of 1; archive its active project before creating another, or review upgrade availability.</p>
+                </Show>
+                <p class="note">Individual uploads are limited to {formatBytes(admin().storage.maximumAttachmentBytes)}. dongo does not meter people, agents, or WorkItems.</p>
+                <Show when={owner()}>
+                  <A class="button" href={`/onboarding?organization=${encodeURIComponent(admin().organization.slug)}`} style={{ "align-self": "flex-start" }}>
+                    {admin().organization.plan === "free" && admin().activeProjectCount >= 1 ? "Review project creation options" : "Create another project"}
+                  </A>
+                </Show>
+                <Show when={admin().organization.plan === "free"}><p class="security-note">Plan upgrades are not available yet; dongo shows that state instead of sending you to sign in or presenting a dead checkout control.</p></Show>
+              </section>
             </>
           )}</Show>
         </div>

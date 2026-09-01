@@ -48,7 +48,7 @@ describe("service credentials", () => {
       api.domains.installations.actions.createServiceCredential,
       {
         projectId: project.projectId,
-        label: "Repository CI",
+        label: ["Don", "go Repository CI"].join(""),
         scopes: [
           "dongo:work:read",
           "dongo:work:write",
@@ -61,11 +61,15 @@ describe("service credentials", () => {
     );
     expect(created.tokenPrefix).toHaveLength(11);
 
-    const stored = await root.run(async (ctx) => ({
-      credential: await ctx.db.get(created.serviceCredentialId),
-      installation: await ctx.db.get(created.installationId),
-      serialized: JSON.stringify(await ctx.db.get(created.serviceCredentialId)),
-    }));
+    const stored = await root.run(async (ctx) => {
+      const installation = await ctx.db.get(created.installationId);
+      return {
+        credential: await ctx.db.get(created.serviceCredentialId),
+        installation,
+        actor: installation ? await ctx.db.get(installation.actorId) : null,
+        serialized: JSON.stringify(await ctx.db.get(created.serviceCredentialId)),
+      };
+    });
     expect(stored.credential?.tokenHash).toMatch(/^[a-f0-9]{64}$/u);
     expect(stored.credential?.tokenPrefix).toBe(created.tokenPrefix);
     expect(stored.serialized).not.toContain(created.token);
@@ -74,7 +78,9 @@ describe("service credentials", () => {
       clientId: `dongo-service-v1:${created.tokenPrefix}`,
       resource: "https://dev.dongo.so/api/agent/v1",
       status: "active",
+      label: "dongo Repository CI",
     });
+    expect(stored.actor).toMatchObject({ name: "dongo Repository CI" });
 
     const invalidToken = `${created.token.slice(0, -1)}${created.token.endsWith("a") ? "b" : "a"}`;
     const invalid = await callSigned(

@@ -1,9 +1,12 @@
 import { CliCoreError, CoreService } from "@dongo/cli-core";
 import { DongoClient } from "@dongo/client";
 import type { OperationInput } from "@dongo/contracts";
+import type { OperationOutput } from "@dongo/contracts";
 import { readFileSync } from "node:fs";
 import { parseArgs } from "./args.ts";
 import type { ParsedArgs } from "./args.ts";
+import { commandName, renderHelp, validateCommand } from "./command-schema.ts";
+import { renderIntegrationOutput } from "./integration-output.ts";
 import type { OutputWriter } from "./output.ts";
 import { errorResult, processOutput, writeJson } from "./output.ts";
 
@@ -14,9 +17,11 @@ const CLI_VERSION = (JSON.parse(
 export interface CliDependencies {
   output?: OutputWriter;
   signal?: AbortSignal;
+  wait?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
   serviceFactory?: () => Pick<
     CoreService,
     | "connect"
+    | "createProject"
     | "setupCi"
     | "authStatus"
     | "logout"
@@ -30,36 +35,6 @@ export interface CliDependencies {
     | "integration"
   >;
 }
-
-const HELP = `dongo CLI
-
-Usage:
-  dongo connect [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
-  dongo ci setup
-  dongo auth status
-  dongo auth logout
-  dongo doctor
-  dongo session-start
-  dongo overview
-  dongo intake get|claim|renew|complete [options]
-  dongo work create|get|start|update|renew|finish [options]
-  dongo comment add [options]
-  dongo attention request|get|resolve [options]
-  dongo attachment get|fetch [--attachment-id ID] [--output PATH]
-  dongo sync
-  dongo integrate codex|claude|generic [--apply]
-
-Options:
-  --version, -V                Print the installed CLI version
-  --json                       Write one stable JSON result to stdout
-  --no-browser                 Print the complete approval link without opening it
-  --project-ref REF            Bind the terminal to an exact existing project
-  --project-name NAME          Override the inferred first-project name
-  --repository-url URL         Override the inferred Git origin URL
-  --execution-mode MODE        Create the first project in manual or autonomous mode
-  --idempotency-key KEY        Reuse this key when recovering a mutation response
-  --apply                      Apply a rendered host integration after preview
-`;
 
 function humanJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2).replace(/[\u202a-\u202e\u2066-\u2069]/gi, (character) =>
@@ -100,6 +75,129 @@ function integerOption(parsed: ParsedArgs, name: string, minimum: number, requir
   return value;
 }
 
+async function defaultWait(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    throw new CliCoreError({ code: "cancelled", message: "Attention wait was cancelled.", exitCode: 130 });
+  }
+  await new Promise<void>((resolve, reject) => {
+    const complete = () => {
+      signal?.removeEventListener("abort", cancel);
+      resolve();
+    };
+    const timer = setTimeout(complete, milliseconds);
+    const cancel = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
+      reject(new CliCoreError({
+        code: "cancelled",
+        message: "Attention wait was cancelled.",
+        exitCode: 130,
+      }));
+    };
+    signal?.addEventListener("abort", cancel, { once: true });
+  });
+}
+
+async function waitForAttention(
+  service: Pick<CoreService, "execute">,
+  attentionId: string,
+  timeoutSeconds: number,
+  dependencies: CliDependencies,
+): Promise<{
+  attention: OperationOutput<"get_attention">;
+  wait: { status: "resolved" | "timed_out"; attempts: number; elapsedSeconds: number };
+}> {
+  const timeoutMilliseconds = timeoutSeconds * 1_000;
+  const pause = dependencies.wait ?? defaultWait;
+  let elapsedMilliseconds = 0;
+  let intervalMilliseconds = 5_000;
+  let attempts = 0;
+  while (true) {
+    const attention = await service.execute(
+      "get_attention",
+      { attentionId },
+      dependencies.signal,
+    );
+    attempts += 1;
+    if (attention.resolution) {
+      return {
+        attention,
+        wait: {
+          status: "resolved",
+          attempts,
+          elapsedSeconds: elapsedMilliseconds / 1_000,
+        },
+      };
+    }
+    if (elapsedMilliseconds >= timeoutMilliseconds) {
+      return {
+        attention,
+        wait: {
+          status: "timed_out",
+          attempts,
+          elapsedSeconds: elapsedMilliseconds / 1_000,
+        },
+      };
+    }
+    const nextWait = Math.min(
+      intervalMilliseconds,
+      timeoutMilliseconds - elapsedMilliseconds,
+    );
+    await pause(nextWait, dependencies.signal);
+    elapsedMilliseconds += nextWait;
+    intervalMilliseconds = Math.min(intervalMilliseconds * 2, 30_000);
+  }
+}
+
+async function waitForUpdates(
+  service: Pick<CoreService, "execute">,
+  cursor: number | undefined,
+  timeoutSeconds: number,
+  dependencies: CliDependencies,
+): Promise<OperationOutput<"get_updates"> & {
+  clientWait: {
+    status: "updates_available" | "timed_out";
+    attempts: number;
+    elapsedSeconds: number;
+  };
+}> {
+  let currentCursor = cursor;
+  let remainingSeconds = timeoutSeconds;
+  let elapsedSeconds = 0;
+  let attempts = 0;
+
+  while (true) {
+    const requestedSeconds = Math.min(20, remainingSeconds);
+    const updates = await service.execute(
+      "get_updates",
+      { cursor: currentCursor, waitSeconds: requestedSeconds },
+      dependencies.signal,
+    );
+    attempts += 1;
+    const reportedSeconds = Math.max(0, updates.wait.elapsedMilliseconds / 1_000);
+    const segmentSeconds = updates.wait.status === "timed_out"
+      ? Math.max(requestedSeconds, reportedSeconds)
+      : reportedSeconds;
+    elapsedSeconds = Math.min(timeoutSeconds, elapsedSeconds + segmentSeconds);
+
+    if (updates.updates.length > 0 || updates.hasMore) {
+      return {
+        ...updates,
+        clientWait: { status: "updates_available", attempts, elapsedSeconds },
+      };
+    }
+
+    currentCursor = updates.cursor;
+    remainingSeconds = Math.max(0, timeoutSeconds - elapsedSeconds);
+    if (remainingSeconds === 0 || updates.wait.status === "not_requested") {
+      return {
+        ...updates,
+        clientWait: { status: "timed_out", attempts, elapsedSeconds },
+      };
+    }
+  }
+}
+
 function mutationKey(parsed: ParsedArgs, onGenerated: (key: string) => void): string {
   const supplied = option(parsed, "idempotency-key");
   if (supplied) return supplied;
@@ -131,22 +229,6 @@ function requirePositionals(parsed: ParsedArgs, count: number, usage: string): v
   }
 }
 
-function allowOnlyValues(parsed: ParsedArgs, allowed: string[]): void {
-  const unexpected = Object.keys(parsed.values).find((name) => !allowed.includes(name));
-  if (unexpected) {
-    throw new CliCoreError({ code: "validation", message: `--${unexpected} is not valid for this command.`, exitCode: 2 });
-  }
-}
-
-function validateModeFlags(parsed: ParsedArgs): void {
-  const invalid =
-    (parsed.noBrowser && parsed.command !== "connect") ||
-    (parsed.apply && parsed.command !== "integrate") ||
-    (parsed.important && !(parsed.command === "attention" && parsed.subcommand === "request")) ||
-    (parsed.resolveWithoutResponse && !(parsed.command === "attention" && parsed.subcommand === "resolve"));
-  if (invalid) throw new CliCoreError({ code: "validation", message: "A command-specific option was used with the wrong command.", exitCode: 2 });
-}
-
 export async function runCli(argv: string[], dependencies: CliDependencies = {}): Promise<number> {
   const output = dependencies.output ?? processOutput;
   const jsonRequested = argv.includes("--json");
@@ -154,25 +236,26 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
   let parsed: ParsedArgs | undefined;
   try {
     parsed = parseArgs(argv);
-    validateModeFlags(parsed);
+    if (parsed.help || parsed.command === "help") {
+      const help = renderHelp(parsed);
+      if (parsed.json) writeJson(output, { ok: true, command: help.command, data: { usage: help.usage, schema: help.schema } });
+      else output.stdout(help.usage);
+      return 0;
+    }
+    const validated = validateCommand(parsed);
     const commandArgs = parsed;
     const service = (dependencies.serviceFactory ?? (() => new CoreService()))();
     const commandMutationKey = () =>
       mutationKey(commandArgs, (key) => {
         mutationRecoveryKey = key;
-        output.stderr(`Mutation recovery key (reuse only for this exact request): ${key}\n`);
+        if (!commandArgs.json) output.stderr(`Mutation recovery key (reuse only for this exact request): ${key}\n`);
       });
 
     let data: unknown;
-    let command = parsed.command;
+    let humanOutput: string | undefined;
+    let command = validated.name;
     switch (parsed.command) {
-      case "help":
-        allowOnlyValues(parsed, []);
-        if (parsed.json) writeJson(output, { ok: true, command: "help", data: { usage: HELP } });
-        else output.stdout(HELP);
-        return 0;
       case "version":
-        allowOnlyValues(parsed, []);
         if (parsed.json) {
           writeJson(output, { ok: true, command: "version", data: { version: CLI_VERSION } });
         } else {
@@ -180,7 +263,6 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         }
         return 0;
       case "connect":
-        allowOnlyValues(parsed, ["project-ref", "project-name", "repository-url", "execution-mode"]);
         requirePositionals(parsed, 1, "Usage: dongo connect [options]");
         const executionMode = option(parsed, "execution-mode");
         if (executionMode !== undefined && executionMode !== "manual" && executionMode !== "autonomous") {
@@ -198,7 +280,7 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
               output.stderr(
                 `${browserOpened ? "Opened" : "Open"} this secure link:\n${verificationUriComplete}\n\n` +
                   (projectProposal
-                    ? `If this account has no project, approval will create “${projectProposal.name}”${projectProposal.repositoryUrl ? ` for ${projectProposal.repositoryUrl}` : ""}.\n`
+                    ? `Approval may create “${projectProposal.name}”${projectProposal.repositoryUrl ? ` for ${projectProposal.repositoryUrl}` : ""}. Free plans include one active project; use --project-ref to bind an existing project.\n`
                     : "") +
                   `Confirm code ${userCode} in the browser. Waiting until ${new Date(expiresAt).toISOString()}…\n`,
               );
@@ -208,8 +290,45 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           },
         });
         break;
+      case "project": {
+        requireSubcommand(parsed, ["create"], "Usage: dongo project create --name NAME [options]");
+        command = "project create";
+        const projectExecutionMode = option(parsed, "execution-mode");
+        if (
+          projectExecutionMode !== undefined
+          && projectExecutionMode !== "manual"
+          && projectExecutionMode !== "autonomous"
+        ) {
+          throw new CliCoreError({
+            code: "validation",
+            message: "--execution-mode must be manual or autonomous.",
+            exitCode: 2,
+          });
+        }
+        const newProjectName = requiredOption(parsed, "name");
+        data = await service.createProject({
+          noBrowser: parsed.noBrowser,
+          projectName: newProjectName,
+          repositoryUrl: option(parsed, "repository-url"),
+          executionMode: projectExecutionMode,
+          signal: dependencies.signal,
+          events: {
+            onVerification: ({ verificationUriComplete, userCode, expiresAt, browserOpened, projectProposal }) => {
+              output.stderr(
+                `${browserOpened ? "Opened" : "Open"} this secure link:\n${verificationUriComplete}\n\n` +
+                  `Approval will create “${projectProposal?.name ?? newProjectName}” and bind this repository. ` +
+                  "Free plans include one active project; the approval page will show whether you can create this one. " +
+                  "Your existing browser session can approve it without another account sign-in.\n" +
+                  `Confirm code ${userCode} in the browser. Waiting until ${new Date(expiresAt).toISOString()}…\n`,
+              );
+            },
+            onSlowDown: (seconds) => output.stderr(`Authorization server requested slower polling (${seconds}s).\n`),
+            onNetworkRetry: (message) => output.stderr(`${message}\n`),
+          },
+        });
+        break;
+      }
       case "ci":
-        allowOnlyValues(parsed, []);
         requirePositionals(
           parsed,
           2,
@@ -227,7 +346,6 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         data = await service.setupCi({ signal: dependencies.signal });
         break;
       case "auth":
-        allowOnlyValues(parsed, []);
         requirePositionals(parsed, 2, "Usage: dongo auth status|logout");
         if (parsed.subcommand === "status") {
           command = "auth status";
@@ -240,45 +358,53 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         }
         break;
       case "doctor":
-        allowOnlyValues(parsed, []);
         requirePositionals(parsed, 1, "Usage: dongo doctor");
         data = await service.doctor(dependencies.signal);
         if (!(data as { ok: boolean }).ok) {
-          if (parsed.json) writeJson(output, { ok: false, command, data });
-          else output.stdout(humanJson(data));
-          return 5;
+          throw new CliCoreError({
+            code: "doctor_failed",
+            message: "One or more dongo connection checks failed.",
+            retryable: true,
+            exitCode: 5,
+            details: { diagnostics: data },
+          });
         }
         break;
       case "session-start":
-        allowOnlyValues(parsed, []);
         requirePositionals(parsed, 1, "Usage: dongo session-start");
-        data = await service.sessionStart(dependencies.signal);
+        data = await service.execute("session_start", {
+          externalSessionId: option(parsed, "session-id") ?? DongoClient.idempotencyKey(),
+          hostCapabilities: option(parsed, "parallel-capability") || option(parsed, "worktree-capability")
+            ? {
+                parallelExecution: option(parsed, "parallel-capability") as "supported" | "unsupported",
+                worktreeIsolation: option(parsed, "worktree-capability") as "supported" | "unsupported",
+              }
+            : undefined,
+        }, dependencies.signal);
         break;
       case "session":
-        allowOnlyValues(parsed, []);
         requirePositionals(parsed, 2, "Usage: dongo session start");
         if (parsed.subcommand !== "start") {
           throw new CliCoreError({ code: "validation", message: "Usage: dongo session start", exitCode: 2 });
         }
         command = "session start";
-        data = await service.sessionStart(dependencies.signal);
+        data = await service.execute("session_start", {
+          externalSessionId: option(parsed, "session-id") ?? DongoClient.idempotencyKey(),
+          hostCapabilities: option(parsed, "parallel-capability") || option(parsed, "worktree-capability")
+            ? {
+                parallelExecution: option(parsed, "parallel-capability") as "supported" | "unsupported",
+                worktreeIsolation: option(parsed, "worktree-capability") as "supported" | "unsupported",
+              }
+            : undefined,
+        }, dependencies.signal);
         break;
       case "overview":
-        allowOnlyValues(parsed, []);
         requirePositionals(parsed, 1, "Usage: dongo overview");
         data = await service.overview(dependencies.signal);
         break;
       case "intake": {
         const action = requireSubcommand(parsed, ["get", "claim", "renew", "complete"], "Usage: dongo intake get|claim|renew|complete [options]");
         command = `intake ${action}`;
-        allowOnlyValues(
-          parsed,
-          action === "get"
-            ? ["intake-id"]
-            : action === "complete"
-              ? ["intake-id", "revision", "state", "explanation", "linked-work-id", "idempotency-key"]
-              : ["intake-id", "revision", "lease-seconds", "idempotency-key"],
-        );
         const intakeId = requiredOption(parsed, "intake-id");
         if (action === "get") data = await service.execute("get_intake", { intakeId }, dependencies.signal);
         else if (action === "claim") {
@@ -314,25 +440,14 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
       case "work": {
         const action = requireSubcommand(parsed, ["create", "get", "start", "update", "renew", "finish"], "Usage: dongo work create|get|start|update|renew|finish [options]");
         command = `work ${action}`;
-        allowOnlyValues(
-          parsed,
-          action === "create"
-            ? ["title", "goal", "source-intake-id", "parent-work-id", "idempotency-key"]
-            : action === "get"
-              ? ["work-id", "identifier"]
-              : action === "start"
-                ? ["work-id", "revision", "session-id", "lease-seconds", "idempotency-key"]
-                : action === "update"
-                  ? ["work-id", "revision", "title", "goal", "latest-update", "artifact", "idempotency-key"]
-                  : action === "renew"
-                    ? ["work-id", "revision", "lease-seconds", "idempotency-key"]
-                    : ["work-id", "revision", "outcome", "artifact", "idempotency-key"],
-        );
         if (action === "create") {
           data = await service.execute("create_work", {
             idempotencyKey: commandMutationKey(),
             title: requiredOption(parsed, "title"),
             goal: requiredOption(parsed, "goal"),
+            context: option(parsed, "context"),
+            links: values(parsed, "link").length > 0 ? values(parsed, "link") : undefined,
+            initialComment: option(parsed, "initial-comment"),
             sourceIntakeIds: values(parsed, "source-intake-id").length > 0 ? values(parsed, "source-intake-id") : undefined,
             parentWorkItemId: option(parsed, "parent-work-id"),
           }, dependencies.signal);
@@ -350,6 +465,16 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
             expectedRevision: integerOption(parsed, "revision", 0, true) ?? 0,
             externalSessionId: option(parsed, "session-id") ?? DongoClient.idempotencyKey(),
             leaseSeconds: integerOption(parsed, "lease-seconds", 1),
+            workspace: option(parsed, "workspace-kind")
+              ? {
+                  kind: option(parsed, "workspace-kind") as
+                    | "worktree"
+                    | "shared_checkout"
+                    | "undisclosed",
+                  worktreeName: option(parsed, "worktree-name"),
+                  branch: option(parsed, "branch"),
+                }
+              : undefined,
           }, dependencies.signal);
         } else if (action === "update") {
           const artifacts = values(parsed, "artifact");
@@ -390,7 +515,6 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
       case "comment": {
         requireSubcommand(parsed, ["add"], "Usage: dongo comment add --work-id ID --body TEXT");
         command = "comment add";
-        allowOnlyValues(parsed, ["work-id", "body", "idempotency-key"]);
         data = await service.execute("add_comment", {
           idempotencyKey: commandMutationKey(),
           workItemId: requiredOption(parsed, "work-id"),
@@ -399,18 +523,30 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         break;
       }
       case "attention": {
-        const action = requireSubcommand(parsed, ["request", "get", "resolve"], "Usage: dongo attention request|get|resolve [options]");
+        const action = requireSubcommand(parsed, ["request", "get", "wait", "resolve"], "Usage: dongo attention request|get|wait|resolve [options]");
         command = `attention ${action}`;
-        allowOnlyValues(
-          parsed,
-          action === "get"
-            ? ["attention-id"]
-            : action === "request"
-              ? ["work-id", "revision", "kind", "title", "body", "option", "idempotency-key"]
-              : ["attention-id", "body", "selected-option", "idempotency-key"],
-        );
         if (action === "get") {
           data = await service.execute("get_attention", { attentionId: requiredOption(parsed, "attention-id") }, dependencies.signal);
+        } else if (action === "wait") {
+          const timeoutSeconds = integerOption(parsed, "timeout-seconds", 1) ?? 300;
+          if (timeoutSeconds > 3_600) {
+            throw new CliCoreError({
+              code: "validation",
+              message: "--timeout-seconds must be no greater than 3600.",
+              exitCode: 2,
+            });
+          }
+          if (!parsed.json) {
+            output.stderr(
+              `Waiting up to ${timeoutSeconds}s; checks back off from 5s to at most 30s. A stopped process cannot wake itself.\n`,
+            );
+          }
+          data = await waitForAttention(
+            service,
+            requiredOption(parsed, "attention-id"),
+            timeoutSeconds,
+            dependencies,
+          );
         } else if (action === "request") {
           const kind = requiredOption(parsed, "kind");
           if (!(["review", "decision", "question", "blocked"] as const).includes(kind as never)) {
@@ -446,10 +582,33 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         }
         break;
       }
+      case "updates": {
+        const action = requireSubcommand(parsed, ["get", "wait"], "Usage: dongo updates get|wait [options]");
+        command = `updates ${action}`;
+        const cursor = integerOption(parsed, "cursor", 0);
+        if (action === "get") {
+          data = await service.execute("get_updates", { cursor, waitSeconds: 0 }, dependencies.signal);
+        } else {
+          const timeoutSeconds = integerOption(parsed, "timeout-seconds", 1) ?? 300;
+          if (timeoutSeconds > 3_600) {
+            throw new CliCoreError({
+              code: "validation",
+              message: "--timeout-seconds must be no greater than 3600.",
+              exitCode: 2,
+            });
+          }
+          if (!parsed.json) {
+            output.stderr(
+              `Waiting up to ${timeoutSeconds}s for new Intake signals. dongo uses bounded server backoff, and the web app can report this waiter as live only while this command is running. A stopped process cannot restart itself.\n`,
+            );
+          }
+          data = await waitForUpdates(service, cursor, timeoutSeconds, dependencies);
+        }
+        break;
+      }
       case "attachment": {
         const action = requireSubcommand(parsed, ["get", "fetch"], "Usage: dongo attachment get|fetch --attachment-id ID [--output PATH]");
         command = `attachment ${action}`;
-        allowOnlyValues(parsed, action === "get" ? ["attachment-id"] : ["attachment-id", "output"]);
         const attachmentId = requiredOption(parsed, "attachment-id");
         data = action === "get"
           ? await service.attachmentInfo(attachmentId, dependencies.signal)
@@ -457,7 +616,6 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         break;
       }
       case "sync": {
-        allowOnlyValues(parsed, []);
         requirePositionals(parsed, 1, "Usage: dongo sync");
         const result = await service.sync(dependencies.signal);
         data = { export: result.export };
@@ -466,26 +624,34 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
       case "integrate": {
         const host = requireSubcommand(parsed, ["codex", "claude", "generic"], "Usage: dongo integrate codex|claude|generic [--apply]");
         command = `integrate ${host}`;
-        allowOnlyValues(parsed, []);
         data = await service.integration(host as "codex" | "claude" | "generic", parsed.apply);
+        humanOutput = renderIntegrationOutput(data as Awaited<ReturnType<CoreService["integration"]>>);
         break;
       }
       default:
         throw new CliCoreError({ code: "validation", message: `Unknown command: ${parsed.command}`, exitCode: 2 });
     }
 
-    if (parsed.json) writeJson(output, { ok: true, command, data });
-    else output.stdout(humanJson(data));
+    if (parsed.json) writeJson(output, {
+      ok: true,
+      command,
+      data,
+      ...(mutationRecoveryKey ? { recovery: { idempotencyKey: mutationRecoveryKey } } : {}),
+    });
+    else output.stdout(humanOutput ?? humanJson(data));
     return 0;
   } catch (error) {
-    const failure = errorResult(error);
-    if (mutationRecoveryKey && failure.exitCode === 5) {
-      failure.result.error.details = {
-        ...(failure.result.error.details && typeof failure.result.error.details === "object"
-          ? failure.result.error.details as Record<string, unknown>
-          : {}),
-        idempotencyKey: mutationRecoveryKey,
-      };
+    const failure = errorResult(error, parsed ? (commandName(parsed) ?? parsed.command) : "unknown");
+    if (mutationRecoveryKey) {
+      failure.result.recovery = { idempotencyKey: mutationRecoveryKey };
+      if (failure.exitCode === 5) {
+        failure.result.error.details = {
+          ...(failure.result.error.details && typeof failure.result.error.details === "object"
+            ? failure.result.error.details as Record<string, unknown>
+            : {}),
+          idempotencyKey: mutationRecoveryKey,
+        };
+      }
     }
     if (parsed?.json ?? jsonRequested) writeJson(output, failure.result);
     else output.stderr(`${failure.result.error.code}: ${failure.result.error.message}\n`);

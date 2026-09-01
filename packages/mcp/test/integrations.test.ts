@@ -35,6 +35,17 @@ test("all host instruction blocks exactly match canonical server instructions", 
   ]) {
     assert.equal(await integrationFile(path), expected);
   }
+  assert.match(DONGO_MCP_INSTRUCTIONS, /durable system of record for repository planning and execution/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /inspect existing Intake and Work for relevant or duplicate items/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /attach every repository change to its active Run before editing/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /Record meaningful progress, blockers, Attention requests, and outcomes/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /only after the requested implementation and relevant verification are complete/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /dongo_get_attention immediately, then after 5, 10, 20/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /stopping after five minutes/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /stopped local agent does not wake itself/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /Humans may enrich waiting or claimed Intake/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /save preserves the claim but advances the Intake revision/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /review the current text, context, links, and finalized attachments/u);
 });
 
 test("renderer creates distinct non-secret project host assets", () => {
@@ -48,6 +59,7 @@ test("renderer creates distinct non-secret project host assets", () => {
     publicProjectRef: "project_uvwxyz",
     shortProjectRef: "uvwxyz",
   });
+  assert.equal(first.integrationVersion, "0.1.8");
   assert.notEqual(first.serverName, second.serverName);
   assert.notEqual(first.endpoint, second.endpoint);
   assert.match(first.codexConfigToml, /https:\/\/dev\.dongo\.so\/p\/project_abcdef\/mcp/);

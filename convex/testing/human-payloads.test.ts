@@ -214,6 +214,12 @@ describe("human query payloads", () => {
     const overview = await human.query(api.domains.overview.index.getForHuman, {
       projectId: project.projectId,
     });
+    expect(overview.working[0]?.actor).toMatchObject({
+      name: "Payload Agent",
+      agentType: "test",
+      transport: "development",
+      transportLabel: "Payload Test Client",
+    });
     expectNoFields(overview.project, ["_creationTime", "organizationId", "nextWorkNumber"]);
     expectNoFields(overview.working[0]?.work, [
       ...tenancyFields,
@@ -251,6 +257,13 @@ describe("human query payloads", () => {
     const detail = await human.query(api.domains.work.index.getDetailForHuman, {
       workItemId: working.workItemId,
     });
+    expect(detail.actors.find((actor) => actor._id === seeded.agentActorId))
+      .toMatchObject({
+        name: "Payload Agent",
+        agentType: "test",
+        transport: "development",
+        transportLabel: "Payload Test Client",
+      });
     expect(detail.runs[0]?._id).toBe(seeded.workingRunId);
     expect(detail.comments[0]?._id).toBe(comment.commentId);
     expect(detail.artifacts[0]).toMatchObject({

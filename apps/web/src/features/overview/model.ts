@@ -44,6 +44,7 @@ export type SourceIntakeSummary = {
 export type WorkItem = {
   id: string;
   identifier: string;
+  legacyIdentifiers?: string[];
   title: string;
   state: WorkState;
   agent?: string;
@@ -64,7 +65,13 @@ export type WorkItem = {
 
 export type Intake = {
   id: string;
+  sourceIdeaId?: string;
   text: string;
+  submittedText?: string;
+  context?: string;
+  links?: string[];
+  revision?: number;
+  editable?: boolean;
   submissionKey?: string;
   optimistic?: boolean;
   attachment?: string;

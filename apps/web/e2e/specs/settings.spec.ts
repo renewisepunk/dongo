@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test("saves credential-free project settings with keyboard execution-mode selection", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo/settings");
   await expect(page.getByRole("heading", { name: "General" })).toBeVisible();
+  await expect(page.getByLabel("Work identifier code")).toHaveValue("dong");
   const repository = page.getByLabel("Repository URL");
   await repository.fill("https://user:secret@github.com/renewisepunk/dongo");
   await page.getByRole("button", { name: "Save project" }).click();
@@ -23,6 +24,32 @@ test("saves credential-free project settings with keyboard execution-mode select
     name: "dongo Workspace",
     repositoryUrl: "https://github.com/renewisepunk/dongo",
     executionMode: "autonomous",
+    parallelExecution: {
+      enabled: false,
+      maxConcurrentRuns: 1,
+      requiresIsolatedWorkspaces: true,
+    },
+  });
+});
+
+test("lets an owner opt into isolated parallel work with a safety cap", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo/settings?scenario=parallel-enabled");
+
+  await expect(page.getByLabel("Allow parallel work")).toBeChecked();
+  await expect(page.getByLabel("Maximum concurrent runs")).toHaveValue("6");
+  await expect(page.getByText("This is a safety cap, not a plan limit.")).toBeVisible();
+  await expect(page.getByText(/agent host creates its agents and isolated worktrees/)).toBeVisible();
+
+  await page.getByLabel("Maximum concurrent runs").selectOption("3");
+  await page.getByRole("button", { name: "Save project" }).click();
+  await expect(page.getByRole("status")).toHaveText("Project settings saved.");
+  const update = await page.locator("html").getAttribute("data-fixture-project-update");
+  expect(JSON.parse(update ?? "null")).toMatchObject({
+    parallelExecution: {
+      enabled: true,
+      maxConcurrentRuns: 3,
+      requiresIsolatedWorkspaces: true,
+    },
   });
 });
 
@@ -32,6 +59,17 @@ test("revokes installations and creates a one-time scoped CI credential", async 
   await expect(page.getByText("https://dev.dongo.so/p/fixture-project/mcp", { exact: true })).toBeVisible();
   await expect(page.getByText(/dongo CLI/)).toBeVisible();
   await expect(page.getByText(/Claude Code/)).toBeVisible();
+  const surfacedCopy = await page.locator("body").innerText();
+  const accessibleLabels = await page.locator("[aria-label]").evaluateAll((elements) =>
+    elements.map((element) => element.getAttribute("aria-label") ?? "").join("\n"),
+  );
+  const metadata = await page.locator("meta[content]").evaluateAll((elements) =>
+    elements.map((element) => element.getAttribute("content") ?? "").join("\n"),
+  );
+  const forbiddenBrandCase = new RegExp(["\\bD", "ongo|D", "ONGO", "\\b(?![-_.])"].join(""));
+  expect(`${await page.title()}\n${surfacedCopy}\n${accessibleLabels}\n${metadata}`).not.toMatch(
+    forbiddenBrandCase,
+  );
 
   await page.getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("button", { name: "Confirm" }).click();
@@ -87,6 +125,7 @@ test("updates organization membership and confirms removal", async ({ page }) =>
 test("enforces member read-only administration and shows plan limits", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo/settings?scenario=member");
   await expect(page.getByLabel("Project name")).toBeDisabled();
+  await expect(page.getByLabel("Allow parallel work")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save project" })).toBeHidden();
 
   await page.getByRole("button", { name: "Agent access" }).click();
@@ -97,6 +136,8 @@ test("enforces member read-only administration and shows plan limits", async ({ 
   await expect(page.getByText("1 / 1", { exact: true })).toBeVisible();
   await expect(page.getByText("2.0 MB / 10 GB", { exact: true })).toBeVisible();
   await expect(page.getByText(/Individual uploads are limited to 250 MB/)).toBeVisible();
+  await expect(page.getByText(/Free includes 1 active project.*using 1 of 1/)).toBeVisible();
+  await expect(page.getByText(/Plan upgrades are not available yet/)).toBeVisible();
 });
 
 test("archives and restores a project only after explicit confirmation", async ({ page }) => {

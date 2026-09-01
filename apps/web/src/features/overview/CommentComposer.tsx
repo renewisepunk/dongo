@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 
 import {
   attachmentKind,
@@ -6,6 +6,11 @@ import {
   formatAttachmentBytes,
   MAX_INTAKE_ATTACHMENTS,
 } from "../../lib/attachment-upload";
+import {
+  clearLocalDraft,
+  readLocalDraft,
+  writeLocalDraft,
+} from "../../lib/local-drafts";
 
 type CommentDraftAttachment = {
   localId: string;
@@ -19,6 +24,7 @@ type CommentDraftAttachment = {
 };
 
 type CommentComposerProps = {
+  draftKey: string;
   onSubmit: (body: string | undefined, attachmentIds: string[]) => Promise<void>;
   uploadAttachment: (
     file: File,
@@ -42,7 +48,7 @@ function pastedFiles(clipboard: DataTransfer | null): File[] {
 }
 
 export function CommentComposer(props: CommentComposerProps) {
-  const [body, setBody] = createSignal("");
+  const [body, setBody] = createSignal(readLocalDraft(props.draftKey));
   const [attachments, setAttachments] = createSignal<CommentDraftAttachment[]>([]);
   const [submitting, setSubmitting] = createSignal(false);
   const [dragging, setDragging] = createSignal(false);
@@ -70,6 +76,8 @@ export function CommentComposer(props: CommentComposerProps) {
     !uploadPending() &&
     !uploadFailed(),
   );
+
+  createEffect(() => writeLocalDraft(props.draftKey, body()));
 
   const updateAttachment = (
     localId: string,
@@ -185,11 +193,13 @@ export function CommentComposer(props: CommentComposerProps) {
     const text = body().trim();
     const attachmentIds = availableAttachmentIds();
     const submittedAttachments = attachments();
+    const submittedDraftKey = props.draftKey;
     setSubmitting(true);
     try {
       await props.onSubmit(text || undefined, attachmentIds);
       for (const attachment of submittedAttachments) revokePreview(attachment);
-      setBody("");
+      clearLocalDraft(submittedDraftKey);
+      if (props.draftKey === submittedDraftKey) setBody("");
       setAttachments([]);
     } catch {
       return;
@@ -364,7 +374,9 @@ export function CommentComposer(props: CommentComposerProps) {
             ? "finish uploads before submitting"
             : uploadFailed()
               ? "remove or retry failed uploads"
-              : "paste or drop files · ⌘ enter to submit"}
+              : body()
+                ? "draft saved on this device · ⌘ enter to submit"
+                : "paste or drop files · ⌘ enter to submit"}
         </span>
         <button
           class="button"

@@ -26,8 +26,14 @@
             "validation",
             "revision_conflict",
             "claim_conflict",
+            "parallel_execution_unavailable",
+            "concurrency_limit",
+            "session_work_limit",
             "lease_expired",
             "idempotency_conflict",
+            "already_resolved",
+            "identifier_conflict",
+            "identifier_exhausted",
             "quota_exceeded",
             "upload_incomplete",
             "rate_limited",
@@ -91,6 +97,20 @@
           "minLength": 1,
           "maxLength": 120
         },
+        "transport": {
+          "type": "string",
+          "enum": [
+            "cli",
+            "mcp",
+            "service",
+            "development"
+          ]
+        },
+        "transportLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
         "machineLabel": {
           "type": "string",
           "minLength": 1,
@@ -142,6 +162,10 @@
           "minLength": 1,
           "maxLength": 16
         },
+        "compactIdentifierPrefix": {
+          "type": "string",
+          "pattern": "^[a-z]{4}$"
+        },
         "repositoryUrl": {
           "type": "string",
           "format": "uri"
@@ -152,6 +176,29 @@
             "manual",
             "autonomous"
           ]
+        },
+        "parallelExecution": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "maxConcurrentRuns": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            },
+            "requiresIsolatedWorkspaces": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "enabled",
+            "maxConcurrentRuns",
+            "requiresIsolatedWorkspaces"
+          ],
+          "additionalProperties": false
         },
         "archivedAt": {
           "type": "integer",
@@ -236,6 +283,18 @@
         "text": {
           "type": "string",
           "maxLength": 100000
+        },
+        "context": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "links": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
         },
         "state": {
           "type": "string",
@@ -529,6 +588,59 @@
             "abandoned"
           ]
         },
+        "hostCapabilities": {
+          "type": "object",
+          "properties": {
+            "parallelExecution": {
+              "type": "string",
+              "enum": [
+                "supported",
+                "unsupported",
+                "undisclosed"
+              ]
+            },
+            "worktreeIsolation": {
+              "type": "string",
+              "enum": [
+                "supported",
+                "unsupported",
+                "undisclosed"
+              ]
+            }
+          },
+          "required": [
+            "parallelExecution",
+            "worktreeIsolation"
+          ],
+          "additionalProperties": false
+        },
+        "workspace": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "worktree",
+                "shared_checkout",
+                "undisclosed"
+              ]
+            },
+            "worktreeName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
         "latestUpdate": {
           "type": "string",
           "maxLength": 100000
@@ -577,6 +689,15 @@
           "minLength": 1,
           "maxLength": 64
         },
+        "legacyIdentifiers": {
+          "maxItems": 4,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
         "sequence": {
           "type": "integer",
           "exclusiveMinimum": 0,
@@ -590,6 +711,18 @@
         "goal": {
           "type": "string",
           "maxLength": 100000
+        },
+        "context": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "links": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
         },
         "outcome": {
           "type": "string",
@@ -735,6 +868,132 @@
       ],
       "additionalProperties": false
     },
+    "ProjectUpdate": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "version": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "type": "string",
+          "const": "intake_available"
+        },
+        "intakeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "normal",
+            "important"
+          ]
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "kind",
+        "intakeId",
+        "priority",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectUpdates": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "updates": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProjectUpdate"
+          }
+        },
+        "hasMore": {
+          "type": "boolean"
+        },
+        "wait": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "updates_available",
+                "timed_out",
+                "not_requested"
+              ]
+            },
+            "requestedSeconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "elapsedMilliseconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "status",
+            "requestedSeconds",
+            "elapsedMilliseconds"
+          ],
+          "additionalProperties": false
+        },
+        "delivery": {
+          "type": "object",
+          "properties": {
+            "mechanism": {
+              "type": "string",
+              "const": "bounded_pull"
+            },
+            "stoppedAgentsRestarted": {
+              "type": "boolean",
+              "const": false
+            }
+          },
+          "required": [
+            "mechanism",
+            "stoppedAgentsRestarted"
+          ],
+          "additionalProperties": false
+        },
+        "serverTime": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "cursor",
+        "updates",
+        "hasMore",
+        "wait",
+        "delivery",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
     "SessionStart": {
       "type": "object",
       "properties": {
@@ -764,17 +1023,101 @@
                 "autonomous"
               ]
             },
+            "maxStartedWorkItemsPerSession": {
+              "type": "number",
+              "const": 1,
+              "description": "Maximum Ready work items an autonomous session may start."
+            },
             "maxNewWorkItemsPerSession": {
               "type": "number",
-              "const": 1
+              "const": 1,
+              "description": "Deprecated compatibility alias; this never limited WorkItem creation."
             },
             "wakeUpSemantics": {
               "type": "string",
               "const": "next_pull"
+            },
+            "parallelExecution": {
+              "type": "object",
+              "properties": {
+                "policy": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "maxConcurrentRuns": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 8
+                    },
+                    "requiresIsolatedWorkspaces": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "maxConcurrentRuns",
+                    "requiresIsolatedWorkspaces"
+                  ],
+                  "additionalProperties": false
+                },
+                "hostCapabilities": {
+                  "type": "object",
+                  "properties": {
+                    "parallelExecution": {
+                      "type": "string",
+                      "enum": [
+                        "supported",
+                        "unsupported",
+                        "undisclosed"
+                      ]
+                    },
+                    "worktreeIsolation": {
+                      "type": "string",
+                      "enum": [
+                        "supported",
+                        "unsupported",
+                        "undisclosed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "parallelExecution",
+                    "worktreeIsolation"
+                  ],
+                  "additionalProperties": false
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "serial",
+                    "parallel"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "project_disabled",
+                    "host_unsupported",
+                    "host_undisclosed",
+                    "parallel_available"
+                  ]
+                }
+              },
+              "required": [
+                "policy",
+                "hostCapabilities",
+                "mode",
+                "reason"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [
             "executionMode",
+            "maxStartedWorkItemsPerSession",
             "maxNewWorkItemsPerSession",
             "wakeUpSemantics"
           ],
@@ -871,6 +1214,30 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 500
+        },
+        "hostCapabilities": {
+          "type": "object",
+          "properties": {
+            "parallelExecution": {
+              "type": "string",
+              "enum": [
+                "supported",
+                "unsupported"
+              ]
+            },
+            "worktreeIsolation": {
+              "type": "string",
+              "enum": [
+                "supported",
+                "unsupported"
+              ]
+            }
+          },
+          "required": [
+            "parallelExecution",
+            "worktreeIsolation"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -924,6 +1291,48 @@
         },
         "data": {
           "$ref": "#/$defs/Overview"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "GetUpdatesInput": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "waitSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        }
+      },
+      "additionalProperties": false
+    },
+    "GetUpdatesSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/ProjectUpdates"
         },
         "requestId": {
           "type": "string",
@@ -1179,6 +1588,23 @@
           "type": "string",
           "maxLength": 100000
         },
+        "context": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "links": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "initialComment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000
+        },
         "sourceIntakeIds": {
           "maxItems": 500,
           "type": "array",
@@ -1296,6 +1722,33 @@
           "type": "integer",
           "minimum": 30,
           "maximum": 3600
+        },
+        "workspace": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "worktree",
+                "shared_checkout",
+                "undisclosed"
+              ]
+            },
+            "worktreeName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -1935,6 +2388,26 @@
       },
       "successResponse": {
         "$ref": "#/$defs/GetOverviewSuccessResponse"
+      }
+    },
+    "get_updates": {
+      "method": "GET",
+      "path": "/api/agent/v1/get_updates",
+      "scopes": [
+        "dongo:work:read"
+      ],
+      "readOnly": true,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "input": {
+        "$ref": "#/$defs/GetUpdatesInput"
+      },
+      "output": {
+        "$ref": "#/$defs/ProjectUpdates"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/GetUpdatesSuccessResponse"
       }
     },
     "get_intake": {

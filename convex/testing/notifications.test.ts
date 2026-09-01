@@ -164,7 +164,7 @@ describe("notification scheduling", () => {
       channel: "email",
       email: identity.email,
       attentionKind: "decision",
-      workIdentifier: "NOT-1",
+      workIdentifier: "proj001",
     });
   });
 

@@ -76,6 +76,10 @@ The exact package manager and build tooling are chosen in Wave 0 by Agent 01. Do
 - The server derives tenant, project, grant/credential, scopes, and installation Actor identity.
 - The public MCP gateway validates OAuth at its boundary and passes a trusted, short-lived internal request context to Convex; it never forwards the inbound OAuth token as a downstream credential.
 - All mutations pass through authorization, validation, idempotency, invariant enforcement, event recording, and structured error mapping.
+- Parallel Work starts remain project-scoped atomic mutations. The server
+  combines project parallel policy, distinct session identity, reported host
+  capability, isolated-workspace metadata, and current active-Run capacity; a
+  host never grants itself concurrency merely by creating a worktree.
 - R2 stores bytes; Convex stores metadata, quota reservations, ownership, and lifecycle state.
 - Product Events are immutable audit/history records. Structured operational logs are separate and redact user content.
 
@@ -85,7 +89,10 @@ The exact package manager and build tooling are chosen in Wave 0 by Agent 01. Do
 
 Document allowed transitions and atomic effects for:
 
-- Intake new → claimed → processed/dismissed;
+- Idea open → archived → open and open → promoted, with promoted terminal and
+  exactly one atomically linked Intake;
+- Intake new → claimed → processed/dismissed, including human edits to `new`
+  or `claimed` that preserve the claim and advance the revision;
 - WorkItem ready → working → done/cancelled;
 - Run running → waiting/completed/failed/cancelled;
 - claim acquisition, renewal, expiry, release, and reclaim;
@@ -100,13 +107,44 @@ Each transition specifies authorization, expected revision, idempotency behavior
 Freeze typed aggregates for:
 
 - current viewer, organization, project, role, and entitlement;
+- human Ideas backlog with explicit title, optional text/context/links,
+  finalized attachments, state, rank, attribution, revision, archive/promotion
+  metadata, and linked Intake provenance;
 - Overview with Needs You precedence and stable section ordering;
-- Intake with finalized attachments;
+- Intake with text, optional context and links, finalized attachments, immutable
+  creator attribution, update time/revision, attributed update Events, and a
+  server-authoritative deterministic non-empty `displayLabel` for human views;
 - Work detail with source Intake, current/latest Run, comments (including finalized attachment references), artifacts, and Attention;
+- active-Run visualization with agent identity, canonical Work, Run state,
+  progress, elapsed/lease health, and safe workspace label; this read model is
+  subscription-backed and never equates generic CLI activity with an active
+  Run;
 - search result union;
 - installation/grant metadata and Advanced CI/service one-time secret result;
 - media upload initiation/finalization;
 - notification preference/delivery state needed by clients.
+
+### Work identifier contract
+
+Canonical Work identifiers are project-scoped and match
+`[a-z]{4}[0-9]{3}` with no separator, such as `dong012`. The four-letter code
+uses the first four ASCII letters of the immutable lowercase project slug; if
+needed, append ASCII letters from the legacy identifier prefix and then `x`
+padding. New projects persist that derived compact prefix and existing projects
+derive it identically. Sequences run from `001` through `999`.
+
+Stored legacy identifiers remain exact aliases for lookup by project and work
+number. Read models expose the compact value as `identifier` and retained old
+values in `legacyIdentifiers`; display, copy, search results, links, snapshots,
+and exports use the compact value. The same compact identifier may exist in two
+projects, so neither form is globally unique.
+
+Exhaustion fails before mutation with HTTP `409`, code
+`identifier_exhausted`, message `This project has used all 999 work
+identifiers`, `retryable: false`, and details containing `maxSequence: 999`,
+the authoritative `nextSequence`, and `action: "use_another_project"`.
+Idempotency replay is resolved before allocation, so replaying the successful
+creation of sequence `999` still succeeds.
 
 ### Agent operations
 
@@ -134,6 +172,29 @@ sync_snapshot
 ```
 
 Human attention response remains a human-authenticated product mutation, not an agent-token operation.
+
+Ideas are likewise human-only and intentionally absent from the versioned agent
+operation registry. Authenticated product operations are
+`ideas.listForHuman`, `getForHuman`, `create`, `update`, `reorder`, `archive`,
+`restore`, and `promote`. Human summaries include `createdBy` and `updatedBy`
+Actors plus revision/timestamps. Open list order uses explicit `position`;
+Archived and Promoted UI history sort by newest transition. Promotion
+atomically creates one Intake whose text is the Idea title followed, when
+present, by a blank line and the Idea text; it also copies context and links and
+dual-links the same finalized attachments without removing their Idea
+association. It sets the Idea's
+`promotedIntakeId`/`promotedAt` and the Intake's `sourceIdeaId`, and permanently
+reuses that mapping for every replay or later promotion attempt. Agent Overview,
+search, update delivery, snapshots, HTTPS, CLI, and MCP expose only the
+resulting Intake, never the source backlog.
+
+Editing Intake is likewise a human-authenticated Convex mutation, not an agent
+operation. `updateForHuman` accepts `intakeId`, `expectedRevision`, optional
+text/context/links, additive `addAttachmentIds`, and an idempotency key. It
+returns the new revision and update time plus the attachment IDs actually
+added. It emits `intake.updated`; an already attached file on that Intake is an
+idempotent no-op, while files attached elsewhere, owned by another editor, not
+available, outside the project, or beyond the 20-file total are rejected.
 
 ### MCP tool contract
 
@@ -194,6 +255,14 @@ The MCP gateway targets protocol revision `2026-07-28` using the official TypeSc
 - Signed media URLs are short-lived bearer capabilities and never logged.
 - Intake text, attachments, comments, Markdown, URLs, filenames, and terminal output are untrusted.
 - Rate limits cover device-code issuance/polling, OAuth authorization/token/registration endpoints, agent authentication, OTP, upload initiation, search, and mutation bursts.
+- Host capability and Run workspace metadata are claims from an authenticated
+  installation, not authorization. The server still enforces project policy,
+  one active WorkItem per session, atomic per-item ownership, capacity, and
+  leases. Workspace metadata never includes an absolute path.
+- Idea authorization is human membership authorization. Agent grants and scopes
+  confer no Idea read or write capability. Attachment bytes/metadata remain
+  hidden from agents while associated only with an Idea and become agent-visible
+  only through the atomically promoted Intake under normal attachment checks.
 
 ## Environment model
 

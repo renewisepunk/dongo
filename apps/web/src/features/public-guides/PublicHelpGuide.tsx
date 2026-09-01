@@ -16,6 +16,7 @@ const CLI_REFERENCE = [
   ["dongo auth status", "Show the local authorization state without exposing credentials."],
   ["dongo doctor", "Check the repository marker, credential binding, resource, and connectivity."],
   ["dongo session-start", "Start a read-only agent session and receive project instructions."],
+  ["dongo attention wait --attention-id ID", "Wait for one human response with bounded backoff; this does not restart a stopped agent."],
   ["dongo overview", "Read the project overview from the terminal."],
   ["dongo sync", "Write the deterministic, one-way .agent-work snapshot."],
   ["dongo integrate codex|claude|generic", "Preview a project-scoped MCP configuration; add --apply only after review."],
@@ -70,6 +71,13 @@ export function PublicHelpGuide() {
 
       <GuideSection index="04" id="mcp-resources" title="MCP resources" lede="Every project has one remote Streamable HTTP resource. Every host authorizes independently against that exact URL.">
         <div class="mcp-resource-line"><span>project resource</span><code>{dongoPublicOrigin}/p/&lt;project-ref&gt;/mcp</code></div>
+        <div class="guide-process" role="list" aria-label="MCP host setup sequence">
+          <article role="listitem"><span>1</span><h3>Apply configuration</h3><p>Apply the reviewed project-scoped configuration.</p></article>
+          <article role="listitem"><span>2</span><h3>Approve if required</h3><p>Approve the project-scoped server only if the host asks.</p></article>
+          <article role="listitem"><span>3</span><h3>Log in if required</h3><p>Complete login only when the host reports that authentication is needed.</p></article>
+          <article role="listitem"><span>4</span><h3>Restart only if necessary</h3><p>Do not reopen a working repository session unless the host cannot reload the connection.</p></article>
+          <article role="listitem"><span>5</span><h3>Verify</h3><p>Call <code>dongo_session_start</code>. Success names the intended project; failure should name the next recovery action.</p></article>
+        </div>
         <div class="help-resource-grid">
           <article><span>Codex</span><h3>Managed project entry</h3><p>Preview with <code>dongo integrate codex</code>, apply with <code>--apply</code>, then use the printed <code>codex mcp login</code> command.</p></article>
           <article><span>Claude Code</span><h3>Remote HTTP project entry</h3><p>Preview with <code>dongo integrate claude</code>, apply with <code>--apply</code>, then run <code>claude mcp login dongo-&lt;project-ref&gt;</code>.</p></article>

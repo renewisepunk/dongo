@@ -100,7 +100,7 @@ export function CompletedWork(props: CompletedWorkProps) {
           </Show>
           <section class="work-section" style={{ "margin-top": "0" }}>
             <For each={completed()}>{(item) => (
-              <A class="work-row work-row--done" href={`/app/${props.orgSlug}/${props.projectSlug}?work=${encodeURIComponent(item.id)}`}>
+              <A class="work-row work-row--done" href={`/app/${props.orgSlug}/${props.projectSlug}?work=${encodeURIComponent(item.identifier)}`}>
                 <span class="mono" style={{ color: "var(--green)" }}>✓</span>
                 <span class="work-row__title work-row__title--done">{item.title}</span>
                 <span class="work-row__identifier mono">{[item.identifier, item.agent, item.completedAt].filter(Boolean).join(" · ")}</span>

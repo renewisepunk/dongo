@@ -314,6 +314,54 @@ describe("project administration", () => {
       name: "Renamed project",
       repositoryUrl: "https://github.com/example/dongo",
       executionMode: "autonomous",
+      parallelExecution: {
+        enabled: false,
+        maxConcurrentRuns: 1,
+        requiresIsolatedWorkspaces: true,
+      },
+    });
+    await owner.mutation(api.domains.projects.index.updateProject, {
+      projectId: project.projectId,
+      name: "Renamed project",
+      repositoryUrl: "https://github.com/example/dongo",
+      executionMode: "autonomous",
+      parallelExecution: {
+        enabled: true,
+        maxConcurrentRuns: 6,
+        requiresIsolatedWorkspaces: true,
+      },
+    });
+    const parallel = await owner.query(api.domains.projects.index.administration, {
+      projectId: project.projectId,
+    });
+    expect(parallel.project.parallelExecution).toEqual({
+      enabled: true,
+      maxConcurrentRuns: 6,
+      requiresIsolatedWorkspaces: true,
+    });
+    await owner.mutation(api.domains.projects.index.updateProject, {
+      projectId: project.projectId,
+      name: "Renamed project",
+      repositoryUrl: "https://github.com/example/dongo",
+      executionMode: "autonomous",
+      parallelExecution: {
+        enabled: false,
+        maxConcurrentRuns: 1,
+        requiresIsolatedWorkspaces: true,
+      },
+    });
+    const serial = await owner.query(api.domains.projects.index.administration, {
+      projectId: project.projectId,
+    });
+    expect(serial.project.parallelExecution).toEqual({
+      enabled: false,
+      maxConcurrentRuns: 1,
+      requiresIsolatedWorkspaces: true,
+    });
+    const storedSerial = await owner.run((ctx) => ctx.db.get(project.projectId));
+    expect(storedSerial).toMatchObject({
+      parallelExecutionEnabled: false,
+      maxConcurrentRuns: 4,
     });
     expect(updated.organization.name).toBe("Renamed organization");
     await expect(owner.mutation(api.domains.projects.index.updateProject, {

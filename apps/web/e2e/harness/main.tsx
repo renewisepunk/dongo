@@ -1,12 +1,13 @@
 import { Route, Router } from "@solidjs/router";
+import { MetaProvider } from "@solidjs/meta";
 import { render } from "solid-js/web";
 import { Overview, type OverviewConnection } from "../../src/features/overview/Overview";
 import { HelpGuide } from "../../src/features/help/HelpGuide";
-import { MarketingHome } from "../../src/features/marketing/MarketingHome";
 import { GetStartedGuide } from "../../src/features/public-guides/GetStartedGuide";
 import { PublicHelpGuide } from "../../src/features/public-guides/PublicHelpGuide";
 import { SecurityOverview } from "../../src/features/security/SecurityOverview";
 import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
+import { Ideas } from "../../src/features/ideas/Ideas";
 import type { WorkItem } from "../../src/features/overview/model";
 import { CompletedWork } from "../../src/routes/app/[orgSlug]/[projectSlug]/done";
 import AuthCallbackRoute from "../../src/routes/auth/callback";
@@ -18,7 +19,9 @@ import OnboardingRoute from "../../src/routes/onboarding";
 import OAuthConsentRoute from "../../src/routes/oauth/consent";
 import OAuthProjectRoute from "../../src/routes/oauth/project";
 import OpenRoute from "../../src/routes/open";
+import IndexRoute from "../../src/routes/index";
 import { connectFixtureProject, fixtureSession } from "./project-fixture";
+import { connectFixtureIdeas } from "./ideas-fixture";
 import "../../src/styles/global.css";
 
 const authDependencies = {
@@ -100,22 +103,57 @@ const onboardingDependencies = {
       throw new Error("fixture session detail must stay hidden");
     }
   },
+  async getProjectCreationContext() {
+    const scenario = new URLSearchParams(window.location.search).get("scenario");
+    if (scenario === "allowance-error") {
+      throw new Error("fixture allowance detail must stay hidden");
+    }
+    if (scenario === "paid" || scenario === "free-limit" || scenario === "member-only") {
+      return {
+        organizations: scenario === "member-only" ? [] : [{
+          id: "organization-fixture",
+          name: "Fixture Studio",
+          slug: "fixture-studio",
+          plan: scenario === "paid" ? "paid" as const : "free" as const,
+          activeProjectCount: 1,
+          activeProjectLimit: scenario === "paid" ? null : 1,
+          canCreate: scenario === "paid",
+        }],
+        projects: [{
+          publicRef: "fixture-project",
+          name: "dongo",
+          slug: "dongo",
+          organizationName: "Fixture Studio",
+          organizationSlug: "fixture-studio",
+          repositoryUrl: "https://github.com/renewisepunk/dongo",
+        }],
+      };
+    }
+    return { organizations: [], projects: [] };
+  },
   async createFirstProject(input: {
+    organizationId?: string;
     name: string;
     slug: string;
     repositoryUrl?: string;
     executionMode: "manual" | "autonomous";
+    parallelExecution?: {
+      enabled: boolean;
+      maxConcurrentRuns: number;
+      requiresIsolatedWorkspaces: true;
+    };
   }) {
     if (input.name === "Fail safely") {
       throw new Error("fixture provisioning detail must stay hidden");
     }
+    document.documentElement.dataset.fixtureOnboardingProject = JSON.stringify(input);
     return {
       projectId: "project-created",
       publicRef: "fixture-created",
       created: true,
       resourceProvisioned: true as const,
-      organizationId: "organization-fixture",
-      organizationSlug: "fixture-owner-serfixture",
+      organizationId: input.organizationId ?? "organization-fixture",
+      organizationSlug: input.organizationId ? "fixture-studio" : "fixture-owner-serfixture",
     };
   },
 };
@@ -163,12 +201,52 @@ const deviceDependencies = {
       },
     ];
   },
+  async getProjectCreationContext() {
+    const code = new URLSearchParams(window.location.search).get("user_code")?.replace(/-/g, "");
+    if (code === "NOPROJ00") return { organizations: [], projects: [] };
+    const freeLimit = code === "LIMIT001";
+    return {
+      organizations: [{
+        id: "organization-fixture",
+        name: "Fixture Studio",
+        slug: "fixture-studio",
+        plan: freeLimit ? "free" as const : "paid" as const,
+        activeProjectCount: freeLimit ? 1 : 2,
+        activeProjectLimit: freeLimit ? 1 : null,
+        canCreate: !freeLimit,
+      }],
+      projects: [
+        {
+          publicRef: "fixture-project",
+          name: "dongo",
+          slug: "dongo",
+          organizationName: "Fixture Studio",
+          organizationSlug: "fixture-studio",
+          repositoryUrl: "https://github.com/renewisepunk/dongo",
+        },
+        {
+          publicRef: "companion-project",
+          name: "Companion",
+          slug: "companion",
+          organizationName: "Fixture Studio",
+          organizationSlug: "fixture-studio",
+          repositoryUrl: "https://github.com/renewisepunk/companion",
+        },
+      ],
+    };
+  },
   async createFirstProject(input: {
     user: { id: string; name?: string; email?: string };
+    organizationId?: string;
     name: string;
     slug: string;
     repositoryUrl?: string;
     executionMode: "manual" | "autonomous";
+    parallelExecution?: {
+      enabled: boolean;
+      maxConcurrentRuns: number;
+      requiresIsolatedWorkspaces: true;
+    };
   }) {
     document.documentElement.dataset.fixtureDeviceCreatedProject = JSON.stringify(input);
     return {
@@ -249,7 +327,14 @@ const oauthConsentDependencies = {
     if (oauthScenario() === "client-error") {
       throw new Error("fixture client detail must stay hidden");
     }
-    return { clientId, name: clientId === "claude" ? "Claude Code" : "Codex" };
+    return {
+      clientId,
+      name: clientId === "claude"
+        ? "Claude Code"
+        : clientId === "legacy-dongo-client"
+          ? ["D", "ONGO agent"].join("")
+          : "Codex",
+    };
   },
   async listAuthorizableProjects() {
     return oauthScenario() === "no-project" ? [] : oauthProjects;
@@ -291,8 +376,15 @@ const connectDependencies = {
         organizationPlan: "paid" as const,
         membershipRole: "owner" as const,
         activeProjectCount: 1,
+        activeProjectLimit: null,
+        canCreateProject: true,
         identifierPrefix: "DONGO",
         executionMode: "manual" as const,
+        parallelExecution: {
+          enabled: false,
+          maxConcurrentRuns: 1,
+          requiresIsolatedWorkspaces: true as const,
+        },
       },
       subscribeInstallations(
         onUpdate: (installations: Array<{
@@ -311,18 +403,34 @@ const connectDependencies = {
         if (oauthScenario() === "status-error") {
           onError(new Error("fixture status detail must stay hidden"));
         } else {
-          onUpdate(oauthScenario() === "connected"
-            ? [{
+          const cliInstallation = {
                 id: "installation-fixture",
-                kind: "cli",
-                status: "active",
+                kind: "cli" as const,
+                status: "active" as const,
                 clientId: "dongo-cli",
                 label: "dongo CLI",
                 machineLabel: "Fixture Mac",
                 scopes: ["dongo:work:read", "dongo:work:write"],
                 createdAt: Date.now(),
-              }]
-            : []);
+              };
+          const claudeInstallation = {
+            id: "installation-claude",
+            kind: "mcp" as const,
+            status: oauthScenario() === "claude-connected" || oauthScenario() === "claude-approved"
+              ? "active" as const
+              : oauthScenario() === "claude-needs-reauth"
+                ? "needs_reauth" as const
+                : "revoked" as const,
+            clientId: "claude-code",
+            label: "Claude Code",
+            scopes: ["dongo:work:read", "dongo:work:write"],
+            createdAt: Date.now(),
+            ...(oauthScenario() === "claude-connected" ? { lastUsedAt: Date.now() } : {}),
+          };
+          if (oauthScenario() === "connected") onUpdate([cliInstallation]);
+          else if (oauthScenario() === "claude-connected" || oauthScenario() === "claude-approved" || oauthScenario() === "claude-needs-reauth" || oauthScenario() === "claude-revoked") {
+            onUpdate([cliInstallation, claudeInstallation]);
+          } else onUpdate([]);
         }
         return () => {
           document.documentElement.dataset.fixtureConnectUnsubscribed = "true";
@@ -350,7 +458,13 @@ function fixtureAdministration() {
       slug: "dongo",
       repositoryUrl: "https://github.com/renewisepunk/dongo",
       identifierPrefix: "DONGO",
+      compactIdentifierPrefix: "dong",
       executionMode: "manual" as const,
+      parallelExecution: {
+        enabled: oauthScenario() === "parallel-enabled",
+        maxConcurrentRuns: oauthScenario() === "parallel-enabled" ? 6 : 1,
+        requiresIsolatedWorkspaces: true as const,
+      },
       ...(archived ? { archivedAt: Date.now() - 60_000 } : {}),
     },
     organization: {
@@ -406,9 +520,12 @@ const settingsDependencies = {
       organizationPlan: administration.organization.plan,
       membershipRole: administration.membershipRole,
       activeProjectCount: administration.activeProjectCount,
+      activeProjectLimit: administration.organization.plan === "free" ? 1 : null,
+      canCreateProject: administration.organization.plan === "paid" || administration.activeProjectCount < 1,
       repositoryUrl: administration.project.repositoryUrl,
       identifierPrefix: administration.project.identifierPrefix,
       executionMode: administration.project.executionMode,
+      parallelExecution: administration.project.parallelExecution,
       ...(administration.project.archivedAt === undefined
         ? {}
         : { archivedAt: administration.project.archivedAt }),
@@ -419,7 +536,7 @@ const settingsDependencies = {
         kind: "cli" as const,
         status: "active" as const,
         clientId: "dongo-cli",
-        label: "dongo CLI",
+        label: ["D", "ongo CLI"].join(""),
         machineLabel: "Fixture Mac",
         scopes: ["dongo:work:read", "dongo:work:write"],
         createdAt: Date.now() - 3_600_000,
@@ -457,6 +574,11 @@ const settingsDependencies = {
         name: string;
         repositoryUrl?: string;
         executionMode: "manual" | "autonomous";
+        parallelExecution: {
+          enabled: boolean;
+          maxConcurrentRuns: number;
+          requiresIsolatedWorkspaces: true;
+        };
       }) {
         if (input.name === "Fail safely") throw new Error("fixture update detail must stay hidden");
         Object.assign(administration.project, input);
@@ -528,7 +650,8 @@ const settingsDependencies = {
 const firstCompletedPage: WorkItem[] = [
   {
     id: "work-done",
-    identifier: "DONGO-6",
+    identifier: "dong006",
+    legacyIdentifiers: ["DONGO-6"],
     title: "Complete the agent golden journey",
     state: "done",
     agent: "Codex",
@@ -539,7 +662,8 @@ const firstCompletedPage: WorkItem[] = [
   },
   {
     id: "work-completed-1",
-    identifier: "DONGO-5",
+    identifier: "dong005",
+    legacyIdentifiers: ["DONGO-5"],
     title: "Freeze the operation contract",
     state: "done",
     agent: "Claude",
@@ -554,7 +678,8 @@ const secondCompletedPage: WorkItem[] = [
   firstCompletedPage[1]!,
   {
     id: "work-completed-2",
-    identifier: "DONGO-4",
+    identifier: "dong004",
+    legacyIdentifiers: ["DONGO-4"],
     title: "Verify tenant isolation",
     state: "done",
     agent: "Codex",
@@ -652,51 +777,76 @@ function FixtureOpen() {
   );
 }
 
+function FixtureIndex() {
+  return (
+    <IndexRoute
+      dependencies={{
+        async humanSession() {
+          document.documentElement.dataset.fixtureIndexSessionChecked = "true";
+          return oauthScenario() === "signed-in" ? fixtureSession() : null;
+        },
+        async bootstrapHumanIdentity() {
+          document.documentElement.dataset.fixtureIndexIdentityBootstrapped = "true";
+        },
+        async listAuthorizableProjects() {
+          return oauthProjects;
+        },
+      }}
+    />
+  );
+}
+
 const root = document.getElementById("app");
 if (!root) throw new Error("E2E fixture root is unavailable");
 
 render(
   () => (
-    <Router>
-      <Route path="/" component={MarketingHome} />
-      <Route path="/open" component={FixtureOpen} />
-      <Route path="/get-started" component={GetStartedGuide} />
-      <Route path="/help" component={PublicHelpGuide} />
-      <Route path="/security" component={SecurityOverview} />
-      <Route path="/login" component={FixtureLogin} />
-      <Route path="/auth/code" component={FixtureEmailCode} />
-      <Route path="/auth/callback" component={FixtureAuthCallback} />
-      <Route path="/onboarding" component={() => <OnboardingRoute dependencies={onboardingDependencies} />} />
-      <Route path="/device" component={() => <DeviceAuthorizationRoute dependencies={deviceDependencies} />} />
-      <Route path="/oauth/project" component={() => <OAuthProjectRoute dependencies={oauthProjectDependencies} />} />
-      <Route path="/oauth/consent" component={() => <OAuthConsentRoute dependencies={oauthConsentDependencies} />} />
-      <Route path="/connect" component={() => <ConnectRoute dependencies={connectDependencies} />} />
-      <Route
-        path="/app/:orgSlug/:projectSlug/settings"
-        component={() => (
-          <ProjectSettings
-            orgSlug="fixture-studio"
-            projectSlug="dongo"
-            dependencies={settingsDependencies}
-          />
-        )}
-      />
-      <Route
-        path="/app/:orgSlug/:projectSlug/done"
-        component={() => (
-          <CompletedWork
-            orgSlug="fixture-studio"
-            projectSlug="dongo"
-            dependencies={completedDependencies}
-          />
-        )}
-      />
-      <Route
-        path="/app/:orgSlug/:projectSlug/help"
-        component={() => <HelpGuide orgSlug="fixture-studio" projectSlug="dongo" />}
-      />
-      <Route path="*" component={FixtureOverview} />
-    </Router>
+    <MetaProvider>
+      <Router>
+        <Route path="/" component={FixtureIndex} />
+        <Route path="/open" component={FixtureOpen} />
+        <Route path="/get-started" component={GetStartedGuide} />
+        <Route path="/help" component={PublicHelpGuide} />
+        <Route path="/security" component={SecurityOverview} />
+        <Route path="/login" component={FixtureLogin} />
+        <Route path="/auth/code" component={FixtureEmailCode} />
+        <Route path="/auth/callback" component={FixtureAuthCallback} />
+        <Route path="/onboarding" component={() => <OnboardingRoute dependencies={onboardingDependencies} />} />
+        <Route path="/device" component={() => <DeviceAuthorizationRoute dependencies={deviceDependencies} />} />
+        <Route path="/oauth/project" component={() => <OAuthProjectRoute dependencies={oauthProjectDependencies} />} />
+        <Route path="/oauth/consent" component={() => <OAuthConsentRoute dependencies={oauthConsentDependencies} />} />
+        <Route path="/connect" component={() => <ConnectRoute dependencies={connectDependencies} />} />
+        <Route
+          path="/app/:orgSlug/:projectSlug/settings"
+          component={() => (
+            <ProjectSettings
+              orgSlug="fixture-studio"
+              projectSlug="dongo"
+              dependencies={settingsDependencies}
+            />
+          )}
+        />
+        <Route
+          path="/app/:orgSlug/:projectSlug/done"
+          component={() => (
+            <CompletedWork
+              orgSlug="fixture-studio"
+              projectSlug="dongo"
+              dependencies={completedDependencies}
+            />
+          )}
+        />
+        <Route
+          path="/app/:orgSlug/:projectSlug/help"
+          component={() => <HelpGuide orgSlug="fixture-studio" projectSlug="dongo" />}
+        />
+        <Route
+          path="/app/:orgSlug/:projectSlug/ideas"
+          component={() => <Ideas orgSlug="fixture-studio" projectSlug="dongo" connect={connectFixtureIdeas} />}
+        />
+        <Route path="*" component={FixtureOverview} />
+      </Router>
+    </MetaProvider>
   ),
   root,
 );

@@ -39,8 +39,30 @@ type OAuthResult = { redirect?: boolean; url?: string };
 
 type ProjectGroup = {
   membership: { organizationId: string; role: "owner" | "member" };
-  organization: { name: string; slug: string } | null;
+  organization: { name: string; slug: string; plan: "free" | "paid" } | null;
+  projectAllowance?: {
+    resource: "active_projects";
+    plan: "free" | "paid";
+    activeProjectCount: number;
+    limit: number | null;
+    remaining: number | null;
+    canCreate: boolean;
+    actions: Array<"use_existing" | "archive_existing" | "upgrade">;
+  } | null;
   projects: Array<{ _id?: string; publicRef: string; name: string; slug: string; repositoryUrl?: string; archivedAt?: number }>;
+};
+
+export type ProjectCreationContext = {
+  organizations: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    plan: "free" | "paid";
+    activeProjectCount: number;
+    activeProjectLimit: number | null;
+    canCreate: boolean;
+  }>;
+  projects: AuthorizableProject[];
 };
 
 export type BootstrapResult = { profileId: string; created: boolean };
@@ -83,6 +105,11 @@ const createAndProvisionProjectReference = makeFunctionReference<
     identifierPrefix: string;
     repositoryUrl?: string;
     executionMode: "manual" | "autonomous";
+    parallelExecution?: {
+      enabled: boolean;
+      maxConcurrentRuns: number;
+      requiresIsolatedWorkspaces: true;
+    };
   },
   { projectId: string; publicRef: string; created: boolean; resourceProvisioned: true }
 >("domains/projects/actions:createAndProvisionResource");
@@ -215,19 +242,69 @@ export async function listAuthorizableProjects(): Promise<AuthorizableProject[]>
   }
 }
 
+export async function getProjectCreationContext(): Promise<ProjectCreationContext> {
+  try {
+    const groups = await (await bootstrappedConvexClient()).query(listProjectsReference, {});
+    return {
+      organizations: groups.flatMap((group) => {
+        if (!group.organization || group.membership.role !== "owner") return [];
+        const activeProjectCount = group.projectAllowance?.activeProjectCount ??
+          group.projects.filter((project) => project.archivedAt === undefined).length;
+        const activeProjectLimit = group.projectAllowance?.limit ??
+          (group.organization.plan === "free" ? 1 : null);
+        return [{
+          id: group.membership.organizationId,
+          name: group.organization.name,
+          slug: group.organization.slug,
+          plan: group.organization.plan,
+          activeProjectCount,
+          activeProjectLimit,
+          canCreate: group.projectAllowance?.canCreate ??
+            (activeProjectLimit === null || activeProjectCount < activeProjectLimit),
+        }];
+      }),
+      projects: groups.flatMap((group) => group.organization
+        ? group.projects
+            .filter((project) => project.archivedAt === undefined)
+            .map((project) => ({
+              publicRef: project.publicRef,
+              name: project.name,
+              slug: project.slug,
+              organizationName: group.organization!.name,
+              organizationSlug: group.organization!.slug,
+              repositoryUrl: project.repositoryUrl,
+            }))
+        : []),
+    };
+  } catch (cause) {
+    if (cause instanceof AuthorizationFlowError) throw cause;
+    throw new AuthorizationFlowError("unavailable", "Could not load your project allowance. Try again.");
+  }
+}
+
 export async function createFirstProject(input: {
   user: { id: string; name?: string; email?: string };
+  organizationId?: string;
   name: string;
   slug: string;
   repositoryUrl?: string;
   executionMode: "manual" | "autonomous";
+  parallelExecution?: {
+    enabled: boolean;
+    maxConcurrentRuns: number;
+    requiresIsolatedWorkspaces: true;
+  };
 }): Promise<FirstProjectResult> {
   try {
     const client = await bootstrappedConvexClient();
     let groups = await client.query(listProjectsReference, {});
-    let ownerGroup = groups.find((group) => group.membership.role === "owner" && group.organization !== null);
+    let ownerGroup = groups.find((group) =>
+      group.membership.role === "owner" &&
+      group.organization !== null &&
+      (input.organizationId === undefined || group.membership.organizationId === input.organizationId)
+    );
     let organizationId = ownerGroup?.membership.organizationId;
-    if (!organizationId && groups.length === 0) {
+    if (!organizationId && groups.length === 0 && input.organizationId === undefined) {
       const organization = await client.mutation(createPersonalOrganizationReference, {
         name: input.user.name?.trim() || "Personal workspace",
         slug: personalOrganizationSlug({ ...input.user, userId: input.user.id }),
@@ -237,7 +314,7 @@ export async function createFirstProject(input: {
       ownerGroup = groups.find((group) => group.membership.organizationId === organizationId && group.membership.role === "owner");
     }
     if (!organizationId || !ownerGroup) {
-      throw new AuthorizationFlowError("invalid", "An organization owner must create the first project.");
+      throw new AuthorizationFlowError("invalid", "An organization owner must create this project.");
     }
     const project = await client.action(createAndProvisionProjectReference, {
       organizationId,
@@ -246,6 +323,7 @@ export async function createFirstProject(input: {
       identifierPrefix: projectIdentifierPrefix(input.name),
       repositoryUrl: input.repositoryUrl,
       executionMode: input.executionMode,
+      parallelExecution: input.parallelExecution,
     });
     const organizationSlug = ownerGroup.organization?.slug;
     if (!organizationSlug) {
@@ -254,6 +332,18 @@ export async function createFirstProject(input: {
     return { ...project, organizationId, organizationSlug };
   } catch (cause) {
     if (cause instanceof AuthorizationFlowError) throw cause;
+    const data = typeof cause === "object" && cause !== null && "data" in cause
+      ? (cause as { data?: unknown }).data
+      : undefined;
+    const code = typeof data === "object" && data !== null && "code" in data
+      ? (data as { code?: unknown }).code
+      : undefined;
+    if (code === "plan_limit") {
+      throw new AuthorizationFlowError(
+        "conflict",
+        "The free plan already uses its 1 active project. Use it, archive it, or review upgrade options.",
+      );
+    }
     const message = cause instanceof Error ? cause.message : "";
     if (message.includes("free plan")) {
       throw new AuthorizationFlowError("conflict", "The free plan already has an active project.");

@@ -8,8 +8,9 @@ import {
   resolveAgentPrincipal,
 } from "../../lib/authz";
 import { attachmentSummary } from "../attachments/summary";
+import { intakeForAgent } from "../agent/privacy";
 import {
-  actorSummaryForHuman,
+  actorSummaryForHumanWithInstallation,
   attentionSummaryForHuman,
   intakeSummaryForHuman,
   runSummaryForHuman,
@@ -143,7 +144,9 @@ export async function buildOverview(
         .query("attachments")
         .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
         .take(20)
-        .then((attachments) => attachments.map(attachmentSummary)),
+        .then((attachments) => attachments
+          .filter((attachment) => attachment.status === "available")
+          .map(attachmentSummary)),
     })),
   );
   const needsYou = await Promise.all(
@@ -177,6 +180,22 @@ export const getForHuman = query({
       principal.project!,
       principal.profile._id,
     );
+    const [needsYou, working] = await Promise.all([
+      Promise.all(snapshot.needsYou.map(async ({ request, work, actor }) => ({
+        request: attentionSummaryForHuman(request),
+        work: work ? workSummaryForHuman(work, snapshot.project) : null,
+        actor: actor
+          ? await actorSummaryForHumanWithInstallation(ctx, actor)
+          : null,
+      }))),
+      Promise.all(snapshot.working.map(async ({ work, run, actor }) => ({
+        work: workSummaryForHuman(work, snapshot.project),
+        run: run ? runSummaryForHuman(run) : null,
+        actor: actor
+          ? await actorSummaryForHumanWithInstallation(ctx, actor)
+          : null,
+      }))),
+    ]);
     return {
       project: {
         _id: snapshot.project._id,
@@ -184,27 +203,21 @@ export const getForHuman = query({
         publicRef: snapshot.project.publicRef,
       },
       generatedAt: snapshot.generatedAt,
-      needsYou: snapshot.needsYou.map(({ request, work, actor }) => ({
-        request: attentionSummaryForHuman(request),
-        work: work ? workSummaryForHuman(work) : null,
-        actor: actor ? actorSummaryForHuman(actor) : null,
-      })),
-      working: snapshot.working.map(({ work, run, actor }) => ({
-        work: workSummaryForHuman(work),
-        run: run ? runSummaryForHuman(run) : null,
-        actor: actor ? actorSummaryForHuman(actor) : null,
-      })),
+      needsYou,
+      working,
       ready: snapshot.ready.map(({ work, effectiveState, staleClaim }) => ({
-        work: workSummaryForHuman(work),
+        work: workSummaryForHuman(work, snapshot.project),
         effectiveState,
         staleClaim,
       })),
       inbox: snapshot.inbox.map(({ intake, attachments, staleClaim }) => ({
-        intake: intakeSummaryForHuman(intake),
+        intake: intakeSummaryForHuman(intake, attachments[0]),
         attachments,
         staleClaim,
       })),
-      recentlyDone: snapshot.recentlyDone.map(workSummaryForHuman),
+      recentlyDone: snapshot.recentlyDone.map((work) =>
+        workSummaryForHuman(work, snapshot.project),
+      ),
     };
   },
 });
@@ -217,6 +230,13 @@ export const getForAgent = internalQuery({
       args.authorization,
       "dongo:work:read",
     );
-    return await buildOverview(ctx, principal.project);
+    const snapshot = await buildOverview(ctx, principal.project);
+    return {
+      ...snapshot,
+      inbox: snapshot.inbox.map(({ intake, ...item }) => ({
+        ...item,
+        intake: intakeForAgent(intake),
+      })),
+    };
   },
 });

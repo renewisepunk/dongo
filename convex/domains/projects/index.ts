@@ -13,8 +13,56 @@ import {
   requireOwner,
 } from "../../lib/authz";
 import { appendEvent } from "../../lib/events";
+import {
+  compactIdentifierPrefix,
+  derivedCompactIdentifierPrefix,
+} from "../work/identifiers";
 import { fail, optionalString, requireString } from "../../lib/errors";
 import { MAX_ATTACHMENT_BYTES, organizationStorageLimit } from "../../lib/plans";
+import {
+  DEFAULT_MAX_CONCURRENT_RUNS,
+  normalizeParallelExecutionSettings,
+  parallelExecutionPolicy,
+} from "../work/concurrency";
+
+const FREE_ACTIVE_PROJECT_LIMIT = 1;
+
+function activeProjectAllowance(
+  plan: "free" | "paid",
+  activeProjectCount: number,
+) {
+  const limit = plan === "free" ? FREE_ACTIVE_PROJECT_LIMIT : undefined;
+  const remaining = limit === undefined
+    ? undefined
+    : Math.max(0, limit - activeProjectCount);
+  return {
+    resource: "active_projects" as const,
+    plan,
+    activeProjectCount,
+    limit,
+    remaining,
+    canCreate: remaining === undefined || remaining > 0,
+    actions: plan === "free"
+      ? ["use_existing", "archive_existing", "upgrade"] as const
+      : [] as const,
+  };
+}
+
+function failActiveProjectPlanLimit(activeProjectCount: number): never {
+  fail(
+    "plan_limit",
+    "The free plan includes one active project. Use the existing project, archive it, or upgrade to create another.",
+    {
+      resource: "active_projects",
+      plan: "free",
+      activeProjectCount,
+      limit: FREE_ACTIVE_PROJECT_LIMIT,
+      remaining: 0,
+      retryable: false,
+      actions: ["use_existing", "archive_existing", "upgrade"],
+    },
+  );
+}
 
 function normalizeSlug(value: string): string {
   const slug = value.trim().toLowerCase();
@@ -121,6 +169,11 @@ export const createProject = internalMutation({
     identifierPrefix: v.string(),
     repositoryUrl: v.optional(v.string()),
     executionMode: v.union(v.literal("manual"), v.literal("autonomous")),
+    parallelExecution: v.optional(v.object({
+      enabled: v.boolean(),
+      maxConcurrentRuns: v.number(),
+      requiresIsolatedWorkspaces: v.optional(v.literal(true)),
+    })),
   },
   handler: async (ctx, args) => {
     const profile = await requireCurrentProfile(ctx);
@@ -132,6 +185,23 @@ export const createProject = internalMutation({
     const slug = normalizeSlug(args.slug);
     const identifierPrefix = normalizePrefix(args.identifierPrefix);
     const repositoryUrl = normalizeRepositoryUrl(args.repositoryUrl);
+    const compactIdentifierPrefix = derivedCompactIdentifierPrefix({
+      slug,
+      identifierPrefix,
+    });
+    const parallelExecution = normalizeParallelExecutionSettings(
+      args.parallelExecution ?? {
+        enabled: false,
+        maxConcurrentRuns: DEFAULT_MAX_CONCURRENT_RUNS,
+      },
+    );
+    const publicParallelExecution = {
+      enabled: parallelExecution.enabled,
+      maxConcurrentRuns: parallelExecution.enabled
+        ? parallelExecution.maxConcurrentRuns
+        : 1,
+      requiresIsolatedWorkspaces: true as const,
+    };
     const existingProject = await ctx.db
       .query("projects")
       .withIndex("by_organization_slug", (q) =>
@@ -144,6 +214,8 @@ export const createProject = internalMutation({
         existingProject.identifierPrefix !== identifierPrefix ||
         existingProject.repositoryUrl !== repositoryUrl ||
         existingProject.executionMode !== args.executionMode ||
+        (existingProject.parallelExecutionEnabled ?? false) !== parallelExecution.enabled ||
+        (existingProject.maxConcurrentRuns ?? DEFAULT_MAX_CONCURRENT_RUNS) !== parallelExecution.maxConcurrentRuns ||
         existingProject.archivedAt !== undefined
       ) {
         fail("validation", "Project slug is already in use");
@@ -161,9 +233,12 @@ export const createProject = internalMutation({
           .eq("organizationId", args.organizationId)
           .eq("archivedAt", undefined),
       )
-      .take(1);
-    if (organization.plan === "free" && activeProjects.length >= 1) {
-      fail("forbidden", "The free plan allows one active project");
+      .take(100);
+    if (
+      organization.plan === "free"
+      && activeProjects.length >= FREE_ACTIVE_PROJECT_LIMIT
+    ) {
+      failActiveProjectPlanLimit(activeProjects.length);
     }
     if (
       await ctx.db
@@ -186,8 +261,11 @@ export const createProject = internalMutation({
       publicRef,
       repositoryUrl,
       identifierPrefix,
+      compactIdentifierPrefix,
       nextWorkNumber: 1,
       executionMode: args.executionMode,
+      parallelExecutionEnabled: parallelExecution.enabled,
+      maxConcurrentRuns: parallelExecution.maxConcurrentRuns,
       createdAt: now,
       updatedAt: now,
     });
@@ -197,7 +275,7 @@ export const createProject = internalMutation({
       projectId,
       actorId: actor._id,
       type: "project.created",
-      data: { identifierPrefix, slug },
+      data: { identifierPrefix, slug, parallelExecution: publicParallelExecution },
       createdAt: now,
     });
     return { projectId, publicRef, created: true };
@@ -237,6 +315,9 @@ export const listMine = query({
           )
           .take(100),
         ]);
+        const activeProjectCount = projects.filter(
+          (project) => project.archivedAt === undefined,
+        ).length;
         return {
           membership: {
             organizationId: membership.organizationId,
@@ -250,6 +331,9 @@ export const listMine = query({
                 plan: organization.plan,
               }
             : null,
+          projectAllowance: organization
+            ? activeProjectAllowance(organization.plan, activeProjectCount)
+            : null,
           projects: projects.map((project) => ({
             _id: project._id,
             publicRef: project.publicRef,
@@ -257,7 +341,9 @@ export const listMine = query({
             slug: project.slug,
             repositoryUrl: project.repositoryUrl,
             identifierPrefix: project.identifierPrefix,
+            compactIdentifierPrefix: compactIdentifierPrefix(project),
             executionMode: project.executionMode,
+            parallelExecution: parallelExecutionPolicy(project),
             archivedAt: project.archivedAt,
           })),
         };
@@ -318,7 +404,9 @@ export const administration = query({
         slug: project.slug,
         repositoryUrl: project.repositoryUrl,
         identifierPrefix: project.identifierPrefix,
+        compactIdentifierPrefix: compactIdentifierPrefix(project),
         executionMode: project.executionMode,
+        parallelExecution: parallelExecutionPolicy(project),
         archivedAt: project.archivedAt,
       },
       organization: {
@@ -347,6 +435,11 @@ export const updateProject = mutation({
     name: v.string(),
     repositoryUrl: v.optional(v.string()),
     executionMode: v.union(v.literal("manual"), v.literal("autonomous")),
+    parallelExecution: v.optional(v.object({
+      enabled: v.boolean(),
+      maxConcurrentRuns: v.number(),
+      requiresIsolatedWorkspaces: v.optional(v.literal(true)),
+    })),
   },
   handler: async (ctx, args) => {
     const principal = await requireHumanProject(ctx, args.projectId, {
@@ -356,18 +449,37 @@ export const updateProject = mutation({
     const name = requireString(args.name, "name", 240);
     const repositoryUrl = normalizeRepositoryUrl(args.repositoryUrl);
     const project = principal.project!;
+    const storedParallelExecution = args.parallelExecution
+      ? normalizeParallelExecutionSettings(args.parallelExecution)
+      : {
+          enabled: project.parallelExecutionEnabled ?? false,
+          maxConcurrentRuns:
+            project.maxConcurrentRuns ?? DEFAULT_MAX_CONCURRENT_RUNS,
+          requiresIsolatedWorkspaces: true as const,
+        };
+    const parallelExecution = {
+      enabled: storedParallelExecution.enabled,
+      maxConcurrentRuns: storedParallelExecution.enabled
+        ? storedParallelExecution.maxConcurrentRuns
+        : 1,
+      requiresIsolatedWorkspaces: true as const,
+    };
     if (
       project.name === name &&
       project.repositoryUrl === repositoryUrl &&
-      project.executionMode === args.executionMode
+      project.executionMode === args.executionMode &&
+      (project.parallelExecutionEnabled ?? false) === storedParallelExecution.enabled &&
+      (project.maxConcurrentRuns ?? DEFAULT_MAX_CONCURRENT_RUNS) === storedParallelExecution.maxConcurrentRuns
     ) {
-      return { name, repositoryUrl, executionMode: args.executionMode };
+      return { name, repositoryUrl, executionMode: args.executionMode, parallelExecution };
     }
     const now = Date.now();
     await ctx.db.patch(project._id, {
       name,
       repositoryUrl,
       executionMode: args.executionMode,
+      parallelExecutionEnabled: storedParallelExecution.enabled,
+      maxConcurrentRuns: storedParallelExecution.maxConcurrentRuns,
       updatedAt: now,
     });
     await appendEvent(ctx, {
@@ -375,10 +487,15 @@ export const updateProject = mutation({
       projectId: project._id,
       actorId: principal.actor._id,
       type: "project.updated",
-      data: { name, repositoryUrl: repositoryUrl ?? null, executionMode: args.executionMode },
+      data: {
+        name,
+        repositoryUrl: repositoryUrl ?? null,
+        executionMode: args.executionMode,
+        parallelExecution,
+      },
       createdAt: now,
     });
-    return { name, repositoryUrl, executionMode: args.executionMode };
+    return { name, repositoryUrl, executionMode: args.executionMode, parallelExecution };
   },
 });
 
@@ -598,9 +715,9 @@ export const unarchiveProject = mutation({
         .withIndex("by_organization_archived", (q) =>
           q.eq("organizationId", organization._id).eq("archivedAt", undefined),
         )
-        .take(1);
-      if (active.length > 0) {
-        fail("forbidden", "Archive the active project before restoring this one");
+        .take(100);
+      if (active.length >= FREE_ACTIVE_PROJECT_LIMIT) {
+        failActiveProjectPlanLimit(active.length);
       }
     }
     const now = Date.now();

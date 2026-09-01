@@ -11,6 +11,7 @@ import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import {
   agentContextValidator,
   artifactTypeValidator,
+  MAX_BODY_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_TITLE_LENGTH,
   workKindValidator,
@@ -30,7 +31,7 @@ import {
 } from "../../lib/errors";
 import { attachmentSummary } from "../attachments/summary";
 import {
-  actorSummaryForHuman,
+  actorSummaryForHumanWithInstallation,
   artifactSummaryForHuman,
   attentionSummaryForHuman,
   commentSummaryForHuman,
@@ -41,6 +42,13 @@ import {
 import { runIdempotent } from "../../lib/idempotency";
 import { isLeaseActive, newLease } from "../../lib/leases";
 import { createWorkItem, linkIntakeToWork } from "./service";
+import { workByIdentifier } from "./identifiers";
+import {
+  capabilityState,
+  normalizeWorkspace,
+  parallelExecutionPolicy,
+  workspaceValidator,
+} from "./concurrency";
 
 const inlineArtifactValidator = v.object({
   type: artifactTypeValidator,
@@ -209,6 +217,9 @@ export const createForAgent = internalMutation({
     authorization: agentContextValidator,
     title: v.string(),
     description: v.optional(v.string()),
+    context: v.optional(v.string()),
+    links: v.optional(v.array(v.string())),
+    initialComment: v.optional(v.string()),
     kind: workKindValidator,
     parentId: v.optional(v.id("workItems")),
     sourceIntakeIds: v.optional(v.array(v.id("intakes"))),
@@ -232,6 +243,9 @@ export const createForAgent = internalMutation({
         payload: {
           title: args.title,
           description: args.description,
+          context: args.context,
+          links: args.links,
+          initialComment: args.initialComment,
           kind: args.kind,
           parentId: args.parentId,
           sourceIntakeIds: args.sourceIntakeIds,
@@ -249,6 +263,32 @@ export const createForAgent = internalMutation({
           now,
           requestId: principal.requestId,
         });
+        if (args.initialComment !== undefined) {
+          const body = requireString(
+            args.initialComment,
+            "initialComment",
+            MAX_BODY_LENGTH,
+          );
+          const commentId = await ctx.db.insert("comments", {
+            organizationId: principal.project.organizationId,
+            projectId: principal.project._id,
+            workItemId,
+            actorId: principal.actor._id,
+            body,
+            attachmentIds: [],
+            createdAt: now,
+          });
+          await appendEvent(ctx, {
+            organizationId: principal.project.organizationId,
+            projectId: principal.project._id,
+            workItemId,
+            actorId: principal.actor._id,
+            type: "comment.created",
+            data: { commentId },
+            requestId: principal.requestId,
+            createdAt: now,
+          });
+        }
         for (const intakeId of [...new Set(args.sourceIntakeIds ?? [])]) {
           const intake = await ctx.db.get(intakeId);
           if (!intake) fail("not_found", "Source Intake not found");
@@ -296,15 +336,74 @@ async function workDetail(ctx: QueryCtx, work: Doc<"workItems">) {
   return { work, runs, comments, artifacts, attention, sources };
 }
 
+async function workDetailForHuman(
+  ctx: QueryCtx,
+  work: Doc<"workItems">,
+  project: Doc<"projects">,
+) {
+  const detail = await workDetail(ctx, work);
+  const attachments = (
+    await ctx.db
+      .query("attachments")
+      .withIndex("by_work", (q) => q.eq("workItemId", work._id))
+      .take(100)
+  )
+    .filter((attachment) => attachment.status === "available")
+    .map(attachmentSummary);
+  const sourceIntakes = (
+    await Promise.all(detail.sources.map(async (source) => {
+      const intake = await ctx.db.get(source.intakeId);
+      if (!intake || intake.projectId !== work.projectId) return null;
+      const sourceAttachments = (
+        await ctx.db
+          .query("attachments")
+          .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
+          .take(100)
+      )
+        .filter((attachment) => attachment.status === "available")
+        .map(attachmentSummary);
+      return { intake, attachments: sourceAttachments };
+    }))
+  ).filter((source): source is NonNullable<typeof source> => source !== null);
+  const actorIds = new Set<Id<"actors">>();
+  for (const run of detail.runs) actorIds.add(run.actorId);
+  for (const comment of detail.comments) actorIds.add(comment.actorId);
+  for (const artifact of detail.artifacts) actorIds.add(artifact.actorId);
+  for (const request of detail.attention) {
+    actorIds.add(request.requestedByActorId);
+    if (request.resolvedByActorId) actorIds.add(request.resolvedByActorId);
+  }
+  const actors = (
+    await Promise.all([...actorIds].map((actorId) => ctx.db.get(actorId)))
+  ).filter((actor): actor is Doc<"actors"> => actor !== null);
+  return {
+    work: workSummaryForHuman(detail.work, project),
+    runs: detail.runs.map(runSummaryForHuman),
+    comments: detail.comments.map(commentSummaryForHuman),
+    artifacts: detail.artifacts.map(artifactSummaryForHuman),
+    attention: detail.attention.map(attentionSummaryForHuman),
+    actors: await Promise.all(
+      actors.map((actor) => actorSummaryForHumanWithInstallation(ctx, actor)),
+    ),
+    attachments,
+    sourceIntakes: sourceIntakes.map(({ intake, attachments: sourceAttachments }) => ({
+      intake: intakeSummaryForHuman(intake, sourceAttachments[0]),
+      attachments: sourceAttachments,
+    })),
+  };
+}
+
 export const getForHuman = query({
   args: { workItemId: v.id("workItems") },
   handler: async (ctx, args) => {
     const work = await ctx.db.get(args.workItemId);
     if (!work) fail("not_found", "Work item not found");
-    await requireHumanProject(ctx, work.projectId, { allowArchived: true });
+    const principal = await requireHumanProject(ctx, work.projectId, {
+      allowArchived: true,
+    });
     const detail = await workDetail(ctx, work);
     return {
-      work: workSummaryForHuman(detail.work),
+      work: workSummaryForHuman(detail.work, principal.project!),
       runs: detail.runs.map(runSummaryForHuman),
       comments: detail.comments.map(commentSummaryForHuman),
       artifacts: detail.artifacts.map(artifactSummaryForHuman),
@@ -318,55 +417,10 @@ export const getDetailForHuman = query({
   handler: async (ctx, args) => {
     const work = await ctx.db.get(args.workItemId);
     if (!work) fail("not_found", "Work item not found");
-    await requireHumanProject(ctx, work.projectId, { allowArchived: true });
-    const detail = await workDetail(ctx, work);
-    const attachments = (
-      await ctx.db
-        .query("attachments")
-        .withIndex("by_work", (q) => q.eq("workItemId", work._id))
-        .take(100)
-    )
-      .filter((attachment) => attachment.status === "available")
-      .map(attachmentSummary);
-    const sourceIntakes = (
-      await Promise.all(detail.sources.map(async (source) => {
-        const intake = await ctx.db.get(source.intakeId);
-        if (!intake || intake.projectId !== work.projectId) return null;
-        const sourceAttachments = (
-          await ctx.db
-            .query("attachments")
-            .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
-            .take(100)
-        )
-          .filter((attachment) => attachment.status === "available")
-          .map(attachmentSummary);
-        return { intake, attachments: sourceAttachments };
-      }))
-    ).filter((source): source is NonNullable<typeof source> => source !== null);
-    const actorIds = new Set<Id<"actors">>();
-    for (const run of detail.runs) actorIds.add(run.actorId);
-    for (const comment of detail.comments) actorIds.add(comment.actorId);
-    for (const artifact of detail.artifacts) actorIds.add(artifact.actorId);
-    for (const request of detail.attention) {
-      actorIds.add(request.requestedByActorId);
-      if (request.resolvedByActorId) actorIds.add(request.resolvedByActorId);
-    }
-    const actors = (
-      await Promise.all([...actorIds].map((actorId) => ctx.db.get(actorId)))
-    ).filter((actor): actor is Doc<"actors"> => actor !== null);
-    return {
-      work: workSummaryForHuman(detail.work),
-      runs: detail.runs.map(runSummaryForHuman),
-      comments: detail.comments.map(commentSummaryForHuman),
-      artifacts: detail.artifacts.map(artifactSummaryForHuman),
-      attention: detail.attention.map(attentionSummaryForHuman),
-      actors: actors.map(actorSummaryForHuman),
-      attachments,
-      sourceIntakes: sourceIntakes.map(({ intake, attachments: sourceAttachments }) => ({
-        intake: intakeSummaryForHuman(intake),
-        attachments: sourceAttachments,
-      })),
-    };
+    const principal = await requireHumanProject(ctx, work.projectId, {
+      allowArchived: true,
+    });
+    return await workDetailForHuman(ctx, work, principal.project!);
   },
 });
 
@@ -376,7 +430,9 @@ export const listCompletedForHuman = query({
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    await requireHumanProject(ctx, args.projectId, { allowArchived: true });
+    const principal = await requireHumanProject(ctx, args.projectId, {
+      allowArchived: true,
+    });
     const page = await ctx.db
       .query("workItems")
       .withIndex("by_project_state_updated", (q) =>
@@ -384,7 +440,130 @@ export const listCompletedForHuman = query({
       )
       .order("desc")
       .paginate(args.paginationOpts);
-    return { ...page, page: page.page.map(workSummaryForHuman) };
+    return {
+      ...page,
+      page: page.page.map((work) =>
+        workSummaryForHuman(work, principal.project!),
+      ),
+    };
+  },
+});
+
+export const getByIdentifierForHuman = query({
+  args: { projectId: v.id("projects"), identifier: v.string() },
+  handler: async (ctx, args) => {
+    const principal = await requireHumanProject(ctx, args.projectId, {
+      allowArchived: true,
+    });
+    const identifier = requireString(args.identifier, "identifier", 80);
+    const work = await workByIdentifier(ctx, principal.project!, identifier);
+    if (!work) fail("not_found", "Work item not found");
+    return await workDetailForHuman(ctx, work, principal.project!);
+  },
+});
+
+export const concurrencyForHuman = query({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    const principal = await requireHumanProject(ctx, args.projectId, {
+      allowArchived: true,
+    });
+    const project = principal.project!;
+    const serverTime = Date.now();
+    const [running, waiting] = await Promise.all(
+      (["running", "waiting"] as const).map((status) =>
+        ctx.db
+          .query("runs")
+          .withIndex("by_project_status", (q) =>
+            q.eq("projectId", project._id).eq("status", status),
+          )
+          .order("desc")
+          .take(100),
+      ),
+    );
+    const runs = await Promise.all(
+      [...running, ...waiting]
+        .sort((left, right) => right.startedAt - left.startedAt)
+        .slice(0, 100)
+        .map(async (run) => {
+          const [work, actor] = await Promise.all([
+            ctx.db.get(run.workItemId),
+            ctx.db.get(run.actorId),
+          ]);
+          if (!work || !actor) return null;
+          if (run.status === "waiting") {
+            const [openAttention, seenAttention] = await Promise.all(
+              (["open", "seen"] as const).map((status) =>
+                ctx.db
+                  .query("attentionRequests")
+                  .withIndex("by_work_status", (q) =>
+                    q.eq("workItemId", work._id).eq("status", status),
+                  )
+                  .filter((q) => q.eq(q.field("runId"), run._id))
+                  .first(),
+              ),
+            );
+            if (!openAttention && !seenAttention) return null;
+          }
+          const claimExpiresAt =
+            work.claimedRunId === run._id ? work.claimExpiresAt : undefined;
+          const leaseStatus = run.status === "waiting" || claimExpiresAt === undefined
+            ? "released" as const
+            : claimExpiresAt <= serverTime
+              ? "expired" as const
+              : claimExpiresAt - serverTime <= 5 * 60_000
+                ? "expiring" as const
+                : "healthy" as const;
+          return {
+            id: run._id,
+            workItem: {
+              id: work._id,
+              identifier: workSummaryForHuman(work, project).identifier,
+              title: work.title,
+            },
+            actor: await actorSummaryForHumanWithInstallation(ctx, actor),
+            state: run.status,
+            startedAt: run.startedAt,
+            lastHeartbeatAt: run.lastHeartbeatAt,
+            elapsedMilliseconds: Math.max(0, serverTime - run.startedAt),
+            latestProgress: run.summary,
+            lease: {
+              status: leaseStatus,
+              expiresAt: claimExpiresAt,
+            },
+            hostCapabilities: {
+              parallelExecution: capabilityState(
+                run.parallelExecutionCapability,
+              ),
+              worktreeIsolation: capabilityState(
+                run.worktreeIsolationCapability,
+              ),
+            },
+            workspace: {
+              kind: run.workspaceKind ?? "undisclosed" as const,
+              worktreeName: run.worktreeName,
+              branch: run.branch,
+            },
+          };
+        }),
+    );
+    const visibleRuns = runs.filter((run) => run !== null);
+    const activeRuns = visibleRuns.filter(
+      (run) =>
+        run.state === "running" &&
+        (run.lease.status === "healthy" || run.lease.status === "expiring"),
+    ).length;
+    const policy = parallelExecutionPolicy(project);
+    return {
+      policy,
+      capacity: {
+        activeRuns,
+        maxConcurrentRuns: policy.maxConcurrentRuns,
+        remaining: Math.max(0, policy.maxConcurrentRuns - activeRuns),
+      },
+      runs: visibleRuns,
+      serverTime,
+    };
   },
 });
 
@@ -412,14 +591,7 @@ export const getByIdentifierForAgent = internalQuery({
       "dongo:work:read",
     );
     const identifier = requireString(args.identifier, "identifier", 80);
-    const work = await ctx.db
-      .query("workItems")
-      .withIndex("by_project_identifier", (q) =>
-        q
-          .eq("projectId", principal.project._id)
-          .eq("identifier", identifier),
-      )
-      .unique();
+    const work = await workByIdentifier(ctx, principal.project, identifier);
     if (!work) fail("not_found", "Work item not found");
     return await workDetail(ctx, work);
   },
@@ -432,6 +604,7 @@ export const start = internalMutation({
     expectedRevision: v.number(),
     resumeRunId: v.optional(v.id("runs")),
     leaseSeconds: v.optional(v.number()),
+    workspace: v.optional(workspaceValidator),
     idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
@@ -449,6 +622,7 @@ export const start = internalMutation({
       work.claimedRunId && !isLeaseActive(work.claimExpiresAt, now),
     );
     work = await expireStaleWorkClaim(ctx, work, now);
+    const workspace = normalizeWorkspace(args.workspace);
     return await runIdempotent(
       ctx,
       {
@@ -463,6 +637,7 @@ export const start = internalMutation({
           resumeRunId: args.resumeRunId,
           externalSessionId: args.authorization.externalSessionId,
           leaseSeconds: args.leaseSeconds,
+          workspace,
         },
         now,
       },
@@ -497,6 +672,126 @@ export const start = internalMutation({
             claimExpiresAt: work.claimExpiresAt ?? null,
           });
         }
+        const runningRuns = await ctx.db
+          .query("runs")
+          .withIndex("by_project_status", (q) =>
+            q.eq("projectId", work.projectId).eq("status", "running"),
+          )
+          .take(100);
+        const activeRuns: Array<Doc<"runs">> = [];
+        for (const candidate of runningRuns) {
+          const candidateWork = await ctx.db.get(candidate.workItemId);
+          if (
+            !candidateWork ||
+            candidateWork.claimedRunId !== candidate._id ||
+            !isLeaseActive(candidateWork.claimExpiresAt, now)
+          ) {
+            if (
+              candidateWork?.claimedRunId === candidate._id &&
+              !isLeaseActive(candidateWork.claimExpiresAt, now)
+            ) {
+              await expireStaleWorkClaim(ctx, candidateWork, now);
+            }
+            continue;
+          }
+          activeRuns.push(candidate);
+        }
+        const externalSessionId = args.authorization.externalSessionId;
+        if (!externalSessionId) fail("validation", "externalSessionId is required");
+        const sameSessionRun = activeRuns.find(
+          (candidate) =>
+            candidate.installationId === principal.installation._id &&
+            candidate.externalSessionId === externalSessionId,
+        );
+        if (sameSessionRun) {
+          fail(
+            "session_work_limit",
+            "This agent session already has active work",
+            {
+              activeWorkItemId: sameSessionRun.workItemId,
+              retryable: false,
+            },
+          );
+        }
+        const policy = parallelExecutionPolicy(principal.project);
+        const session = await ctx.db
+          .query("agentSessions")
+          .withIndex("by_installation_session", (q) =>
+            q
+              .eq("installationId", principal.installation._id)
+              .eq("externalSessionId", externalSessionId),
+          )
+          .unique();
+        const hostCapabilities = {
+          parallelExecution: capabilityState(
+            session?.parallelExecutionCapability,
+          ),
+          worktreeIsolation: capabilityState(
+            session?.worktreeIsolationCapability,
+          ),
+        };
+        if (activeRuns.length > 0) {
+          if (!policy.enabled) {
+            fail(
+              "parallel_execution_unavailable",
+              "Parallel work is disabled for this project",
+              {
+                reason: "project_disabled",
+                retryable: false,
+              },
+            );
+          }
+          const unsafeExistingRun = activeRuns.find(
+            (candidate) =>
+              candidate.parallelExecutionCapability !== "supported" ||
+              candidate.worktreeIsolationCapability !== "supported" ||
+              candidate.workspaceKind !== "worktree",
+          );
+          if (unsafeExistingRun) {
+            fail(
+              "parallel_execution_unavailable",
+              "Existing active work is not isolated for safe parallel execution",
+              {
+                reason: "existing_run_not_isolated",
+                retryable: false,
+              },
+            );
+          }
+          if (activeRuns.length >= policy.maxConcurrentRuns) {
+            fail(
+              "concurrency_limit",
+              "This project has reached its configured concurrent Run limit",
+              {
+                activeRuns: activeRuns.length,
+                maxConcurrentRuns: policy.maxConcurrentRuns,
+                retryable: false,
+              },
+            );
+          }
+          const unsupported = Object.values(hostCapabilities).includes("unsupported");
+          const undisclosed = Object.values(hostCapabilities).includes("undisclosed");
+          if (unsupported || undisclosed || workspace.kind !== "worktree") {
+            fail(
+              "parallel_execution_unavailable",
+              unsupported
+                ? "This host reports that isolated parallel work is unsupported"
+                : undisclosed
+                  ? "This host has not disclosed isolated parallel-work support"
+                  : "Parallel work requires a separate worktree",
+              {
+                reason: unsupported
+                  ? "host_unsupported"
+                  : undisclosed
+                    ? "host_undisclosed"
+                    : "isolated_workspace_required",
+                parallelExecutionCapability: hostCapabilities.parallelExecution,
+                worktreeIsolationCapability: hostCapabilities.worktreeIsolation,
+                workspaceKind: workspace.kind,
+                retryable: false,
+              },
+            );
+          }
+        }
         let runId: Id<"runs">;
         if (args.resumeRunId) {
           const run = await ctx.db.get(args.resumeRunId);
@@ -514,6 +809,11 @@ export const start = internalMutation({
             externalSessionId:
               args.authorization.externalSessionId ?? run.externalSessionId,
             lastHeartbeatAt: now,
+            parallelExecutionCapability: session?.parallelExecutionCapability,
+            worktreeIsolationCapability: session?.worktreeIsolationCapability,
+            workspaceKind: workspace.kind,
+            worktreeName: workspace.worktreeName,
+            branch: workspace.branch,
           });
         } else {
           runId = await ctx.db.insert("runs", {
@@ -524,6 +824,11 @@ export const start = internalMutation({
             installationId: principal.installation._id,
             status: "running",
             externalSessionId: args.authorization.externalSessionId,
+            parallelExecutionCapability: session?.parallelExecutionCapability,
+            worktreeIsolationCapability: session?.worktreeIsolationCapability,
+            workspaceKind: workspace.kind,
+            worktreeName: workspace.worktreeName,
+            branch: workspace.branch,
             startedAt: now,
             lastHeartbeatAt: now,
           });
@@ -545,7 +850,12 @@ export const start = internalMutation({
           runId,
           actorId: principal.actor._id,
           type: args.resumeRunId ? "run.resumed" : "run.started",
-          data: { claimExpiresAt: lease.claimExpiresAt },
+          data: {
+            claimExpiresAt: lease.claimExpiresAt,
+            workspaceKind: workspace.kind,
+            worktreeName: workspace.worktreeName ?? null,
+            branch: workspace.branch ?? null,
+          },
           requestId: principal.requestId,
           createdAt: now,
         });

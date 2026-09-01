@@ -63,7 +63,11 @@ export const createForHuman = mutation({
             if (attachment.status !== "available") {
               fail("upload_incomplete", "Comment attachment is not available");
             }
-            if (attachment.intakeId !== undefined || attachment.workItemId !== undefined) {
+            if (
+              attachment.ideaId !== undefined ||
+              attachment.intakeId !== undefined ||
+              attachment.workItemId !== undefined
+            ) {
               fail("invalid_transition", "Attachment is already in use");
             }
             return attachment;

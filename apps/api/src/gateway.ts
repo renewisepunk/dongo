@@ -92,7 +92,12 @@ function operationStatus(result: OperationExecutionResult): number {
       return 404;
     case "revision_conflict":
     case "claim_conflict":
+    case "parallel_execution_unavailable":
+    case "concurrency_limit":
+    case "session_work_limit":
     case "idempotency_conflict":
+    case "identifier_conflict":
+    case "identifier_exhausted":
       return 409;
     case "lease_expired":
       return 410;
@@ -373,6 +378,15 @@ export function createDongoApiGateway(
           resource.toString(),
         );
       }
+      const updateWaitSeconds = operation === "get_updates"
+        ? Math.max(
+            0,
+            Math.min(20, Number(url.searchParams.get("waitSeconds") ?? 0) || 0),
+          )
+        : 0;
+      const effectiveOperationTimeoutMs = operation === "get_updates"
+        ? Math.max(operationTimeoutMs, updateWaitSeconds * 1_000 + 10_000)
+        : operationTimeoutMs;
       const controller = new AbortController();
       let timedOut = false;
       const relayAbort = (): void => controller.abort(request.signal.reason);
@@ -381,7 +395,7 @@ export function createDongoApiGateway(
       const timeout = setTimeout(() => {
         timedOut = true;
         controller.abort(new Error("API operation timed out"));
-      }, operationTimeoutMs);
+      }, effectiveOperationTimeoutMs);
       try {
         const token = bearerToken(request);
         const principal = await options.tokenVerifier.verifyAccessToken(

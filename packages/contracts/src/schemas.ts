@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const workLinkSchema = z.url({ protocol: /^https?$/ });
+
 const identifier = z.string().min(1).max(256);
 const timestamp = z.number().int().nonnegative();
 const boundedText = z.string().max(100_000);
@@ -10,6 +12,8 @@ export const actorSummarySchema = z
     kind: z.enum(["human", "installation", "service"]),
     displayName: z.string().min(1).max(240),
     agentType: z.string().min(1).max(120).optional(),
+    transport: z.enum(["cli", "mcp", "service", "development"]).optional(),
+    transportLabel: z.string().min(1).max(240).optional(),
     machineLabel: z.string().min(1).max(240).optional(),
   })
   .strict();
@@ -23,8 +27,14 @@ export const projectSummarySchema = z
     name: z.string().min(1).max(240),
     slug: z.string().min(1).max(128),
     identifierPrefix: z.string().min(1).max(16),
+    compactIdentifierPrefix: z.string().regex(/^[a-z]{4}$/u).optional(),
     repositoryUrl: z.url().optional(),
     executionMode: z.enum(["manual", "autonomous"]),
+    parallelExecution: z.object({
+      enabled: z.boolean(),
+      maxConcurrentRuns: z.number().int().min(1).max(8),
+      requiresIsolatedWorkspaces: z.literal(true),
+    }).strict().optional(),
     archivedAt: timestamp.optional(),
   })
   .strict();
@@ -45,6 +55,8 @@ export const intakeSchema = z
     id: identifier,
     projectId: identifier,
     text: boundedText,
+    context: boundedText.optional(),
+    links: z.array(workLinkSchema).max(100).optional(),
     state: z.enum([
       "waiting",
       "claimed",
@@ -131,6 +143,15 @@ export const runSchema = z
       "failed",
       "abandoned",
     ]),
+    hostCapabilities: z.object({
+      parallelExecution: z.enum(["supported", "unsupported", "undisclosed"]),
+      worktreeIsolation: z.enum(["supported", "unsupported", "undisclosed"]),
+    }).strict().optional(),
+    workspace: z.object({
+      kind: z.enum(["worktree", "shared_checkout", "undisclosed"]),
+      worktreeName: z.string().min(1).max(240).optional(),
+      branch: z.string().min(1).max(240).optional(),
+    }).strict().optional(),
     latestUpdate: boundedText.optional(),
     startedAt: timestamp,
     activeUntil: timestamp.optional(),
@@ -143,9 +164,12 @@ export const workItemSchema = z
     id: identifier,
     projectId: identifier,
     identifier: z.string().min(1).max(64),
+    legacyIdentifiers: z.array(z.string().min(1).max(64)).max(4).optional(),
     sequence: z.number().int().positive(),
     title: z.string().min(1).max(500),
     goal: boundedText,
+    context: boundedText.optional(),
+    links: z.array(workLinkSchema).max(100).optional(),
     outcome: boundedText.optional(),
     state: z.enum(["ready", "working", "done", "cancelled"]),
     orderKey: z.string().min(1).max(128),
@@ -173,6 +197,35 @@ export const overviewSchema = z
   })
   .strict();
 
+export const projectUpdateSchema = z
+  .object({
+    id: identifier,
+    version: z.number().int().positive(),
+    kind: z.literal("intake_available"),
+    intakeId: identifier,
+    priority: z.enum(["normal", "important"]),
+    createdAt: timestamp,
+  })
+  .strict();
+
+export const projectUpdatesSchema = z
+  .object({
+    cursor: z.number().int().nonnegative(),
+    updates: z.array(projectUpdateSchema).max(100),
+    hasMore: z.boolean(),
+    wait: z.object({
+      status: z.enum(["updates_available", "timed_out", "not_requested"]),
+      requestedSeconds: z.number().int().min(0).max(20),
+      elapsedMilliseconds: z.number().int().nonnegative(),
+    }).strict(),
+    delivery: z.object({
+      mechanism: z.literal("bounded_pull"),
+      stoppedAgentsRestarted: z.literal(false),
+    }).strict(),
+    serverTime: timestamp,
+  })
+  .strict();
+
 export const sessionStartSchema = z
   .object({
     project: projectSummarySchema,
@@ -182,8 +235,24 @@ export const sessionStartSchema = z
     instructions: z
       .object({
         executionMode: z.enum(["manual", "autonomous"]),
-        maxNewWorkItemsPerSession: z.literal(1),
+        maxStartedWorkItemsPerSession: z
+          .literal(1)
+          .describe("Maximum Ready work items an autonomous session may start."),
+        maxNewWorkItemsPerSession: z
+          .literal(1)
+          .describe("Deprecated compatibility alias; this never limited WorkItem creation."),
         wakeUpSemantics: z.literal("next_pull"),
+        parallelExecution: z.object({
+          policy: projectSummarySchema.shape.parallelExecution.unwrap(),
+          hostCapabilities: runSchema.shape.hostCapabilities.unwrap(),
+          mode: z.enum(["serial", "parallel"]),
+          reason: z.enum([
+            "project_disabled",
+            "host_unsupported",
+            "host_undisclosed",
+            "parallel_available",
+          ]),
+        }).strict().optional(),
       })
       .strict(),
   })

@@ -12,7 +12,7 @@ import type {
 } from "@dongo/contracts";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
-import { internalQuery } from "../_generated/server";
+import { internalMutation, internalQuery } from "../_generated/server";
 import {
   agentContextValidator,
 } from "../lib/validators";
@@ -22,6 +22,18 @@ import {
 } from "../lib/authz";
 import { fail } from "../lib/errors";
 import { buildOverview } from "../domains/overview/index";
+import { normalizedActorIdentity } from "../domains/human/summary";
+import {
+  compactIdentifierPrefix,
+  displayWorkIdentifier,
+  legacyWorkIdentifiers,
+  workByIdentifier,
+} from "../domains/work/identifiers";
+import {
+  capabilityState,
+  hostCapabilitiesValidator,
+  parallelExecutionPolicy,
+} from "../domains/work/concurrency";
 
 function id<T extends string>(value: string): string & { readonly __table: T } {
   return value as string & { readonly __table: T };
@@ -43,6 +55,7 @@ async function actorSummary(
   const installation = actor.installationId
     ? await ctx.db.get(actor.installationId)
     : null;
+  const identity = normalizedActorIdentity(actor, installation);
   return {
     id: id<"actors">(actor._id),
     kind:
@@ -51,9 +64,11 @@ async function actorSummary(
         : installation?.kind === "service"
           ? "service"
           : "installation",
-    displayName: actor.name,
-    agentType: actor.agentType,
-    machineLabel: installation?.machineLabel,
+    displayName: identity.displayName,
+    agentType: identity.agentType,
+    transport: identity.transport,
+    transportLabel: identity.transportLabel,
+    machineLabel: identity.machineLabel,
   };
 }
 
@@ -80,8 +95,10 @@ async function projectSummary(
     name: project.name,
     slug: project.slug,
     identifierPrefix: project.identifierPrefix,
+    compactIdentifierPrefix: compactIdentifierPrefix(project),
     repositoryUrl: validUrl(project.repositoryUrl),
     executionMode: project.executionMode,
+    parallelExecution: parallelExecutionPolicy(project),
     archivedAt: project.archivedAt,
   };
 }
@@ -145,6 +162,8 @@ async function intakeDto(
     id: id<"intakes">(intake._id),
     projectId: id<"projects">(intake.projectId),
     text: intake.text ?? "",
+    context: intake.context,
+    links: intake.links,
     state:
       intake.status === "new" || (intake.status === "claimed" && !claimActive)
         ? "waiting"
@@ -153,9 +172,9 @@ async function intakeDto(
     createdBy: await actorSummaryById(ctx, intake.createdByActorId),
     claimedBy: claimActive ? claimedBy : undefined,
     claimExpiresAt: claimActive ? intake.claimExpiresAt : undefined,
-    attachmentIds: attachments.map((attachment) =>
-      id<"attachments">(attachment._id),
-    ),
+    attachmentIds: attachments
+      .filter((attachment) => attachment.status === "available")
+      .map((attachment) => id<"attachments">(attachment._id)),
     linkedWorkItemIds: links.map((link) => id<"workItems">(link.workItemId)),
     createdAt: intake.createdAt,
     updatedAt: intake.updatedAt,
@@ -181,6 +200,15 @@ async function runDto(
     installationActor: await actorSummaryById(ctx, run.actorId),
     externalSessionId: run.externalSessionId || `run-${run._id}`,
     state: runState(run),
+    hostCapabilities: {
+      parallelExecution: capabilityState(run.parallelExecutionCapability),
+      worktreeIsolation: capabilityState(run.worktreeIsolationCapability),
+    },
+    workspace: {
+      kind: run.workspaceKind ?? "undisclosed",
+      worktreeName: run.worktreeName,
+      branch: run.branch,
+    },
     latestUpdate: run.summary,
     startedAt: run.startedAt,
     activeUntil:
@@ -195,8 +223,9 @@ async function workDto(
   ctx: QueryCtx,
   work: Doc<"workItems">,
 ): Promise<WorkItem> {
-  const [links, artifacts, comments, openRequests, seenRequests, runs] =
+  const [project, links, artifacts, comments, openRequests, seenRequests, runs] =
     await Promise.all([
+      ctx.db.get(work.projectId),
       ctx.db
         .query("intakeWorkLinks")
         .withIndex("by_work", (q) => q.eq("workItemId", work._id))
@@ -231,6 +260,7 @@ async function workDto(
         .order("desc")
         .take(25),
     ]);
+  if (!project) fail("internal", "Work project mapping is missing");
   const claimActive =
     work.claimedRunId !== undefined &&
     work.claimExpiresAt !== undefined &&
@@ -253,10 +283,13 @@ async function workDto(
   return {
     id: id<"workItems">(work._id),
     projectId: id<"projects">(work.projectId),
-    identifier: work.identifier,
+    identifier: displayWorkIdentifier(project, work),
+    legacyIdentifiers: legacyWorkIdentifiers(project, work),
     sequence: work.number,
     title: work.title,
     goal: work.description ?? "",
+    context: work.context,
+    links: work.links,
     outcome: terminalRun?.summary,
     state: work.state === "working" && !claimActive ? "ready" : work.state,
     orderKey: String(work.rank),
@@ -339,14 +372,7 @@ export const getWorkByIdentifier = internalQuery({
       args.authorization,
       "dongo:work:read",
     );
-    const work = await ctx.db
-      .query("workItems")
-      .withIndex("by_project_identifier", (q) =>
-        q
-          .eq("projectId", principal.project._id)
-          .eq("identifier", args.identifier),
-      )
-      .unique();
+    const work = await workByIdentifier(ctx, principal.project, args.identifier);
     if (!work) fail("not_found", "Work item not found");
     return await workDto(ctx, work);
   },
@@ -519,14 +545,51 @@ export const getOverview = internalQuery({
   },
 });
 
-export const sessionStart = internalQuery({
-  args: { authorization: agentContextValidator },
+export const sessionStart = internalMutation({
+  args: {
+    authorization: agentContextValidator,
+    hostCapabilities: v.optional(hostCapabilitiesValidator),
+  },
   handler: async (ctx, args): Promise<SessionStart> => {
     const principal = await resolveAgentPrincipal(
       ctx,
       args.authorization,
       "dongo:work:read",
     );
+    const verifiedAt = Date.now();
+    await ctx.db.patch(principal.installation._id, {
+      lastUsedAt: verifiedAt,
+      updatedAt: verifiedAt,
+    });
+    await ctx.db.patch(principal.actor._id, { lastSeenAt: verifiedAt });
+    const externalSessionId = args.authorization.externalSessionId;
+    if (!externalSessionId) fail("validation", "externalSessionId is required");
+    const existingSession = await ctx.db
+      .query("agentSessions")
+      .withIndex("by_installation_session", (q) =>
+        q
+          .eq("installationId", principal.installation._id)
+          .eq("externalSessionId", externalSessionId),
+      )
+      .unique();
+    const sessionFields = {
+      parallelExecutionCapability: args.hostCapabilities?.parallelExecution,
+      worktreeIsolationCapability: args.hostCapabilities?.worktreeIsolation,
+      updatedAt: verifiedAt,
+    };
+    if (existingSession) {
+      await ctx.db.patch(existingSession._id, sessionFields);
+    } else {
+      await ctx.db.insert("agentSessions", {
+        organizationId: principal.project.organizationId,
+        projectId: principal.project._id,
+        installationId: principal.installation._id,
+        actorId: principal.actor._id,
+        externalSessionId,
+        ...sessionFields,
+        createdAt: verifiedAt,
+      });
+    }
     const cursor = await ctx.db
       .query("agentSyncCursors")
       .withIndex("by_installation", (q) =>
@@ -542,6 +605,18 @@ export const sessionStart = internalQuery({
       )
       .order("asc")
       .take(100);
+    const policy = parallelExecutionPolicy(principal.project);
+    const hostCapabilities = {
+      parallelExecution: capabilityState(args.hostCapabilities?.parallelExecution),
+      worktreeIsolation: capabilityState(args.hostCapabilities?.worktreeIsolation),
+    };
+    const reason = !policy.enabled
+      ? "project_disabled" as const
+      : Object.values(hostCapabilities).includes("unsupported")
+        ? "host_unsupported" as const
+        : Object.values(hostCapabilities).includes("undisclosed")
+          ? "host_undisclosed" as const
+          : "parallel_available" as const;
     return {
       project: await projectSummary(ctx, principal.project),
       installation: await actorSummary(ctx, principal.actor),
@@ -551,8 +626,15 @@ export const sessionStart = internalQuery({
       ),
       instructions: {
         executionMode: principal.project.executionMode,
+        maxStartedWorkItemsPerSession: 1,
         maxNewWorkItemsPerSession: 1,
         wakeUpSemantics: "next_pull",
+        parallelExecution: {
+          policy,
+          hostCapabilities,
+          mode: reason === "parallel_available" ? "parallel" : "serial",
+          reason,
+        },
       },
     };
   },

@@ -370,14 +370,79 @@ async function dispatchAgentOperation(
         wireContext,
         stringField(input, "externalSessionId"),
       );
-      return await ctx.runQuery(internal.gateway.readModels.sessionStart, {
+      return await ctx.runMutation(internal.gateway.readModels.sessionStart, {
         authorization: auth,
+        hostCapabilities: input.hostCapabilities as
+          | {
+              parallelExecution: "supported" | "unsupported";
+              worktreeIsolation: "supported" | "unsupported";
+            }
+          | undefined,
       });
     }
     case "get_overview":
       return await ctx.runQuery(internal.gateway.readModels.getOverview, {
         authorization: baseAuthorization,
       });
+    case "get_updates": {
+      const waitSeconds = (input.waitSeconds as number | undefined) ?? 0;
+      const started = await ctx.runMutation(
+        internal.domains.agentUpdates.index.beginPull,
+        { authorization: baseAuthorization, waitSeconds },
+      );
+      let cursor = input.cursor as number | undefined;
+      let intervalMilliseconds = 1_000;
+      let result:
+        | {
+            cursor: number;
+            updates: unknown[];
+            hasMore: boolean;
+            serverTime: number;
+          }
+        | undefined;
+      try {
+        while (true) {
+          result = await ctx.runQuery(internal.domains.agentUpdates.index.read, {
+            authorization: baseAuthorization,
+            cursor,
+          });
+          cursor = result.cursor;
+          if (result.updates.length > 0 || result.hasMore || waitSeconds === 0) {
+            break;
+          }
+          const elapsed = Date.now() - started.startedAt;
+          const remaining = waitSeconds * 1_000 - elapsed;
+          if (remaining <= 0) break;
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.min(intervalMilliseconds, remaining)),
+          );
+          intervalMilliseconds = Math.min(intervalMilliseconds * 2, 5_000);
+        }
+      } finally {
+        await ctx.runMutation(internal.domains.agentUpdates.index.finishPull, {
+          authorization: baseAuthorization,
+        });
+      }
+      if (!result) throw new Error("Project updates were unavailable");
+      const elapsedMilliseconds = Math.max(0, Date.now() - started.startedAt);
+      return {
+        ...result,
+        wait: {
+          status: result.updates.length > 0 || result.hasMore
+            ? "updates_available"
+            : waitSeconds > 0
+              ? "timed_out"
+              : "not_requested",
+          requestedSeconds: waitSeconds,
+          elapsedMilliseconds,
+        },
+        delivery: {
+          mechanism: "bounded_pull",
+          stoppedAgentsRestarted: false,
+        },
+        serverTime: Date.now(),
+      };
+    }
     case "get_intake":
       return await intakeResult(
         ctx,
@@ -429,6 +494,9 @@ async function dispatchAgentOperation(
           authorization: baseAuthorization,
           title: stringField(input, "title"),
           description: stringField(input, "goal"),
+          context: optionalStringField(input, "context"),
+          links: input.links as string[] | undefined,
+          initialComment: optionalStringField(input, "initialComment"),
           kind: "task",
           parentId: optionalStringField(input, "parentWorkItemId") as
             | Id<"workItems">
@@ -476,6 +544,13 @@ async function dispatchAgentOperation(
         workItemId,
         expectedRevision: numberField(input, "expectedRevision"),
         leaseSeconds: input.leaseSeconds as number | undefined,
+        workspace: input.workspace as
+          | {
+              kind: "worktree" | "shared_checkout" | "undisclosed";
+              worktreeName?: string;
+              branch?: string;
+            }
+          | undefined,
         idempotencyKey: stringField(input, "idempotencyKey"),
       });
       return await workResult(ctx, auth, workItemId);
@@ -820,7 +895,13 @@ function normalizeError(error: unknown): GatewayError {
               : [
                     "revision_conflict",
                     "claim_conflict",
+                    "parallel_execution_unavailable",
+                    "concurrency_limit",
+                    "session_work_limit",
                     "idempotency_conflict",
+                    "already_resolved",
+                    "identifier_conflict",
+                    "identifier_exhausted",
                   ].includes(code)
                 ? 409
                 : code === "quota_exceeded"

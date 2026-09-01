@@ -14,6 +14,69 @@ The terminal opens one `verification_uri_complete` link, displays a comparison c
 
 For SSH/headless use, add `--no-browser` and open the printed complete link on a trusted browser. Never send the code or link to another person and never substitute a copied bearer token.
 
+### Separate account, repository, and host state
+
+- The browser account session identifies the human. Reuse it while it remains
+  valid; do not require logout or another email/Google login merely because a
+  different repository is being connected.
+- The repository binding maps the current checkout to one project and one
+  project-scoped CLI installation. A healthy binding in another repository does
+  not bind this one.
+- Codex, Claude Code, and generic MCP connections are optional, project-scoped
+  host installations. Each has its own approval and credential; none replaces
+  the repository binding or reuses its CLI credential.
+
+For an unbound additional repository, run `dongo connect` from that repository
+and let the approval page reuse the existing account session. Do not run
+`dongo auth logout` or delete another repository's healthy credential first.
+Use `--project-ref REF` only when trusted repository context or an explicit human
+decision confirms that the new checkout belongs to that exact existing project.
+
+### Free-plan active-project limit
+
+The free plan permits one active project. If another project cannot be created
+because the allowance is full, treat the response as an entitlement decision,
+not an authentication error. Keep the account session and existing repository
+connections intact, stop automatic retries, and present these recoveries:
+
+1. Upgrade the organization when the product offers an upgrade path, then retry
+   `dongo connect` from the additional repository.
+2. Archive a specifically chosen active project that no longer needs to remain
+   active, then retry. Never archive automatically.
+3. Use `dongo connect --project-ref REF` only when this repository is genuinely
+   another checkout or worktree of that existing project.
+
+If upgrade is not currently available and neither archive nor use-existing is
+appropriate, report the project limit as the blocker. Do not restart login,
+revoke grants, weaken authorization checks, or bind an unrelated repository to
+the existing project to bypass the limit.
+
+### Parallel host capability and workspace reporting
+
+Parallel execution is not an authentication scope or paid-plan upgrade. Every
+project defaults to Single-agent. An owner may separately enable parallel work
+and configure a 2–8 concurrent-Run safety cap, default 4. Do not diagnose a
+parallel start rejection as OAuth, installation, or active-project-limit
+failure.
+
+At session start, report `parallelExecution` and `worktreeIsolation` as
+`supported` only when the current host can actually create separate agent
+sessions and isolated Git worktrees for them. Report `unsupported` when the
+host is known not to support the capability; otherwise omit the declaration and
+let dongo expose it as `undisclosed`. Client name or MCP connectivity is not
+proof of either capability.
+
+When starting Work, report `workspace.kind` truthfully as `worktree`,
+`shared_checkout`, or `undisclosed`. A worktree may include bounded
+`worktreeName` and `branch` labels, but never an absolute path. dongo stores
+these values for Run safety and visualization; it does not create or inspect the
+workspace. Unsupported and undisclosed hosts remain valid serial clients.
+
+If a start returns `parallel_execution_unavailable`, `concurrency_limit`, or
+`session_work_limit`, refetch project/Run state and follow the returned policy.
+Never bypass the rejection by inventing capability metadata, changing the
+session ID, reusing a claim, restarting login, or binding another project.
+
 ### Pending, slow, denied, or expired
 
 - `authorization_pending` is normal; leave the process running.
@@ -36,6 +99,10 @@ dongo connect
 ```
 
 Logout revokes server access before local deletion. If revocation fails, local material is intentionally retained so logout can be retried.
+
+Use this logout recovery only for the current repository's broken credential or
+marker. Do not use it for an unbound additional repository or an active-project
+plan limit.
 
 ## Revoked, expired, or replayed tokens
 

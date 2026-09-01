@@ -8,13 +8,19 @@ import {
   bridgeAuthorizationSession,
   createFirstProject,
   decideDeviceRequest,
+  getProjectCreationContext,
   getDeviceRequest,
   listAuthorizableProjects,
   selectAuthorizationProject,
   type AuthorizableProject,
   type DeviceRequest,
+  type ProjectCreationContext,
 } from "../../lib/authorization-client";
 import { formatUserCode, loginHref, normalizeUserCode } from "../../lib/auth-flow";
+import {
+  DEFAULT_PARALLEL_RUN_LIMIT,
+  parallelExecutionPolicy,
+} from "../../lib/parallel-execution";
 import { slugify } from "../../lib/slug";
 
 type ApprovalState = "entry" | "loading" | "review" | "approved" | "denied" | "error";
@@ -92,6 +98,7 @@ export type DeviceAuthorizationRouteDependencies = {
   bridgeAuthorizationSession: typeof bridgeAuthorizationSession;
   getDeviceRequest: typeof getDeviceRequest;
   listAuthorizableProjects: typeof listAuthorizableProjects;
+  getProjectCreationContext: typeof getProjectCreationContext;
   createFirstProject: typeof createFirstProject;
   selectAuthorizationProject: typeof selectAuthorizationProject;
   decideDeviceRequest: typeof decideDeviceRequest;
@@ -110,24 +117,46 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
     project_name?: string;
     repository_url?: string;
     execution_mode?: string;
+    project_action?: string;
   }>();
   const initialCode = normalizeUserCode(searchParams.user_code ?? "");
   const [userCode, setUserCode] = createSignal(initialCode);
   const [state, setState] = createSignal<ApprovalState>(initialCode ? "loading" : "entry");
   const [request, setRequest] = createSignal<DeviceRequest>();
   const [projects, setProjects] = createSignal<AuthorizableProject[]>([]);
+  const [creationContext, setCreationContext] = createSignal<ProjectCreationContext>();
+  const [selectedOrganizationId, setSelectedOrganizationId] = createSignal("");
   const [accountUser, setAccountUser] = createSignal<HumanUser>();
-  const [account, setAccount] = createSignal("");
   const [error, setError] = createSignal("");
+  const [serverPlanBlocked, setServerPlanBlocked] = createSignal(false);
+  const [allowParallelWork, setAllowParallelWork] = createSignal(false);
+  const [maxConcurrentRuns, setMaxConcurrentRuns] = createSignal(DEFAULT_PARALLEL_RUN_LIMIT);
   const loadHumanSession = props.dependencies?.humanSession ?? humanSession;
   const bridgeSession = props.dependencies?.bridgeAuthorizationSession ?? bridgeAuthorizationSession;
   const loadDeviceRequest = props.dependencies?.getDeviceRequest ?? getDeviceRequest;
   const loadProjects = props.dependencies?.listAuthorizableProjects ?? listAuthorizableProjects;
+  const loadProjectCreationContext = props.dependencies?.getProjectCreationContext ?? getProjectCreationContext;
   const provisionFirstProject = props.dependencies?.createFirstProject ?? createFirstProject;
   const chooseProject = props.dependencies?.selectAuthorizationProject ?? selectAuthorizationProject;
   const saveDecision = props.dependencies?.decideDeviceRequest ?? decideDeviceRequest;
   const currentReturnTo = () => `${location.pathname}${location.search}`;
-  const onboardingHref = () => `/onboarding?returnTo=${encodeURIComponent(currentReturnTo())}`;
+  const createIntent = createMemo(() => searchParams.project_action === "create");
+  const selectedOrganization = createMemo(() => {
+    const organizations = creationContext()?.organizations ?? [];
+    return organizations.find((organization) => organization.id === selectedOrganizationId()) ?? organizations[0];
+  });
+  const creationTargetProject = createMemo(() => {
+    const organization = selectedOrganization();
+    return creationContext()?.projects.find(
+      (project) => project.organizationSlug === organization?.slug,
+    ) ?? creationContext()?.projects[0];
+  });
+  const onboardingHref = () => {
+    const params = new URLSearchParams({ returnTo: currentReturnTo() });
+    const organization = selectedOrganization();
+    if (organization) params.set("organization", organization.slug);
+    return `/onboarding?${params.toString()}`;
+  };
   const projectProposal = createMemo<FirstProjectProposal | undefined>(() => {
     const name = searchParams.project_name?.trim();
     if (!name || name.length > 120) return undefined;
@@ -159,14 +188,38 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
     }
     return { name, slug, repositoryUrl, executionMode };
   });
-  const projectResolution = createMemo(() => resolveAgentSelectedProject({
-    projects: projects(),
-    projectRef: searchParams.project_ref,
-    projectName: projectProposal()?.name,
-    repositoryUrl: projectProposal()?.repositoryUrl,
-  }));
+  const projectResolution = createMemo(() => createIntent()
+    ? {}
+    : resolveAgentSelectedProject({
+        projects: projects(),
+        projectRef: searchParams.project_ref,
+        projectName: projectProposal()?.name,
+        repositoryUrl: projectProposal()?.repositoryUrl,
+      }));
   const selectedProject = createMemo(() => projectResolution().project);
-  const canApprove = createMemo(() => Boolean(selectedProject() || (projects().length === 0 && projectProposal())));
+  const wantsProjectCreation = createMemo(() =>
+    createIntent() || projects().length === 0,
+  );
+  const canCreateProject = createMemo(() => {
+    if (serverPlanBlocked()) return false;
+    if (!projectProposal()) return false;
+    const context = creationContext();
+    if (!context) return false;
+    if (context.organizations.length === 0) return context.projects.length === 0;
+    return selectedOrganization()?.canCreate === true;
+  });
+  const projectLimitReached = createMemo(() =>
+    wantsProjectCreation() && (serverPlanBlocked() || selectedOrganization()?.canCreate === false),
+  );
+  const canApprove = createMemo(() => Boolean(
+    wantsProjectCreation() ? canCreateProject() : selectedProject(),
+  ));
+  const creationTargetHref = (suffix = "") => {
+    const project = creationTargetProject();
+    return project
+      ? `/app/${encodeURIComponent(project.organizationSlug)}/${encodeURIComponent(project.slug)}${suffix}`
+      : "/open";
+  };
 
   const load = async () => {
     const code = normalizeUserCode(userCode());
@@ -185,17 +238,19 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
         return;
       }
       setAccountUser(session.user);
-      setAccount(session.user.email || session.user.name || "dongo account");
       await bridgeSession(currentReturnTo());
-      const [deviceRequest, availableProjects] = await Promise.all([
+      const [deviceRequest, availableProjects, projectCreationContext] = await Promise.all([
         loadDeviceRequest(code),
         loadProjects(),
+        loadProjectCreationContext(),
       ]);
       if (deviceRequest.status !== "pending") {
         throw new AuthorizationFlowError("conflict", "This authorization request has already been completed.");
       }
       setRequest(deviceRequest);
       setProjects(availableProjects);
+      setCreationContext(projectCreationContext);
+      setSelectedOrganizationId(projectCreationContext.organizations[0]?.id ?? "");
       setState("review");
     } catch (cause) {
       if (cause instanceof AuthorizationFlowError && cause.code === "authentication_required") {
@@ -221,16 +276,21 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
     try {
       if (accept) {
         let approvedProject = selectedProject();
-        if (!approvedProject) {
+        if (wantsProjectCreation()) {
           const proposal = projectProposal();
           const user = accountUser();
           if (!proposal || !user) throw new AuthorizationFlowError("invalid", "The CLI project proposal is incomplete.");
           const created = await provisionFirstProject({
             user,
+            organizationId: selectedOrganization()?.id,
             name: proposal.name,
             slug: proposal.slug,
             repositoryUrl: proposal.repositoryUrl,
             executionMode: proposal.executionMode,
+            parallelExecution: parallelExecutionPolicy(
+              allowParallelWork(),
+              maxConcurrentRuns(),
+            ),
           });
           approvedProject = {
             publicRef: created.publicRef,
@@ -240,15 +300,23 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
             organizationSlug: created.organizationSlug,
             repositoryUrl: proposal.repositoryUrl,
           };
-          setProjects([approvedProject]);
+          setProjects([...projects(), approvedProject]);
         }
+        if (!approvedProject) throw new AuthorizationFlowError("invalid", "The project binding is incomplete.");
         await chooseProject(approvedProject.publicRef, currentReturnTo());
       }
       await saveDecision(userCode(), accept);
       setState(accept ? "approved" : "denied");
     } catch (cause) {
-      setError(cause instanceof AuthorizationFlowError ? cause.message : "The authorization decision could not be saved.");
-      setState("error");
+      const message = cause instanceof AuthorizationFlowError ? cause.message : "The authorization decision could not be saved.";
+      if (cause instanceof AuthorizationFlowError && /free plan/i.test(message)) {
+        setServerPlanBlocked(true);
+        setError(message);
+        setState("review");
+      } else {
+        setError(message);
+        setState("error");
+      }
     }
   };
 
@@ -287,10 +355,9 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
           </div>
           <div class="consent-summary">
             <div class="consent-summary__row"><span class="consent-summary__key">client</span><span class="consent-summary__value">{loaded().clientId === "dongo-cli" ? "dongo CLI · official client" : loaded().clientId}</span></div>
-            <div class="consent-summary__row"><span class="consent-summary__key">account</span><span class="consent-summary__value">{account()}</span></div>
             <div class="consent-summary__row">
               <Show
-                when={projects().length > 0}
+                when={!wantsProjectCreation() && projects().length > 0}
                 fallback={<><span class="consent-summary__key">project</span><span class="consent-summary__value">{projectProposal() ? `New: ${projectProposal()!.name}` : "No project yet"}</span></>}
               >
                 <span class="consent-summary__key">project</span>
@@ -301,50 +368,103 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
                 </span>
               </Show>
             </div>
-            <div class="consent-summary__row"><span class="consent-summary__key">resource</span><span class="consent-summary__value mono">{loaded().resources.join(", ") || "dongo agent API"}</span></div>
-            <div class="consent-summary__row"><span class="consent-summary__key">status</span><span class="consent-summary__value">{loaded().status}</span></div>
           </div>
           <div class="field-group">
             <div class="field-label">Requested access</div>
             <ul class="scope-list">
-              <Show when={projects().length === 0 && projectProposal()}>{(proposal) => (
-                <li>Create “{proposal().name}” as this account’s first project and bind this terminal to it.</li>
+              <Show when={wantsProjectCreation() && projectProposal()}>{(proposal) => (
+                <li>Create “{proposal().name}” as {projects().length === 0 ? "this account’s first project" : "another project"} and bind this terminal to it.</li>
               )}</Show>
               <For each={loaded().scopes}>{(scope) => <li>{scopeCopy[scope] || scope}</li>}</For>
             </ul>
           </div>
-          <Show when={projects().length === 0}>
+          <Show when={wantsProjectCreation()}>
             <div class="auth-stack" role="status">
               <Show
                 when={projectProposal()}
                 fallback={<>
-                  <p class="auth-lede">Create your first project to continue this terminal authorization.</p>
+                  <p class="auth-lede">A complete project proposal is required to continue this terminal authorization.</p>
                   <A class="button button--primary button--full" href={onboardingHref()}>Create project</A>
                 </>}
               >{(proposal) => <>
                 <div class="field-label">CLI project proposal</div>
                 <p class="auth-lede">
                   {proposal().name}
-                  {proposal().repositoryUrl ? <> · <span class="mono">{proposal().repositoryUrl}</span></> : null}
                   {` · ${proposal().executionMode} mode`}
                 </p>
-                <p class="note">To change these details, deny this request and rerun <span class="mono">dongo connect</span> with project options.</p>
+                <p class="note">This creates a new project; it will not reuse an existing repository binding. To change these details, deny this request and rerun <span class="mono">dongo project create</span> with project options.</p>
+                <div class="parallel-option" data-enabled={allowParallelWork()}>
+                  <div class="parallel-option__status" aria-live="polite">{allowParallelWork() ? "Parallel work enabled" : "Single-agent"}</div>
+                  <label class="parallel-option__toggle" for="device-parallel-work">
+                    <input
+                      id="device-parallel-work"
+                      type="checkbox"
+                      checked={allowParallelWork()}
+                      onChange={(event) => setAllowParallelWork(event.currentTarget.checked)}
+                    />
+                    <span>
+                      <strong>Allow parallel work</strong>
+                      <span>Agents may work on separate claimed items at the same time when their host supports isolated workspaces.</span>
+                    </span>
+                  </label>
+                  <Show when={allowParallelWork()}>
+                    <label class="parallel-option__limit" for="device-parallel-run-limit">
+                      <span>Maximum concurrent runs <small>Safety cap</small></span>
+                      <select
+                        class="input mono"
+                        id="device-parallel-run-limit"
+                        value={maxConcurrentRuns()}
+                        onChange={(event) => setMaxConcurrentRuns(Number(event.currentTarget.value))}
+                      >
+                        {[2, 3, 4, 5, 6, 7, 8].map((limit) => <option value={limit}>{limit}</option>)}
+                      </select>
+                    </label>
+                  </Show>
+                  <p class="security-note">dongo coordinates claims. Your agent host creates agents and isolated worktrees. Hosts that do not support or report isolation continue one item at a time.</p>
+                </div>
               </>}</Show>
+              <Show when={selectedOrganization()}>{(organization) => (
+                <div class="field-group">
+                  <label class="field-label" for="device-organization">Organization</label>
+                  <Show
+                    when={(creationContext()?.organizations.length ?? 0) > 1}
+                    fallback={<div class="input" aria-label="Organization">{organization().name}</div>}
+                  >
+                    <select class="input" id="device-organization" value={organization().id} onChange={(event) => { setSelectedOrganizationId(event.currentTarget.value); setServerPlanBlocked(false); setError(""); }}>
+                      {creationContext()!.organizations.map((candidate) => <option value={candidate.id}>{candidate.name}</option>)}
+                    </select>
+                  </Show>
+                  <p class="note">{organization().plan === "free"
+                    ? `Free plan · ${organization().activeProjectCount} of ${organization().activeProjectLimit} active projects used.`
+                    : `Paid plan · ${organization().activeProjectCount} active projects; no project limit.`}</p>
+                </div>
+              )}</Show>
             </div>
           </Show>
-          <Show when={projects().length > 0 && !selectedProject()}>
+          <Show when={!wantsProjectCreation() && projects().length > 0 && !selectedProject()}>
             <div class="error" role="alert">
               dongo could not match this repository to exactly one active project. Deny this request and let the agent reconnect with an exact project reference.
             </div>
           </Show>
-          <Show when={selectedProject()}>
+          <Show when={!wantsProjectCreation() && selectedProject()}>
             <p class="note">Project selected by the dongo CLI from this repository. Confirm the binding above; project selection is not editable during approval.</p>
+          </Show>
+          <Show when={projectLimitReached()}>
+            <div class="notice" role="alert">
+              <strong>Free plan project limit reached.</strong>
+              <p>This organization already uses its 1 included active project. Your account is signed in; logging in again will not create more capacity.</p>
+            </div>
+            <div class="button-stack">
+              <A class="button button--full" href={creationTargetHref()}>Use existing project</A>
+              <A class="button button--full" href={creationTargetHref("/settings?tab=General")}>Archive an active project</A>
+              <A class="button button--quiet button--full" href={creationTargetHref("/settings?tab=Plan%20%26%20storage")}>Plan and upgrade options</A>
+            </div>
           </Show>
           <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
           <p class="note" id="device-warning">Approve only if this code matches a terminal in your possession. Do not approve a code sent in a message.</p>
           <div class="consent-actions">
-            <button class="button" type="button" onClick={() => void decide(false)}>Deny</button>
-            <button class="button button--primary" type="button" disabled={!canApprove()} onClick={() => void decide(true)}>{projects().length === 0 && projectProposal() ? "Create & approve" : "Approve"}</button>
+            <button class="button button--primary button--full" type="button" disabled={!canApprove()} onClick={() => void decide(true)}>{wantsProjectCreation() && projectProposal() ? "Create & approve" : "Approve"}</button>
+            <button class="button button--quiet" type="button" onClick={() => void decide(false)}>Deny</button>
           </div>
         </div>
       )}</Show>

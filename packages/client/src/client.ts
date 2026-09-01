@@ -76,6 +76,18 @@ function safeErrorMessage(code: string): string {
       return "The dongo installation needs additional access for this operation.";
     case "not_found":
       return "The requested dongo resource was not found.";
+    case "already_resolved":
+      return "Attention already resolved.";
+    case "identifier_conflict":
+      return "The next dongo work identifier is already in use. Refresh the project before creating more work.";
+    case "identifier_exhausted":
+      return "This project has used all 999 work identifiers. Use another project for new work.";
+    case "parallel_execution_unavailable":
+      return "This agent session cannot start additional parallel work. Continue serially or use a supported isolated worktree.";
+    case "concurrency_limit":
+      return "This project has reached its configured concurrent Run limit.";
+    case "session_work_limit":
+      return "This agent session already has active work.";
     case "validation":
       return "dongo rejected the request as invalid.";
     case "revision_conflict":
@@ -88,6 +100,77 @@ function safeErrorMessage(code: string): string {
     default:
       return "dongo rejected the operation.";
   }
+}
+
+function safeErrorDetails(code: string, value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const details = value as Record<string, unknown>;
+  if (code === "identifier_exhausted") {
+    if (
+      details.maxSequence !== 999 ||
+      typeof details.nextSequence !== "number" ||
+      !Number.isSafeInteger(details.nextSequence) ||
+      details.nextSequence < 1000 ||
+      details.action !== "use_another_project"
+    ) {
+      return undefined;
+    }
+    return {
+      maxSequence: 999,
+      nextSequence: details.nextSequence,
+      action: "use_another_project",
+    };
+  }
+  if (code === "identifier_conflict") {
+    if (
+      typeof details.identifier !== "string" ||
+      !/^[a-z]{4}[0-9]{3}$/u.test(details.identifier) ||
+      typeof details.sequence !== "number" ||
+      !Number.isSafeInteger(details.sequence) ||
+      details.sequence < 1 ||
+      details.sequence > 999
+    ) {
+      return undefined;
+    }
+    return {
+      identifier: details.identifier,
+      sequence: details.sequence,
+    };
+  }
+  if (code === "parallel_execution_unavailable") {
+    const reason = details.reason;
+    if (![
+      "project_disabled",
+      "host_unsupported",
+      "host_undisclosed",
+      "isolated_workspace_required",
+      "existing_run_not_isolated",
+    ].includes(String(reason))) return undefined;
+    return {
+      reason,
+      parallelExecutionCapability: details.parallelExecutionCapability,
+      worktreeIsolationCapability: details.worktreeIsolationCapability,
+      workspaceKind: details.workspaceKind,
+    };
+  }
+  if (code === "concurrency_limit") {
+    if (
+      !Number.isSafeInteger(details.activeRuns) ||
+      !Number.isSafeInteger(details.maxConcurrentRuns)
+    ) return undefined;
+    return {
+      activeRuns: details.activeRuns,
+      maxConcurrentRuns: details.maxConcurrentRuns,
+    };
+  }
+  if (code === "session_work_limit") {
+    return typeof details.activeWorkItemId === "string"
+      ? { activeWorkItemId: details.activeWorkItemId }
+      : undefined;
+  }
+  return undefined;
 }
 
 function requestUrl(baseUrl: string, operation: OperationName, input: object): string {
@@ -166,7 +249,13 @@ export class DongoClient {
   ): Promise<OperationOutput<Name>> {
     const token = await this.#tokenProvider.getAccessToken();
     const timeoutController = new AbortController();
-    const timeout = setTimeout(() => timeoutController.abort(new Error("request timeout")), this.#requestTimeoutMs);
+    const updateWaitSeconds = operation === "get_updates"
+      ? ((input as { waitSeconds?: number }).waitSeconds ?? 0)
+      : 0;
+    const requestTimeoutMs = operation === "get_updates"
+      ? Math.max(this.#requestTimeoutMs, updateWaitSeconds * 1_000 + 5_000)
+      : this.#requestTimeoutMs;
+    const timeout = setTimeout(() => timeoutController.abort(new Error("request timeout")), requestTimeoutMs);
     const abort = () => timeoutController.abort(options.signal?.reason);
     if (options.signal?.aborted) abort();
     else options.signal?.addEventListener("abort", abort, { once: true });
@@ -227,7 +316,7 @@ export class DongoClient {
         }
         const retryAfter = parseRetryAfter(response.headers.get("retry-after"), this.#clock.now());
         const code = safeErrorCode(body.error.code);
-        const conflict = code.includes("conflict") || code === "lease_expired";
+        const conflict = code.includes("conflict") || code === "lease_expired" || code === "already_resolved";
         const retryable = !conflict && (body.error.retryable || RETRYABLE_STATUS.has(response.status));
         throw new DongoClientError({
           code,
@@ -236,6 +325,7 @@ export class DongoClient {
           retryAfterMs: retryable ? retryAfter : undefined,
           requestId: safeRequestId(body.requestId),
           status: response.status,
+          details: safeErrorDetails(code, body.error.details),
         });
       }
 
@@ -248,6 +338,10 @@ export class DongoClient {
 
   sessionStart(input: OperationInput<"session_start">, options?: CallOptions) {
     return this.call("session_start", input, options);
+  }
+
+  getUpdates(input: OperationInput<"get_updates"> = {}, options?: CallOptions) {
+    return this.call("get_updates", input, options);
   }
 
   getOverview(input: OperationInput<"get_overview"> = {}, options?: CallOptions) {

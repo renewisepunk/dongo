@@ -139,6 +139,15 @@ async function executeWithTimeout(
   context.mcpReq.signal.addEventListener("abort", relayAbort, { once: true });
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const updateWaitSeconds = operation === "get_updates"
+    ? ((input as { waitSeconds?: number }).waitSeconds ?? 0)
+    : 0;
+  const operationTimeoutMs = operation === "get_updates"
+    ? Math.max(
+        options.limits.operationTimeoutMs,
+        updateWaitSeconds * 1_000 + 10_000,
+      )
+    : options.limits.operationTimeoutMs;
   const timeout = new Promise<OperationExecutionResult>((resolve) => {
     timeoutId = setTimeout(() => {
       timedOut = true;
@@ -150,7 +159,7 @@ async function executeWithTimeout(
           true,
         ),
       );
-    }, options.limits.operationTimeoutMs);
+    }, operationTimeoutMs);
   });
 
   try {

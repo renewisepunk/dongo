@@ -22,17 +22,36 @@ import {
   mergeOptimisticIntakes,
 } from "../../lib/optimistic-intake";
 import {
+  actorDisplayIdentity,
   isInlineImagePreviewAvailable,
   ProjectDataConnection,
 } from "../../lib/project-data";
+import {
+  agentPresenceFeedback,
+  nudgeDeliveryFeedback,
+  nudgePriorityHelp,
+} from "../../lib/agent-update-feedback";
+import {
+  clearLocalDraft,
+  readLocalDraft,
+  writeLocalDraft,
+} from "../../lib/local-drafts";
 import type {
+  AgentUpdatePresence,
+  IntakeUpdateInput,
+  IntakeUpdateResult,
+  IntakeNudgePriority,
+  IntakeNudgeResult,
   ProjectInfo,
   ProjectSearchCursor,
   ProjectSearchResult,
+  ProjectConcurrencySnapshot,
 } from "../../lib/project-data";
 import { searchHighlightSegments } from "../../lib/search-highlight";
 import type { AttachmentSummary, Intake, WorkItem } from "./model";
 import { CommentComposer } from "./CommentComposer";
+import { IntakeEditor } from "./IntakeEditor";
+import { ConcurrentActivity } from "./ConcurrentActivity";
 import "./overview.css";
 
 export type OverviewConnection = Pick<
@@ -40,11 +59,16 @@ export type OverviewConnection = Pick<
   | "projectName"
   | "availableProjects"
   | "subscribeOverview"
+  | "subscribeConcurrency"
   | "subscribeWorkDetail"
   | "subscribeWorkById"
+  | "subscribeWorkByIdentifier"
   | "subscribeIntakeDetail"
+  | "subscribeAgentUpdatePresence"
   | "searchProject"
   | "createIntake"
+  | "updateIntake"
+  | "nudgeIntake"
   | "uploadAttachment"
   | "discardAttachment"
   | "downloadAttachment"
@@ -143,6 +167,26 @@ type OverviewRouteState = {
 
 type DetailInitialFocus = "close" | "respond" | "comment" | "detail";
 
+class ConcurrentWorkChangeError extends Error {
+  constructor() {
+    super("The work item changed while this response was being sent");
+    this.name = "ConcurrentWorkChangeError";
+  }
+}
+
+function isConcurrentWorkChange(error: unknown): boolean {
+  const data = typeof error === "object" && error !== null && "data" in error
+    ? (error as { data?: unknown }).data
+    : undefined;
+  const code = typeof data === "object" && data !== null && "code" in data
+    ? (data as { code?: unknown }).code
+    : undefined;
+  const message = error instanceof Error ? error.message : "";
+  return code === "revision_conflict" ||
+    code === "idempotency_conflict" ||
+    /revision_conflict|idempotency_conflict|already resolved|changed since/i.test(message);
+}
+
 const OVERVIEW_COMMANDS: readonly OverviewCommand[] = [
   ...DONGO_SHORTCUTS.map((shortcut) => ({
     id: shortcut.id,
@@ -169,6 +213,10 @@ function isTextEntryTarget(target: EventTarget | null): boolean {
   );
 }
 
+export function isHumanWorkIdentifier(value: string): boolean {
+  return /^[a-z]{4}\d{3}$/.test(value) || /^[A-Z][A-Z0-9]{1,7}-[1-9]\d*$/.test(value);
+}
+
 function sameOverviewRoute(
   left: OverviewRouteState,
   right: OverviewRouteState,
@@ -188,13 +236,19 @@ export function Overview(props: OverviewProps) {
   const [work, setWork] = createSignal<WorkItem[]>([]);
   const [intakes, setIntakes] = createSignal<Intake[]>([]);
   const [optimisticIntakes, setOptimisticIntakes] = createSignal<Intake[]>([]);
+  const [composerOpen, setComposerOpen] = createSignal(false);
   const [draft, setDraft] = createSignal("");
   const [draftAttachments, setDraftAttachments] = createSignal<DraftAttachment[]>([]);
   const [submissionKey, setSubmissionKey] = createSignal(crypto.randomUUID());
   const [selectedWorkId, setSelectedWorkId] = createSignal<string>();
+  const [selectedWorkReference, setSelectedWorkReference] = createSignal<string>();
   const [selectedWorkDetail, setSelectedWorkDetail] = createSignal<WorkItem>();
   const [selectedIntakeId, setSelectedIntakeId] = createSignal<string>();
   const [selectedIntakeDetail, setSelectedIntakeDetail] = createSignal<Intake>();
+  const [agentPresence, setAgentPresence] = createSignal<AgentUpdatePresence>();
+  const [agentPresenceStatus, setAgentPresenceStatus] = createSignal<"loading" | "ready" | "error">("loading");
+  const [concurrency, setConcurrency] = createSignal<ProjectConcurrencySnapshot>();
+  const [concurrencyStatus, setConcurrencyStatus] = createSignal<"loading" | "ready" | "error">("loading");
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [query, setQuery] = createSignal("");
   const [searchResults, setSearchResults] = createSignal<ProjectSearchResult[]>([]);
@@ -223,8 +277,10 @@ export function Overview(props: OverviewProps) {
   const [wideDetailLayout, setWideDetailLayout] = createSignal(false);
   let connection: OverviewConnection | undefined;
   let unsubscribeOverview: (() => void) | undefined;
+  let unsubscribeConcurrency: (() => void) | undefined;
   let unsubscribeWork: (() => void) | undefined;
   let unsubscribeIntake: (() => void) | undefined;
+  let unsubscribeAgentPresence: (() => void) | undefined;
   let fileInput: HTMLInputElement | undefined;
   let projectMenuButton: HTMLButtonElement | undefined;
   let projectMenu: HTMLDivElement | undefined;
@@ -232,6 +288,7 @@ export function Overview(props: OverviewProps) {
   let profileMenu: HTMLDivElement | undefined;
   let searchButton: HTMLButtonElement | undefined;
   let searchInput: HTMLInputElement | undefined;
+  let composerButton: HTMLButtonElement | undefined;
   let composerInput: HTMLTextAreaElement | undefined;
   let searchReturnFocus: HTMLElement | undefined;
   let commandReturnFocus: HTMLElement | undefined;
@@ -300,10 +357,15 @@ export function Overview(props: OverviewProps) {
         project.slug === props.projectSlug,
     ),
   );
-  const canCreateProject = createMemo(() => {
+  const canRequestProjectCreation = createMemo(() =>
+    currentProject()?.membershipRole === "owner",
+  );
+  const projectAllowance = createMemo(() => {
     const project = currentProject();
-    return project?.membershipRole === "owner" &&
-      (project.organizationPlan === "paid" || project.activeProjectCount < 1);
+    if (!project) return "";
+    return project.activeProjectLimit !== null
+      ? `${project.organizationPlan === "free" ? "Free" : "Current"} plan · ${project.activeProjectCount} of ${project.activeProjectLimit} active projects`
+      : `Paid plan · ${project.activeProjectCount} active projects`;
   });
   const selectedWork = createMemo(() => {
     const detail = selectedWorkDetail();
@@ -486,6 +548,7 @@ export function Overview(props: OverviewProps) {
     setSelectedWorkDetail(undefined);
     setSelectedIntakeDetail(undefined);
     setSelectedWorkId(undefined);
+    setSelectedWorkReference(undefined);
     setSelectedIntakeId(undefined);
     setDetailPeek(false);
     setDetailInitialFocus("close");
@@ -502,11 +565,11 @@ export function Overview(props: OverviewProps) {
   };
 
   const openWork = (
-    id: string,
+    reference: string,
     updateRoute = true,
     returnFocus?: HTMLElement,
     peek = false,
-    initialFocus: DetailInitialFocus = "close",
+    initialFocus?: DetailInitialFocus,
   ) => {
     if (!selectedWorkId() && !selectedIntakeId()) {
       const resolvedReturnFocus = returnFocus ?? (
@@ -519,7 +582,13 @@ export function Overview(props: OverviewProps) {
         resolvedReturnFocus?.classList.contains("search-button") === true;
       detailReturnScroll = { x: window.scrollX, y: window.scrollY };
     }
-    if (updateRoute) applyRouteUpdate({ work: id, intake: undefined });
+    const item = work().find((candidate) =>
+      candidate.id === reference ||
+      candidate.identifier === reference ||
+      candidate.legacyIdentifiers?.includes(reference),
+    );
+    const routeReference = item?.identifier ?? reference;
+    if (updateRoute) applyRouteUpdate({ work: routeReference, intake: undefined });
     unsubscribeWork?.();
     unsubscribeWork = undefined;
     unsubscribeIntake?.();
@@ -528,9 +597,11 @@ export function Overview(props: OverviewProps) {
     setSelectedIntakeDetail(undefined);
     setSelectedIntakeId(undefined);
     setDetailPeek(peek);
-    setDetailInitialFocus(initialFocus);
-    setSelectedWorkId(id);
-    const item = work().find((candidate) => candidate.id === id);
+    setDetailInitialFocus(
+      initialFocus ?? (item?.attention && !item.attention.response ? "respond" : "comment"),
+    );
+    setSelectedWorkReference(updateRoute ? routeReference : reference);
+    setSelectedWorkId(item?.id ?? reference);
     if (!connection) return;
     if (item?.unseen && item.attention) {
       void connection.markAttentionSeen(item.attention.id).catch(() => {
@@ -546,9 +617,24 @@ export function Overview(props: OverviewProps) {
             closeDetail();
           },
         )
-      : connection.subscribeWorkById(
-          id,
-          setSelectedWorkDetail,
+      : isHumanWorkIdentifier(reference)
+        ? connection.subscribeWorkByIdentifier(
+          reference,
+          (detail) => {
+            setSelectedWorkId(detail.id);
+            setSelectedWorkDetail(detail);
+          },
+          () => {
+            announce("This Work item is unavailable");
+            closeDetail();
+          },
+        )
+        : connection.subscribeWorkById(
+          reference,
+          (detail) => {
+            setSelectedWorkId(detail.id);
+            setSelectedWorkDetail(detail);
+          },
           () => {
             announce("This Work item is unavailable");
             closeDetail();
@@ -598,8 +684,8 @@ export function Overview(props: OverviewProps) {
 
   const overviewPath = () =>
     `/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}`;
-  const workDetailHref = (id: string) =>
-    `${overviewPath()}?work=${encodeURIComponent(id)}`;
+  const workDetailHref = (identifier: string) =>
+    `${overviewPath()}?work=${encodeURIComponent(identifier)}`;
   const intakeDetailHref = (id: string) =>
     `${overviewPath()}?intake=${encodeURIComponent(id)}`;
   const handleWorkLink = (
@@ -644,7 +730,7 @@ export function Overview(props: OverviewProps) {
     if (shouldSearch && !searchOpen()) openSearch(false);
     if (!shouldSearch && searchOpen()) closeSearch(false);
     if (workId) {
-      if (selectedWorkId() !== workId) openWork(workId, false);
+      if (selectedWorkReference() !== workId) openWork(workId, false);
       return;
     }
     if (intakeId) {
@@ -724,6 +810,7 @@ export function Overview(props: OverviewProps) {
 
   const addFiles = (files: File[]) => {
     if (!connection || files.length === 0) return;
+    setComposerOpen(true);
     const remaining = MAX_INTAKE_ATTACHMENTS - draftAttachments().length;
     if (remaining <= 0) {
       announce(`An Intake may include at most ${MAX_INTAKE_ATTACHMENTS} attachments`);
@@ -825,7 +912,9 @@ export function Overview(props: OverviewProps) {
       setDraft("");
       setDraftAttachments([]);
       setSubmissionKey(crypto.randomUUID());
+      setComposerOpen(false);
       announce("Added to Inbox");
+      queueMicrotask(() => composerButton?.focus({ preventScroll: true }));
     } catch {
       setOptimisticIntakes((items) =>
         items.filter((item) => item.submissionKey !== key),
@@ -855,7 +944,7 @@ export function Overview(props: OverviewProps) {
       await connection.reorderWork(item, rank);
       announce("Ready order updated");
     } catch {
-      announce("The Ready order changed; try again");
+      announce("Another person or agent changed Ready. The latest order is shown; try again");
     }
   };
 
@@ -933,7 +1022,9 @@ export function Overview(props: OverviewProps) {
   const selectSearchResult = (result: ProjectSearchResult) => {
     const returnFocus = searchReturnFocus;
     closeSearch(true, false);
-    if (result.targetKind === "work") openWork(result.targetId, true, returnFocus);
+    if (result.targetKind === "work") {
+      openWork(result.identifier ?? result.targetId, true, returnFocus);
+    }
     else openIntake(result.targetId, true, returnFocus);
   };
 
@@ -1075,9 +1166,8 @@ export function Overview(props: OverviewProps) {
         !peek,
         selected,
         peek,
-        respond ? "respond" : wideDetailLayout() && !peek ? "detail" : "close",
+        respond ? "respond" : undefined,
       );
-      if (wideDetailLayout() && !peek && !respond) focusWideDetailWhenReady(id);
       return;
     }
     if (respond) {
@@ -1126,10 +1216,17 @@ export function Overview(props: OverviewProps) {
   const focusCapture = () => {
     if (searchOpen()) closeSearch(true, false);
     if (selectedWorkId() || selectedIntakeId()) closeDetail();
+    setComposerOpen(true);
     queueMicrotask(() => {
       composerInput?.focus({ preventScroll: true });
       composerInput?.scrollIntoView({ block: "center" });
     });
+  };
+
+  const closeCapture = () => {
+    setComposerOpen(false);
+    setKeyboardSelection("capture:composer");
+    queueMicrotask(() => composerButton?.focus({ preventScroll: true }));
   };
 
   const runOverviewCommand = (id: OverviewCommandId) => {
@@ -1230,6 +1327,9 @@ export function Overview(props: OverviewProps) {
         } else if (selectedWorkId() || selectedIntakeId()) {
           event.preventDefault();
           closeDetail();
+        } else if (composerOpen()) {
+          event.preventDefault();
+          closeCapture();
         }
         return;
       }
@@ -1402,6 +1502,20 @@ export function Overview(props: OverviewProps) {
             setLoading(false);
           },
         );
+        unsubscribeConcurrency = connected.subscribeConcurrency(
+          (snapshot) => {
+            setConcurrency(snapshot);
+            setConcurrencyStatus("ready");
+          },
+          () => setConcurrencyStatus("error"),
+        );
+        unsubscribeAgentPresence = connected.subscribeAgentUpdatePresence(
+          (presence) => {
+            setAgentPresence(presence);
+            setAgentPresenceStatus("ready");
+          },
+          () => setAgentPresenceStatus("error"),
+        );
       } catch {
         setLoadError("This project could not be loaded for your account.");
         setLoading(false);
@@ -1429,8 +1543,10 @@ export function Overview(props: OverviewProps) {
     for (const controller of uploadControllers.values()) controller.abort();
     uploadControllers.clear();
     unsubscribeOverview?.();
+    unsubscribeConcurrency?.();
     unsubscribeWork?.();
     unsubscribeIntake?.();
+    unsubscribeAgentPresence?.();
     void (async () => {
       await Promise.allSettled([...pendingUploads.values()]);
       if (connected) {
@@ -1514,8 +1630,16 @@ export function Overview(props: OverviewProps) {
                 </div>
               )}</For>
               <div class="menu-divider" />
-              <Show when={canCreateProject()}>
-                <button class="menu-action" type="button" role="menuitem" onClick={() => navigate("/onboarding")}>+ Create project</button>
+              <Show when={currentProject()}>
+                <div class="menu-label">{projectAllowance()}</div>
+              </Show>
+              <Show when={canRequestProjectCreation()}>
+                <button
+                  class="menu-action"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => navigate(`/onboarding?organization=${encodeURIComponent(currentProject()!.organizationSlug)}`)}
+                >+ Create project</button>
               </Show>
               <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("Members")}>Organization settings</button>
               <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("General")}>Project settings</button>
@@ -1523,6 +1647,11 @@ export function Overview(props: OverviewProps) {
           </Show>
         </div>
         <div class="header-spacer" />
+        <button
+          class="button button--quiet"
+          type="button"
+          onClick={() => navigate(`/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/ideas`)}
+        >Ideas</button>
         <button ref={searchButton} class="search-button" type="button" disabled={loading() || Boolean(loadError())} onClick={() => openSearch()} aria-label="Search this project" aria-keyshortcuts="/">
           <span>search</span><span class="shortcut">/</span>
         </button>
@@ -1584,10 +1713,41 @@ export function Overview(props: OverviewProps) {
 
       <div class="overview-scroll">
         <div class="overview-content">
-          <section
-            class="composer"
-            aria-label="Add something"
+          <Show
+            when={composerOpen()}
+            fallback={
+              <div class="capture-launcher">
+                <button
+                  ref={composerButton}
+                  class="capture-launcher__button"
+                  type="button"
+                  data-nav-item
+                  data-nav-kind="capture"
+                  data-nav-id="composer"
+                  data-keyboard-selected={keyboardSelection() === "capture:composer"}
+                  aria-keyshortcuts="C ArrowDown"
+                  disabled={loading() || Boolean(loadError())}
+                  onFocus={() => setKeyboardSelection("capture:composer")}
+                  onClick={focusCapture}
+                >
+                  <span aria-hidden="true">+</span> New
+                </button>
+                <Show when={draft().trim() || draftAttachments().length > 0}>
+                  <span class="capture-launcher__draft">Draft saved</span>
+                </Show>
+              </div>
+            }
           >
+          <section class="composer" aria-label="Add something">
+            <div class="composer__heading">
+              <span>New Intake</span>
+              <button
+                class="composer__close"
+                type="button"
+                aria-label="Close new Intake"
+                onClick={closeCapture}
+              >×</button>
+            </div>
             <textarea
               ref={composerInput}
               class="composer__input"
@@ -1745,6 +1905,7 @@ export function Overview(props: OverviewProps) {
               </button>
             </div>
           </section>
+          </Show>
 
           <Show when={loading()}>
             <div class="empty-state" role="status">Loading live project activity…</div>
@@ -1755,6 +1916,16 @@ export function Overview(props: OverviewProps) {
               <div>{loadError()}</div>
               <button class="button" type="button" onClick={() => window.location.reload()}>Retry</button>
             </div>
+          </Show>
+
+          <Show when={!loading() && !loadError()}>
+            <ConcurrentActivity
+              snapshot={concurrency()}
+              status={concurrencyStatus()}
+              selectedWorkId={selectedWorkId()}
+              workHref={workDetailHref}
+              onSelect={handleWorkLink}
+            />
           </Show>
 
           <Show when={!loading() && !loadError() && work().length === 0 && visibleIntakes().length === 0}>
@@ -1773,7 +1944,7 @@ export function Overview(props: OverviewProps) {
               <For each={needs()}>{(item) => (
                 <a
                   class="work-row work-row--attention"
-                  href={workDetailHref(item.id)}
+                  href={workDetailHref(item.identifier)}
                   data-work-id={item.id}
                   data-nav-item
                   data-nav-kind="work"
@@ -1782,7 +1953,7 @@ export function Overview(props: OverviewProps) {
                   aria-current={selectedWorkId() === item.id ? "page" : undefined}
                   aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
                   onFocus={() => setKeyboardSelection(`work:${item.id}`)}
-                  onClick={(event) => handleWorkLink(event, item.id)}
+                  onClick={(event) => handleWorkLink(event, item.identifier)}
                 >
                   <span class="work-row__head">
                     <span class="work-row__title">{item.title}</span>
@@ -1808,7 +1979,7 @@ export function Overview(props: OverviewProps) {
               <For each={working()}>{(item) => (
                 <a
                   class="work-row"
-                  href={workDetailHref(item.id)}
+                  href={workDetailHref(item.identifier)}
                   data-work-id={item.id}
                   data-nav-item
                   data-nav-kind="work"
@@ -1817,7 +1988,7 @@ export function Overview(props: OverviewProps) {
                   aria-current={selectedWorkId() === item.id ? "page" : undefined}
                   aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
                   onFocus={() => setKeyboardSelection(`work:${item.id}`)}
-                  onClick={(event) => handleWorkLink(event, item.id)}
+                  onClick={(event) => handleWorkLink(event, item.identifier)}
                 >
                   <span class="work-row__head">
                     <span class="work-row__title">{item.title}</span>
@@ -1865,7 +2036,7 @@ export function Overview(props: OverviewProps) {
                   </div>
                   <a
                     class="ready-row__open"
-                    href={workDetailHref(item.id)}
+                    href={workDetailHref(item.identifier)}
                     data-work-id={item.id}
                     data-nav-item
                     data-nav-kind="work"
@@ -1875,7 +2046,7 @@ export function Overview(props: OverviewProps) {
                     aria-current={selectedWorkId() === item.id ? "page" : undefined}
                     aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
                     onFocus={() => setKeyboardSelection(`work:${item.id}`)}
-                    onClick={(event) => handleWorkLink(event, item.id)}
+                    onClick={(event) => handleWorkLink(event, item.identifier)}
                   >
                     <span class="ready-row__position">{String(index() + 1).padStart(2, "0")}</span>
                     <span class="work-row__title">{item.title}</span>
@@ -1931,7 +2102,7 @@ export function Overview(props: OverviewProps) {
               <For each={done()}>{(item) => (
                 <a
                   class="work-row work-row--done"
-                  href={workDetailHref(item.id)}
+                  href={workDetailHref(item.identifier)}
                   data-work-id={item.id}
                   data-nav-item
                   data-nav-kind="work"
@@ -1940,11 +2111,13 @@ export function Overview(props: OverviewProps) {
                   aria-current={selectedWorkId() === item.id ? "page" : undefined}
                   aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
                   onFocus={() => setKeyboardSelection(`work:${item.id}`)}
-                  onClick={(event) => handleWorkLink(event, item.id)}
+                  onClick={(event) => handleWorkLink(event, item.identifier)}
                 >
                   <span style={{ color: "var(--green)" }} class="mono">✓</span>
                   <span class="work-row__title work-row__title--done">{item.title}</span>
-                  <span class="work-row__identifier mono">{item.completedAt}</span>
+                  <span class="work-row__identifier mono">
+                    {[item.identifier, item.completedAt].filter(Boolean).join(" · ")}
+                  </span>
                 </a>
               )}</For>
             </section>
@@ -1952,9 +2125,11 @@ export function Overview(props: OverviewProps) {
         </div>
       </div>
 
-      <Show when={selectedWork()}>{(item) => (
-        <WorkDetail
+      <For each={selectedWorkId() ? [selectedWorkId()!] : []}>{() => (
+        <Show when={selectedWork()}>{(item) => (
+          <WorkDetail
           item={item()}
+          draftScope={`${props.orgSlug}/${props.projectSlug}/${item().id}`}
           wide={wideDetailLayout()}
           peek={detailPeek()}
           initialFocus={detailInitialFocus()}
@@ -1978,9 +2153,13 @@ export function Overview(props: OverviewProps) {
             try {
               await connection.respondToAttention(attention.id, selectedOption, body);
               announce("Response sent to your agent");
-            } catch {
-              announce("Your response could not be sent");
-              throw new Error("response_failed");
+            } catch (error) {
+              if (isConcurrentWorkChange(error)) {
+                announce("This issue changed; the latest update is shown and your draft was kept");
+                throw new ConcurrentWorkChangeError();
+              }
+              announce("Your response could not be sent; your draft was kept");
+              throw error;
             }
           }}
           onResolve={async () => {
@@ -1989,9 +2168,13 @@ export function Overview(props: OverviewProps) {
             try {
               await connection.resolveAttention(attention.id);
               announce("Attention resolved");
-            } catch {
+            } catch (error) {
+              if (isConcurrentWorkChange(error)) {
+                announce("This issue changed; the latest update is shown");
+                throw new ConcurrentWorkChangeError();
+              }
               announce("Attention could not be resolved");
-              throw new Error("resolve_failed");
+              throw error;
             }
           }}
           onComment={async (body, attachmentIds) => {
@@ -1999,16 +2182,44 @@ export function Overview(props: OverviewProps) {
             try {
               await connection.addComment(item().id, body, attachmentIds);
               announce("Comment added");
-            } catch {
-              announce("Comment could not be added");
-              throw new Error("comment_failed");
+            } catch (error) {
+              if (isConcurrentWorkChange(error)) {
+                announce("This issue changed; the latest update is shown and your draft was kept");
+                throw new ConcurrentWorkChangeError();
+              }
+              announce("Comment could not be added; your draft was kept");
+              throw error;
             }
           }}
         />
-      )}</Show>
+        )}</Show>
+      )}</For>
 
       <Show when={selectedIntake()}>{(intake) => (
-        <IntakeDetail wide={wideDetailLayout()} initialFocus={detailInitialFocus()} intake={intake()} work={work()} onClose={closeDetail} onOpenWork={openWork} onDownload={downloadAttachment} loadAttachmentPreview={loadAttachmentPreview} />
+        <IntakeDetail
+          wide={wideDetailLayout()}
+          initialFocus={detailInitialFocus()}
+          intake={intake()}
+          ideasHref={`/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/ideas`}
+          work={work()}
+          agentPresence={agentPresence()}
+          agentPresenceStatus={agentPresenceStatus()}
+          onClose={closeDetail}
+          onOpenWork={openWork}
+          onDownload={downloadAttachment}
+          loadAttachmentPreview={loadAttachmentPreview}
+          uploadAttachment={connection?.uploadAttachment.bind(connection)}
+          discardAttachment={connection?.discardAttachment.bind(connection)}
+          announce={announce}
+          onSave={async (input) => {
+            if (!connection) throw new Error("intake_update_unavailable");
+            return await connection.updateIntake(input);
+          }}
+          onNudge={async (priority, idempotencyKey) => {
+            if (!connection) throw new Error("nudge_unavailable");
+            return await connection.nudgeIntake(intake().id, priority, idempotencyKey);
+          }}
+        />
       )}</Show>
 
       <Show when={searchOpen()}>
@@ -2108,6 +2319,7 @@ export function Overview(props: OverviewProps) {
 
 type WorkDetailProps = {
   item: WorkItem;
+  draftScope: string;
   wide: boolean;
   peek: boolean;
   initialFocus: DetailInitialFocus;
@@ -2125,13 +2337,52 @@ type WorkDetailProps = {
 };
 
 function WorkDetail(props: WorkDetailProps) {
-  const [choice, setChoice] = createSignal<string>();
-  const [response, setResponse] = createSignal("");
+  const responseDraftKey = () =>
+    `${props.draftScope}:attention:${props.item.attention?.id ?? "none"}`;
+  const readResponseDraft = () => {
+    try {
+      const parsed = JSON.parse(readLocalDraft(responseDraftKey())) as {
+        choice?: string;
+        response?: string;
+      };
+      return {
+        choice: typeof parsed.choice === "string" ? parsed.choice : undefined,
+        response: typeof parsed.response === "string" ? parsed.response : "",
+      };
+    } catch {
+      return { choice: undefined, response: "" };
+    }
+  };
+  const initialResponseDraft = readResponseDraft();
+  const [choice, setChoice] = createSignal<string | undefined>(initialResponseDraft.choice);
+  const [response, setResponse] = createSignal(initialResponseDraft.response);
   const [pending, setPending] = createSignal(false);
+  const [editNotice, setEditNotice] = createSignal("");
   const [identifierCopied, setIdentifierCopied] = createSignal(false);
   let detailPanel: HTMLElement | undefined;
   let closeButton: HTMLButtonElement | undefined;
   let identifierCopyTimer: number | undefined;
+  let activeResponseDraftKey = responseDraftKey();
+
+  createEffect(() => {
+    const key = responseDraftKey();
+    if (key !== activeResponseDraftKey) {
+      activeResponseDraftKey = key;
+      const saved = readResponseDraft();
+      setChoice(saved.choice);
+      setResponse(saved.response);
+      setEditNotice("");
+      return;
+    }
+    const savedChoice = choice();
+    const savedResponse = response();
+    writeLocalDraft(
+      key,
+      savedChoice || savedResponse
+        ? JSON.stringify({ choice: savedChoice, response: savedResponse })
+        : "",
+    );
+  });
 
   onCleanup(() => window.clearTimeout(identifierCopyTimer));
 
@@ -2173,9 +2424,16 @@ function WorkDetail(props: WorkDetailProps) {
     setPending(true);
     try {
       await props.onRespond(selectedOption, body || undefined);
+      clearLocalDraft(responseDraftKey());
       setChoice(undefined);
       setResponse("");
-    } catch {
+      setEditNotice("");
+    } catch (error) {
+      if (error instanceof ConcurrentWorkChangeError) {
+        setEditNotice(
+          "This issue changed while you were responding. The latest agent update is shown and your draft was kept.",
+        );
+      }
       return;
     } finally {
       setPending(false);
@@ -2187,7 +2445,16 @@ function WorkDetail(props: WorkDetailProps) {
     setPending(true);
     try {
       await props.onResolve();
-    } catch {
+      clearLocalDraft(responseDraftKey());
+      setChoice(undefined);
+      setResponse("");
+      setEditNotice("");
+    } catch (error) {
+      if (error instanceof ConcurrentWorkChangeError) {
+        setEditNotice(
+          "This issue changed while you were resolving it. The latest agent update is shown.",
+        );
+      }
       return;
     } finally {
       setPending(false);
@@ -2269,7 +2536,24 @@ function WorkDetail(props: WorkDetailProps) {
               <div class="resolved-response">
                 <div class="resolved-response__status">✓ answered</div>
                 <MarkdownContent source={attention().response ?? ""} class="detail-section__body" />
-                <div class="note">Your agent will see this on its next pull.</div>
+                <div class="note">Your agent will see this on its next explicit pull. An active dongo waiter checks with backoff for up to five minutes; a stopped agent will not restart itself.</div>
+                <Show when={response().trim() || choice()}>
+                  <div class="detail-card" role="note">
+                    <strong>Your unsent response draft was kept.</strong>
+                    <Show when={choice()}>{(savedChoice) => (
+                      <div class="note">Selected option: {savedChoice()}</div>
+                    )}</Show>
+                    <Show when={response().trim()}>
+                      <textarea
+                        class="textarea"
+                        aria-label="Unsent response draft"
+                        value={response()}
+                        readOnly
+                        rows={3}
+                      />
+                    </Show>
+                  </div>
+                </Show>
               </div>
             }>
               <div class="attention-options">
@@ -2298,6 +2582,9 @@ function WorkDetail(props: WorkDetailProps) {
                   <button class="button button--quiet" type="button" disabled={pending()} onClick={() => void resolveWithoutResponse()}>Resolve without response</button>
                 </div>
               </div>
+            </Show>
+            <Show when={editNotice()}>
+              <div class="security-note" role="alert">{editNotice()}</div>
             </Show>
           </div>
         )}</Show>
@@ -2339,7 +2626,7 @@ function WorkDetail(props: WorkDetailProps) {
 
         <Show when={props.item.latest}>
           <section class="detail-section">
-            <div class="detail-section__label">latest from {props.item.agent ?? "agent"}</div>
+            <div class="detail-section__label">latest from {actorDisplayIdentity({ type: "agent", name: props.item.agent ?? "Agent" })}</div>
             <div class="detail-card"><MarkdownContent source={props.item.latest ?? ""} /></div>
             <div class="security-note">{props.item.state === "done" ? "run finished" : props.item.elapsed ?? "waiting to start"}</div>
           </section>
@@ -2365,8 +2652,12 @@ function WorkDetail(props: WorkDetailProps) {
             <For each={props.item.conversation}>{(entry) => (
               <div class="conversation-entry">
                 <div class="conversation-entry__meta">
-                  <span class="conversation-entry__who" data-role={entry.role ?? (entry.human ? "human" : "agent")}>{entry.who}</span>
-                  <span class="conversation-entry__role">{entry.role === "system" ? "system" : entry.human || entry.role === "human" ? "human" : entry.agentType ? `${entry.agentType} agent` : "agent"}</span>
+                  <span class="conversation-entry__who" data-role={entry.role ?? (entry.human ? "human" : "agent")}>{actorDisplayIdentity({
+                    type: entry.role === "system" ? "system" : entry.human || entry.role === "human" ? "human" : "agent",
+                    name: entry.who,
+                    agentType: entry.agentType,
+                  })}</span>
+                  <span class="conversation-entry__role">{entry.role === "system" ? "system" : entry.human || entry.role === "human" ? "human" : "agent"}</span>
                   <span>{entry.when}</span>
                 </div>
                 <Show when={entry.text}><MarkdownContent source={entry.text} class="conversation-entry__text" /></Show>
@@ -2383,6 +2674,7 @@ function WorkDetail(props: WorkDetailProps) {
         </Show>
 
         <CommentComposer
+          draftKey={`${props.draftScope}:comment`}
           onSubmit={props.onComment}
           uploadAttachment={props.uploadAttachment}
           discardAttachment={props.discardAttachment}
@@ -2397,15 +2689,39 @@ type IntakeDetailProps = {
   wide: boolean;
   initialFocus: DetailInitialFocus;
   intake: Intake;
+  ideasHref: string;
   work: WorkItem[];
+  agentPresence?: AgentUpdatePresence;
+  agentPresenceStatus: "loading" | "ready" | "error";
   onClose: () => void;
   onOpenWork: (id: string) => void;
   onDownload: (attachmentId: string) => Promise<void>;
   loadAttachmentPreview: OverviewConnection["loadAttachmentPreview"];
+  uploadAttachment?: OverviewConnection["uploadAttachment"];
+  discardAttachment?: OverviewConnection["discardAttachment"];
+  announce: (message: string) => void;
+  onSave: (input: IntakeUpdateInput) => Promise<IntakeUpdateResult>;
+  onNudge: (
+    priority: IntakeNudgePriority,
+    idempotencyKey: string,
+  ) => Promise<IntakeNudgeResult>;
 };
 
 function IntakeDetail(props: IntakeDetailProps) {
   const linked = () => props.work.filter((item) => props.intake.linkedWorkIds?.includes(item.id));
+  const [editorVisible, setEditorVisible] = createSignal(props.intake.editable);
+  const [nudgePriority, setNudgePriority] = createSignal<IntakeNudgePriority>("normal");
+  const [nudgePending, setNudgePending] = createSignal(false);
+  const [nudgeError, setNudgeError] = createSignal("");
+  const [nudgeResult, setNudgeResult] = createSignal<IntakeNudgeResult>();
+  const [nudgeKey, setNudgeKey] = createSignal(crypto.randomUUID());
+  let nudgeIntakeId = props.intake.id;
+  let nudgeGeneration = 0;
+  const presenceFeedback = createMemo(() => agentPresenceFeedback(props.agentPresence));
+  const deliveryFeedback = createMemo(() => {
+    const result = nudgeResult();
+    return result ? nudgeDeliveryFeedback(result) : undefined;
+  });
   let closeButton: HTMLButtonElement | undefined;
   let detailPanel: HTMLElement | undefined;
 
@@ -2416,6 +2732,40 @@ function IntakeDetail(props: IntakeDetailProps) {
       closeButton?.focus();
     }
   });
+
+  createEffect(() => {
+    const intakeId = props.intake.id;
+    if (intakeId === nudgeIntakeId) {
+      if (props.intake.editable) setEditorVisible(true);
+      return;
+    }
+    nudgeIntakeId = intakeId;
+    setEditorVisible(props.intake.editable);
+    nudgeGeneration += 1;
+    setNudgePriority("normal");
+    setNudgePending(false);
+    setNudgeError("");
+    setNudgeResult(undefined);
+    setNudgeKey(crypto.randomUUID());
+  });
+
+  const notifyAgent = async () => {
+    if (nudgePending() || props.intake.status !== "waiting") return;
+    const generation = ++nudgeGeneration;
+    setNudgePending(true);
+    setNudgeError("");
+    try {
+      const result = await props.onNudge(nudgePriority(), nudgeKey());
+      if (generation !== nudgeGeneration) return;
+      setNudgeResult(result);
+      setNudgeKey(crypto.randomUUID());
+    } catch {
+      if (generation !== nudgeGeneration) return;
+      setNudgeError("The agent notification could not be saved. Try again; dongo will safely reuse the same request.");
+    } finally {
+      if (generation === nudgeGeneration) setNudgePending(false);
+    }
+  };
 
   return (
     <article
@@ -2441,6 +2791,9 @@ function IntakeDetail(props: IntakeDetailProps) {
         <div class="detail__title-group">
           <h2 class="detail__title" id="intake-detail-title">{props.intake.text}</h2>
           <div class="detail__state"><span class="detail__state-dot" data-state={props.intake.status === "processed" ? "done" : "working"} /><span>{props.intake.status === "processed" ? `Processed · ${linked().length} work items created` : "Waiting for local agent"}</span></div>
+          <Show when={props.intake.sourceIdeaId}>{(ideaId) => (
+            <a class="detail__provenance" href={`${props.ideasHref}?filter=promoted&idea=${encodeURIComponent(ideaId())}`}>Promoted from Ideas</a>
+          )}</Show>
         </div>
         <section class="detail-section">
           <div class="detail-section__label">submitted</div>
@@ -2455,6 +2808,51 @@ function IntakeDetail(props: IntakeDetailProps) {
             </Show>
           </div>
         </section>
+        <Show when={editorVisible() && props.uploadAttachment && props.discardAttachment}>
+          <IntakeEditor
+            intake={props.intake}
+            onSave={props.onSave}
+            uploadAttachment={props.uploadAttachment!}
+            discardAttachment={props.discardAttachment!}
+            announce={props.announce}
+          />
+        </Show>
+        <Show when={props.intake.status === "waiting"}>
+          <section class="detail-section" aria-labelledby="notify-agent-label">
+            <div class="detail-section__label" id="notify-agent-label">notify agent</div>
+            <div class="detail-card agent-nudge-card">
+              <Show
+                when={props.agentPresenceStatus !== "loading"}
+                fallback={<div class="note" role="status">Checking whether an agent is waiting for updates…</div>}
+              >
+                <div class="agent-nudge-presence" data-prompt-delivery={presenceFeedback().promptDeliveryAvailable} aria-live="polite">
+                  <strong>{props.agentPresenceStatus === "error" ? "Live agent status is unavailable." : presenceFeedback().title}</strong>
+                  <span>{props.agentPresenceStatus === "error"
+                    ? "You can still notify the agent. dongo will report the actual delivery result after saving it."
+                    : presenceFeedback().body}</span>
+                </div>
+              </Show>
+              <div class="choice-list choice-list--compact" role="radiogroup" aria-label="Notification priority">
+                <button class="choice" type="button" role="radio" aria-checked={nudgePriority() === "normal"} data-selected={nudgePriority() === "normal"} disabled={nudgePending()} onClick={() => { setNudgePriority("normal"); setNudgeError(""); }}>
+                  <span class="choice__dot" aria-hidden="true" /><span class="choice__copy"><span class="choice__title">Normal</span></span>
+                </button>
+                <button class="choice" type="button" role="radio" aria-checked={nudgePriority() === "important"} data-selected={nudgePriority() === "important"} disabled={nudgePending()} onClick={() => { setNudgePriority("important"); setNudgeError(""); }}>
+                  <span class="choice__dot" aria-hidden="true" /><span class="choice__copy"><span class="choice__title">Important</span></span>
+                </button>
+              </div>
+              <p class="note">{nudgePriorityHelp(nudgePriority())}</p>
+              <Show when={deliveryFeedback()}>{(feedback) => (
+                <div class="agent-nudge-result" data-prompt-delivery={feedback().promptDeliveryAvailable} role="status" aria-live="polite">
+                  <strong>{feedback().title}</strong><span>{feedback().body}</span>
+                </div>
+              )}</Show>
+              <Show when={nudgeError()}><div class="error" role="alert">{nudgeError()}</div></Show>
+              <button class="button" type="button" disabled={nudgePending() || props.agentPresenceStatus === "loading"} onClick={() => void notifyAgent()}>
+                {nudgePending() ? "Notifying…" : nudgeResult() ? "Notify again" : "Notify agent"}
+              </button>
+            </div>
+          </section>
+        </Show>
         <Show when={linked().length}>
           <section class="detail-section">
             <div class="detail-section__label">linked work</div>

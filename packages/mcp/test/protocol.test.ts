@@ -48,11 +48,15 @@ for (const era of ["modern", "legacy"] as const) {
     const { client, fixture } = await connectClient(era);
     try {
       const listed = await client.listTools();
-      assert.equal(listed.tools.length, 18);
+      assert.equal(listed.tools.length, 19);
       assert.ok(
         listed.tools.some((tool) => tool.name === "dongo_session_start"),
       );
       assert.match(client.getInstructions() ?? "", /dongo_session_start/);
+      assert.doesNotMatch(
+        client.getServerVersion()?.name ?? "",
+        /\b(?:Dongo|DONGO)\b(?![-_.])/u,
+      );
 
       const result = await client.callTool({
         name: "dongo_session_start",
@@ -68,6 +72,21 @@ for (const era of ["modern", "legacy"] as const) {
       assert.equal(call?.operation, "session_start");
       assert.equal("token" in (call?.context ?? {}), false);
       assert.equal(call?.context.principal.projectRef, "project_ref_123");
+
+      const updates = await client.callTool({
+        name: "dongo_get_updates",
+        arguments: { cursor: 4, waitSeconds: 20 },
+      });
+      assert.equal(updates.isError, undefined);
+      assert.deepEqual(updates.structuredContent, {
+        operation: "get_updates",
+        authorizationForwarded: false,
+      });
+      assert.equal(fixture.calls[1]?.operation, "get_updates");
+      assert.deepEqual(fixture.calls[1]?.input, {
+        cursor: 4,
+        waitSeconds: 20,
+      });
     } finally {
       await client.close();
     }

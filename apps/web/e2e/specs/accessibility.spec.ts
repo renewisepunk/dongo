@@ -29,6 +29,9 @@ async function expectWcagConformance(page: Page): Promise<void> {
 test("keeps the authenticated overview and work detail free of detectable WCAG A/AA violations", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/app/fixture-studio/dongo");
+  await expect(page.getByRole("button", { name: "New", exact: true })).toBeVisible();
+  await expectWcagConformance(page);
+  await page.getByRole("button", { name: "New", exact: true }).click();
   await expect(page.getByRole("region", { name: "Add something" })).toBeVisible();
   await expectWcagConformance(page);
 
@@ -44,4 +47,15 @@ test("keeps the public homepage and guides free of detectable WCAG A/AA violatio
     await expect(page.locator("main")).toBeVisible();
     await expectWcagConformance(page);
   }
+});
+
+test("keeps the Ideas index and editor free of detectable WCAG A/AA violations", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/app/fixture-studio/dongo/ideas");
+  await expect(page.getByRole("region", { name: "Open Ideas" })).toBeVisible();
+  await expectWcagConformance(page);
+
+  await page.locator('[data-idea-id="idea-editorial"] .idea-row__select').click();
+  await expect(page.getByRole("complementary", { name: "Editorial release notes" })).toBeVisible();
+  await expectWcagConformance(page);
 });

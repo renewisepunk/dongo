@@ -341,13 +341,19 @@ export class ConvexHmacOperationExecutor implements OperationExecutor {
     );
 
     const controller = new AbortController();
+    const updateWaitSeconds = operation === "get_updates"
+      ? ((input as { waitSeconds?: number }).waitSeconds ?? 0)
+      : 0;
+    const effectiveTimeoutMs = operation === "get_updates"
+      ? Math.max(this.#timeoutMs, updateWaitSeconds * 1_000 + 5_000)
+      : this.#timeoutMs;
     let timedOut = false;
     const relayAbort = (): void => controller.abort(context.signal.reason);
     context.signal.addEventListener("abort", relayAbort, { once: true });
     const timeout = setTimeout(() => {
       timedOut = true;
       controller.abort(new Error("Internal gateway timed out"));
-    }, this.#timeoutMs);
+    }, effectiveTimeoutMs);
 
     try {
       const response = await this.#fetch(this.#endpoint, {

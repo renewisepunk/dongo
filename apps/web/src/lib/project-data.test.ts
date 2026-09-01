@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   fetchHumanAttachmentPreview,
   isInlineImagePreviewAvailable,
+  actorDisplayIdentity,
   mapAvailableProjects,
   mapIntakeDetail,
   mapOverviewSnapshot,
@@ -112,6 +113,29 @@ describe("secure human attachment previews", () => {
 });
 
 describe("live project overview mapping", () => {
+  it("shows agent display identity without leaking transport labels", () => {
+    expect(actorDisplayIdentity({
+      type: "agent",
+      name: "dongo CLI",
+      displayName: "Mill",
+      agentType: "cli",
+    })).toBe("Mill");
+    expect(actorDisplayIdentity({ type: "agent", name: "dongo CLI", agentType: "cli" })).toBe("Agent");
+    expect(actorDisplayIdentity({ type: "agent", name: "MCP host", agentType: "mcp" })).toBe("Agent");
+    expect(actorDisplayIdentity({ type: "agent", name: "Codex", agentType: "cli" })).toBe("Codex");
+    expect(actorDisplayIdentity({ type: "agent", name: "Build bot", agentType: "service" })).toBe("Build bot");
+    expect(actorDisplayIdentity({
+      type: "agent",
+      name: ["D", "ongo build agent"].join(""),
+      agentType: "service",
+    })).toBe("dongo build agent");
+    expect(actorDisplayIdentity({
+      type: "system",
+      name: ["D", "ONGO"].join(""),
+    })).toBe("dongo");
+    expect(actorDisplayIdentity({ type: "human", name: "Fixture Owner", agentType: "cli" })).toBe("Fixture Owner");
+  });
+
   it("maps only authorized active projects without crossing organization metadata", () => {
     const projects = mapAvailableProjects([
       {
@@ -121,6 +145,15 @@ describe("live project overview mapping", () => {
           name: "Studio",
           slug: "studio",
           plan: "free",
+        },
+        projectAllowance: {
+          resource: "active_projects",
+          plan: "free",
+          activeProjectCount: 1,
+          limit: 1,
+          remaining: 0,
+          canCreate: false,
+          actions: ["use_existing", "archive_existing", "upgrade"],
         },
         projects: [
           {
@@ -168,6 +201,8 @@ describe("live project overview mapping", () => {
         organizationSlug: "studio",
         membershipRole: "owner",
         activeProjectCount: 1,
+        activeProjectLimit: 1,
+        canCreateProject: false,
       }),
       expect.objectContaining({
         id: "project-2",
@@ -183,7 +218,8 @@ describe("live project overview mapping", () => {
     const now = 1_800_000_000_000;
     const ready = {
       _id: "work-ready",
-      identifier: "DON-1",
+      identifier: "dong001",
+      legacyIdentifiers: ["DONGO-1"],
       title: "Ship the live overview",
       description: "Render only durable project state.",
       state: "ready" as const,
@@ -195,7 +231,8 @@ describe("live project overview mapping", () => {
     const attentionWork = {
       ...ready,
       _id: "work-attention",
-      identifier: "DON-2",
+      identifier: "dong002",
+      legacyIdentifiers: ["DONGO-2"],
       title: "Choose an auth mode",
       state: "working" as const,
     };
@@ -204,7 +241,7 @@ describe("live project overview mapping", () => {
       generatedAt: now,
       needsYou: [{
         work: attentionWork,
-        actor: { _id: "actor-1", type: "agent", name: "Codex" },
+        actor: { _id: "actor-1", type: "agent", name: "dongo CLI", agentType: "cli" },
         request: {
           _id: "attention-1",
           requestedByActorId: "actor-1",
@@ -224,6 +261,8 @@ describe("live project overview mapping", () => {
           _id: "intake-1",
           text: "Wire the real data",
           status: "new",
+          revision: 1,
+          updatedAt: now - 5_000,
           createdAt: now - 5_000,
         },
         attachments: [],
@@ -238,8 +277,10 @@ describe("live project overview mapping", () => {
     expect(result.work).toHaveLength(2);
     expect(result.work[0]).toMatchObject({
       id: "work-attention",
+      identifier: "dong002",
+      legacyIdentifiers: ["DONGO-2"],
       state: "needs",
-      agent: "Codex",
+      agent: "Agent",
       unseen: true,
       revision: 2,
       attention: { id: "attention-1", kind: "Decision", important: true },
@@ -250,7 +291,7 @@ describe("live project overview mapping", () => {
       status: "waiting",
       attachmentCount: 0,
     })]);
-    expect(result.work.some((item) => item.identifier === "DON-143")).toBe(false);
+    expect(result.work.some((item) => item.identifier === "DONGO-2")).toBe(false);
   });
 
   it("maps a direct Intake detail with attachments and Work links", () => {
@@ -260,6 +301,8 @@ describe("live project overview mapping", () => {
         clientRequestId: "submission-direct",
         text: "Investigate the deep link",
         status: "processed",
+        revision: 2,
+        updatedAt: Date.now(),
         createdAt: Date.now(),
       },
       attachments: [{
@@ -291,7 +334,8 @@ describe("live project overview mapping", () => {
     const now = Date.now();
     const work = {
       _id: "work-detail",
-      identifier: "DON-3",
+      identifier: "dong003",
+      legacyIdentifiers: ["DONGO-3"],
       title: "Trace the source Intake",
       description: "Keep the submitted context visible.",
       state: "ready" as const,
@@ -303,6 +347,7 @@ describe("live project overview mapping", () => {
     const mapped = mapWorkDetail({
       id: work._id,
       identifier: work.identifier,
+      legacyIdentifiers: work.legacyIdentifiers,
       title: work.title,
       state: "ready",
       goal: work.description,
@@ -310,7 +355,15 @@ describe("live project overview mapping", () => {
       revision: work.revision,
     }, {
       work,
-      runs: [],
+      runs: [{
+        _id: "run-cli",
+        actorId: "actor-codex",
+        status: "completed",
+        summary: "The acting agent completed verification.",
+        startedAt: now - 55_000,
+        lastHeartbeatAt: now - 40_000,
+        finishedAt: now - 40_000,
+      }],
       comments: [
         {
           _id: "comment-agent",
@@ -330,7 +383,7 @@ describe("live project overview mapping", () => {
       artifacts: [],
       attention: [],
       actors: [
-        { _id: "actor-codex", type: "agent", name: "Codex", agentType: "mcp" },
+        { _id: "actor-codex", type: "agent", name: "dongo CLI", displayName: "Mill", agentType: "cli" },
         { _id: "actor-owner", type: "human", name: "Fixture Owner" },
       ],
       attachments: [
@@ -352,6 +405,8 @@ describe("live project overview mapping", () => {
           _id: "intake-source",
           text: "The browser freezes after upload",
           status: "processed",
+          revision: 2,
+          updatedAt: now - 80_000,
           createdAt: now - 90_000,
         },
         attachments: [{
@@ -369,9 +424,9 @@ describe("live project overview mapping", () => {
     })]);
     expect(mapped.conversation).toEqual([
       expect.objectContaining({
-        who: "Codex",
+        who: "Mill",
         role: "agent",
-        agentType: "mcp",
+        agentType: "cli",
         human: false,
         text: "## Verification\n\n✅ `npm test` is green.",
       }),
@@ -386,6 +441,10 @@ describe("live project overview mapping", () => {
         })],
       }),
     ]);
+    expect(mapped).toMatchObject({
+      agent: "Mill",
+      latest: "The acting agent completed verification.",
+    });
     expect(mapped.sources).toEqual([expect.objectContaining({
       id: "intake-source",
       text: "The browser freezes after upload",
@@ -424,6 +483,8 @@ describe("live project overview mapping", () => {
         _id: "intake-stale",
         text: "Reclaim this Intake",
         status: "claimed",
+        revision: 3,
+        updatedAt: Date.now() - 30_000,
         claimExpiresAt: Date.now() - 1,
         createdAt: Date.now() - 60_000,
       },

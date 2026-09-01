@@ -341,6 +341,12 @@ export class ApiConvexOperationExecutor implements ApiOperationExecutor {
       ),
     );
     const controller = new AbortController();
+    const updateWaitSeconds = operation === "get_updates"
+      ? ((input as { waitSeconds?: number }).waitSeconds ?? 0)
+      : 0;
+    const effectiveTimeoutMs = operation === "get_updates"
+      ? Math.max(this.#timeoutMs, updateWaitSeconds * 1_000 + 5_000)
+      : this.#timeoutMs;
     let timedOut = false;
     const relayAbort = (): void => controller.abort(context.signal.reason);
     if (context.signal.aborted) relayAbort();
@@ -348,7 +354,7 @@ export class ApiConvexOperationExecutor implements ApiOperationExecutor {
     const timeout = setTimeout(() => {
       timedOut = true;
       controller.abort(new Error("Internal gateway timed out"));
-    }, this.#timeoutMs);
+    }, effectiveTimeoutMs);
     try {
       const response = await this.#fetch(this.#endpoint, {
         method: INTERNAL_METHOD,

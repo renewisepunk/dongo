@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { fail } from "../lib/errors";
+import { derivedCompactIdentifierPrefix } from "../domains/work/identifiers";
 
 export const createWalkingSkeleton = internalMutation({
   args: {
@@ -91,6 +92,10 @@ export const createWalkingSkeleton = internalMutation({
       slug: args.projectSlug,
       publicRef,
       identifierPrefix: "DON",
+      compactIdentifierPrefix: derivedCompactIdentifierPrefix({
+        slug: args.projectSlug,
+        identifierPrefix: "DON",
+      }),
       nextWorkNumber: 1,
       executionMode: "manual",
       createdAt: now,

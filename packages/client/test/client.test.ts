@@ -50,6 +50,46 @@ test("session start follows the canonical POST contract", async () => {
   assert.deepEqual(JSON.parse((await request?.text()) ?? ""), { externalSessionId: "session-1" });
 });
 
+test("project updates use bounded cursor query parameters", async () => {
+  let request: Request | undefined;
+  const client = new DongoClient({
+    baseUrl: "https://dev.dongo.so/api/agent/v1",
+    tokenProvider,
+    fetch: async (input, init) => {
+      request = new Request(input, init);
+      return Response.json({
+        ok: true,
+        data: {
+          cursor: 8,
+          updates: [],
+          hasMore: false,
+          wait: {
+            status: "timed_out",
+            requestedSeconds: 20,
+            elapsedMilliseconds: 20_000,
+          },
+          delivery: {
+            mechanism: "bounded_pull",
+            stoppedAgentsRestarted: false,
+          },
+          serverTime: 20_000,
+        },
+        requestId: "req_updates",
+        apiVersion: "v1",
+      });
+    },
+  });
+
+  const result = await client.getUpdates({ cursor: 7, waitSeconds: 20 });
+  assert.equal(result.cursor, 8);
+  assert.equal(request?.method, "GET");
+  assert.equal(
+    request?.url,
+    "https://dev.dongo.so/api/agent/v1/get_updates?cursor=7&waitSeconds=20",
+  );
+  assert.equal(await request?.text(), "");
+});
+
 test("read operations retry transient failures", async () => {
   let calls = 0;
   const client = new DongoClient({
@@ -100,6 +140,58 @@ test("client surfaces stable API errors without reflecting credentials", async (
     assert.doesNotMatch(error.message, /not-a-real-token|signature=secret|customer content/);
     return true;
   });
+});
+
+test("identifier exhaustion is specific, non-retryable, and actionable", async () => {
+  let calls = 0;
+  const client = new DongoClient({
+    baseUrl: "https://dev.dongo.so/api/agent/v1",
+    tokenProvider,
+    fetch: async () => {
+      calls += 1;
+      return Response.json(
+        {
+          ok: false,
+          error: {
+            code: "identifier_exhausted",
+            message: "server detail",
+            retryable: false,
+            details: {
+              maxSequence: 999,
+              nextSequence: 1000,
+              action: "use_another_project",
+            },
+          },
+          requestId: "req_identifiers",
+        },
+        { status: 409 },
+      );
+    },
+  });
+
+  await assert.rejects(
+    client.createWork({
+      idempotencyKey: "identifier-exhaustion-test",
+      title: "One too many",
+      goal: "Prove the boundary.",
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof DongoClientError);
+      assert.equal(error.code, "identifier_exhausted");
+      assert.equal(error.retryable, false);
+      assert.equal(
+        error.message,
+        "This project has used all 999 work identifiers. Use another project for new work.",
+      );
+      assert.deepEqual(error.details, {
+        maxSequence: 999,
+        nextSequence: 1000,
+        action: "use_another_project",
+      });
+      return true;
+    },
+  );
+  assert.equal(calls, 1);
 });
 
 test("Retry-After replaces jitter rather than adding a second delay", async () => {
@@ -157,7 +249,7 @@ test("idempotent mutations retry with the same contract key and body", async () 
       if (requests.length === 1) throw new Error("response lost after commit");
       return Response.json({
         ok: true,
-        data: { id: "work_1", identifier: "DON-1", title: "Title", goal: "Goal", state: "ready" },
+        data: { id: "work_1", identifier: "dong001", legacyIdentifiers: ["DON-1"], title: "Title", goal: "Goal", state: "ready" },
         requestId: "req_mutation",
         apiVersion: "v1",
       });
@@ -169,6 +261,34 @@ test("idempotent mutations retry with the same contract key and body", async () 
   assert.equal(requests[0]?.headers.get("idempotency-key"), idempotencyKey);
   assert.equal(requests[1]?.headers.get("idempotency-key"), idempotencyKey);
   assert.equal(await requests[0]?.text(), await requests[1]?.text());
+});
+
+test("create work sends optional planning context, links, and initial comment", async () => {
+  let request: Request | undefined;
+  const client = new DongoClient({
+    baseUrl: "https://dev.dongo.so/api/agent/v1",
+    tokenProvider,
+    fetch: async (input, init) => {
+      request = new Request(input, init);
+      return Response.json({
+        ok: true,
+        data: { id: "work_1", identifier: "dong001", legacyIdentifiers: ["DON-1"], title: "Title", goal: "Goal", state: "ready" },
+        requestId: "req_create_context",
+        apiVersion: "v1",
+      });
+    },
+  });
+  const input = {
+    idempotencyKey: "idem_create_context",
+    title: "Title",
+    goal: "Goal",
+    context: "Compatibility constraints",
+    links: ["https://example.com/design"],
+    initialComment: "Begin with the client inventory.",
+  };
+
+  await client.createWork(input);
+  assert.deepEqual(JSON.parse((await request?.text()) ?? ""), input);
 });
 
 test("contract-invalid inputs fail before transport", async () => {
@@ -205,5 +325,33 @@ test("claim and revision conflicts are never retried even if a server marks them
     client.updateWork({ idempotencyKey: "idem_12345678", workItemId: "work_1", expectedRevision: 1, latestUpdate: "Progress" }),
     (error: unknown) => error instanceof DongoClientError && error.code === "revision_conflict" && !error.retryable,
   );
+  assert.equal(calls, 1);
+});
+
+test("already-resolved Attention errors stay specific and non-retryable", async () => {
+  let calls = 0;
+  const client = new DongoClient({
+    baseUrl: "https://dev.dongo.so/api/agent/v1",
+    tokenProvider,
+    fetch: async () => {
+      calls += 1;
+      return Response.json(
+        {
+          ok: false,
+          error: { code: "already_resolved", message: "untrusted server detail", retryable: true },
+          requestId: "req_resolved",
+        },
+        { status: 409 },
+      );
+    },
+  });
+
+  await assert.rejects(client.getOverview(), (error: unknown) => {
+    assert.ok(error instanceof DongoClientError);
+    assert.equal(error.code, "already_resolved");
+    assert.equal(error.message, "Attention already resolved.");
+    assert.equal(error.retryable, false);
+    return true;
+  });
   assert.equal(calls, 1);
 });

@@ -37,7 +37,7 @@ Intake claims use the same expiring-lease principle.
 
 ### D-05 — Local wake-up semantics
 
-Recommended: V1 promises no background wake-up. Agents pull at session start and before continuing prior dongo work. A human response is available on the next explicit pull or session. An active adapter may poll only while its host session remains open. Product copy must not imply that a stopped local agent resumes itself.
+Decided: V1 promises no background wake-up. Agents pull at session start and before continuing prior dongo work. A human response is available on the next explicit pull or session. The supported active notification mechanism is `dongo attention wait --attention-id ID`: it reads immediately, backs off through 5, 10, 20, and at most 30 seconds between checks, and stops after five minutes by default (with a caller-bounded maximum of one hour). MCP adapters that remain active may apply the same bounded schedule with `dongo_get_attention`. A timed-out waiter exits cleanly and must be restarted explicitly. Product copy must not imply that a stopped local agent resumes itself.
 
 ### D-06 — Agent identity
 
@@ -103,6 +103,10 @@ Every mutation accepts a client-generated idempotency key. Repeating a key with 
 
 Convex remains authoritative. Export files are deterministic and marked as dongo-managed. Sync may replace generated content but never imports edits, stages files, commits, or pushes. Local write failure after a successful cloud mutation is a warning repaired by the next explicit sync.
 
+New Work uses a project-scoped canonical identifier matching `[a-z]{4}[0-9]{3}`, such as `dong012`. The four-letter code is the first four ASCII letters of the immutable lowercase project slug; if the slug supplies fewer than four, append ASCII letters from the legacy identifier prefix and then `x` padding. Sequences run from `001` through `999`. Existing stored identifiers remain exact project-scoped lookup aliases in `legacyIdentifiers`, while display, copy, search, links, snapshots, and exports use the canonical `identifier`. Never synthesize a legacy alias or resolve either form outside the authenticated project.
+
+Creating sequence `999` is valid. A new allocation after it fails before mutation with HTTP `409`, code `identifier_exhausted`, message `This project has used all 999 work identifiers`, `retryable: false`, and details containing `maxSequence: 999`, the authoritative `nextSequence`, and `action: "use_another_project"`. Replaying the successful idempotency key for item `999` still returns the original result because replay resolution happens before allocation.
+
 ### D-14 — Route and deep-link model
 
 Recommended routes:
@@ -115,6 +119,7 @@ Recommended routes:
 /oauth/complete
 /onboarding
 /app/:orgSlug/:projectSlug
+/app/:orgSlug/:projectSlug/ideas
 /app/:orgSlug/:projectSlug/work/:identifier
 /app/:orgSlug/:projectSlug/search
 /app/:orgSlug/:projectSlug/done
@@ -123,6 +128,10 @@ Recommended routes:
 ```
 
 Work detail is route-backed but rendered as a desktop side panel or mobile full-screen sheet, preserving back behavior, focus, and Overview scroll position.
+
+Ideas use `/app/:orgSlug/:projectSlug/ideas`; selected detail is query-backed as
+`?idea={ideaId}` so filtering, Back, direct links, and responsive panel/sheet
+behavior remain predictable without mixing Ideas into Overview or Inbox.
 
 ### D-15 — MCP transport and tool policy
 
@@ -153,6 +162,62 @@ Recommended: before the agent protocol gate, web work is limited to sign-in, pro
 Decided: Cloudflare serves development from `https://dev.dongo.so` and production from `https://dongo.so`. `https://www.dongo.so` redirects to the production apex. Convex deployment `wandering-camel-662` is the named development backend. Development and production use separate Worker environments, OAuth issuers/resources, secrets, R2 buckets, and Convex deployments; a dev token or cookie must never authenticate against production.
 
 `dev.dongo.so` is currently unprovisioned and must be created as part of Wave 0 infrastructure setup. The existing `dongo.so` Worker remains untouched until an accepted production release artifact is promoted. Web, auth, API, and project-specific MCP routes share the environment origin but remain separate route/security boundaries behind the Cloudflare entry layer.
+
+### D-19 — Editable unprocessed Intake
+
+Decided: any authorized project member may enrich Intake while it is `new` or `claimed`; `processed` and `dismissed` Intake is read-only. Editable fields are text, optional context, and up to 100 normalized HTTP(S) links. Attachments are additive in this slice: an editor may attach finalized files they uploaded for the same project, but may not remove an existing attachment. The saved Intake must still contain text or at least one available attachment, and may contain no more than 20 attachments.
+
+Every save is idempotent, requires the expected revision, records the human Actor through an immutable `intake.updated` Event, bumps `revision` and `updatedAt`, and preserves an existing active or stale claim. An agent triaging the Intake must therefore refetch after `revision_conflict` and use the current text, context, links, and finalized attachments before completing triage. Processed/dismissed edits fail with `invalid_transition`; a stale save fails with `revision_conflict` and the expected/current revisions.
+
+Convex subscriptions are authoritative. The human editor keeps an unsaved draft when live state changes, sees the current server version, and explicitly retries or merges instead of silently overwriting another human or agent. The server-authoritative human `displayLabel` is deterministic and never empty: use the first nonblank normalized text line, otherwise the first available attachment filename, otherwise the neutral `Untitled intake` fallback for legacy/deleted-data edge cases. Create, list, detail, search, and source-Intake surfaces use that value.
+
+### D-20 — Safe parallel agent execution
+
+Decided: every project starts in **Single-agent** mode. An owner may opt into
+**Allow parallel work** and choose a `maxConcurrentRuns` safety cap from 2
+through 8; the default is 4. The cap is operational safety policy, not a paid
+plan entitlement. Disabled projects have an effective cap of 1. The existing
+free-plan active-project allowance remains a separate organization-level limit.
+
+Parallel execution means different agent sessions may hold different WorkItems.
+One session may own at most one active WorkItem, and no two sessions may own the
+same item. Every start remains an atomic claim. An additional concurrent start
+is admitted only when the project opted in, capacity remains, the new session is
+distinct, the host explicitly reports support for both parallel execution and
+worktree isolation, and the Run reports isolated-worktree metadata. Missing,
+unsupported, or undisclosed capabilities fail closed for parallel admission but
+remain fully usable for serial work.
+
+dongo coordinates policy, atomic claims, Runs, and live state; it does not spawn
+agents, create Git worktrees, choose branches, or inspect repository paths. The
+host owns those actions and must report capability and bounded workspace
+metadata truthfully. Never transmit an absolute local path. Human live views are
+derived from authoritative active Runs and subscriptions, not inferred from
+host presence or generic CLI activity.
+
+### D-21 — Human Ideas backlog
+
+Decided: Ideas are a dedicated human-only project backlog, not Intake, Work, or
+an agent-visible planning queue. An Idea has an explicit title, optional text,
+context, normalized HTTP(S) links, and finalized attachments. Humans may create,
+edit, order, filter, archive, and restore Ideas through authenticated product
+operations. Agent Overview, search, snapshots, update signals, HTTPS operations,
+MCP tools, and CLI workflow commands never list or mutate Ideas.
+
+Idea states are `open`, `archived`, and terminal `promoted`. Only open Ideas are
+editable, reorderable, archivable, or eligible for promotion. Archived Ideas
+may be restored. Promotion is a deliberate human action that atomically creates
+one Intake from the current canonical Idea, records durable two-way provenance,
+and makes the Idea terminal. One Idea permanently maps to exactly one Intake:
+replaying the same idempotency key returns the original result, and a later
+promotion attempt with another key safely returns the same Intake with
+`created: false` rather than creating a duplicate.
+
+All human writes are idempotent, and every mutation of an existing Idea is
+revision-aware. Promotion keeps the original Idea as linked history and makes
+its finalized attachments agent-visible only through the created Intake. It
+does not assign, claim, or authorize starting work; the Intake enters the normal
+human-to-agent triage boundary.
 
 ## Decisions that may wait until after the walking skeleton
 

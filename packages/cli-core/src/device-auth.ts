@@ -41,6 +41,7 @@ export interface FirstProjectProposal {
   repositoryUrl?: string;
   executionMode: "manual" | "autonomous";
   projectRef?: string;
+  projectAction?: "create";
 }
 
 export interface DeviceAuthorizationOptions {
@@ -184,6 +185,7 @@ export class DeviceAuthorizationClient {
     if (proposal.repositoryUrl) url.searchParams.set("repository_url", proposal.repositoryUrl);
     url.searchParams.set("execution_mode", proposal.executionMode);
     if (proposal.projectRef) url.searchParams.set("project_ref", proposal.projectRef);
+    if (proposal.projectAction) url.searchParams.set("project_action", proposal.projectAction);
     return url.toString();
   }
 

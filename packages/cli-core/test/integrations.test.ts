@@ -21,9 +21,31 @@ test("integration preview renders checked-in host assets without writing or cred
   const preview = await configureIntegration(input(root, "codex", false));
   assert.equal(preview.applied, false);
   assert.equal(preview.serverName, "dongo-abcdef");
+  assert.doesNotMatch(
+    JSON.stringify({
+      serverName: preview.serverName,
+      lifecycle: preview.lifecycle,
+      files: preview.files,
+    }),
+    /\b(?:Dongo|DONGO)\b(?![-_.])/u,
+  );
   assert.equal(preview.endpoint, "https://dev.dongo.so/p/project_abcdef/mcp");
   assert.deepEqual(preview.files.map((file) => file.path), [".codex/config.toml", "AGENTS.md"]);
   assert.doesNotMatch(preview.files[0]?.managedContent ?? "", /authorization|bearer|token|secret|header/i);
+  assert.match(preview.files[1]?.managedContent ?? "", /durable system of record for repository planning and execution/u);
+  assert.match(preview.files[1]?.managedContent ?? "", /attach every repository change to its active Run before editing/u);
+  assert.match(preview.files[1]?.managedContent ?? "", /implementation and relevant verification are complete/u);
+  assert.equal(preview.lifecycle.state, "preview_ready");
+  assert.equal(preview.lifecycle.connectionState, "unverified");
+  assert.deepEqual(preview.lifecycle.steps.map(({ id, status }) => ({ id, status })), [
+    { id: "apply_configuration", status: "action_required" },
+    { id: "approve_project_server", status: "conditional" },
+    { id: "complete_login", status: "conditional" },
+    { id: "restart_host", status: "conditional" },
+    { id: "verify_connection", status: "pending" },
+  ]);
+  assert.equal(preview.lifecycle.steps[0]?.command, "dongo integrate codex --apply");
+  assert.equal(preview.lifecycle.steps[2]?.command, preview.loginCommand);
   await assert.rejects(readFile(path.join(root, ".codex", "config.toml"), "utf8"), { code: "ENOENT" });
 });
 
@@ -38,6 +60,11 @@ test("Codex apply preserves unrelated TOML and prose and is idempotent", async (
   );
   const applied = await configureIntegration(input(root, "codex", true));
   assert.equal(applied.files.every((file) => file.changed), true);
+  assert.equal(applied.lifecycle.state, "configuration_applied");
+  assert.equal(applied.lifecycle.connectionState, "unverified");
+  assert.equal(applied.lifecycle.steps[0]?.status, "complete");
+  assert.equal(applied.lifecycle.steps[0]?.command, undefined);
+  assert.match(applied.lifecycle.summary, /Connection verification is still required/u);
   const config = await readFile(path.join(root, ".codex", "config.toml"), "utf8");
   const agents = await readFile(path.join(root, "AGENTS.md"), "utf8");
   assert.match(config, /model = "gpt"/);
@@ -112,9 +139,12 @@ test("Claude JSON merge preserves unrelated servers and conflicting ownership ch
   await chmod(path.join(root, ".mcp.json"), 0o600);
   await configureIntegration(input(root, "claude", true));
   const merged = JSON.parse(await readFile(path.join(root, ".mcp.json"), "utf8"));
+  const claude = await readFile(path.join(root, "CLAUDE.md"), "utf8");
   assert.equal(merged.custom, true);
   assert.equal(merged.mcpServers.other.url, "https://other.example/mcp");
   assert.equal(merged.mcpServers["dongo-abcdef"].url, "https://dev.dongo.so/p/project_abcdef/mcp");
+  assert.match(claude, /durable system of record for repository planning and execution/u);
+  assert.match(claude, /Record meaningful progress, blockers, Attention requests, and outcomes/u);
   assert.equal((await lstat(path.join(root, ".mcp.json"))).mode & 0o777, 0o600);
 
   merged.mcpServers["dongo-abcdef"].url = "https://attacker.example/mcp";

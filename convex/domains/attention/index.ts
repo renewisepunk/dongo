@@ -223,7 +223,7 @@ export const respond = mutation({
       },
       async () => {
         if (request.status === "resolved") {
-          fail("invalid_transition", "Attention request is already resolved");
+          fail("already_resolved", "Attention already resolved.");
         }
         const commentId = await ctx.db.insert("comments", {
           organizationId: request.organizationId,
@@ -292,7 +292,7 @@ export const resolveWithoutResponse = mutation({
       },
       async () => {
         if (request.status === "resolved") {
-          fail("invalid_transition", "Attention request is already resolved");
+          fail("already_resolved", "Attention already resolved.");
         }
         await ctx.db.patch(request._id, {
           status: "resolved",
@@ -353,7 +353,7 @@ export const cancel = internalMutation({
       },
       async () => {
         if (request.status === "resolved") {
-          fail("invalid_transition", "Attention request is already resolved");
+          fail("already_resolved", "Attention already resolved.");
         }
         await ctx.db.patch(request._id, {
           status: "resolved",
@@ -437,7 +437,7 @@ export const resolveForAgent = internalMutation({
       },
       async () => {
         if (request.status === "resolved") {
-          fail("invalid_transition", "Attention request is already resolved");
+          fail("already_resolved", "Attention already resolved.");
         }
         const commentId =
           body || selectedOption

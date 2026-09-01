@@ -201,7 +201,7 @@ Normal output:
 ```text
 Opened https://dev.dongo.so/device?...
 Confirm code ABCD-EFGH in the browser.
-Connected to Fixture Studio / Dongo.
+Connected to Fixture Studio / dongo.
 ```
 
 Normal output must not say:

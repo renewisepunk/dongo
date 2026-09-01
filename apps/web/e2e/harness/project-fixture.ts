@@ -5,9 +5,11 @@ import type {
 import type { AttachmentSummary, Intake, WorkItem } from "../../src/features/overview/model";
 import type {
   ProjectInfo,
+  ProjectConcurrencySnapshot,
   ProjectOverview,
   ProjectSearchPage,
 } from "../../src/lib/project-data";
+import { intakeDisplayLabel } from "../../src/lib/intake-editing";
 
 const currentProject: ProjectInfo = {
   id: "project-fixture",
@@ -19,9 +21,16 @@ const currentProject: ProjectInfo = {
   organizationPlan: "paid",
   membershipRole: "owner",
   activeProjectCount: 2,
+  activeProjectLimit: null,
+  canCreateProject: true,
   repositoryUrl: "https://github.com/renewisepunk/dongo",
   identifierPrefix: "DONGO",
   executionMode: "manual",
+  parallelExecution: {
+    enabled: true,
+    maxConcurrentRuns: 4,
+    requiresIsolatedWorkspaces: true,
+  },
 };
 
 const availableProjects: readonly ProjectInfo[] = [
@@ -38,7 +47,8 @@ const availableProjects: readonly ProjectInfo[] = [
 let work: WorkItem[] = [
   {
     id: "work-needs",
-    identifier: "DONGO-7",
+    identifier: "dong007",
+    legacyIdentifiers: ["DONGO-7"],
     title: "Approve the release candidate",
     state: "needs",
     agent: "Codex",
@@ -68,7 +78,8 @@ let work: WorkItem[] = [
   },
   {
     id: "work-working",
-    identifier: "DONGO-8",
+    identifier: "dong008",
+    legacyIdentifiers: ["DONGO-8"],
     title: "Harden attachment delivery",
     state: "working",
     agent: "Claude",
@@ -81,7 +92,8 @@ let work: WorkItem[] = [
   },
   {
     id: "work-ready-a",
-    identifier: "DONGO-9",
+    identifier: "dong009",
+    legacyIdentifiers: ["DONGO-9"],
     title: "Verify fixture search",
     state: "ready",
     age: "8m",
@@ -91,7 +103,8 @@ let work: WorkItem[] = [
   },
   {
     id: "work-ready-b",
-    identifier: "DONGO-10",
+    identifier: "dong010",
+    legacyIdentifiers: ["DONGO-10"],
     title: "Audit mobile controls",
     state: "ready",
     age: "7m",
@@ -101,7 +114,8 @@ let work: WorkItem[] = [
   },
   {
     id: "work-done",
-    identifier: "DONGO-6",
+    identifier: "dong006",
+    legacyIdentifiers: ["DONGO-6"],
     title: "Complete the agent golden journey",
     state: "done",
     agent: "Codex",
@@ -136,6 +150,12 @@ let work: WorkItem[] = [
         "",
         "<img src=x onerror=alert(1)>",
       ].join("\n"),
+    }, {
+      who: "dongo CLI",
+      role: "agent",
+      agentType: "cli",
+      when: "1h",
+      text: "Historical transport-attributed update.",
     }],
     rank: 500,
     revision: 7,
@@ -144,6 +164,19 @@ let work: WorkItem[] = [
 
 let intakes: Intake[] = [
   {
+    id: "intake-from-idea",
+    sourceIdeaId: "idea-promoted",
+    text: "Project health digest",
+    submittedText: "Project health digest",
+    status: "processed",
+    age: "2m",
+    attachmentCount: 0,
+    createdAt: Date.now() - 2 * 60_000,
+    linkedWorkIds: [],
+    revision: 2,
+    editable: false,
+  },
+  {
     id: "intake-release",
     text: "Prepare a trustworthy release candidate",
     status: "processed",
@@ -151,14 +184,48 @@ let intakes: Intake[] = [
     attachmentCount: 0,
     createdAt: Date.now() - 14 * 60_000,
     linkedWorkIds: ["work-needs"],
+    revision: 2,
+    editable: false,
   },
   {
     id: "intake-waiting",
     text: "Investigate the fixture login screen",
+    submittedText: "Investigate the fixture login screen",
+    context: "Reproduce this from a signed-out browser.",
+    links: ["https://example.test/login-report"],
     status: "waiting",
     age: "3m",
     attachmentCount: 0,
     createdAt: Date.now() - 3 * 60_000,
+    revision: 1,
+    editable: true,
+  },
+  {
+    id: "intake-empty",
+    text: "Untitled intake",
+    status: "waiting",
+    age: "now",
+    attachmentCount: 0,
+    createdAt: Date.UTC(2026, 8, 1),
+    revision: 1,
+    editable: true,
+  },
+  {
+    id: "intake-attachment-only",
+    text: "capture.png",
+    status: "waiting",
+    age: "now",
+    attachment: "capture.png",
+    attachments: [{
+      id: "attachment-existing-capture",
+      filename: "capture.png",
+      mimeType: "image/png",
+      byteSize: 256,
+    }],
+    attachmentCount: 1,
+    createdAt: Date.UTC(2026, 8, 1),
+    revision: 1,
+    editable: true,
   },
 ];
 
@@ -167,6 +234,8 @@ type IntakeListener = (item: Intake) => void;
 const overviewListeners = new Set<(overview: ProjectOverview) => void>();
 const workListeners = new Map<string, Set<WorkListener>>();
 const intakeListeners = new Map<string, Set<IntakeListener>>();
+let fixtureAgentWaiting = true;
+let fixtureIntakeConflictRaised = false;
 const uploadAttempts = new Map<string, number>();
 const uploadedAttachments = new Map<string, {
   id: string;
@@ -175,6 +244,10 @@ const uploadedAttachments = new Map<string, {
   byteSize: number;
   blob: Blob;
 }>();
+
+function fixtureScenario(): string | null {
+  return new URLSearchParams(window.location.search).get("scenario");
+}
 
 function attachmentSummary(attachmentId: string): AttachmentSummary | undefined {
   const attachment = uploadedAttachments.get(attachmentId);
@@ -239,6 +312,123 @@ const connection: OverviewConnection = {
     queueMicrotask(() => onUpdate(overview()));
     return () => overviewListeners.delete(onUpdate);
   },
+  subscribeConcurrency(onUpdate, onError) {
+    if (fixtureScenario() === "concurrency-error") {
+      queueMicrotask(() => onError(new Error("fixture concurrency detail must stay hidden")));
+      return () => undefined;
+    }
+    const snapshot = (latestProgress: string): ProjectConcurrencySnapshot => ({
+      serverTime: Date.now(),
+      policy: {
+        enabled: true,
+        maxConcurrentRuns: 4,
+        requiresIsolatedWorkspaces: true,
+      },
+      capacity: { activeRuns: 1, maxConcurrentRuns: 4, remaining: 3 },
+      runs: [
+        {
+          id: "run-attachments",
+          workItem: {
+            id: "work-working",
+            identifier: "dong008",
+            title: "Harden attachment delivery",
+          },
+          actor: { _id: "actor-claude", type: "agent", name: "Claude", agentType: "Claude Code" },
+          state: "running",
+          latestProgress,
+          startedAt: Date.now() - 122_000,
+          lastHeartbeatAt: Date.now() - 2_000,
+          elapsedMilliseconds: 122_000,
+          lease: { status: "healthy", expiresAt: Date.now() + 28_000 },
+          hostCapabilities: {
+            parallelExecution: "supported",
+            worktreeIsolation: "supported",
+          },
+          workspace: {
+            kind: "worktree",
+            worktreeName: "attachments",
+            branch: "codex/attachment-delivery",
+          },
+        },
+        {
+          id: "run-release",
+          workItem: {
+            id: "work-needs",
+            identifier: "dong007",
+            title: "Approve the release candidate",
+          },
+          actor: { _id: "actor-codex", type: "agent", name: "Codex", agentType: "Codex" },
+          state: "waiting",
+          latestProgress: "Waiting for the release decision.",
+          startedAt: Date.now() - 362_000,
+          lastHeartbeatAt: Date.now() - 8_000,
+          elapsedMilliseconds: 362_000,
+          lease: { status: "released" },
+          hostCapabilities: {
+            parallelExecution: fixtureScenario() === "concurrency-undisclosed"
+              ? "undisclosed"
+              : "supported",
+            worktreeIsolation: fixtureScenario() === "concurrency-undisclosed"
+              ? "undisclosed"
+              : "supported",
+          },
+          workspace: { kind: "undisclosed" },
+        },
+      ],
+    });
+    queueMicrotask(() => onUpdate(snapshot("Testing retry and cancellation semantics.")));
+    if (fixtureScenario() === "concurrency-live") {
+      const timer = window.setTimeout(() => {
+        onUpdate(snapshot("Live progress: retry cancellation verified."));
+      }, 650);
+      return () => window.clearTimeout(timer);
+    }
+    return () => undefined;
+  },
+  subscribeAgentUpdatePresence(onUpdate, onError) {
+    const scenario = fixtureScenario();
+    if (scenario === "presence-error") {
+      queueMicrotask(() => onError(new Error("fixture presence detail must stay hidden")));
+      return () => undefined;
+    }
+    const emit = (state: "waiting" | "recently_active" | "stopped") => {
+      fixtureAgentWaiting = state === "waiting";
+      onUpdate({
+        serverTime: Date.now(),
+        installations: [{
+          installationId: "installation-codex",
+          actor: {
+            id: "actor-codex",
+            displayName: "Codex",
+            agentType: "Codex",
+          },
+          capability: "get_updates",
+          state,
+          delivery: state === "waiting" ? "bounded_wait" : state === "recently_active" ? "next_pull" : "offline",
+          lastPulledAt: Date.now() - 1_000,
+          ...(state === "waiting" ? { waitingUntil: Date.now() + 20_000 } : {}),
+        }],
+        truth: { stoppedAgentsRestarted: false },
+      });
+    };
+    if (scenario === "presence-live-change") {
+      queueMicrotask(() => emit("stopped"));
+      const timer = window.setTimeout(() => emit("waiting"), 700);
+      return () => window.clearTimeout(timer);
+    }
+    if (scenario === "presence-slow") {
+      const timer = window.setTimeout(() => emit("waiting"), 250);
+      return () => window.clearTimeout(timer);
+    }
+    queueMicrotask(() => emit(
+      scenario === "presence-next-pull"
+        ? "recently_active"
+        : scenario === "presence-stopped"
+          ? "stopped"
+          : "waiting",
+    ));
+    return () => undefined;
+  },
   subscribeWorkDetail(item, onUpdate) {
     return subscribe(
       workListeners,
@@ -255,19 +445,50 @@ const connection: OverviewConnection = {
       work.find((candidate) => candidate.id === id),
     );
   },
-  subscribeIntakeDetail(id, onUpdate) {
+  subscribeWorkByIdentifier(identifier, onUpdate) {
+    const item = work.find((candidate) =>
+      candidate.identifier === identifier || candidate.legacyIdentifiers?.includes(identifier),
+    );
     return subscribe(
+      workListeners,
+      item?.id ?? identifier,
+      onUpdate,
+      item,
+    );
+  },
+  subscribeIntakeDetail(id, onUpdate) {
+    const unsubscribe = subscribe(
       intakeListeners,
       id,
       onUpdate,
       intakes.find((candidate) => candidate.id === id),
     );
+    if (fixtureScenario() === "intake-edit-live" && id === "intake-waiting") {
+      const timer = window.setTimeout(() => {
+        intakes = intakes.map((item) => item.id === id ? {
+          ...item,
+          context: "Live context added from another browser.",
+          revision: (item.revision ?? 1) + 1,
+        } : item);
+        emitIntake(id);
+        emitOverview();
+      }, 500);
+      return () => {
+        window.clearTimeout(timer);
+        unsubscribe();
+      };
+    }
+    return unsubscribe;
   },
   async searchProject(term): Promise<ProjectSearchPage> {
     const normalized = term.trim().toLowerCase();
     return {
       results: [
-        ...work.filter((item) => `${item.title} ${item.goal}`.toLowerCase().includes(normalized)).map((item) => ({
+        ...work.filter((item) =>
+          `${item.identifier} ${item.legacyIdentifiers?.join(" ") ?? ""} ${item.title} ${item.goal}`
+            .toLowerCase()
+            .includes(normalized)
+        ).map((item) => ({
           kind: "work" as const,
           id: item.id,
           targetKind: "work" as const,
@@ -279,7 +500,11 @@ const connection: OverviewConnection = {
           age: item.age ?? "now",
           createdAt: Date.now() - 1_000,
         })),
-        ...intakes.filter((item) => item.text.toLowerCase().includes(normalized)).map((item) => ({
+        ...intakes.filter((item) =>
+          `${item.submittedText ?? ""} ${item.attachments?.map((attachment) => attachment.filename).join(" ") ?? ""} ${item.text}`
+            .toLowerCase()
+            .includes(normalized)
+        ).map((item) => ({
           kind: "intake" as const,
           id: item.id,
           targetKind: "intake" as const,
@@ -306,11 +531,104 @@ const connection: OverviewConnection = {
         return attachment ? [attachment] : [];
       }),
       createdAt: Date.now(),
+      revision: 1,
+      editable: true,
     };
     intakes = [next, ...intakes];
     emitOverview();
     emitIntake(id);
     return { intakeId: id, revision: 1 };
+  },
+  async updateIntake(input) {
+    const item = intakes.find((candidate) => candidate.id === input.intakeId);
+    if (!item) throw new Error("fixture Intake unavailable");
+    if (!item.editable) {
+      throw Object.assign(new Error("invalid_transition"), { data: { code: "invalid_transition" } });
+    }
+    if (fixtureScenario() === "intake-edit-conflict" && !fixtureIntakeConflictRaised) {
+      fixtureIntakeConflictRaised = true;
+      intakes = intakes.map((candidate) => candidate.id === item.id ? {
+        ...candidate,
+        context: "Latest context saved from another browser.",
+        revision: (candidate.revision ?? 1) + 1,
+      } : candidate);
+      emitIntake(item.id);
+      emitOverview();
+      throw Object.assign(new Error("revision_conflict"), {
+        data: {
+          code: "revision_conflict",
+          details: { expectedRevision: input.expectedRevision, currentRevision: (item.revision ?? 1) + 1 },
+        },
+      });
+    }
+    if (input.expectedRevision !== (item.revision ?? 1)) {
+      throw Object.assign(new Error("revision_conflict"), { data: { code: "revision_conflict" } });
+    }
+    if (fixtureScenario() === "intake-edit-processed-race") {
+      intakes = intakes.map((candidate) => candidate.id === item.id ? {
+        ...candidate,
+        status: "processed",
+        editable: false,
+        revision: (candidate.revision ?? 1) + 1,
+      } : candidate);
+      emitIntake(item.id);
+      emitOverview();
+      throw Object.assign(new Error("invalid_transition"), { data: { code: "invalid_transition" } });
+    }
+    if (fixtureScenario() === "intake-edit-error") throw new Error("fixture Intake edit detail must stay hidden");
+    const added = (input.addAttachmentIds ?? []).flatMap((attachmentId) => {
+      const attachment = attachmentSummary(attachmentId);
+      return attachment ? [attachment] : [];
+    });
+    const nextRevision = (item.revision ?? 1) + 1;
+    intakes = intakes.map((candidate) => candidate.id === item.id ? {
+      ...candidate,
+      submittedText: input.text,
+      text: intakeDisplayLabel(
+        input.text,
+        [...(candidate.attachments ?? []), ...added],
+      ),
+      context: input.context,
+      links: input.links ?? [],
+      attachments: [...(candidate.attachments ?? []), ...added],
+      attachment: candidate.attachments?.[0]?.filename ?? added[0]?.filename,
+      attachmentCount: (candidate.attachments?.length ?? 0) + added.length,
+      revision: nextRevision,
+    } : candidate);
+    emitIntake(item.id);
+    emitOverview();
+    document.documentElement.dataset.fixtureIntakeEdit = JSON.stringify(input);
+    return {
+      intakeId: item.id,
+      revision: nextRevision,
+      updatedAt: Date.now(),
+      addedAttachmentIds: added.map((attachment) => attachment.id),
+    };
+  },
+  async nudgeIntake(intakeId, priority, idempotencyKey) {
+    if (fixtureScenario() === "nudge-error") throw new Error("fixture nudge detail must stay hidden");
+    document.documentElement.dataset.fixtureIntakeNudge = JSON.stringify({
+      intakeId,
+      priority,
+      idempotencyKey,
+    });
+    return {
+      signal: {
+        id: `signal-${idempotencyKey}`,
+        version: 1,
+        kind: "intake_available" as const,
+        intakeId,
+        priority,
+        createdAt: Date.now(),
+      },
+      delivery: {
+        mechanism: "bounded_pull" as const,
+        waitingInstallations: fixtureAgentWaiting ? 1 : 0,
+        recentlyActiveInstallations: fixtureScenario() === "presence-next-pull" ? 1 : 0,
+        stoppedInstallations: fixtureScenario() === "presence-stopped" ? 1 : 0,
+        stoppedAgentsRestarted: false as const,
+      },
+    };
   },
   async uploadAttachment(file, onProgress, signal) {
     if (signal.aborted) throw new DOMException("Upload cancelled", "AbortError");
@@ -359,6 +677,22 @@ const connection: OverviewConnection = {
   async respondToAttention(attentionRequestId, selectedOption, body) {
     const item = work.find((candidate) => candidate.attention?.id === attentionRequestId);
     if (!item) throw new Error("fixture attention not found");
+    if (fixtureScenario() === "attention-conflict") {
+      updateWork(item.id, (current) => ({
+        ...current,
+        state: "working",
+        revision: current.revision + 1,
+        latest: "The agent resolved this request while your response was open.",
+        attention: current.attention
+          ? {
+              ...current.attention,
+              status: "resolved",
+              response: "The agent continued with the safe default.",
+            }
+          : undefined,
+      }));
+      throw new Error("revision_conflict");
+    }
     const response = [selectedOption, body].filter(Boolean).join(" — ");
     updateWork(item.id, (current) => ({
       ...current,
@@ -408,6 +742,17 @@ export async function connectFixtureProject(
 ): Promise<OverviewConnection> {
   if (orgSlug !== currentProject.organizationSlug || projectSlug !== currentProject.slug) {
     throw new Error("Fixture project not found");
+  }
+  if (fixtureScenario() === "live-agent-update") {
+    window.setTimeout(() => {
+      updateWork("work-working", (current) => ({
+        ...current,
+        revision: current.revision + 1,
+        agent: "dongo CLI",
+        latest: "Agent update arrived over the live project subscription.",
+        elapsed: "now",
+      }));
+    }, 600);
   }
   return connection;
 }

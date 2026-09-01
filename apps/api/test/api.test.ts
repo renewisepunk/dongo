@@ -436,6 +436,10 @@ class FakeVerifier implements ApiTokenVerifier {
 class FakeExecutor implements ApiOperationExecutor {
   calls: Array<{ operation: string; input: Record<string, unknown> }> = [];
 
+  constructor(
+    private readonly data: Record<string, unknown> = { accepted: true },
+  ) {}
+
   async execute(
     operation: Parameters<ApiOperationExecutor["execute"]>[0],
     input: Parameters<ApiOperationExecutor["execute"]>[1],
@@ -443,7 +447,7 @@ class FakeExecutor implements ApiOperationExecutor {
     this.calls.push({ operation, input });
     return {
       ok: true as const,
-      data: { accepted: true },
+      data: this.data,
       requestId: "executor-request",
     };
   }
@@ -487,6 +491,49 @@ describe("CLI REST gateway", () => {
     expect(executor.calls).toEqual([
       { operation: "get_work", input: { identifier: "DON-42" } },
     ]);
+  });
+
+  it("preserves enriched Intake fields in the existing API response", async () => {
+    const intake = {
+      id: "intake-1",
+      projectId: "project-1",
+      text: "Investigate the failing import",
+      context: "It began after the latest vendor export.",
+      links: ["https://example.com/failure-report"],
+      state: "waiting",
+      revision: 2,
+      createdBy: {
+        id: "actor-1",
+        kind: "human",
+        displayName: "Project member",
+      },
+      attachmentIds: ["attachment-1"],
+      linkedWorkItemIds: [],
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    const executor = new FakeExecutor(intake);
+    const worker = createDongoApiGateway({
+      resource: RESOURCE,
+      allowedHostnames: ["dev.dongo.so"],
+      tokenVerifier: new FakeVerifier(principal()),
+      operationExecutor: executor,
+      rateLimiter: allowedRateLimiter(),
+    });
+    const response = await worker.fetch(new Request(
+      "https://dev.dongo.so/api/agent/v1/get_intake?intakeId=intake-1",
+      { headers: { authorization: "Bearer opaque-access-token" } },
+    ));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      data: intake,
+      apiVersion: "v1",
+    });
+    expect(executor.calls).toEqual([{
+      operation: "get_intake",
+      input: { intakeId: "intake-1" },
+    }]);
   });
 
   it("requires exact POST JSON and Idempotency-Key consistency", async () => {
@@ -534,6 +581,65 @@ describe("CLI REST gateway", () => {
       error: { code: "validation", retryable: false },
     });
     expect(executor.calls).toHaveLength(1);
+  });
+
+  it("forwards additive host capability and safe workspace metadata", async () => {
+    const executor = new FakeExecutor();
+    const worker = createDongoApiGateway({
+      resource: RESOURCE,
+      allowedHostnames: ["dev.dongo.so"],
+      tokenVerifier: new FakeVerifier(principal()),
+      operationExecutor: executor,
+      rateLimiter: allowedRateLimiter(),
+    });
+    const sessionInput = {
+      externalSessionId: "agent-session",
+      hostCapabilities: {
+        parallelExecution: "supported",
+        worktreeIsolation: "supported",
+      },
+    };
+    const session = await worker.fetch(new Request(
+      "https://dev.dongo.so/api/agent/v1/session_start",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer opaque",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(sessionInput),
+      },
+    ));
+    expect(session.status).toBe(200);
+
+    const workInput = {
+      workItemId: "work-1",
+      expectedRevision: 2,
+      externalSessionId: "agent-session",
+      workspace: {
+        kind: "worktree",
+        worktreeName: "agent-one",
+        branch: "work/one",
+      },
+      idempotencyKey: "parallel-start-key",
+    };
+    const start = await worker.fetch(new Request(
+      "https://dev.dongo.so/api/agent/v1/start_work",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer opaque",
+          "content-type": "application/json",
+          "idempotency-key": workInput.idempotencyKey,
+        },
+        body: JSON.stringify(workInput),
+      },
+    ));
+    expect(start.status).toBe(200);
+    expect(executor.calls).toEqual([
+      { operation: "session_start", input: sessionInput },
+      { operation: "start_work", input: workInput },
+    ]);
   });
 
   it("enforces method, bearer, scope, and rate limit boundaries", async () => {

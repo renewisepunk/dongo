@@ -12,6 +12,7 @@ export interface ExportArtifact {
 export interface ExportWorkItem {
   id?: WorkItem["id"] | string;
   identifier: WorkItem["identifier"];
+  legacyIdentifiers?: WorkItem["legacyIdentifiers"];
   title: WorkItem["title"];
   state?: WorkItem["state"] | string;
   status?: string;

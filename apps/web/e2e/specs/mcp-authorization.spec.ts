@@ -55,16 +55,18 @@ test("fails MCP project selection closed for no project, session, or backend", a
   await expect(page).toHaveURL(/\/login\?returnTo=/);
 });
 
-test("reviews and allows an MCP host with exact account, project, resource, and scopes", async ({ page }) => {
+test("reviews and allows an optional MCP host with a simplified project summary", async ({ page }) => {
   await page.goto(`/oauth/consent?${signedConsentQuery}`);
   await expect(page.getByRole("heading", { name: "Allow Claude Code to use dongo?" })).toBeVisible();
-  await expect(page.getByText("fixture@example.test", { exact: true })).toBeVisible();
-  await expect(page.getByText("https://dev.dongo.so/p/fixture-project/mcp", { exact: true })).toBeVisible();
+  await expect(page.getByText("Optional MCP connection", { exact: true })).toBeVisible();
+  await expect(page.getByText("The CLI works without this optional connection.")).toBeVisible();
+  await expect(page.getByText("fixture@example.test", { exact: true })).toBeHidden();
+  await expect(page.getByText("https://dev.dongo.so/p/fixture-project/mcp", { exact: true })).toBeHidden();
   await expect(page.getByText("Read project context, work, comments, and attachment metadata.")).toBeVisible();
   await expect(page.getByText("Keep this host authorized until its grant is revoked.")).toBeVisible();
 
   await page.getByLabel("project").selectOption("companion-project");
-  await page.getByRole("button", { name: "Allow access" }).click();
+  await page.getByRole("button", { name: "Approve MCP access" }).click();
 
   const selected = await page.locator("html").getAttribute("data-fixture-consent-project");
   expect(JSON.parse(selected ?? "null")).toMatchObject({ publicRef: "companion-project" });
@@ -73,6 +75,24 @@ test("reviews and allows an MCP host with exact account, project, resource, and 
   await expect(page.locator("html")).toHaveAttribute(
     "data-fixture-consent-follow",
     JSON.stringify({ redirect: true, url: "/fixture/oauth-complete" }),
+  );
+});
+
+test("normalizes legacy runtime client casing in visible and accessible consent copy", async ({ page }) => {
+  const query = signedConsentQuery.replace("client_id=claude", "client_id=legacy-dongo-client");
+  await page.goto(`/oauth/consent?${query}`);
+
+  await expect(page.getByRole("heading", { name: "Allow dongo agent to use dongo?" })).toBeVisible();
+  const surfacedCopy = await page.locator("body").innerText();
+  const accessibleLabels = await page.locator("[aria-label]").evaluateAll((elements) =>
+    elements.map((element) => element.getAttribute("aria-label") ?? "").join("\n"),
+  );
+  const metadata = await page.locator("meta[content]").evaluateAll((elements) =>
+    elements.map((element) => element.getAttribute("content") ?? "").join("\n"),
+  );
+  const forbiddenBrandCase = new RegExp(["D", "ongo|D", "ONGO"].join(""));
+  expect(`${await page.title()}\n${surfacedCopy}\n${accessibleLabels}\n${metadata}`).not.toMatch(
+    forbiddenBrandCase,
   );
 });
 
@@ -93,7 +113,7 @@ test("fails MCP consent closed for missing client, project, session, or backend"
   await expect(page.getByRole("alert")).toHaveText(
     "You do not have an active project available for this request.",
   );
-  await expect(page.getByRole("button", { name: "Allow access" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Approve MCP access" })).toBeDisabled();
 
   await page.goto(`/oauth/consent?${signedConsentQuery}&scenario=client-error`);
   await expect(page.getByText("This OAuth request could not be loaded.")).toBeVisible();

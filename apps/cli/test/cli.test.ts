@@ -5,9 +5,12 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { CliCoreError } from "@dongo/cli-core";
+import { CliCoreError, type IntegrationResult } from "@dongo/cli-core";
 import { DongoClientError } from "@dongo/client";
+import { COMMAND_SCHEMAS } from "../src/command-schema.ts";
 import { isEntrypoint, runCli } from "../src/index.ts";
+
+const noncanonicalProductCase = /\b(?:Dongo|DONGO)\b(?![-_.])/u;
 
 test("a symlinked binary resolves to the CLI entrypoint", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "dongo-cli-entrypoint-"));
@@ -30,8 +33,36 @@ function capture() {
   };
 }
 
+function integrationFixture(host: IntegrationResult["host"], applied: boolean): IntegrationResult {
+  return {
+    host,
+    applied,
+    serverName: "dongo-project",
+    endpoint: "https://dongo.so/p/project/mcp",
+    replacedServers: [],
+    files: [{ path: ".mcp.json", changed: true, managedContent: "private implementation detail" }],
+    loginCommand: "claude mcp login dongo-project",
+    rollback: ["claude mcp remove dongo-project"],
+    lifecycle: {
+      state: applied ? "configuration_applied" : "preview_ready",
+      connectionState: "unverified",
+      summary: applied
+        ? "Configuration applied. Connection verification is still required."
+        : "Preview ready. No files were changed.",
+      steps: [
+        { order: 1, id: "apply_configuration", title: "Apply the configuration.", status: applied ? "complete" : "action_required", instruction: applied ? "Applied." : "Review, then apply.", ...(!applied ? { command: `dongo integrate ${host} --apply` } : {}) },
+        { order: 2, id: "approve_project_server", title: "Approve the project-scoped server, if required.", status: "conditional", instruction: "Approve it only if prompted." },
+        { order: 3, id: "complete_login", title: "Complete login, if required.", status: "conditional", instruction: "Log in only if prompted.", command: "claude mcp login dongo-project" },
+        { order: 4, id: "restart_host", title: "Restart only when necessary.", status: "conditional", instruction: "Restart only if dynamic loading fails." },
+        { order: 5, id: "verify_connection", title: "Verify the connection.", status: "pending", instruction: "Start a dongo session." },
+      ],
+    },
+  };
+}
+
 const fakeService = {
   connect: async () => ({ project: { publicRef: "pub_1" } }),
+  createProject: async () => ({ project: { publicRef: "pub_created" } }),
   setupCi: async () => ({ project: { publicRef: "pub_ci" }, credentialStore: "environment" }),
   authStatus: async () => ({ authenticated: true, credential: { scopes: ["dongo:work:read"] } }),
   logout: async () => ({ revoked: true }),
@@ -42,7 +73,7 @@ const fakeService = {
   execute: async (operation: string, input: unknown) => ({ operation, input }),
   attachmentInfo: async (attachmentId: string) => ({ attachmentId, filename: "report.txt", byteSize: 5, downloadAvailable: true }),
   fetchAttachment: async (attachmentId: string, output?: string) => ({ attachmentId, path: output ?? ".agent-work/attachments/report.txt" }),
-  integration: async (host: string, apply: boolean) => ({ host, applied: apply, files: [] }),
+  integration: async (host: IntegrationResult["host"], apply: boolean) => integrationFixture(host, apply),
 };
 
 test("ci setup is production-only and accepts no environment selection", async () => {
@@ -83,6 +114,27 @@ test("help exposes only the production connection flow", async () => {
   assert.equal(await runCli(["help"], { output: stream.output }), 0);
   assert.match(stream.values().stdout, /dongo connect/u);
   assert.doesNotMatch(stream.values().stdout, /--environment|--origin|dev\.dongo\.so/u);
+});
+
+test("every command provides specific human and machine-readable help", async () => {
+  for (const schema of Object.values(COMMAND_SCHEMAS)) {
+    const argv = schema.command === "version" ? ["--version"] : schema.command.split(" ");
+    const human = capture();
+    assert.equal(await runCli([...argv, "--help"], { output: human.output }), 0, schema.command);
+    assert.match(human.values().stdout, new RegExp(schema.usage.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")), schema.command);
+    assert.doesNotMatch(
+      human.values().stdout,
+      noncanonicalProductCase,
+      schema.command,
+    );
+
+    const json = capture();
+    assert.equal(await runCli([...argv, "--help", "--json"], { output: json.output }), 0, schema.command);
+    const envelope = JSON.parse(json.values().stdout);
+    assert.equal(envelope.ok, true);
+    assert.equal(envelope.data.schema.command, schema.command);
+    assert.equal(json.values().stderr, "");
+  }
 });
 
 test("--version reports the package version in human and JSON modes", async () => {
@@ -128,7 +180,12 @@ test("doctor failure has deterministic JSON and exit code", async () => {
   assert.deepEqual(JSON.parse(stream.values().stdout), {
     ok: false,
     command: "doctor",
-    data: { ok: false, checks: [{ name: "server", ok: false }] },
+    error: {
+      code: "doctor_failed",
+      message: "One or more dongo connection checks failed.",
+      retryable: true,
+      details: { diagnostics: { ok: false, checks: [{ name: "server", ok: false }] } },
+    },
   });
 });
 
@@ -167,7 +224,7 @@ test("connect keeps the complete approval link out of JSON stdout", async () => 
   assert.equal(JSON.parse(stream.values().stdout).data.project.publicRef, "pub_1");
 });
 
-test("connect forwards an explicit first-project proposal", async () => {
+test("connect forwards an explicit project proposal", async () => {
   const stream = capture();
   let received: Record<string, unknown> | undefined;
   const exitCode = await runCli([
@@ -201,6 +258,47 @@ test("connect rejects an unsupported execution mode", async () => {
     serviceFactory: () => fakeService as never,
   }), 2);
   assert.equal(JSON.parse(stream.values().stdout).error.code, "validation");
+});
+
+test("project create carries explicit creation intent and explains the free-plan allowance", async () => {
+  const stream = capture();
+  let received: Record<string, unknown> | undefined;
+  const exitCode = await runCli([
+    "project", "create",
+    "--name", "Another project",
+    "--repository-url", "https://github.com/example/another",
+    "--execution-mode", "autonomous",
+    "--no-browser",
+    "--json",
+  ], {
+    output: stream.output,
+    serviceFactory: () => ({
+      ...fakeService,
+      createProject: async (options: Record<string, unknown>) => {
+        received = options;
+        const events = options.events as {
+          onVerification?: (details: Record<string, unknown>) => void;
+        } | undefined;
+        events?.onVerification?.({
+          verificationUriComplete: "https://dongo.so/device?user_code=ABCD-EFGH&project_action=create",
+          userCode: "ABCD-EFGH",
+          expiresAt: 1_788_086_460_000,
+          browserOpened: false,
+          projectProposal: { name: "Another project" },
+        });
+        return { project: { publicRef: "pub_created" } };
+      },
+    }) as never,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(received?.projectName, "Another project");
+  assert.equal(received?.repositoryUrl, "https://github.com/example/another");
+  assert.equal(received?.executionMode, "autonomous");
+  assert.equal(received?.noBrowser, true);
+  assert.equal(JSON.parse(stream.values().stdout).command, "project create");
+  assert.match(stream.values().stderr, /free plans include one active project/i);
+  assert.match(stream.values().stderr, /without another account sign-in/i);
 });
 
 test("cancellation uses the shell-standard exit code and stable JSON", async () => {
@@ -249,6 +347,7 @@ test("CLI routes every remaining v1 operation with stable JSON and reusable muta
     { operation: "request_attention", argv: ["attention", "request", "--work-id", "work_1", "--revision", "5", "--kind", "decision", "--title", "Choose", "--body", "Pick", "--option", "A", "--option", "B"] },
     { operation: "get_attention", argv: ["attention", "get", "--attention-id", "attention_1"] },
     { operation: "resolve_attention", argv: ["attention", "resolve", "--attention-id", "attention_1", "--selected-option", "A"] },
+    { operation: "get_updates", argv: ["updates", "get", "--cursor", "7"] },
   ];
 
   for (const item of cases) {
@@ -278,13 +377,317 @@ test("CLI routes every remaining v1 operation with stable JSON and reusable muta
   });
 });
 
+test("session and work start forward explicit parallel safety metadata", async () => {
+  const received: Array<{ operation: string; input: unknown }> = [];
+  const service = {
+    ...fakeService,
+    execute: async (operation: string, input: unknown) => {
+      received.push({ operation, input });
+      return { accepted: true };
+    },
+  };
+  const session = capture();
+  assert.equal(await runCli([
+    "session", "start",
+    "--session-id", "agent-session",
+    "--parallel-capability", "supported",
+    "--worktree-capability", "supported",
+    "--json",
+  ], { output: session.output, serviceFactory: () => service as never }), 0);
+  const work = capture();
+  assert.equal(await runCli([
+    "work", "start",
+    "--work-id", "work_1",
+    "--revision", "3",
+    "--session-id", "agent-session",
+    "--workspace-kind", "worktree",
+    "--worktree-name", "agent-one",
+    "--branch", "work/one",
+    "--json",
+  ], { output: work.output, serviceFactory: () => service as never }), 0);
+  assert.deepEqual(received[0], {
+    operation: "session_start",
+    input: {
+      externalSessionId: "agent-session",
+      hostCapabilities: {
+        parallelExecution: "supported",
+        worktreeIsolation: "supported",
+      },
+    },
+  });
+  assert.equal(received[1]?.operation, "start_work");
+  assert.deepEqual(
+    received[1]?.input as Record<string, unknown>,
+    {
+      idempotencyKey: (received[1]?.input as Record<string, unknown>).idempotencyKey,
+      workItemId: "work_1",
+      expectedRevision: 3,
+      externalSessionId: "agent-session",
+      leaseSeconds: undefined,
+      workspace: {
+        kind: "worktree",
+        worktreeName: "agent-one",
+        branch: "work/one",
+      },
+    },
+  );
+});
+
+test("session capability flags are supplied together in the JSON validation envelope", async () => {
+  const stream = capture();
+  assert.equal(await runCli([
+    "session-start",
+    "--parallel-capability", "supported",
+    "--json",
+  ], { output: stream.output, serviceFactory: () => fakeService as never }), 2);
+  const envelope = JSON.parse(stream.values().stdout);
+  assert.equal(envelope.ok, false);
+  assert.equal(envelope.command, "session-start");
+  assert.equal(envelope.error.code, "validation");
+  assert.deepEqual(envelope.error.details.schema.command, "session-start");
+  assert.match(
+    envelope.error.details.issues.join("\n"),
+    /Provide both --parallel-capability and --worktree-capability/u,
+  );
+  assert.equal(stream.values().stderr, "");
+});
+
+test("work create forwards planning context, links, and an initial comment", async () => {
+  const stream = capture();
+  let received: Record<string, unknown> | undefined;
+  const exitCode = await runCli([
+    "work", "create",
+    "--title", "Title",
+    "--goal", "Goal",
+    "--context", "Keep compatibility",
+    "--link", "https://example.com/spec",
+    "--link", "https://example.com/design",
+    "--initial-comment", "Start with the client inventory.",
+    "--json",
+  ], {
+    output: stream.output,
+    serviceFactory: () => ({
+      ...fakeService,
+      execute: async (_operation: string, input: Record<string, unknown>) => {
+        received = input;
+        return { id: "work_1" };
+      },
+    }) as never,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(received?.context, "Keep compatibility");
+  assert.deepEqual(received?.links, ["https://example.com/spec", "https://example.com/design"]);
+  assert.equal(received?.initialComment, "Start with the client inventory.");
+  assert.equal(stream.values().stderr, "");
+});
+
+test("work get forwards canonical compact identifiers without rewriting them", async () => {
+  const stream = capture();
+  let received: Record<string, unknown> | undefined;
+  assert.equal(await runCli([
+    "work", "get", "--identifier", "dong008", "--json",
+  ], {
+    output: stream.output,
+    serviceFactory: () => ({
+      ...fakeService,
+      execute: async (_operation: string, input: Record<string, unknown>) => {
+        received = input;
+        return { identifier: "dong008", legacyIdentifiers: ["DONGO-8"] };
+      },
+    }) as never,
+  }), 0);
+  assert.deepEqual(received, { workItemId: undefined, identifier: "dong008" });
+  assert.deepEqual(JSON.parse(stream.values().stdout).data, {
+    identifier: "dong008",
+    legacyIdentifiers: ["DONGO-8"],
+  });
+});
+
+test("attention wait discovers a response with bounded exponential backoff", async () => {
+  const stream = capture();
+  const waits: number[] = [];
+  let attempts = 0;
+  const exitCode = await runCli([
+    "attention",
+    "wait",
+    "--attention-id",
+    "attention_1",
+    "--timeout-seconds",
+    "300",
+    "--json",
+  ], {
+    output: stream.output,
+    wait: async (milliseconds) => {
+      waits.push(milliseconds);
+    },
+    serviceFactory: () => ({
+      ...fakeService,
+      execute: async () => {
+        attempts += 1;
+        return attempts === 3
+          ? { id: "attention_1", resolution: { kind: "responded", body: "Proceed" } }
+          : { id: "attention_1" };
+      },
+    }) as never,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(waits, [5_000, 10_000]);
+  assert.deepEqual(JSON.parse(stream.values().stdout).data.wait, {
+    status: "resolved",
+    attempts: 3,
+    elapsedSeconds: 15,
+  });
+  assert.equal(stream.values().stderr, "");
+});
+
+test("attention wait stops at its timeout instead of polling forever", async () => {
+  const stream = capture();
+  const waits: number[] = [];
+  const exitCode = await runCli([
+    "attention",
+    "wait",
+    "--attention-id",
+    "attention_1",
+    "--timeout-seconds",
+    "12",
+    "--json",
+  ], {
+    output: stream.output,
+    wait: async (milliseconds) => {
+      waits.push(milliseconds);
+    },
+    serviceFactory: () => ({
+      ...fakeService,
+      execute: async () => ({ id: "attention_1" }),
+    }) as never,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(waits, [5_000, 7_000]);
+  assert.deepEqual(JSON.parse(stream.values().stdout).data.wait, {
+    status: "timed_out",
+    attempts: 3,
+    elapsedSeconds: 12,
+  });
+});
+
+test("updates wait keeps a bounded waiter visible and resumes from the returned cursor", async () => {
+  const stream = capture();
+  const received: Array<Record<string, unknown>> = [];
+  let attempts = 0;
+  const exitCode = await runCli([
+    "updates",
+    "wait",
+    "--timeout-seconds",
+    "45",
+    "--json",
+  ], {
+    output: stream.output,
+    serviceFactory: () => ({
+      ...fakeService,
+      execute: async (operation: string, input: Record<string, unknown>) => {
+        assert.equal(operation, "get_updates");
+        received.push(input);
+        attempts += 1;
+        return attempts === 1
+          ? {
+              cursor: 5,
+              updates: [],
+              hasMore: false,
+              wait: { status: "timed_out", requestedSeconds: 20, elapsedMilliseconds: 20_000 },
+              delivery: { mechanism: "bounded_pull", stoppedAgentsRestarted: false },
+              serverTime: 1,
+            }
+          : {
+              cursor: 6,
+              updates: [{ id: "signal_1", version: 6, kind: "intake_available", intakeId: "intake_1", priority: "important", createdAt: 2 }],
+              hasMore: false,
+              wait: { status: "updates_available", requestedSeconds: 20, elapsedMilliseconds: 0 },
+              delivery: { mechanism: "bounded_pull", stoppedAgentsRestarted: false },
+              serverTime: 2,
+            };
+      },
+    }) as never,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(received, [
+    { cursor: undefined, waitSeconds: 20 },
+    { cursor: 5, waitSeconds: 20 },
+  ]);
+  const data = JSON.parse(stream.values().stdout).data;
+  assert.equal(data.updates[0].intakeId, "intake_1");
+  assert.deepEqual(data.clientWait, {
+    status: "updates_available",
+    attempts: 2,
+    elapsedSeconds: 20,
+  });
+  assert.equal(stream.values().stderr, "");
+});
+
+test("updates wait stops at the caller timeout and never busy-polls", async () => {
+  const stream = capture();
+  const received: Array<Record<string, unknown>> = [];
+  const exitCode = await runCli([
+    "updates",
+    "wait",
+    "--cursor",
+    "9",
+    "--timeout-seconds",
+    "12",
+    "--json",
+  ], {
+    output: stream.output,
+    serviceFactory: () => ({
+      ...fakeService,
+      execute: async (_operation: string, input: Record<string, unknown>) => {
+        received.push(input);
+        return {
+          cursor: 9,
+          updates: [],
+          hasMore: false,
+          wait: { status: "timed_out", requestedSeconds: 12, elapsedMilliseconds: 12_000 },
+          delivery: { mechanism: "bounded_pull", stoppedAgentsRestarted: false },
+          serverTime: 3,
+        };
+      },
+    }) as never,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(received, [{ cursor: 9, waitSeconds: 12 }]);
+  assert.deepEqual(JSON.parse(stream.values().stdout).data.clientWait, {
+    status: "timed_out",
+    attempts: 1,
+    elapsedSeconds: 12,
+  });
+});
+
 test("integration commands preview by default and apply only with the explicit flag", async () => {
   for (const apply of [false, true]) {
     const stream = capture();
     const argv = ["integrate", "codex", ...(apply ? ["--apply"] : []), "--json"];
     assert.equal(await runCli(argv, { output: stream.output, serviceFactory: () => fakeService as never }), 0);
-    assert.deepEqual(JSON.parse(stream.values().stdout).data, { host: "codex", applied: apply, files: [] });
+    assert.deepEqual(JSON.parse(stream.values().stdout).data, integrationFixture("codex", apply));
+    assert.equal(stream.values().stderr, "");
   }
+});
+
+test("integration human output gives the ordered setup sequence without raw configuration details", async () => {
+  const stream = capture();
+  assert.equal(await runCli(["integrate", "claude", "--apply"], {
+    output: stream.output,
+    serviceFactory: () => fakeService as never,
+  }), 0);
+  const stdout = stream.values().stdout;
+  assert.match(stdout, /^dongo Claude Code configuration applied successfully\./u);
+  assert.match(stdout, /1\. Apply the configuration\. \(done\)[\s\S]*2\. Approve the project-scoped server, if required\. \(if required\)[\s\S]*3\. Complete login, if required\. \(if required\)[\s\S]*4\. Restart only when necessary\. \(if required\)[\s\S]*5\. Verify the connection\. \(after the prior steps\)/u);
+  assert.match(stdout, /Run: claude mcp login dongo-project/u);
+  assert.doesNotMatch(stdout, /https:\/\/|private implementation detail|rollback|serverName|managedContent/u);
+  assert.doesNotMatch(stdout, noncanonicalProductCase);
+  assert.equal(stream.values().stderr, "");
 });
 
 test("mutation validation fails before invoking the service", async () => {
@@ -297,6 +700,40 @@ test("mutation validation fails before invoking the service", async () => {
   assert.equal(exitCode, 2);
   assert.equal(called, false);
   assert.equal(JSON.parse(stream.values().stdout).error.code, "validation");
+});
+
+test("validation reports all argument problems with the expected command schema", async () => {
+  let called = false;
+  const stream = capture();
+  const exitCode = await runCli([
+    "attention", "request",
+    "--revision", "not-a-number",
+    "--kind", "wrong",
+    "--title", "",
+    "--option", "only-one",
+    "--timeout-seconds", "0",
+    "--json",
+  ], {
+    output: stream.output,
+    serviceFactory: () => ({ ...fakeService, execute: async () => { called = true; } }) as never,
+  });
+  assert.equal(exitCode, 2);
+  assert.equal(called, false);
+  const envelope = JSON.parse(stream.values().stdout);
+  assert.equal(envelope.ok, false);
+  assert.equal(envelope.command, "attention request");
+  assert.equal(envelope.error.code, "validation");
+  assert.deepEqual(envelope.error.details.schema.command, "attention request");
+  assert.deepEqual(envelope.error.details.issues, [
+    "--timeout-seconds is not valid for attention request.",
+    "--work-id is required.",
+    "--revision must be an integer in at least 0.",
+    "--kind must be one of: review, decision, question, blocked.",
+    "--title is required.",
+    "--body is required.",
+    "Provide either zero or at least two --option values.",
+  ]);
+  assert.equal(stream.values().stderr, "");
 });
 
 test("API exit codes distinguish scope, conflict, and temporary failures", async () => {
@@ -320,6 +757,31 @@ test("API exit codes distinguish scope, conflict, and temporary failures", async
   }
 });
 
+test("an already resolved Attention returns the specific idempotent conflict", async () => {
+  const stream = capture();
+  const exitCode = await runCli([
+    "attention", "resolve", "--attention-id", "attention_1", "--selected-option", "A", "--json",
+  ], {
+    output: stream.output,
+    serviceFactory: () => ({
+      ...fakeService,
+      execute: async () => {
+        throw new DongoClientError({ code: "already_resolved", message: "generic domain message", retryable: true });
+      },
+    }) as never,
+  });
+  assert.equal(exitCode, 6);
+  const envelope = JSON.parse(stream.values().stdout);
+  assert.equal(envelope.command, "attention resolve");
+  assert.deepEqual(envelope.error, {
+    code: "already_resolved",
+    message: "Attention already resolved.",
+    retryable: false,
+  });
+  assert.match(envelope.recovery.idempotencyKey, /^[0-9a-f-]{36}$/);
+  assert.equal(stream.values().stderr, "");
+});
+
 test("generated mutation keys are recoverable after a temporary response failure", async () => {
   let receivedKey = "";
   const stream = capture();
@@ -335,8 +797,29 @@ test("generated mutation keys are recoverable after a temporary response failure
   });
   assert.equal(exitCode, 5);
   assert.match(receivedKey, /^[0-9a-f-]{36}$/);
-  assert.match(stream.values().stderr, new RegExp(receivedKey));
-  assert.equal(JSON.parse(stream.values().stdout).error.details.idempotencyKey, receivedKey);
+  assert.equal(stream.values().stderr, "");
+  const envelope = JSON.parse(stream.values().stdout);
+  assert.equal(envelope.command, "work create");
+  assert.equal(envelope.error.details.idempotencyKey, receivedKey);
+  assert.deepEqual(envelope.recovery, { idempotencyKey: receivedKey });
+});
+
+test("generated mutation keys are returned in successful JSON envelopes", async () => {
+  let receivedKey = "";
+  const stream = capture();
+  assert.equal(await runCli(["comment", "add", "--work-id", "work_1", "--body", "Done", "--json"], {
+    output: stream.output,
+    serviceFactory: () => ({
+      ...fakeService,
+      execute: async (_operation: string, input: { idempotencyKey: string }) => {
+        receivedKey = input.idempotencyKey;
+        return { saved: true };
+      },
+    }) as never,
+  }), 0);
+  const envelope = JSON.parse(stream.values().stdout);
+  assert.deepEqual(envelope.recovery, { idempotencyKey: receivedKey });
+  assert.equal(stream.values().stderr, "");
 });
 
 test("human output escapes bidirectional terminal controls", async () => {

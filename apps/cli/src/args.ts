@@ -1,5 +1,3 @@
-import { CliCoreError } from "@dongo/cli-core";
-
 export interface ParsedArgs {
   command: string;
   subcommand?: string;
@@ -10,7 +8,9 @@ export interface ParsedArgs {
   apply: boolean;
   important: boolean;
   resolveWithoutResponse: boolean;
+  help: boolean;
   values: Record<string, string[]>;
+  issues: string[];
 }
 
 const VALUE_OPTIONS = new Set([
@@ -18,14 +18,19 @@ const VALUE_OPTIONS = new Set([
   "attachment-id",
   "attention-id",
   "body",
+  "context",
+  "cursor",
   "explanation",
   "goal",
   "idempotency-key",
   "identifier",
   "intake-id",
   "kind",
+  "initial-comment",
+  "link",
   "lease-seconds",
   "linked-work-id",
+  "name",
   "option",
   "outcome",
   "output",
@@ -39,9 +44,15 @@ const VALUE_OPTIONS = new Set([
   "source-intake-id",
   "state",
   "title",
+  "timeout-seconds",
   "work-id",
   "latest-update",
   "execution-mode",
+  "parallel-capability",
+  "worktree-capability",
+  "workspace-kind",
+  "worktree-name",
+  "branch",
 ]);
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -54,6 +65,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let resolveWithoutResponse = false;
   let help = false;
   const values: Record<string, string[]> = {};
+  const issues: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -66,18 +78,20 @@ export function parseArgs(argv: string[]): ParsedArgs {
     else if (argument === "--resolve-without-response") resolveWithoutResponse = true;
     else if (argument.startsWith("--") && VALUE_OPTIONS.has(argument.slice(2))) {
       const name = argument.slice(2);
-      const value = argv[++index];
-      if (value === undefined) {
-        throw new CliCoreError({ code: "validation", message: `${argument} requires a value.`, exitCode: 2 });
+      const value = argv[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        issues.push(`${argument} requires a value.`);
+      } else {
+        index += 1;
+        (values[name] ??= []).push(value);
       }
-      (values[name] ??= []).push(value);
     } else if (argument.startsWith("-")) {
-      throw new CliCoreError({ code: "validation", message: `Unknown option: ${argument}`, exitCode: 2 });
+      issues.push(`Unknown option: ${argument}.`);
     } else positional.push(argument);
   }
 
   return {
-    command: help ? "help" : version ? "version" : (positional[0] ?? "help"),
+    command: version ? "version" : (positional[0] ?? "help"),
     subcommand: positional[1],
     positionals: positional,
     json,
@@ -86,6 +100,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     apply,
     important,
     resolveWithoutResponse,
+    help,
     values,
+    issues,
   };
 }

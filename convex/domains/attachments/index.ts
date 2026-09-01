@@ -17,6 +17,7 @@ import {
   organizationStorageLimit,
 } from "../../lib/plans";
 import { attachmentSummary } from "./summary";
+import { attachmentForAgent } from "../agent/privacy";
 
 const RESERVATION_TTL_MS = 60 * 60 * 1_000;
 
@@ -226,7 +227,11 @@ export const discard = internalMutation({
     if (attachment.createdByProfileId !== principal.profile._id) {
       fail("not_found", "Attachment not found");
     }
-    if (attachment.intakeId !== undefined || attachment.workItemId !== undefined) {
+    if (
+      attachment.ideaId !== undefined ||
+      attachment.intakeId !== undefined ||
+      attachment.workItemId !== undefined
+    ) {
       fail("invalid_transition", "Attached media cannot be discarded");
     }
     if (attachment.status === "deleted") {
@@ -310,11 +315,15 @@ export const getForAgent = internalQuery({
       ["dongo:work:read", "dongo:attachments:read"],
     );
     const attachment = await ctx.db.get(args.attachmentId);
-    if (!attachment || attachment.status !== "available") {
+    if (
+      !attachment ||
+      attachment.status !== "available" ||
+      (attachment.intakeId === undefined && attachment.workItemId === undefined)
+    ) {
       fail("not_found", "Attachment not found");
     }
     assertSameProject(attachment, principal.project);
-    return attachment;
+    return attachmentForAgent(attachment);
   },
 });
 

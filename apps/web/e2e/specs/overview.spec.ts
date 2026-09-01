@@ -8,7 +8,11 @@ function workDetail(page: Page, name: string) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo");
+  await expect(page.getByRole("button", { name: "New", exact: true })).toHaveText("+ New");
+  await expect(page.getByRole("region", { name: "Add something" })).toBeHidden();
+  await page.getByRole("button", { name: "New", exact: true }).click();
   await expect(page.getByRole("region", { name: "Add something" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Add something…" }).blur();
 });
 
 test("renders every live work lane without browser errors", async ({ page }) => {
@@ -29,6 +33,55 @@ test("renders every live work lane without browser errors", async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+test("shows concurrent agents, safe workspace detail, and live progress", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=concurrency-live");
+  const activity = page.getByRole("region", { name: "agent activity" });
+
+  await expect(activity).toContainText("1 / 4 active");
+  const running = activity.locator('[data-run-id="run-attachments"]');
+  const waiting = activity.locator('[data-run-id="run-release"]');
+  await expect(running).toContainText("Claude");
+  await expect(running).toContainText("dong008");
+  await expect(running).toContainText("Running");
+  await expect(running).toContainText("Worktree · codex/attachment-delivery");
+  await expect(running).toContainText("Lease healthy");
+  await expect(waiting).toContainText("Waiting");
+  await expect(waiting).toContainText("Isolated workspace");
+  await expect(waiting).toContainText("Lease released");
+  await expect(running).toContainText("Live progress: retry cancellation verified.");
+  await running.click();
+  await expect(page.getByRole("region", { name: "Harden attachment delivery" })).toBeVisible();
+  await expect(running).toHaveAttribute("aria-current", "page");
+});
+
+test("keeps an undisclosed host serial without implying workspace support", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=concurrency-undisclosed");
+  const run = page.locator('[data-run-id="run-release"]');
+
+  await expect(run).toContainText("Workspace details unavailable");
+  await expect(run).toContainText(
+    "This host continues serially until it reports isolated-workspace support.",
+  );
+});
+
+test("keeps Working usable when live agent activity is unavailable", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=concurrency-error");
+  await expect(page.getByText("Live agent activity is temporarily unavailable.")).toBeVisible();
+  await expect(page.locator('[data-work-id="work-working"]')).toBeVisible();
+});
+
+test("uses canonical compact IDs in live rows and links", async ({ page }) => {
+  const needs = page.locator('[data-work-id="work-needs"]');
+  const ready = page.locator('[data-work-id="work-ready-a"]');
+
+  await expect(needs).toContainText("dong007");
+  await expect(needs).toHaveAttribute("href", "/app/fixture-studio/dongo?work=dong007");
+  await expect(ready).toContainText("dong009");
+  await expect(ready).toHaveAttribute("href", "/app/fixture-studio/dongo?work=dong009");
+  await expect(page.locator('[data-work-id="work-done"]')).toContainText("dong006 · 1h");
+  await expect(page.getByText("DONGO-7", { exact: true })).toBeHidden();
+});
+
 test("switches projects through an accessible keyboard menu", async ({ page }) => {
   const trigger = page.getByRole("button", { name: "Select organization or project" });
   await trigger.click();
@@ -41,6 +94,16 @@ test("switches projects through an accessible keyboard menu", async ({ page }) =
   await expect(companion).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/app\/fixture-studio\/companion$/);
+});
+
+test("shows the current plan allowance and keeps project creation discoverable", async ({ page }) => {
+  await page.getByRole("button", { name: "Select organization or project" }).click();
+  const menu = page.getByRole("menu", { name: "Organizations and projects" });
+
+  await expect(menu.getByText("Paid plan · 2 active projects", { exact: true })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "+ Create project" })).toBeVisible();
+  await menu.getByRole("menuitem", { name: "+ Create project" }).click();
+  await expect(page).toHaveURL(/\/onboarding\?organization=fixture-studio$/);
 });
 
 test("restores focus when project navigation is dismissed", async ({ page }) => {
@@ -69,6 +132,7 @@ test("opens the route-backed help guide from the profile menu", async ({ page })
 
   await expect(page).toHaveURL(/\/app\/fixture-studio\/dongo\/help$/);
   await expect(page.getByRole("heading", { name: "Keep the loop moving" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Agent setup sequence" }).getByRole("listitem")).toHaveCount(5);
   await expect(page.getByRole("heading", { name: "Keyboard shortcuts" })).toBeVisible();
   await expect(page.getByText("Command menu", { exact: true })).toBeVisible();
 });
@@ -79,14 +143,14 @@ test("bounds overview connection and subscription failures", async ({ page }) =>
     "This project could not be loaded for your account.",
   );
   await expect(page.getByText("fixture overview connection detail must stay hidden")).toBeHidden();
-  await expect(page.getByRole("button", { name: "Submit to Inbox" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "New", exact: true })).toBeDisabled();
 
   await page.goto("/app/fixture-studio/dongo?scenario=overview-subscription-error");
   await expect(page.getByRole("alert")).toContainText(
     "Live project data is temporarily unavailable.",
   );
   await expect(page.getByText("fixture overview subscription detail must stay hidden")).toBeHidden();
-  await expect(page.getByRole("button", { name: "Submit to Inbox" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "New", exact: true })).toBeDisabled();
 });
 
 test("responds to Attention and reconciles the work lane", async ({ page }) => {
@@ -102,6 +166,7 @@ test("responds to Attention and reconciles the work lane", async ({ page }) => {
 
   await expect(dialog.getByText("✓ answered")).toBeVisible();
   await expect(dialog.getByText(/Approve staging — Proceed with/).first()).toBeVisible();
+  await expect(dialog.getByText(/next explicit pull.*backoff.*stopped agent/i)).toBeVisible();
   await expect(page.getByText("Response sent to your agent")).toBeVisible();
   await dialog.getByRole("button", { name: /close|back/i }).click();
   await expect(page.getByText("needs you", { exact: true })).toBeHidden();
@@ -114,8 +179,204 @@ test("reconciles optimistic Intake exactly once", async ({ page }) => {
   await page.getByRole("button", { name: "Submit to Inbox" }).click();
 
   await expect(page.getByText("Added to Inbox")).toBeVisible();
-  await expect(composer).toHaveValue("");
+  await expect(page.getByRole("region", { name: "Add something" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "New", exact: true })).toBeFocused();
   await expect(page.getByText("Capture this fixture request exactly once", { exact: true })).toHaveCount(1);
+});
+
+test("opens capture on demand and keeps a draft when it is collapsed", async ({ page }) => {
+  const composer = page.getByRole("textbox", { name: "Add something…" });
+  await composer.fill("Keep this unfinished thought");
+  await page.keyboard.press("Escape");
+
+  const newButton = page.getByRole("button", { name: "New", exact: true });
+  await expect(newButton).toBeFocused();
+  await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
+  await newButton.click();
+  await expect(composer).toBeFocused();
+  await expect(composer).toHaveValue("Keep this unfinished thought");
+});
+
+test("gives an empty Inbox item a stable label in the sidebar and detail", async ({ page }) => {
+  const fallback = page.getByText("Untitled intake", { exact: true });
+  await expect(fallback).toBeVisible();
+  await fallback.click();
+
+  const detail = workDetail(page, "Untitled intake");
+  await expect(detail).toBeVisible();
+  await expect(detail.getByLabel("Text", { exact: true })).toHaveValue("");
+  await expect(detail.getByRole("button", { name: "Save changes" })).toBeDisabled();
+});
+
+test("explicitly saves Intake text, context, links, and a new image", async ({ page }) => {
+  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
+  const detail = page.locator(".detail");
+  await detail.getByLabel("Text", { exact: true }).fill("Investigate the updated login screen");
+  await detail.getByLabel("Context", { exact: true }).fill("Focus on the passwordless return path.");
+  await detail.getByLabel(/Links/).fill("https://example.test/auth\nhttps://example.test/repro");
+  await detail.getByLabel("Choose files to add to Intake").setInputFiles({
+    name: "login-state.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("fixture image"),
+  });
+
+  await expect(detail.getByText(/ready to save/)).toBeVisible();
+  await expect(detail.getByText("Unsaved changes.", { exact: true })).toBeVisible();
+  await detail.getByRole("button", { name: "Save changes" }).click();
+
+  await expect(detail.getByText("Changes saved. Connected views update in real time.", { exact: true })).toBeVisible();
+  await expect(detail.getByText("login-state.png", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Investigate the updated login screen" })).toBeVisible();
+  await expect(detail.getByRole("heading", { name: "Investigate the updated login screen" })).toBeVisible();
+  const saved = JSON.parse(await page.locator("html").getAttribute("data-fixture-intake-edit") ?? "null");
+  expect(saved).toMatchObject({
+    intakeId: "intake-waiting",
+    expectedRevision: 1,
+    text: "Investigate the updated login screen",
+    context: "Focus on the passwordless return path.",
+    links: ["https://example.test/auth", "https://example.test/repro"],
+  });
+  expect(saved.addAttachmentIds).toHaveLength(1);
+});
+
+test("retains Intake edits through a revision conflict and supports an explicit retry", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=intake-edit-conflict");
+  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
+  const detail = workDetail(page, "Investigate the fixture login screen");
+  const context = detail.getByLabel("Context", { exact: true });
+  await context.fill("Keep this human context through the conflict.");
+  await detail.getByRole("button", { name: "Save changes" }).click();
+
+  await expect(detail.getByRole("alert")).toContainText("changed elsewhere");
+  await expect(context).toHaveValue("Keep this human context through the conflict.");
+  await detail.getByRole("button", { name: "Keep my edits" }).click();
+  await expect(context).toHaveValue("Keep this human context through the conflict.");
+  await detail.getByRole("button", { name: "Save changes" }).click();
+  await expect(detail.getByText("Changes saved. Connected views update in real time.", { exact: true })).toBeVisible();
+
+  const saved = JSON.parse(await page.locator("html").getAttribute("data-fixture-intake-edit") ?? "null");
+  expect(saved).toMatchObject({
+    expectedRevision: 2,
+    context: "Keep this human context through the conflict.",
+  });
+});
+
+test("synchronizes a clean Intake editor from live project updates", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=intake-edit-live");
+  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
+  const detail = workDetail(page, "Investigate the fixture login screen");
+
+  await expect(detail.getByLabel("Context", { exact: true })).toHaveValue(
+    "Live context added from another browser.",
+  );
+  await expect(detail.getByText("Updated from live project activity.", { exact: true })).toBeVisible();
+});
+
+test("keeps a dirty Intake draft when a live update arrives and can use latest", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=intake-edit-live");
+  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
+  const detail = workDetail(page, "Investigate the fixture login screen");
+  const context = detail.getByLabel("Context", { exact: true });
+  await context.fill("Keep this local draft until I choose.");
+
+  await expect(detail.getByRole("alert")).toContainText("changed elsewhere");
+  await expect(context).toHaveValue("Keep this local draft until I choose.");
+  await detail.getByRole("button", { name: "Use latest" }).click();
+  await expect(context).toHaveValue("Live context added from another browser.");
+  await expect(detail.getByText("Latest version loaded. Your unsaved edits were discarded.", { exact: true })).toBeVisible();
+});
+
+test("retains a failed enrichment upload for a focused retry", async ({ page }) => {
+  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
+  const detail = workDetail(page, "Investigate the fixture login screen");
+  await detail.getByLabel("Choose files to add to Intake").setInputFiles({
+    name: "retry-intake.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("retry fixture"),
+  });
+
+  await expect(detail.getByText(/Upload interrupted/)).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Save changes" })).toBeDisabled();
+  await detail.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(detail.getByText(/ready to save/)).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Save changes" })).toBeEnabled();
+});
+
+test("keeps processed Intake details read-only", async ({ page }) => {
+  await page.getByText("Prepare a trustworthy release candidate", { exact: true }).click();
+  const detail = workDetail(page, "Prepare a trustworthy release candidate");
+  await expect(detail).toBeVisible();
+  await expect(detail.getByText("edit intake", { exact: true })).toBeHidden();
+  await expect(detail.getByRole("button", { name: "Save changes" })).toBeHidden();
+});
+
+test("retains the draft when an agent finishes processing during save", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=intake-edit-processed-race");
+  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
+  const detail = workDetail(page, "Investigate the fixture login screen");
+  const context = detail.getByLabel("Context", { exact: true });
+  await context.fill("Do not lose this late clarification.");
+  await detail.getByRole("button", { name: "Save changes" }).click();
+
+  await expect(detail.getByRole("alert")).toContainText(
+    "The agent finished processing this item before your save",
+  );
+  await expect(context).toHaveValue("Do not lose this late clarification.");
+  await expect(context).toBeDisabled();
+  await expect(detail.getByText(/submitted details are read-only/i)).toBeVisible();
+});
+
+test("notifies a live bounded waiter with explicit priority semantics", async ({ page }) => {
+  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
+  const detail = workDetail(page, "Investigate the fixture login screen");
+
+  await expect(detail.getByText("An agent is waiting for updates.", { exact: true })).toBeVisible();
+  await expect(detail.getByText("dongo can deliver this promptly through the live bounded wait.", { exact: true })).toBeVisible();
+  await detail.getByRole("radio", { name: "Important" }).click();
+  await expect(detail.getByText(/does not bypass bounded pull or restart a stopped agent/i)).toBeVisible();
+  await detail.getByRole("button", { name: "Notify agent" }).click();
+
+  await expect(detail.getByText("Notification is ready for a waiting agent.", { exact: true })).toBeVisible();
+  const nudge = JSON.parse(await page.locator("html").getAttribute("data-fixture-intake-nudge") ?? "null");
+  expect(nudge).toMatchObject({ intakeId: "intake-waiting", priority: "important" });
+});
+
+test("queues a notification for the next explicit pull without overstating recent activity", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=presence-next-pull");
+  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
+  const detail = workDetail(page, "Investigate the fixture login screen");
+
+  await expect(detail.getByText("No agent is waiting for live updates.", { exact: true })).toBeVisible();
+  await expect(detail.getByText("This Intake will be available on the agent’s next explicit pull.", { exact: true })).toBeVisible();
+  await detail.getByRole("button", { name: "Notify agent" }).click();
+  await expect(detail.getByText("Notification queued for the next agent pull.", { exact: true })).toBeVisible();
+  await expect(detail.getByText(/delivered promptly/i)).toBeHidden();
+});
+
+test("states that stopped agents do not restart and follows live waiter changes", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=presence-live-change");
+  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
+  const detail = workDetail(page, "Investigate the fixture login screen");
+
+  await expect(detail.getByText(/A stopped agent will not restart/)).toBeVisible();
+  await expect(detail.getByText("An agent is waiting for updates.", { exact: true })).toBeVisible();
+});
+
+test("disables notification while presence loads and keeps a safe retry after failure", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=presence-slow");
+  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
+  const detail = workDetail(page, "Investigate the fixture login screen");
+  await expect(detail.getByText("Checking whether an agent is waiting for updates…", { exact: true })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Notify agent" })).toBeDisabled();
+  await expect(detail.getByRole("button", { name: "Notify agent" })).toBeEnabled();
+
+  await page.goto("/app/fixture-studio/dongo?scenario=nudge-error");
+  await page.getByText("Investigate the fixture login screen", { exact: true }).click();
+  const failedDetail = workDetail(page, "Investigate the fixture login screen");
+  await failedDetail.getByRole("button", { name: "Notify agent" }).click();
+  await expect(failedDetail.getByRole("alert")).toContainText("could not be saved");
+  await expect(failedDetail.getByText("fixture nudge detail must stay hidden")).toBeHidden();
+  await expect(failedDetail.getByRole("button", { name: "Notify agent" })).toBeEnabled();
 });
 
 test("reorders Ready work by drag and by accessible controls", async ({ page }) => {
@@ -155,6 +416,7 @@ test("uploads a browser-selected file before Intake submission", async ({ page }
 });
 
 test("turns the full page into a file drop zone", async ({ page }) => {
+  await page.getByRole("button", { name: "Close new Intake" }).click();
   const dataTransfer = await page.evaluateHandle(() => {
     const transfer = new DataTransfer();
     transfer.items.add(new File(["Dropped fixture"], "dropped-fixture.txt", { type: "text/plain" }));
@@ -164,6 +426,7 @@ test("turns the full page into a file drop zone", async ({ page }) => {
   await expect(page.getByText("Drop to attach", { exact: true })).toBeVisible();
   await page.locator(".app-header").dispatchEvent("drop", { dataTransfer });
   await expect(page.getByText("Drop to attach", { exact: true })).toBeHidden();
+  await expect(page.getByRole("region", { name: "Add something" })).toBeVisible();
   await expect(page.getByText("dropped-fixture.txt", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("region", { name: "Add something" }).getByText("ready", { exact: true }),
@@ -322,9 +585,44 @@ test("opens search by keyboard and restores focus after detail close", async ({ 
   await expect(searchButton).toBeFocused();
 });
 
+test("uses an attachment filename for attachment-only Intake search results", async ({ page }) => {
+  await page.getByRole("button", { name: "Search this project" }).click();
+  const search = page.getByRole("dialog", { name: "Search this project" });
+  await search.getByPlaceholder("Search work, comments and intake…").fill("capture.png");
+
+  const result = search.getByRole("button", { name: /capture\.png/ });
+  await expect(result).toContainText("capture.png");
+  await expect(result).not.toContainText("Untitled intake");
+});
+
+test("finds an exact legacy ID but opens and displays the canonical ID", async ({ page }) => {
+  await page.getByRole("button", { name: "Search this project" }).click();
+  const search = page.getByRole("dialog", { name: "Search this project" });
+  await search.getByPlaceholder("Search work, comments and intake…").fill("DONGO-6");
+  const result = search.getByRole("button", { name: /Complete the agent golden journey/ });
+
+  await expect(result).toContainText("dong006");
+  await result.click();
+  await expect(page).toHaveURL(/\?work=dong006$/);
+  await expect(
+    workDetail(page, "Complete the agent golden journey")
+      .getByRole("button", { name: "Copy issue ID dong006" }),
+  ).toBeVisible();
+});
+
+test("keeps migrated legacy work bookmarks usable", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?work=DONGO-6");
+  const detail = workDetail(page, "Complete the agent golden journey");
+
+  await expect(detail).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Copy issue ID dong006" })).toBeVisible();
+  await expect(page).toHaveURL(/\?work=DONGO-6$/);
+});
+
 test("uses capture and search shortcuts without hijacking text entry", async ({ page }) => {
-  const composer = page.getByRole("textbox", { name: "Add something…" });
+  await page.getByRole("button", { name: "Close new Intake" }).click();
   await page.keyboard.press("c");
+  const composer = page.getByRole("textbox", { name: "Add something…" });
   await expect(composer).toBeFocused();
 
   await composer.fill("Keep / inside this draft");
@@ -352,13 +650,13 @@ test("navigates, peeks, opens, and restores selection by keyboard", async ({ pag
   const peek = workDetail(page, "Approve the release candidate");
   await expect(peek).toBeVisible();
   await expect(peek.getByText("peek · esc closes")).toBeVisible();
-  await expect(page).not.toHaveURL(/work=work-needs/);
+  await expect(page).not.toHaveURL(/work=dong007/);
   await page.keyboard.press("Escape");
   await expect(first).toBeFocused();
 
   await page.keyboard.press("Enter");
   await expect(peek).toBeVisible();
-  await expect(page).toHaveURL(/work=work-needs/);
+  await expect(page).toHaveURL(/work=dong007/);
 });
 
 test("uses a wide contextual navigator and non-modal detail article", async ({ page }) => {
@@ -366,7 +664,7 @@ test("uses a wide contextual navigator and non-modal detail article", async ({ p
   const readyLink = page.locator('[data-work-id="work-ready-a"]');
   await expect(readyLink).toHaveAttribute(
     "href",
-    "/app/fixture-studio/dongo?work=work-ready-a",
+    "/app/fixture-studio/dongo?work=dong009",
   );
 
   await readyLink.click();
@@ -401,12 +699,12 @@ test("uses a wide contextual navigator and non-modal detail article", async ({ p
   const workingLink = page.locator('[data-work-id="work-working"]');
   await workingLink.click();
   await expect(page.getByRole("region", { name: "Harden attachment delivery" })).toBeVisible();
-  await expect(page).toHaveURL(/work=work-working/);
+  await expect(page).toHaveURL(/work=dong008/);
   await expect(workingLink).toHaveAttribute("aria-current", "page");
 
   await page.goBack();
   await expect(page.getByRole("region", { name: "Verify fixture search" })).toBeVisible();
-  await expect(page).toHaveURL(/work=work-ready-a/);
+  await expect(page).toHaveURL(/work=dong009/);
 
   const close = page.getByRole("region", { name: "Verify fixture search" })
     .getByRole("button", { name: /close|back/i });
@@ -415,6 +713,74 @@ test("uses a wide contextual navigator and non-modal detail article", async ({ p
   await expect.poll(async () => page.evaluate(() =>
     !document.activeElement?.closest(".detail"),
   )).toBe(true);
+});
+
+test("focuses the response surface and autosaves drafts independently per task", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await page.locator('[data-work-id="work-working"]').click();
+  const workingComment = workDetail(page, "Harden attachment delivery")
+    .getByRole("textbox", { name: "Add a comment" });
+  await expect(workingComment).toBeFocused();
+  await workingComment.fill("Draft for attachment delivery");
+  await expect(page.getByText(/draft saved on this device/)).toBeVisible();
+
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  const readyComment = workDetail(page, "Verify fixture search")
+    .getByRole("textbox", { name: "Add a comment" });
+  await expect(readyComment).toBeFocused();
+  await readyComment.fill("Draft for fixture search");
+
+  await page.locator('[data-work-id="work-needs"]').click();
+  const attentionResponse = workDetail(page, "Approve the release candidate")
+    .getByRole("textbox", { name: /Add anything the agent should know/ });
+  await expect(
+    workDetail(page, "Approve the release candidate")
+      .getByRole("button", { name: "Approve staging" }),
+  ).toBeFocused();
+  await attentionResponse.fill("Unsent decision context");
+
+  await page.locator('[data-work-id="work-working"]').click();
+  await expect(workingComment).toHaveValue("Draft for attachment delivery");
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  await expect(readyComment).toHaveValue("Draft for fixture search");
+  await page.locator('[data-work-id="work-needs"]').click();
+  await expect(attentionResponse).toHaveValue("Unsent decision context");
+});
+
+test("renders agent changes from live subscriptions without reloading", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=live-agent-update");
+  await expect(page.getByRole("button", { name: "New", exact: true })).toBeVisible();
+  await page.locator('[data-work-id="work-working"]').click();
+  const detail = workDetail(page, "Harden attachment delivery");
+
+  await expect(detail.getByText("Testing retry and cancellation semantics.")).toBeVisible();
+  await expect(
+    detail.getByText("Agent update arrived over the live project subscription."),
+  ).toBeVisible();
+  await expect(detail.getByText("latest from Agent", { exact: true })).toBeVisible();
+  await expect(detail.getByText("latest from dongo CLI", { exact: true })).toBeHidden();
+  await expect(page).toHaveURL(/scenario=live-agent-update.*work=dong008|work=dong008.*scenario=live-agent-update/);
+});
+
+test("keeps a human draft when an agent wins a simultaneous Attention edit", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=attention-conflict");
+  await expect(page.getByRole("button", { name: "New", exact: true })).toBeVisible();
+  await page.locator('[data-work-id="work-needs"]').click();
+  const detail = workDetail(page, "Approve the release candidate");
+  const response = detail.getByRole("textbox", {
+    name: /Add anything the agent should know/,
+  });
+  await response.fill("Keep this human context available");
+  await detail.getByRole("button", { name: "Respond", exact: true }).click();
+
+  await expect(detail.getByRole("alert")).toContainText(
+    "latest agent update is shown and your draft was kept",
+  );
+  await expect(detail.getByText("The agent continued with the safe default.")).toBeVisible();
+  await expect(detail.getByRole("textbox", { name: "Unsent response draft" })).toHaveValue(
+    "Keep this human context available",
+  );
 });
 
 test("moves from wide detail to the sidebar, selects with arrows, and re-enters with Enter", async ({ page }) => {
@@ -436,13 +802,13 @@ test("moves from wide detail to the sidebar, selects with arrows, and re-enters 
   await expect(second.locator("..")).toHaveCSS("outline-style", "solid");
   await expect(second.locator("..")).toHaveCSS("outline-width", "2px");
   await expect(first.locator("..")).toHaveCSS("outline-style", "none");
-  await expect(page).toHaveURL(/work=work-ready-a/);
+  await expect(page).toHaveURL(/work=dong009/);
 
   await page.keyboard.press("Control+k");
   const commands = page.getByRole("dialog", { name: "Command menu" });
   await commands.getByRole("button", { name: /Issue \/ detail/ }).click();
   await expect(firstDetail).toBeFocused();
-  await expect(page).toHaveURL(/work=work-ready-a/);
+  await expect(page).toHaveURL(/work=dong009/);
 
   await page.keyboard.press("ArrowLeft");
   await expect(first).toBeFocused();
@@ -451,7 +817,7 @@ test("moves from wide detail to the sidebar, selects with arrows, and re-enters 
 
   await page.keyboard.press("ArrowLeft");
   await expect(firstDetail).toBeFocused();
-  await expect(page).toHaveURL(/work=work-ready-a/);
+  await expect(page).toHaveURL(/work=dong009/);
   await expect(second.locator("..")).toHaveCSS("outline-style", "none");
 
   await page.keyboard.press("ArrowLeft");
@@ -463,9 +829,10 @@ test("moves from wide detail to the sidebar, selects with arrows, and re-enters 
   const secondDetail = page.getByRole("region", { name: "Audit mobile controls" });
   await expect(secondDetail).toBeVisible();
   await expect(second).toHaveAttribute("aria-current", "page");
-  await expect(secondDetail).toBeFocused();
+  await expect(secondDetail.getByPlaceholder("Add a comment…")).toBeFocused();
   await expect(second.locator("..")).toHaveCSS("outline-style", "none");
 
+  await secondDetail.focus();
   await page.keyboard.press("ArrowLeft");
   await expect(second).toBeFocused();
   await expect(second.locator("..")).toHaveCSS("outline-style", "solid");
@@ -570,7 +937,7 @@ test("reconciles browser Back and preserves the overview scroll position", async
   await row.click();
   const dialog = workDetail(page, "Complete the agent golden journey");
   await expect(dialog).toBeVisible();
-  await expect(page).toHaveURL(/\?work=work-done$/);
+  await expect(page).toHaveURL(/\?work=dong006$/);
   await page.goBack();
 
   await expect(dialog).toBeHidden();
@@ -582,7 +949,11 @@ test("renders attributed agent progress as safe reviewable Markdown", async ({ p
   await page.locator('[data-work-id="work-done"]').click();
   const dialog = workDetail(page, "Complete the agent golden journey");
   await expect(dialog.getByText("Codex", { exact: true })).toBeVisible();
-  await expect(dialog.getByText("mcp agent", { exact: true })).toBeVisible();
+  await expect(dialog.locator(".conversation-entry__role")).toHaveText(["agent", "agent"]);
+  await expect(dialog.getByText("mcp agent", { exact: true })).toBeHidden();
+  const historical = dialog.locator(".conversation-entry", { hasText: "Historical transport-attributed update." });
+  await expect(historical.locator(".conversation-entry__who")).toHaveText("Agent");
+  await expect(historical).not.toContainText("dongo CLI");
   await expect(dialog.getByRole("heading", { name: "Verification" })).toBeVisible();
   await expect(dialog.getByText("Shipped the verified path.", { exact: true })).toBeVisible();
   await expect(dialog.getByRole("link", { name: "Review evidence" })).toHaveAttribute(
@@ -608,7 +979,7 @@ test("places a prominent copyable issue ID above the work title", async ({ page 
   });
   await page.locator('[data-work-id="work-done"]').click();
   const dialog = workDetail(page, "Complete the agent golden journey");
-  const identifier = dialog.getByRole("button", { name: "Copy issue ID DONGO-6" });
+  const identifier = dialog.getByRole("button", { name: "Copy issue ID dong006" });
   const title = dialog.getByRole("heading", { name: "Complete the agent golden journey" });
 
   await expect(identifier).toBeVisible();
@@ -625,8 +996,8 @@ test("places a prominent copyable issue ID above the work title", async ({ page 
   await identifier.click();
   await expect.poll(async () => page.evaluate(() =>
     document.documentElement.dataset.copiedIssueId,
-  )).toBe("DONGO-6");
-  await expect(page.getByText("DONGO-6 copied", { exact: true })).toBeVisible();
+  )).toBe("dong006");
+  await expect(page.getByText("dong006 copied", { exact: true })).toBeVisible();
   await expect(identifier).toHaveAttribute("data-copied", "true");
 });
 
@@ -638,8 +1009,9 @@ test("traps keyboard focus inside work detail", async ({ page }) => {
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   const close = dialog.getByRole("button", { name: /close|back/i });
   const attach = dialog.getByRole("button", { name: "+ Attach" });
-  await expect(close).toBeFocused();
+  await expect(dialog.getByPlaceholder("Add a comment…")).toBeFocused();
 
+  await close.focus();
   await page.keyboard.press("Shift+Tab");
   await expect(attach).toBeFocused();
   await page.keyboard.press("Tab");

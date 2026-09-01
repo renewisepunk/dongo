@@ -101,6 +101,13 @@ dongo connect
 dongo doctor
 ```
 
+Because the public CLI package is new, npm or an agent host may show a
+new-package safety warning during the initial release window. Verify the exact
+scoped package and its repository/integrity metadata with
+`npm view @wisepunk/dongo name version repository dist.integrity`; do not use an
+unscoped lookalike or bypass a host security policy. A host-required approval is
+an expected user confirmation, not a setup failure.
+
 `dongo connect` always connects to the live service at `dongo.so` and opens a browser for project approval. Authentication stays outside the repository, which receives only a non-secret connection marker. SSH and headless environments can use `--no-browser`. Development infrastructure is private to dongo's own source-level test harnesses and is not selectable from the installed CLI.
 
 ## Manual MCP setup
@@ -120,6 +127,11 @@ dongo integrate generic
 ```
 
 Use `--apply` only after reviewing the managed configuration. dongo adds the project connection without copying CLI authentication into Codex, Claude, or another host. Each host authorizes its own connection.
+
+The onboarding skill performs that preview and validated apply as one setup
+flow. The preview names the exact MCP configuration and `AGENTS.md` or
+`CLAUDE.md` managed block it will change; applying preserves unrelated host
+configuration and repository guidance.
 
 ## Security model
 

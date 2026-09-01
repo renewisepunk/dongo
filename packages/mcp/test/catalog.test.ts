@@ -28,6 +28,11 @@ test("catalog has exact parity with the canonical operation registry", () => {
     assert.equal(descriptor.annotations.destructiveHint, canonical.destructive);
     assert.equal(descriptor.annotations.idempotentHint, canonical.idempotent);
     assert.equal(descriptor.annotations.openWorldHint, canonical.openWorld);
+    assert.match(descriptor.toolName, /^dongo_/u);
+    assert.doesNotMatch(
+      `${descriptor.title}\n${descriptor.description}`,
+      /\b(?:Dongo|DONGO)\b(?![-_.])/u,
+    );
   }
 });
 
@@ -91,4 +96,20 @@ test("catalog rejects a mutation schema without required idempotencyKey", () => 
 
 test("operation list is derived rather than maintained independently", () => {
   assert.deepEqual(DONGO_OPERATION_NAMES, Object.keys(operationRegistry));
+});
+
+test("parallel capability and worktree fields flow through canonical MCP schemas", () => {
+  const catalog = createCanonicalDongoToolCatalog();
+  const session = catalog.find((tool) => tool.operation === "session_start");
+  const start = catalog.find((tool) => tool.operation === "start_work");
+  assert.ok(session);
+  assert.ok(start);
+  const sessionJson = session.inputSchema["~standard"].jsonSchema!.input({
+    target: "draft-2020-12",
+  }) as { properties?: Record<string, unknown> };
+  const startJson = start.inputSchema["~standard"].jsonSchema!.input({
+    target: "draft-2020-12",
+  }) as { properties?: Record<string, unknown> };
+  assert.ok(sessionJson.properties?.hostCapabilities);
+  assert.ok(startJson.properties?.workspace);
 });

@@ -23,7 +23,7 @@ const GUIDE_STEPS = [
   {
     number: "03",
     title: "Answer Needs You",
-    body: "Decisions, questions, blockers, and reviews rise to the top. Your response is delivered to the agent on its next pull.",
+    body: "Decisions, questions, blockers, and reviews rise to the top. Your response arrives on the next explicit pull; an active dongo waiter checks with backoff for up to five minutes, while a stopped agent stays stopped.",
   },
   {
     number: "04",
@@ -80,6 +80,13 @@ export function HelpGuide(props: HelpGuideProps) {
               </div>
               <A class="button" href={`${overviewHref}/settings?tab=Access`}>Review access</A>
             </div>
+            <ol class="help-setup-sequence" aria-label="Agent setup sequence">
+              <li><strong>Apply configuration.</strong><span>Review and apply the project-scoped change.</span></li>
+              <li><strong>Approve only if required.</strong><span>Trust the project-scoped server when your host asks.</span></li>
+              <li><strong>Log in only if required.</strong><span>Complete the host login when authentication is still needed.</span></li>
+              <li><strong>Restart only when necessary.</strong><span>Keep using the current repository session when it can reload the connection.</span></li>
+              <li><strong>Verify.</strong><span>Finish only after the selected agent connection passes its check.</span></li>
+            </ol>
             <p class="help-note">Codex, Claude Code, and other MCP hosts authorize independently. Revoking one installation does not revoke the others.</p>
           </section>
 
@@ -113,4 +120,3 @@ export function HelpGuide(props: HelpGuideProps) {
     </main>
   );
 }
-

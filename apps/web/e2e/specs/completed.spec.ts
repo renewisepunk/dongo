@@ -9,9 +9,9 @@ test("paginates completed work without duplicates and opens route-backed detail"
   );
 
   const first = page.getByRole("link", { name: /Complete the agent golden journey/ });
-  await expect(first).toContainText("DONGO-6 · Codex · 1h");
+  await expect(first).toContainText("dong006 · Codex · 1h");
   await expect(page.getByRole("link", { name: /Freeze the operation contract/ })).toContainText(
-    "DONGO-5 · Claude · 2h",
+    "dong005 · Claude · 2h",
   );
   await expect(page.getByRole("link", { name: "Search" })).toHaveAttribute(
     "href",
@@ -24,7 +24,7 @@ test("paginates completed work without duplicates and opens route-backed detail"
   await expect(page.getByRole("button", { name: "Load more" })).toBeHidden();
 
   await first.click();
-  await expect(page).toHaveURL(/\/app\/fixture-studio\/dongo\?work=work-done$/);
+  await expect(page).toHaveURL(/\/app\/fixture-studio\/dongo\?work=dong006$/);
   await expect(
     page.getByRole("region", { name: "Complete the agent golden journey" }),
   ).toBeVisible();

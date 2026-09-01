@@ -11,6 +11,20 @@ import {
 type Host = "Codex" | "Claude Code" | "AGENTS.md";
 const HOSTS: readonly Host[] = ["Codex", "Claude Code", "AGENTS.md"];
 
+function matchesHost(installation: ProjectInstallation, host: Host): boolean {
+  if (host === "AGENTS.md") return installation.kind === "cli";
+  if (installation.kind !== "mcp") return false;
+  const identity = `${installation.label} ${installation.clientId}`.toLowerCase();
+  return host === "Claude Code" ? identity.includes("claude") : identity.includes("codex");
+}
+
+function statusPriority(status: ProjectInstallation["status"]): number {
+  if (status === "active") return 0;
+  if (status === "needs_reauth") return 1;
+  if (status === "pending") return 2;
+  return 3;
+}
+
 type ConnectRouteConnection = {
   project: ProjectInfo;
   subscribeInstallations: (
@@ -65,11 +79,18 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
     (text: string) => navigator.clipboard.writeText(text)
   );
 
-  const activeInstallation = createMemo(() => installations().find(
-    (installation) =>
-      installation.status === "active" &&
-      (installation.kind === "cli" || installation.kind === "mcp"),
+  const cliInstallation = createMemo(() => installations().find(
+    (installation) => installation.kind === "cli" && installation.status === "active",
   ));
+  const hostInstallation = createMemo(() => installations()
+    .filter((installation) => matchesHost(installation, host()))
+    .sort((left, right) => statusPriority(left.status) - statusPriority(right.status))[0]);
+  const verifiedInstallation = createMemo(() => {
+    const installation = hostInstallation();
+    return installation?.status === "active" && installation.lastUsedAt !== undefined
+      ? installation
+      : undefined;
+  });
 
   onMount(() => {
     void connectFirst(preferredProjectId())
@@ -87,13 +108,13 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
             setError("");
           },
           () => {
-            setError("Agent connection status is temporarily unavailable.");
+            setError("Connection status is unavailable. Verify from the current agent session, or refresh this page to retry.");
             setLoading(false);
           },
         );
       })
       .catch(() => {
-        setError("Create a project before connecting an agent.");
+        setError("No project is available. Create or select a project, then return to connect this agent.");
         setLoading(false);
       });
   });
@@ -107,9 +128,44 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
 
   const instruction = createMemo(() => {
     if (host() === "AGENTS.md") {
-      return "Read AGENTS.md, install the dongo adapter in this repository, then run dongo connect.";
+      return "Read AGENTS.md and set up dongo for this repository in this current agent session. Apply the repository configuration, complete browser approval only if required, restart only when necessary, and verify the connection before doing work.";
     }
-    return `Install dongo in this repository and run dongo connect. Configure the ${host()} MCP connection when prompted.`;
+    return `Set up dongo for this repository in this current ${host()} session. In order: 1) apply the project-scoped configuration; 2) approve the project-scoped server only if required; 3) complete login only if required; 4) restart ${host()} only when necessary; 5) verify the connection with dongo_session_start. Keep using this repository session.`;
+  });
+
+  const connectionTitle = createMemo(() => {
+    if (loading()) return "Checking agent access";
+    const installation = hostInstallation();
+    if (installation?.status === "active" && installation.lastUsedAt !== undefined) return `${host()} connection verified`;
+    if (installation?.status === "active") return `${host()} verification required`;
+    if (installation?.status === "needs_reauth") return `${host()} needs login`;
+    if (installation?.status === "pending") return "Waiting for project approval";
+    if (installation?.status === "revoked") return `${host()} access was revoked`;
+    if (cliInstallation() && host() !== "AGENTS.md") return `${host()} setup not verified`;
+    return "Waiting for setup";
+  });
+
+  const connectionBody = createMemo(() => {
+    const installation = hostInstallation();
+    if (installation?.status === "active" && installation.lastUsedAt !== undefined) {
+      return `${host()} can reach this dongo project and passed verification.`;
+    }
+    if (installation?.status === "active") {
+      return `Access is approved. Complete step 5 from ${host()} to verify the connection.`;
+    }
+    if (installation?.status === "needs_reauth") {
+      return `Complete step 3 to sign ${host()} in again, then verify the connection.`;
+    }
+    if (installation?.status === "pending") {
+      return `Approve the project-scoped server if prompted, then continue with login and verification.`;
+    }
+    if (installation?.status === "revoked") {
+      return `Apply the configuration again, complete a fresh login, and verify. The previous access can no longer be used.`;
+    }
+    if (cliInstallation() && host() !== "AGENTS.md") {
+      return `The dongo CLI is ready, but no live ${host()} MCP connection has passed verification. Continue from step 1 below.`;
+    }
+    return "Start with step 1 below. This page updates when the selected connection passes verification.";
   });
 
   const copyInstruction = async () => {
@@ -148,11 +204,22 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
   return (
     <RequireHumanSession dependencies={props.dependencies}><AuthFrame>
       <div class="auth-stack" style={{ gap: "22px" }}>
-        <div class="title-group">
-          <div class="eyebrow eyebrow--green">Project created</div>
-          <h1 class="auth-title">Connect a coding agent</h1>
-          <p class="auth-lede">Open your repository with your coding agent and tell it to install dongo.</p>
-        </div>
+        <Show
+          when={verifiedInstallation()}
+          fallback={
+            <div class="title-group">
+              <div class="eyebrow eyebrow--green">Project created</div>
+              <h1 class="auth-title">Connect a coding agent</h1>
+              <p class="auth-lede">Use the agent session already open in this repository. There is no need to reopen it.</p>
+            </div>
+          }
+        >
+          <div class="title-group">
+            <div class="eyebrow eyebrow--green">Setup complete</div>
+            <h1 class="auth-title">dongo is ready for {project()?.name || "this project"}</h1>
+            <p class="auth-lede">The selected agent connection passed its check. You can start tracking work now.</p>
+          </div>
+        </Show>
 
         <div ref={hostTabs} class="host-tabs" role="tablist" aria-label="Coding agent host">
           {HOSTS.map((item, index) => (
@@ -191,37 +258,45 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
         <Show when={copyError()}><div class="error" role="alert">{copyError()}</div></Show>
 
         <div class="authorization-card">
-          <div class="instruction__label">browser authorization</div>
-          <div class="connection-card__body">
-            `dongo connect` opens one approval link. The code lets you compare terminal and browser; there is normally nothing to copy or enter.
-          </div>
+          <div class="instruction__label">setup sequence</div>
+          <p class="connection-card__body">The CLI connection is required. MCP is optional; use these five host steps only when you want direct dongo tools in the selected agent.</p>
+          <ol class="connection-card__body" aria-label="Setup sequence">
+            <li>Apply the configuration.</li>
+            <li>Approve the project-scoped server only if required.</li>
+            <li>Complete login only if required.</li>
+            <li>Restart only when necessary.</li>
+            <li>Verify the connection.</li>
+          </ol>
         </div>
 
-        <div class="connection-card" data-state={activeInstallation() ? "connected" : "waiting"}>
+        <div class="connection-card" data-state={verifiedInstallation() ? "connected" : "waiting"}>
           <div class="connection-card__title">
-            <Show when={activeInstallation()} fallback={<span class="status-spinner" aria-hidden="true" />}>
+            <Show when={verifiedInstallation()} fallback={<span class="status-spinner" aria-hidden="true" />}>
               <span class="status-dot" aria-hidden="true" />
             </Show>
-            <span>{loading() ? "Checking agent access" : activeInstallation() ? "Agent connected" : "Waiting for browser approval"}</span>
+            <span>{connectionTitle()}</span>
           </div>
-          <div class="connection-card__body">
-            {activeInstallation()
-              ? `${activeInstallation()!.label}${activeInstallation()!.machineLabel ? ` · ${activeInstallation()!.machineLabel}` : ""}.`
-              : "Approve the link opened by your terminal. This screen updates after local credential storage and the connection check succeed."}
-          </div>
-          <Show when={activeInstallation()}>
-            <div class="connection-card__meta">
-              <div>project · {project()?.name}</div>
-              <div>grant · {activeInstallation()!.kind} · {activeInstallation()!.status}</div>
-            </div>
-          </Show>
+          <div class="connection-card__body">{connectionBody()}</div>
         </div>
 
         <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
         <Show when={project()}>{(loaded) => (
-          <A class="button button--primary button--full" href={`/app/${loaded().organizationSlug}/${loaded().slug}`}>
-            {activeInstallation() ? "Continue to Overview" : "Go to Overview"}
-          </A>
+          <Show
+            when={verifiedInstallation()}
+            fallback={
+              <A class="button button--quiet" href={`/app/${loaded().organizationSlug}/${loaded().slug}`}>
+                Skip agent setup for now
+              </A>
+            }
+          >
+            <div class="onboarding-next-step">
+              <div class="instruction__label">Suggested next step</div>
+              <p>Open Overview and add the first piece of work you want your agent to track.</p>
+              <A class="button button--primary button--full" href={`/app/${loaded().organizationSlug}/${loaded().slug}`}>
+                Open dongo Overview
+              </A>
+            </div>
+          </Show>
         )}</Show>
         <p class="security-note">credential stored locally · never committed</p>
       </div>

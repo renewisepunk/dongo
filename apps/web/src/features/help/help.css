@@ -137,6 +137,29 @@
   font-family: var(--mono);
 }
 
+.help-setup-sequence {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 18px 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  list-style: none;
+}
+
+.help-setup-sequence li {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 14px;
+}
+
+.help-setup-sequence strong { color: var(--text-soft); font-size: 13px; font-weight: 600; }
+.help-setup-sequence span { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+
 .shortcut-reference {
   border: 1px solid var(--line);
   background: var(--surface-0);
@@ -209,6 +232,7 @@
   .help-guide-grid { grid-template-columns: 1fr; }
   .help-guide-card { min-height: auto; }
   .help-callout { align-items: stretch; flex-direction: column; }
+  .help-setup-sequence { grid-template-columns: 1fr; }
   .shortcut-reference__row {
     grid-template-columns: minmax(106px, 0.7fr) minmax(0, 1fr);
     gap: 8px 12px;
@@ -227,4 +251,3 @@
 @media (prefers-reduced-motion: reduce) {
   .help-page * { scroll-behavior: auto !important; }
 }
-

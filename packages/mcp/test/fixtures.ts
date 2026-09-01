@@ -42,6 +42,10 @@ function inputSchema(operation: DongoOperationName): ContractSchema {
   if (operation === "session_start") {
     shape.externalSessionId = z.string().min(1);
   }
+  if (operation === "get_updates") {
+    shape.cursor = z.number().int().nonnegative().optional();
+    shape.waitSeconds = z.number().int().min(0).max(20).optional();
+  }
   return z.object(shape).strict() as unknown as ContractSchema;
 }
 

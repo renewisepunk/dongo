@@ -14,6 +14,31 @@ export interface IntegrationFileResult {
   managedContent: string;
 }
 
+export type IntegrationLifecycleState = "preview_ready" | "configuration_applied";
+export type IntegrationConnectionState = "unverified";
+export type IntegrationStepStatus = "complete" | "action_required" | "conditional" | "pending";
+
+export interface IntegrationLifecycleStep {
+  order: 1 | 2 | 3 | 4 | 5;
+  id:
+    | "apply_configuration"
+    | "approve_project_server"
+    | "complete_login"
+    | "restart_host"
+    | "verify_connection";
+  title: string;
+  status: IntegrationStepStatus;
+  instruction: string;
+  command?: string;
+}
+
+export interface IntegrationLifecycle {
+  state: IntegrationLifecycleState;
+  connectionState: IntegrationConnectionState;
+  summary: string;
+  steps: IntegrationLifecycleStep[];
+}
+
 export interface IntegrationResult {
   host: IntegrationHost;
   applied: boolean;
@@ -23,11 +48,77 @@ export interface IntegrationResult {
   files: IntegrationFileResult[];
   loginCommand?: string;
   rollback: string[];
+  lifecycle: IntegrationLifecycle;
 }
 
 const MANAGED_START = "<!-- dongo-managed:v1:start -->";
 const MANAGED_END = "<!-- dongo-managed:v1:end -->";
 const FIRST_PARTY_ORIGINS = new Set(["https://dongo.so", "https://dev.dongo.so"]);
+
+function integrationHostLabel(host: IntegrationHost): string {
+  if (host === "codex") return "Codex";
+  if (host === "claude") return "Claude Code";
+  return "your MCP host";
+}
+
+function integrationLifecycle(
+  host: IntegrationHost,
+  applied: boolean,
+  loginCommand: string | undefined,
+): IntegrationLifecycle {
+  const hostLabel = integrationHostLabel(host);
+  const applyCommand = `dongo integrate ${host} --apply`;
+  return {
+    state: applied ? "configuration_applied" : "preview_ready",
+    connectionState: "unverified",
+    summary: applied
+      ? "Configuration applied. Connection verification is still required."
+      : "Preview ready. No files were changed.",
+    steps: [
+      {
+        order: 1,
+        id: "apply_configuration",
+        title: "Apply the configuration.",
+        status: applied ? "complete" : "action_required",
+        instruction: applied
+          ? "The managed project configuration and agent instructions were applied."
+          : "Review the managed preview, then apply it.",
+        ...(!applied ? { command: applyCommand } : {}),
+      },
+      {
+        order: 2,
+        id: "approve_project_server",
+        title: "Approve the project-scoped server, if required.",
+        status: "conditional",
+        instruction: `Approve the project-scoped dongo server only if ${hostLabel} asks you to trust it.`,
+      },
+      {
+        order: 3,
+        id: "complete_login",
+        title: "Complete login, if required.",
+        status: "conditional",
+        instruction: loginCommand
+          ? `Complete ${hostLabel}'s dongo login only if it is not already connected.`
+          : "Complete your host's OAuth login only if it is not already connected.",
+        ...(loginCommand ? { command: loginCommand } : {}),
+      },
+      {
+        order: 4,
+        id: "restart_host",
+        title: "Restart only when necessary.",
+        status: "conditional",
+        instruction: `Restart ${hostLabel} only if it cannot load the new server dynamically.`,
+      },
+      {
+        order: 5,
+        id: "verify_connection",
+        title: "Verify the connection.",
+        status: "pending",
+        instruction: `From ${hostLabel}, start a dongo session and confirm it reports the intended repository and project.`,
+      },
+    ],
+  };
+}
 
 function shortProjectReference(publicProjectRef: string): string {
   const withoutPrefix = publicProjectRef.replace(/^project[_-]/i, "");
@@ -362,5 +453,6 @@ export async function configureIntegration(input: {
     files,
     loginCommand,
     rollback,
+    lifecycle: integrationLifecycle(input.host, input.apply, loginCommand),
   };
 }

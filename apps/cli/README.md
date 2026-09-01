@@ -22,6 +22,20 @@ dongo --version
 dongo --help
 ```
 
+During the package’s initial release window, npm or an agent’s package-safety
+layer may warn that `@wisepunk/dongo` is newly published. Package age is a risk
+signal, not proof of a bad package and not an instruction to bypass safeguards.
+Before continuing, verify the exact scoped name (not an unscoped lookalike), the
+published repository, version, and integrity metadata:
+
+```sh
+npm view @wisepunk/dongo name version repository dist.integrity
+```
+
+If the host requires explicit approval for a new package, surface that warning
+and use the user’s approval; never substitute another package, add `--force`, or
+disable a security policy merely to make installation proceed.
+
 ## Build a package from a checkout
 
 Build and install the self-contained package archive so the command does not depend on workspace source files:
@@ -47,6 +61,7 @@ The gate inspects the archive, installs it into an isolated prefix, runs it from
 
 ```text
 dongo connect [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
+dongo project create --name NAME [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
 dongo ci setup
 dongo auth status
 dongo auth logout
@@ -56,13 +71,64 @@ dongo overview
 dongo intake get|claim|renew|complete [options]
 dongo work create|get|start|update|renew|finish [options]
 dongo comment add [options]
-dongo attention request|get|resolve [options]
+dongo attention request|get|wait|resolve [options]
+dongo updates get|wait [--cursor N] [--timeout-seconds N]
 dongo attachment get|fetch --attachment-id ID [--output PATH]
 dongo sync
 dongo integrate codex|claude|generic [--apply]
 ```
 
 Add `--json` to receive one JSON object on stdout. Progress and the one complete browser approval link are written to stderr. The normal flow opens that link, waits for browser approval, stores the resulting credential, writes a non-secret project marker, and returns control to the terminal. `--no-browser` supports SSH/headless sessions by printing the same complete link while polling continues; no code or token needs to be copied into the CLI.
+
+Use `dongo project create --name NAME` when this repository should have a new
+project instead of binding an existing one. The command carries explicit
+creation intent into the approval page, then binds the new project and writes
+the repository marker after approval. A current dongo browser session is reused,
+so project approval does not require another account sign-in; the new CLI grant
+is still scoped to that project and approved separately.
+
+The free plan includes one active project. Before creation, the approval page
+shows the organization’s active-project allowance. If it is exhausted, dongo
+returns a non-retryable `plan_limit` result with the current count and the safe
+next choices: use the existing project, archive it, or upgrade when upgrades are
+available. Rerunning authorization does not bypass the plan limit. To bind this
+repository to an existing project instead, use
+`dongo connect --project-ref REF`.
+
+Every command and subcommand has focused help; for example, run
+`dongo work update --help` or add `--json` to receive the same usage and command
+schema in a success envelope. Argument validation reports all detectable
+problems together before contacting dongo. In JSON mode, validation errors put
+the complete issue list and expected command schema in `error.details`.
+
+Work uses a canonical four-letter, three-digit identifier such as `dong008`.
+Pass it to `dongo work get --identifier dong008`. Exact legacy identifiers
+remain valid aliases for migrated work, while command output, copy actions, and
+repository exports use the canonical compact identifier.
+
+JSON output always uses one envelope: successes contain `ok`, `command`, and
+`data`; failures contain `ok`, `command`, and `error`. When the CLI generates an
+idempotency key for a mutation, it returns the key in `recovery.idempotencyKey`
+and does not print it separately to stderr in JSON mode. Reuse that key only to
+recover the exact same request.
+
+`dongo attention wait --attention-id ID` is the active response-notification
+mechanism for a running local adapter. It checks immediately, then after 5, 10,
+20, and at most 30 seconds between later checks. It stops after five minutes by
+default and returns `wait.status` as `resolved` or `timed_out`; use
+`--timeout-seconds` to choose a bound from 1 to 3600 seconds. This command never
+claims to restart a stopped process. A new agent session must call
+`dongo_session_start`, which returns newly resolved Attention for that
+installation, before continuing prior work.
+
+`dongo updates get` performs one immediate pull for project update signals.
+`dongo updates wait` registers a live bounded waiter and waits up to five
+minutes by default for new Intake signals; use `--cursor` to resume after the
+last processed update and `--timeout-seconds` to choose a 1–3600 second bound.
+Each server wait is capped at 20 seconds and checks with 1, 2, 4, then 5 second
+backoff. Drain immediately while `hasMore` is true. The web app may describe a
+nudge as promptly deliverable only while a waiter is live; a stopped CLI does
+not restart itself, and queued signals are returned on its next explicit pull.
 
 Every installed CLI connection targets the live service at `https://dongo.so`. There is no environment picker or custom-origin flag. Development infrastructure is available only to dongo's source-level internal harnesses, and a released CLI refuses a repository marker from any non-production origin before sending credentials.
 
@@ -89,3 +155,19 @@ All v1 mutations accept `--idempotency-key KEY`. If omitted, the CLI creates one
 `dongo sync` writes only dongo-managed Markdown plus `.agent-work/manifest.json`. Writes are atomic and deterministic, signed artifact URLs are omitted, stale files are removed only when they retain the dongo-managed header, and the CLI performs no Git action.
 
 Host integration commands render a project-specific URL-only MCP entry plus the checked-in managed instruction block. Preview is the default and exposes only dongo-owned snippets, never unrelated existing file contents. `--apply` is the explicit consent to merge: unrelated JSON/TOML keys and prose are preserved, malformed markers and conflicting server ownership stop without overwrite, and symlink targets are refused. Codex and Claude receive a host-native OAuth login command; CLI credentials are never copied or passed to a host. Local host logout/removal and server-side installation revocation remain separate actions.
+
+### Claude Code setup order
+
+Run `dongo integrate claude` to review the proposed project-scoped changes.
+After that preview, proceed in this order:
+
+1. Apply the configuration with `dongo integrate claude --apply`.
+2. Approve the project-scoped server only if Claude Code asks for project trust.
+3. Complete the printed login command only if authentication is required.
+4. Restart Claude Code only when it cannot load the connection in the current
+   repository session.
+5. Verify with `dongo_session_start` and accept success only when it identifies
+   the intended project and Claude Code installation.
+
+An integration result should name the completed step and the next required
+action. It should not send a user back through approvals that already succeeded.

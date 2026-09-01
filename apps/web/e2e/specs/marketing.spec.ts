@@ -1,18 +1,26 @@
 import { expect, test } from "@playwright/test";
 
-test("keeps the marketing homepage static and public without checking a human session", async ({ page }) => {
+test("keeps the marketing homepage public when there is no human session", async ({ page }) => {
   await page.goto("/");
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-human-session-checked");
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-open-session-checked");
-  await expect(page.getByRole("heading", { name: "Install the skills. Let your agent set up dongo." })).toBeVisible();
-  await expect(page.getByText("one shared work queue", { exact: false })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "The agent acts like itself" })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-fixture-index-session-checked", "true");
+  await expect(page.getByRole("heading", { name: "Like Linear, but for coding agents." })).toBeVisible();
+  await expect(page.getByText("the shared place for you and your agents", { exact: false })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Start with the agent you already use." })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in", exact: true }).first()).toHaveAttribute("href", "/login");
-  await expect(page.getByRole("link", { name: /Install dongo skills/ }).first()).toHaveAttribute("href", "https://github.com/renewisepunk/dongo-skills");
   await expect(page.getByRole("link", { name: /Open dongo/ })).toHaveAttribute("href", "/open");
   await expect(page.getByRole("link", { name: "Source" })).toHaveAttribute("rel", "external");
+});
+
+test("opens the app directly for a signed-in human", async ({ page }) => {
+  await page.goto("/?scenario=signed-in");
+
+  await expect(page.locator("html")).toHaveAttribute("data-fixture-index-session-checked", "true");
+  await expect(page.locator("html")).toHaveAttribute("data-fixture-index-identity-bootstrapped", "true");
+  await expect(page).toHaveURL(/\/app\/fixture-studio\/dongo$/);
 });
 
 test("resolves Open dongo to sign-in without a human session", async ({ page }) => {
@@ -40,8 +48,8 @@ test("keeps the essential product story readable at a mobile viewport", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Install the skills. Let your agent set up dongo." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Like Linear, but for coding agents." })).toBeVisible();
   await expect(page.getByLabel("Example dongo overview")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "You add intent. The agent handles the tracker." })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Let the agent set it up." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Development changed. The tracker did not." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Put agent work where you can see it." })).toBeVisible();
 });

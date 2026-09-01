@@ -45,6 +45,7 @@ Visible elements:
 
 - dongo wordmark, which returns to the current project Overview.
 - Current organization and project selector showing the project name.
+- Visible Ideas link to the current project's human-only backlog.
 - Search button with its keyboard shortcut hint.
 - Connection state only when relevant: Reconnecting, Offline, or Unable to sync.
 - User avatar/profile menu.
@@ -54,7 +55,8 @@ The organization/project selector opens a compact popover containing:
 - current organization name;
 - current project with a selected checkmark;
 - other available projects, if the plan allows them;
-- Create project, when permitted;
+- current plan and active-project allowance;
+- Create project for owners, even when the allowance is full, so the destination can explain the limit and recovery choices instead of hiding the action;
 - Organization settings;
 - Project settings.
 
@@ -65,6 +67,7 @@ Visible elements:
 - back control when a sheet/subscreen is open;
 - dongo wordmark or current screen title;
 - compact project selector;
+- Ideas action when the Ideas route is not already open;
 - search icon;
 - profile/avatar control.
 
@@ -167,25 +170,27 @@ The screen never flashes Overview data before the Convex identity is authenticat
 
 When authentication was initiated by `/device` or `/oauth/consent`, the callback preserves the pending authorization transaction and returns to it. The user is never forced to restart the terminal or MCP login flow after authenticating.
 
-### Screen 4 — Create the first project (web fallback)
+### Screen 4 — Create a project (web fallback)
 
 Purpose: establish the repository/codebase the user will coordinate.
 
-This is the web-started fallback, not a mandatory gate before an agent can authenticate. The canonical agent-first path is Screen 5B → Screen 5C, where `dongo connect` proposes the repository as the first project and the human creates and approves it in one consent action. The fallback creates a personal organization automatically; its name can be changed later.
+This is the web-started fallback, not a mandatory gate before an agent can authenticate. The canonical agent-first path is Screen 5B → Screen 5C, where `dongo connect` proposes the repository as the first project and the human creates and approves it in one consent action. The first-project fallback creates a personal organization automatically; a later project is created in an explicitly selected owner organization.
 
 Visible elements:
 
 - dongo wordmark.
 - Progress label: “Set up your workspace.”
-- Heading: “Create your first project.”
+- Heading: “Create your first project” or “Create another project,” based on durable project state.
+- Authenticated account identity and explicit copy distinguishing account sign-in from project/repository binding.
 - Explanation: “A project maps to one repository or codebase.”
+- Organization selector when the person owns more than one organization.
+- Current plan, active-project usage, and exact allowance before submission.
 - Project name field.
 - Generated project slug preview.
 - Optional repository URL field.
 - Agent execution mode group:
   - Manual, selected by default, with text explaining that agents triage and suggest work but wait before starting;
   - Autonomous, with text explaining that agents may claim and begin Ready work.
-- Free-plan note: one active project is included.
 - Create project button.
 - Sign out/profile escape action.
 
@@ -194,10 +199,10 @@ Validation and error states:
 - Name required.
 - Slug collision with suggested alternative.
 - Invalid repository URL.
-- Project entitlement reached, with an explanation rather than silent failure.
+- Project entitlement reached, with a specific Free-plan explanation and actions to use the existing project, archive an active project, or review plan/upgrade availability. The user stays authenticated and is never sent to login as a remedy for an allowance failure.
 - Creation failure preserves every entered value and offers Retry.
 
-Next screen: Screen 5. When this fallback was opened from a legacy pending CLI/MCP authorization, the exact pending request remains in `returnTo`; the new project stays selected when the user returns.
+Next screen: Screen 5. The created project is stored as the selected project before navigation, and the destination gives concrete repository/agent connection steps. When this fallback was opened from a legacy pending CLI/MCP authorization, the exact pending request remains in `returnTo`; the new project stays selected when the user returns.
 
 ### Screen 5A — Web: connect a coding agent
 
@@ -259,6 +264,8 @@ Visible elements:
 - Fixed project selected by the CLI/agent from an exact reference, the repository marker, repository URL, unique name/slug, or the account's only active project. The human confirms this binding but does not choose it on the consent page.
 - If an account has multiple projects and repository context does not resolve exactly one, show “No unambiguous project match,” disable approval, and tell the agent to reconnect with an exact public project reference.
 - When no project exists and the current official CLI link contains a valid proposal: a clearly labeled CLI project proposal showing name, repository URL when present, and Manual/Autonomous mode; Requested access explicitly includes creating that first project; the primary action reads “Create & approve.”
+- When an explicit `dongo project create` request contains a valid proposal: do not match or reuse an existing project. Show the target owner organization and allowance, create a new project, bind the terminal to the resulting public project reference, then approve.
+- When the selected organization has reached its Free-plan active-project allowance: disable Create & approve and show use-existing, archive-existing, and plan/upgrade actions without restarting authentication.
 - When no project exists and the request has no valid proposal: approval stays disabled and the web Create project fallback is available.
 - Requested access in plain language, including read/write and offline renewal where applicable.
 - Exact API resource/environment.
@@ -272,7 +279,7 @@ States:
 - No available project/entitlement reached: explain the limitation and allow project management in a separate tab.
 - Invalid, already used, denied, or expired request: show a terminal retry instruction.
 
-For a first project, Create & approve provisions the personal organization/project through the authenticated Convex identity, binds its resulting public project reference to the authorization-server user, and only then approves the device request. Approval creates a separate project-scoped installation Actor and grant. It never issues an account-wide work token and never reveals token material.
+For any project creation request, Create & approve provisions the project through the authenticated Convex identity, binds its resulting public project reference to the authorization-server user, and only then approves the device request. A first project also provisions the personal organization. Approval creates a separate project-scoped installation Actor and grant. It never issues an account-wide work token and never reveals token material.
 
 ### Screen 5D — Browser: authorization complete
 
@@ -305,15 +312,28 @@ Purpose: add the hosted remote MCP server as a separate, independently revocable
 
 Visible elements:
 
-- Project-specific remote endpoint: `https://dev.dongo.so/p/{publicProjectRef}/mcp` in development or `https://dongo.so/p/{publicProjectRef}/mcp` in production.
-- Project-unique server name such as `dongo-{shortProjectRef}`.
-- Codex command/configuration guidance followed by `codex mcp login <name>`.
-- Claude remote HTTP guidance followed by `claude mcp login <name>` or authentication from `/mcp`.
-- Generic URL-only MCP configuration.
-- Explanation of local, user, and committed project scope plus host trust/approval behavior.
-- Warning that MCP hosts receive their own grant; the CLI token is never copied or reused.
+- A preview of the dongo-owned project configuration and managed instructions,
+  without dumping unrelated host configuration.
+- The selected host and project in plain language; raw transport, grant, and
+  resource details stay in the explicit technical preview rather than the
+  human-facing progress state.
+- One ordered setup sequence:
+  1. Apply the configuration.
+  2. Approve the project-scoped server only if required.
+  3. Complete login only if required.
+  4. Restart only when necessary.
+  5. Verify the connection with `dongo_session_start`.
+- A warning that each MCP host receives its own access and the CLI credential is
+  never copied or reused.
 
 `dongo integrate codex` and `dongo integrate claude` may automate safe configuration merges, launch host-native login, install managed instructions, and run a read-only verification. They must show the exact files/settings they will change and rollback instructions.
+
+The selected MCP host is not marked connected because a CLI installation is
+active. Success requires a live, active installation for that host plus a
+successful `dongo_session_start`. Pending project trust, missing or expired
+login, a required reload, revoked access, and verification failure each name the
+specific next step. A working repository session is never told to restart unless
+the host cannot load the newly applied connection.
 
 ### Screen 5G — Browser: approve MCP host
 
@@ -335,8 +355,8 @@ The grant/token family and installation Actor are distinct from the dongo CLI an
 
 Visible elements:
 
-- CLI grant status and read-only `session_start` result.
-- Each configured MCP host with Connected, Needs authentication, Pending project trust, Needs reauthorization, Revoked, or Failed status.
+- CLI connection status and read-only `session_start` result in plain language.
+- Each configured MCP host with Connected, Needs authentication, Pending project trust, Needs reauthorization, Revoked, or Failed status; raw grant and transport details are not shown in the default progress view.
 - Tool count and verification of `dongo_session_start` where the host exposes it.
 - Doctor/retry/reauthorize guidance.
 - Open dongo action only after the selected surface verifies successfully.
@@ -413,7 +433,9 @@ Visible changes:
 - Composer clears only after the submission is safely accepted.
 - A new optimistic row appears under Inbox immediately.
 - The row shows:
-  - the first line of raw text, or the primary filename if there is no text;
+  - the server-authoritative non-empty label: first nonblank normalized text
+    line, otherwise the first available filename, otherwise `Untitled intake`
+    for legacy/deleted-data edge cases;
   - attachment icon/thumbnail and count;
   - submitted time;
   - status label “Waiting for local agent” or “Agent is triaging.”
@@ -437,8 +459,11 @@ Visible elements:
 - Close/back control.
 - Heading “Inbox.”
 - Submitted timestamp and submitting human.
-- Full original Intake text.
+- Current Intake text, optional context, and links.
 - Attachment gallery/list with preview/open/download actions.
+- Submitting human plus created/updated timestamps; immutable history attributes
+  each saved edit to its human Actor without inventing a `lastEditedBy` field on
+  the Intake.
 - Current triage state:
   - Waiting for local agent;
   - Claimed by agent name with elapsed time;
@@ -449,7 +474,97 @@ Visible elements:
 - When processed: Linked work section listing every created or matched WorkItem.
 - When dismissed: short agent explanation when supplied.
 
-The user is not asked to classify or rewrite the Intake. Opening linked work moves to Screen 11.
+While the Intake is waiting or claimed, any authorized project member can enter
+Edit, change text/context/links, and add finalized attachments. Existing
+attachments are retained; removal is outside this slice. The editor sees an
+explicit **Save Intake** action and Saving, Saved, validation, and failure
+states. Saving is unavailable when the resulting Intake would have neither text
+nor an available attachment, while an added attachment is pending or failed, or
+when a link is not a valid HTTP(S) URL. Duplicate normalized links collapse and
+the Intake may contain at most 100 links.
+
+Saving a claimed Intake keeps the agent claim but advances the shared revision.
+The live subscription updates the detail and every Inbox/search/source label. If
+another human or agent changes the Intake while an edit draft is open, the
+canonical version remains visible, the draft is preserved, and the editor is
+offered explicit retry/merge rather than an overwrite. Processed and dismissed
+Intake is read-only; a save that races with triage completion explains that the
+Intake can no longer be edited.
+
+The user is not asked to classify the Intake. Opening linked work moves to
+Screen 11.
+
+## 5A. Human Ideas backlog
+
+Ideas are deliberately separate from Add Something and Inbox. Capturing an Idea
+does not create Intake, notify an agent, enter Overview, or authorize work. The
+route is `/app/:orgSlug/:projectSlug/ideas`; selected detail uses
+`?idea={ideaId}` and follows the same desktop panel/mobile sheet behavior as
+other route-backed detail.
+
+### Screen 9A — Ideas list
+
+Entry: visible **Ideas** link in the project header.
+
+Visible elements:
+
+- Heading **Ideas**.
+- Lede: “Possible future work. Agents cannot see or claim Ideas.”
+- Primary **Capture idea** action.
+- Filters **Open**, **Archived**, and **Promoted**; Open is the default.
+- Open Ideas in explicit manual position order.
+- Archived and Promoted history ordered by newest state transition first.
+- Each card shows title, optional content/attachment summary, creating or latest
+  editing member attribution and time, and state where applicable.
+- Open cards expose accessible Move earlier/Move later controls. They never use
+  Ready, Working, claim, Run, or agent-assignment language.
+
+List subscriptions update without reload. A reorder submits the complete open
+order with current revisions. If another member changes the list first, restore
+canonical order, keep the intended move understandable, and offer a deliberate
+retry rather than overwriting.
+
+### Screen 9B — Capture or edit Idea
+
+The editor contains:
+
+- required **Title**;
+- optional **Idea** text with Markdown support and formatted preview;
+- optional **Context**;
+- **Links**, normalized HTTP(S) URLs;
+- finalized attachments with upload progress, retry, and additive attachment
+  behavior;
+- primary **Capture idea** for create or **Save changes** for edit.
+
+An Idea may contain up to 100 links and 20 finalized attachments. Existing
+attachments remain associated; removal is outside this slice. Attribution
+shows the creating member and latest editing member. Local text/context/link
+drafts are scoped to the Idea; the editor may say “Draft saved on this device.”
+Uploads remain visible until finalized or retried.
+
+Only Open Ideas are editable. Clean live updates replace the displayed state.
+When a live update or stale save races with a dirty editor, preserve text and
+finalized uploads and show “This Idea changed elsewhere. Your unsaved edits and
+finalized uploads are still here.” with **Keep my edits** and **Use latest**.
+Never silently overwrite either member.
+
+### Screen 9C — Archive, restore, and promote
+
+Open detail offers **Edit** and **Archive**. Archived detail is read-only and
+offers **Restore**. Promoted detail is terminal and shows **Already in Inbox**
+plus **View in Inbox**.
+
+Promotion is a deliberate human action. Confirm with heading “Send this idea to
+Inbox?” and copy “This creates one Intake item for agents to triage. The idea
+becomes Promoted and stays linked.” On acceptance, atomically create one Intake
+from the canonical current Idea, move the Idea to Promoted, and preserve the
+two-way link. Success says **Idea sent to Inbox** with **View in Inbox**.
+
+An exact replay or any later promotion request opens the original Intake and
+shows **Already in Inbox**; one Idea can never create a second Intake. The Intake
+detail links back with **Promoted from Ideas**. Promotion does not assign, claim,
+notify, or authorize an agent to start. Agents see only the resulting Intake
+through the normal Intake workflow.
 
 ## 6. Returning and populated Overview
 
@@ -488,11 +603,27 @@ Selecting a row opens Screen 14.
 Each row shows:
 
 - WorkItem title.
+- Canonical Work identifier.
 - Active agent name/avatar.
+- Running or Waiting Run state.
 - Truthful elapsed activity time.
 - Optional compact latest-update text when available.
+- Lease health when degraded or nearing expiry.
+- Safe workspace label: `Worktree · <branch>` when a branch is supplied,
+  otherwise `Worktree · <worktree name>` when its safe label is supplied,
+  `Isolated workspace` when isolation is supported without display details, or
+  `Workspace details unavailable` otherwise.
 
 An expired lease or stopped Run is not displayed as active. Selecting a row opens Screen 12.
+
+The expanded live region is headed `agent activity` with “Live claimed work
+across connected agent sessions.” Cards use the actual agent Actor, canonical
+Work identifier/title, Running/Waiting, latest progress or `No progress update
+yet.`, elapsed time, and lease state `Lease healthy`, `renewing`, `released`, or
+`expired`. Unsupported/undisclosed capability explicitly stays serial; a shared
+checkout says additional work stays serial. If the concurrency query fails,
+state that activity is temporarily unavailable while keeping canonical Working
+navigation usable.
 
 #### Ready rows
 
@@ -511,7 +642,8 @@ Selecting a row opens Screen 11.
 
 Each row shows:
 
-- Truncated raw Intake text or primary filename.
+- The shared server-authoritative Intake label: first nonblank normalized text
+  line, first available filename, or the neutral `Untitled intake` fallback.
 - Attachment type/count.
 - Submitted time.
 - Waiting, triaging, or clarification status.
@@ -538,7 +670,7 @@ Visible elements:
 
 - Close/back control.
 - WorkItem title.
-- Identifier, such as `PROJ-143`.
+- Canonical identifier, such as `dong143`.
 - State line: Ready.
 - Goal/description rendered as safe Markdown.
 - Source Intake section with original text summary and attachment previews.
@@ -563,6 +695,7 @@ Visible elements:
   - latest meaningful update;
   - current claim/active indicator;
   - external session label when useful and safe.
+  - safe workspace label without an absolute local path.
 - Latest section showing the agent’s most recent update.
 - Files/artifacts section showing referenced files, commit, PR, preview, deployment, image, file, report, or URL.
 - Conversation timeline with human and agent messages.
@@ -625,7 +758,7 @@ Visible changes:
 
 - The response appears in the conversation with human name/avatar and timestamp.
 - The Attention card changes to Resolved/Answered.
-- A line states: “Your agent will see this on its next pull.”
+- A line states: “Your agent will see this on its next explicit pull. An active dongo waiter checks with backoff for up to five minutes; a stopped agent will not restart itself.”
 - The WorkItem disappears from Needs You in the underlying Overview.
 - The underlying Ready/Working/waiting state remains visible.
 - Optional Undo is not offered if it would make agent behavior ambiguous; the user can add a corrective comment instead.
@@ -721,16 +854,21 @@ Visible elements:
 - Keyboard shortcut hint on desktop.
 - Search scope text indicating the current project.
 - Results area covering:
+  - canonical WorkItem identifiers and exact retained legacy identifier aliases;
   - WorkItem title;
   - WorkItem description;
   - comments;
   - Intake text.
+- Ideas remain in their dedicated human backlog and are not part of global or
+  agent search; their state filters and manual Open ordering live on Screen 9A.
 - Each result row shows:
   - result type icon/label;
   - WorkItem/Intake title or text excerpt;
   - safely highlighted matching text;
   - identifier/state where applicable;
   - relative date.
+- WorkItem results always display and copy the canonical compact identifier,
+  even when the query matched an exact value from `legacyIdentifiers`.
 - Result count or continuation state.
 - Load more/pagination control for bounded results.
 
@@ -773,12 +911,29 @@ Visible elements:
 - Agent execution mode:
   - Manual;
   - Autonomous.
+- Agent concurrency:
+  - **Single-agent** by default;
+  - owner-only **Allow parallel work** opt-in;
+  - supporting copy: “Agents may work on separate claimed items at the same
+    time when their host supports isolated workspaces.”;
+  - `maxConcurrentRuns` safety cap from 2 through 8, defaulting to 4 when
+    enabled, labeled **Maximum concurrent runs** and **Safety cap**, with
+    explicit copy that it is `not a plan limit`;
+  - explanation that dongo coordinates atomic claims and Runs while the host
+    creates agents and worktrees.
 - Save changes button.
-- Project identifier/prefix, read-only when changing it would break durable references.
+- Compact four-letter project code, read-only and derived from the immutable
+  lowercase slug, with any legacy prefix retained only as compatibility
+  metadata for exact old-identifier lookups.
 - Archive project section.
 - Archive button and explanatory text.
 
 Owner-only actions are unavailable to members. Archiving requires confirmation showing the project name and its effect on agent access.
+
+Unsupported or undisclosed hosts remain available for serial work. Settings do
+not promise that enabling parallel work can make such a host spawn agents or
+worktrees. Live cards appear and change through authoritative project
+subscriptions; they do not appear merely because a CLI process is connected.
 
 ### Screen 20 — Agent installations and access
 
@@ -1005,6 +1160,15 @@ Visible elements:
 - Specific message explains that another person/agent changed the item.
 - The user’s draft remains copyable/retryable where possible.
 - The product never silently overwrites another actor.
+
+The live subscription is authoritative when a human and agent act on the same
+item. dongo applies additive comments independently. For revision-sensitive
+actions such as Ready ordering and Attention resolution, the first accepted
+write wins; a stale write is rejected, the current server state remains on
+screen, and the interface names the concurrent change. Comment and Attention
+response text autosaves locally per project and Work item, is cleared only
+after a successful write, and remains available to copy when the competing
+change makes retry impossible.
 
 ## 14. Complete golden user journey
 

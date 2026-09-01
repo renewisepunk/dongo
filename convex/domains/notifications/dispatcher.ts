@@ -3,6 +3,7 @@ import type { Id } from "../../_generated/dataModel";
 import { internal } from "../../_generated/api";
 import { internalAction, internalMutation } from "../../_generated/server";
 import { IMPORTANT_EMAIL_DELAY_MS } from "./service";
+import { displayWorkIdentifier } from "../work/identifiers";
 
 const DELIVERY_PATH = "/api/notifications/v1/deliver";
 const DELIVERY_LEASE_MS = 2 * 60 * 1_000;
@@ -210,7 +211,7 @@ export const claimDue = internalMutation({
           projectId: project._id,
           deepLinkPath,
           projectName: project.name,
-          workIdentifier: work.identifier,
+          workIdentifier: displayWorkIdentifier(project, work),
           workTitle: work.title,
           attentionKind: attention.kind,
           attentionTitle: attention.title,

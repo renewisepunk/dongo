@@ -7,10 +7,34 @@ const write = process.argv.includes("--write");
 const sourceRoots = ["src", "apps", "packages", "convex", "integrations", "scripts"];
 const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
 const proseExtensions = new Set([".md", ".mdx", ".html"]);
-const structuredTextExtensions = new Set([".json", ".jsonc", ".sql", ".svg", ".xml"]);
+const structuredTextExtensions = new Set([
+  ".css",
+  ".json",
+  ".jsonc",
+  ".sql",
+  ".svg",
+  ".toml",
+  ".txt",
+  ".xml",
+  ".yaml",
+  ".yml",
+]);
 const ignoredDirectories = new Set([".agent-work", ".git", "node_modules", "dist", ".wrangler", "coverage", "test-results", "playwright-report"]);
 const ignoredFiles = new Set(["dongo-prd.md", "scripts/verify-brand-case.mjs"]);
-const uppercaseBrand = /\bDongo\b/g;
+const legacyStandalonePrefixFixtures = new Set([
+  "apps/web/e2e/harness/main.tsx",
+  "apps/web/e2e/harness/project-fixture.ts",
+]);
+const normalizationRegressionInputs = new Set([
+  "Dongo CLI",
+  "DONGO service agent",
+  "Use Dongo with Codex",
+]);
+// Exact legacy Work identifiers (`DONGO-12`), environment variables
+// (`DONGO_TOKEN`), and managed filenames (`DONGO.managed.md`) remain valid.
+// Standalone product copy never does, including copy inside documentation code
+// fences and inline examples.
+const uppercaseBrand = /\b(?:Dongo|DONGO)\b(?![-_.])/g;
 
 async function filesUnder(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -28,7 +52,8 @@ function replaceRanges(value, ranges) {
   let result = value;
   for (const { start, end } of ranges.sort((a, b) => b.start - a.start)) {
     const text = result.slice(start, end);
-    result = `${result.slice(0, start)}${text.replaceAll("Dongo", "dongo")}${result.slice(end)}`;
+    result = `${result.slice(0, start)}${text.replace(uppercaseBrand, "dongo")}${result.slice(end)}`;
+    uppercaseBrand.lastIndex = 0;
   }
   return result;
 }
@@ -40,6 +65,7 @@ function sourceText(value, filename) {
     plugins: ["typescript", ...(filename.endsWith("x") ? ["jsx"] : [])],
   });
   const ranges = [];
+  const relative = path.relative(root, filename);
   const seen = new WeakSet();
   const visit = (node) => {
     if (!node || typeof node !== "object" || seen.has(node)) return;
@@ -48,6 +74,16 @@ function sourceText(value, filename) {
       ["StringLiteral", "TemplateElement", "JSXText"].includes(node.type) &&
       typeof node.start === "number" &&
       typeof node.end === "number" &&
+      !(
+        node.type === "StringLiteral" &&
+        node.value === "DONGO" &&
+        legacyStandalonePrefixFixtures.has(relative)
+      ) &&
+      !(
+        relative === "apps/web/src/lib/brand-case.test.ts" &&
+        node.type === "StringLiteral" &&
+        normalizationRegressionInputs.has(node.value)
+      ) &&
       uppercaseBrand.test(value.slice(node.start, node.end))
     ) {
       ranges.push({ start: node.start, end: node.end });
@@ -64,24 +100,9 @@ function sourceText(value, filename) {
 }
 
 function markdownText(value) {
-  let fenced = false;
-  let changed = false;
-  const output = value.split(/(?<=\n)/).map((line) => {
-    if (/^\s*(```|~~~)/.test(line)) {
-      fenced = !fenced;
-      return line;
-    }
-    if (fenced) return line;
-    const pieces = line.split(/(`[^`]*`)/g);
-    for (let index = 0; index < pieces.length; index += 2) {
-      const next = pieces[index].replace(uppercaseBrand, "dongo");
-      if (next !== pieces[index]) changed = true;
-      pieces[index] = next;
-      uppercaseBrand.lastIndex = 0;
-    }
-    return pieces.join("");
-  }).join("");
-  return { output, ranges: changed ? [{}] : [] };
+  const output = value.replace(uppercaseBrand, "dongo");
+  uppercaseBrand.lastIndex = 0;
+  return { output, ranges: output === value ? [] : [{}] };
 }
 
 const candidates = new Set();
@@ -111,7 +132,7 @@ for (const file of candidates) {
     : extension === ".md" || extension === ".mdx"
       ? markdownText(value)
       : {
-          output: value.replaceAll("Dongo", "dongo"),
+          output: value.replace(uppercaseBrand, "dongo"),
           ranges: uppercaseBrand.test(value) ? [{}] : [],
         };
   uppercaseBrand.lastIndex = 0;

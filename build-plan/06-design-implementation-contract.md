@@ -6,7 +6,7 @@ Status: accepted implementation input. This document does not replace or modify 
 
 The user-authored handoff at [`user-journey-desktop-and-mobile/README.md`](user-journey-desktop-and-mobile/README.md) is mandatory for web implementation. Its primary design source is:
 
-- [`project/Dongo Journey.dc.html`](user-journey-desktop-and-mobile/project/dongo%20Journey.dc.html)
+- [`project/dongo Journey.dc.html`](user-journey-desktop-and-mobile/project/dongo%20Journey.dc.html)
 - the imported design runtime, [`project/support.js`](user-journey-desktop-and-mobile/project/support.js), is prototype infrastructure and is not shipped in the product;
 - [`project/uploads/04-user-journey.md`](user-journey-desktop-and-mobile/project/uploads/04-user-journey.md) supplies the complete screen/state inventory beyond the interactive prototype.
 
@@ -37,13 +37,53 @@ Implement the prototype's hierarchy and states for:
 - agent connection/authorization;
 - empty and populated Overview;
 - Add Something composer and attachment states;
+- dedicated human Ideas route with Capture/Edit, Open manual ordering,
+  Archived/Promoted filters, Archive/Restore, and deliberate one-to-one
+  promotion to Intake; Ideas never appear in agent-facing Overview or search;
 - composer image paste plus the full-viewport desktop file drop zone;
 - Needs You, Working, Ready, Inbox, and Recently Done;
-- Inbox and Ready/Working/Needs You/Done detail;
+- Inbox and Ready/Working/Needs You/Done detail; unprocessed Inbox detail adds
+  explicit Edit/Save states for text, context, links, and additive attachments,
+  preserves drafts through live revision conflicts, and becomes read-only after
+  processing or dismissal;
+- live parallel-Run visualization sourced from authoritative subscriptions,
+  with one card per active Run showing agent, canonical Work, Running/Waiting,
+  latest progress, elapsed/lease health, and a bounded workspace label;
+- project settings with **Single-agent** as the default and owner-only **Allow
+  parallel work** plus a 2–8 concurrent-Run safety cap (default 4), clearly
+  separated from plan limits and host worktree creation;
 - human Attention response and comments, including pasted/dropped comment attachments with upload progress, failure recovery, and conversation-entry attachment rows;
 - search overlay/sheet, command menu, shortcut reference dialog, route-backed Help guide, and toast/status feedback.
 
 The full journey document adds route-backed Completed, settings, installation access/revocation, members, plan/storage, archived/unavailable, offline/reconnecting/session-expired, conflict, and later native screens. Where the prototype omits one of those surfaces, extend its same typography, palette, spacing, borders, hierarchy, and interaction rules rather than introducing another visual system.
+
+For workspace labels, render `Worktree · <branch>` when a safe branch label is
+supplied, otherwise `Worktree · <worktree name>` when its safe label is
+supplied, `Isolated workspace` when isolation support is known but display
+details are omitted, and `Workspace details unavailable` otherwise. Never
+render an absolute local path. Unsupported or undisclosed hosts remain serially
+usable, and shared checkout explicitly keeps additional work serial; the
+interface must not imply that dongo itself creates agents or worktrees.
+
+The live region heading is `agent activity` with “Live claimed work across
+connected agent sessions.” A missing progress summary reads `No progress update
+yet.` Lease states are `Lease healthy`, `renewing`, `released`, and `expired`.
+A query failure says activity is temporarily unavailable without disabling
+canonical Working navigation.
+
+Ideas use `/app/:orgSlug/:projectSlug/ideas` with query-backed `?idea={ideaId}`
+detail. Keep the Ideas header link visible, state plainly “Possible future work.
+Agents cannot see or claim Ideas.”, and use the existing square, compact
+panel/sheet visual language. Open cards use human attribution and accessible
+ordering controls without Ready/Working/claim styling. Archive/Restore and
+Promoted history remain human-only.
+
+The promotion confirmation reads “Send this idea to Inbox?” and “This creates
+one Intake item for agents to triage. The idea becomes Promoted and stays
+linked.” Success reads **Idea sent to Inbox**; replay/terminal state reads
+**Already in Inbox**. Preserve the linked navigation labels **View in Inbox**
+and **Promoted from Ideas**. Dirty live conflicts retain the draft and finalized
+uploads with **Keep my edits** and **Use latest**.
 
 ## Approved agent-auth adaptation
 

@@ -2,6 +2,21 @@ export type Id<T extends string> = string & { readonly __table: T };
 
 export type OrganizationRole = "owner" | "member";
 export type ExecutionMode = "manual" | "autonomous";
+export type HostCapabilityState = "supported" | "unsupported" | "undisclosed";
+export type ParallelExecutionPolicy = {
+  enabled: boolean;
+  maxConcurrentRuns: number;
+  requiresIsolatedWorkspaces: true;
+};
+export type HostCapabilities = {
+  parallelExecution: HostCapabilityState;
+  worktreeIsolation: HostCapabilityState;
+};
+export type RunWorkspace = {
+  kind: "worktree" | "shared_checkout" | "undisclosed";
+  worktreeName?: string;
+  branch?: string;
+};
 export type IntakeState = "waiting" | "claimed" | "clarification_needed" | "processed" | "dismissed";
 export type WorkState = "ready" | "working" | "done" | "cancelled";
 export type RunState = "running" | "waiting_for_human" | "finished" | "failed" | "abandoned";
@@ -14,6 +29,8 @@ export type ActorSummary = {
   kind: ActorKind;
   displayName: string;
   agentType?: string;
+  transport?: "cli" | "mcp" | "service" | "development";
+  transportLabel?: string;
   machineLabel?: string;
 };
 
@@ -25,8 +42,10 @@ export type ProjectSummary = {
   name: string;
   slug: string;
   identifierPrefix: string;
+  compactIdentifierPrefix?: string;
   repositoryUrl?: string;
   executionMode: ExecutionMode;
+  parallelExecution?: ParallelExecutionPolicy;
   archivedAt?: number;
 };
 
@@ -43,6 +62,8 @@ export type Intake = {
   id: Id<"intakes">;
   projectId: Id<"projects">;
   text: string;
+  context?: string;
+  links?: string[];
   state: IntakeState;
   revision: number;
   createdBy: ActorSummary;
@@ -97,6 +118,8 @@ export type Run = {
   installationActor: ActorSummary;
   externalSessionId: string;
   state: RunState;
+  hostCapabilities?: HostCapabilities;
+  workspace?: RunWorkspace;
   latestUpdate?: string;
   startedAt: number;
   activeUntil?: number;
@@ -107,9 +130,12 @@ export type WorkItem = {
   id: Id<"workItems">;
   projectId: Id<"projects">;
   identifier: string;
+  legacyIdentifiers?: string[];
   sequence: number;
   title: string;
   goal: string;
+  context?: string;
+  links?: string[];
   outcome?: string;
   state: WorkState;
   orderKey: string;
@@ -134,6 +160,31 @@ export type Overview = {
   serverTime: number;
 };
 
+export type ProjectUpdate = {
+  id: string;
+  version: number;
+  kind: "intake_available";
+  intakeId: string;
+  priority: "normal" | "important";
+  createdAt: number;
+};
+
+export type ProjectUpdates = {
+  cursor: number;
+  updates: ProjectUpdate[];
+  hasMore: boolean;
+  wait: {
+    status: "updates_available" | "timed_out" | "not_requested";
+    requestedSeconds: number;
+    elapsedMilliseconds: number;
+  };
+  delivery: {
+    mechanism: "bounded_pull";
+    stoppedAgentsRestarted: false;
+  };
+  serverTime: number;
+};
+
 export type SessionStart = {
   project: ProjectSummary;
   installation: ActorSummary;
@@ -141,8 +192,21 @@ export type SessionStart = {
   newlyResolvedAttention: Attention[];
   instructions: {
     executionMode: ExecutionMode;
+    /** Maximum Ready work items this autonomous session may start. */
+    maxStartedWorkItemsPerSession: 1;
+    /** @deprecated Compatibility alias; this never limited WorkItem creation. */
     maxNewWorkItemsPerSession: 1;
     wakeUpSemantics: "next_pull";
+    parallelExecution?: {
+      policy: ParallelExecutionPolicy;
+      hostCapabilities: HostCapabilities;
+      mode: "serial" | "parallel";
+      reason:
+        | "project_disabled"
+        | "host_unsupported"
+        | "host_undisclosed"
+        | "parallel_available";
+    };
   };
 };
 

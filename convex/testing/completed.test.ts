@@ -74,11 +74,15 @@ describe("completed Work history", () => {
     );
 
     expect(first.page.map((item) => item.identifier)).toEqual(
-      Array.from({ length: 20 }, (_, index) => `HST-${30 - index}`),
+      Array.from({ length: 20 }, (_, index) =>
+        `hist${String(30 - index).padStart(3, "0")}`
+      ),
     );
     expect(first.isDone).toBe(false);
     expect(second.page.map((item) => item.identifier)).toEqual(
-      Array.from({ length: 10 }, (_, index) => `HST-${10 - index}`),
+      Array.from({ length: 10 }, (_, index) =>
+        `hist${String(10 - index).padStart(3, "0")}`
+      ),
     );
     expect(second.isDone).toBe(true);
   });

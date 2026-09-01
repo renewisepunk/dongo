@@ -4,6 +4,7 @@ import type {
   Attention,
   Intake,
   Overview,
+  ProjectUpdates,
   SessionStart,
   SyncSnapshot,
   WorkItem,
@@ -13,9 +14,11 @@ import {
   attentionSchema,
   intakeSchema,
   overviewSchema,
+  projectUpdatesSchema,
   schemaFields,
   sessionStartSchema,
   syncSnapshotSchema,
+  workLinkSchema,
   workItemSchema,
 } from "./schemas.ts";
 
@@ -45,17 +48,27 @@ export type AgentArtifactInput = {
   url?: string;
   repositoryPath?: string;
 };
+export type HostCapabilitiesInput = {
+  parallelExecution: "supported" | "unsupported";
+  worktreeIsolation: "supported" | "unsupported";
+};
+export type RunWorkspaceInput = {
+  kind: "worktree" | "shared_checkout" | "undisclosed";
+  worktreeName?: string;
+  branch?: string;
+};
 
 export type OperationMap = {
-  session_start: { input: { externalSessionId: string }; output: SessionStart };
+  session_start: { input: { externalSessionId: string; hostCapabilities?: HostCapabilitiesInput }; output: SessionStart };
   get_overview: { input: Record<string, never>; output: Overview };
+  get_updates: { input: { cursor?: number; waitSeconds?: number }; output: ProjectUpdates };
   get_intake: { input: { intakeId: string }; output: Intake };
   claim_intake: { input: MutationInput & { intakeId: string; expectedRevision: number; leaseSeconds?: number }; output: Intake };
   renew_intake_claim: { input: MutationInput & { intakeId: string; expectedRevision: number; leaseSeconds?: number }; output: Intake };
   complete_triage: { input: MutationInput & { intakeId: string; expectedRevision: number; state: "processed" | "dismissed"; explanation?: string; linkedWorkItemIds?: string[] }; output: Intake };
-  create_work: { input: MutationInput & { title: string; goal: string; sourceIntakeIds?: string[]; parentWorkItemId?: string }; output: WorkItem };
+  create_work: { input: MutationInput & { title: string; goal: string; context?: string; links?: string[]; initialComment?: string; sourceIntakeIds?: string[]; parentWorkItemId?: string }; output: WorkItem };
   get_work: { input: { workItemId?: string; identifier?: string }; output: WorkItem };
-  start_work: { input: MutationInput & { workItemId: string; expectedRevision: number; externalSessionId: string; leaseSeconds?: number }; output: WorkItem };
+  start_work: { input: MutationInput & { workItemId: string; expectedRevision: number; externalSessionId: string; leaseSeconds?: number; workspace?: RunWorkspaceInput }; output: WorkItem };
   update_work: { input: MutationInput & { workItemId: string; expectedRevision: number; title?: string; goal?: string; latestUpdate?: string; artifact?: AgentArtifactInput }; output: WorkItem };
   renew_claim: { input: MutationInput & { workItemId: string; expectedRevision: number; leaseSeconds?: number }; output: WorkItem };
   finish_work: { input: MutationInput & { workItemId: string; expectedRevision: number; outcome: string; artifacts?: AgentArtifactInput[] }; output: WorkItem };
@@ -110,15 +123,35 @@ const workArtifactInput = z
     repositoryPath: z.string().min(1).max(2_048).optional(),
   })
   .strict();
+const hostCapabilitiesInput = z.object({
+  parallelExecution: z.enum(["supported", "unsupported"]),
+  worktreeIsolation: z.enum(["supported", "unsupported"]),
+}).strict();
+const runWorkspaceInput = z.object({
+  kind: z.enum(["worktree", "shared_checkout", "undisclosed"]),
+  worktreeName: z.string().trim().min(1).max(240).optional(),
+  branch: z.string().trim().min(1).max(240).optional(),
+}).strict();
 
 export const operationRegistry = {
   session_start: spec(
     "session_start", "POST", read, true, true,
-    z.object({ externalSessionId: z.string().min(1).max(500) }).strict(),
+    z.object({
+      externalSessionId: z.string().min(1).max(500),
+      hostCapabilities: hostCapabilitiesInput.optional(),
+    }).strict(),
     sessionStartSchema,
   ),
   get_overview: spec(
     "get_overview", "GET", read, true, true, emptyInput, overviewSchema,
+  ),
+  get_updates: spec(
+    "get_updates", "GET", read, true, true,
+    z.object({
+      cursor: z.number().int().nonnegative().optional(),
+      waitSeconds: z.number().int().min(0).max(20).optional(),
+    }).strict(),
+    projectUpdatesSchema,
   ),
   get_intake: spec(
     "get_intake", "GET", read, true, true,
@@ -152,6 +185,9 @@ export const operationRegistry = {
       ...mutationFields,
       title: z.string().min(1).max(500),
       goal: boundedText,
+      context: boundedText.optional(),
+      links: z.array(workLinkSchema).max(100).optional(),
+      initialComment: z.string().trim().min(1).max(100_000).optional(),
       sourceIntakeIds: z.array(identifier).max(500).optional(),
       parentWorkItemId: identifier.optional(),
     }).strict(),
@@ -170,6 +206,7 @@ export const operationRegistry = {
       expectedRevision,
       externalSessionId: z.string().min(1).max(500),
       leaseSeconds,
+      workspace: runWorkspaceInput.optional(),
     }).strict(),
     workItemSchema,
   ),

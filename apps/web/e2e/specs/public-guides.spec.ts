@@ -15,12 +15,14 @@ test("keeps get started public and preserves routes into help, sign-in, and the 
   await page.goto("/get-started");
   await expect(page).toHaveURL(/\/get-started$/);
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-human-session-checked", "true");
-  await expect(page.getByRole("heading", { name: "Install the skills. Approve once. Start working." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Install the skills. Follow the prompts. Start working." })).toBeVisible();
   await expect(page.getByRole("link", { name: /Install dongo skills/ }).first()).toHaveAttribute("href", "https://github.com/renewisepunk/dongo-skills");
   await expect(page.getByText("No project yet?")).toBeVisible();
+  await expect(page.getByText(/newly published.*exact scoped package/i)).toBeVisible();
   await expect(page.getByText("The CLI does not invoke macOS Keychain", { exact: false })).toBeVisible();
   await expect(page.getByText("Re-authenticate", { exact: true })).toBeVisible();
   await expect(page.getByText("Revoke or remove", { exact: true })).toBeVisible();
+  await expect(page.getByRole("list", { name: "MCP host setup sequence" }).getByRole("listitem")).toHaveCount(5);
 
   await page.getByRole("link", { name: "Help", exact: true }).first().click();
   await expect(page).toHaveURL(/\/help$/);
@@ -32,7 +34,7 @@ test("keeps get started public and preserves routes into help, sign-in, and the 
 
   await page.goto("/get-started");
   await page.getByRole("link", { name: /Open app/ }).first().click();
-  await expect(page.getByRole("region", { name: "Add something" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New", exact: true })).toBeVisible();
 });
 
 test("keeps the complete help guide public without a project session", async ({ page }) => {
@@ -44,9 +46,10 @@ test("keeps the complete help guide public without a project session", async ({ 
   await expect(page.getByText("Paste images")).toBeVisible();
   await expect(page.getByText("Drop files anywhere")).toBeVisible();
   await expect(page.getByText("Command menu", { exact: true })).toBeVisible();
-  await expect(page.getByText("dongo_session_start", { exact: true })).toBeVisible();
+  await expect(page.getByText("dongo_session_start", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Re-authenticate this host", { exact: true })).toBeVisible();
   await expect(page.getByText("Revoke server access", { exact: true })).toBeVisible();
+  await expect(page.getByRole("list", { name: "MCP host setup sequence" }).getByRole("listitem")).toHaveCount(5);
   await expect(page.locator(".shortcut-reference__row")).toHaveCount(15);
   await expect(page.getByRole("link", { name: /Security and privacy/ })).toHaveAttribute("href", "/security");
   await expect(page.getByRole("link", { name: /Report a vulnerability/ })).toHaveAttribute("href", /SECURITY\.md$/);

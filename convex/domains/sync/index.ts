@@ -4,6 +4,7 @@ import { agentContextValidator } from "../../lib/validators";
 import { fail } from "../../lib/errors";
 import { resolveAgentPrincipal } from "../../lib/authz";
 import { buildOverview } from "../overview/index";
+import { intakeForAgent } from "../agent/privacy";
 
 const SYNC_LIMIT = 100;
 
@@ -41,10 +42,17 @@ export const sessionStart = internalQuery({
     return {
       project: principal.project,
       installation: principal.installation,
-      overview: await buildOverview(ctx, principal.project),
+      overview: await buildOverview(ctx, principal.project).then((overview) => ({
+        ...overview,
+        inbox: overview.inbox.map(({ intake, ...item }) => ({
+          ...item,
+          intake: intakeForAgent(intake),
+        })),
+      })),
       newlyResolvedAttention,
       instructions: {
         executionMode: principal.project.executionMode,
+        maxStartedWorkItemsPerSession: 1 as const,
         maxNewWorkItemsPerSession: 1 as const,
         wakeUpSemantics: "next_pull" as const,
       },
@@ -116,6 +124,7 @@ export const snapshot = internalQuery({
           .withIndex("by_project_created", (q) =>
             q.eq("projectId", principal.project._id).gt("createdAt", since),
           )
+          .filter((q) => q.eq(q.field("ideaId"), undefined))
           .order("asc")
           .take(SYNC_LIMIT),
       ]);
@@ -145,7 +154,7 @@ export const snapshot = internalQuery({
       acknowledgedThrough: since,
       nextAcknowledgement: now,
       ready,
-      inbox: newIntakes,
+      inbox: newIntakes.map(intakeForAgent),
       activeRuns,
       resolvedAttention,
       events,

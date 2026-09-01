@@ -11,6 +11,11 @@ const projectArgs = {
   identifierPrefix: v.string(),
   repositoryUrl: v.optional(v.string()),
   executionMode: v.union(v.literal("manual"), v.literal("autonomous")),
+  parallelExecution: v.optional(v.object({
+    enabled: v.boolean(),
+    maxConcurrentRuns: v.number(),
+    requiresIsolatedWorkspaces: v.optional(v.literal(true)),
+  })),
 };
 
 export const createAndProvisionResource = action({

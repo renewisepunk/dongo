@@ -21,7 +21,16 @@ vi.mock("convex/browser", () => ({
       convexCalls.push("listMine");
       return [{
         membership: { organizationId: "org_1", role: "owner" },
-        organization: { name: "Studio", slug: "studio" },
+        organization: { name: "Studio", slug: "studio", plan: "free" },
+        projectAllowance: {
+          resource: "active_projects",
+          plan: "free",
+          activeProjectCount: 1,
+          limit: 1,
+          remaining: 0,
+          canCreate: false,
+          actions: ["use_existing", "archive_existing", "upgrade"],
+        },
         projects: [{ publicRef: "project_1", name: "dongo", slug: "dongo" }],
       }];
     }
@@ -43,6 +52,7 @@ import {
   decideDeviceRequest,
   decideOAuthConsent,
   getDeviceRequest,
+  getProjectCreationContext,
   getOAuthClientSummary,
   listAuthorizableProjects,
 } from "./authorization-client";
@@ -64,6 +74,27 @@ describe("isolated authorization worker client", () => {
       organizationSlug: "studio",
     }]);
     expect(convexCalls).toEqual(["auth:convex-access-token", "bootstrap", "listMine"]);
+  });
+
+  it("maps the server-authoritative project allowance for creation UI", async () => {
+    await expect(getProjectCreationContext()).resolves.toEqual({
+      organizations: [{
+        id: "org_1",
+        name: "Studio",
+        slug: "studio",
+        plan: "free",
+        activeProjectCount: 1,
+        activeProjectLimit: 1,
+        canCreate: false,
+      }],
+      projects: [{
+        publicRef: "project_1",
+        name: "dongo",
+        slug: "dongo",
+        organizationName: "Studio",
+        organizationSlug: "studio",
+      }],
+    });
   });
 
   it("reads a device request without persisting or inventing authorization data", async () => {

@@ -17,12 +17,13 @@ import {
   resolveAgentPrincipal,
 } from "../../lib/authz";
 import { appendEvent } from "../../lib/events";
-import { fail, optionalString } from "../../lib/errors";
+import { fail, optionalString, requireString } from "../../lib/errors";
 import { runIdempotent } from "../../lib/idempotency";
 import { isLeaseActive, newLease } from "../../lib/leases";
 import { createWorkItem, linkIntakeToWork } from "../work/service";
 import { attachmentSummary } from "../attachments/summary";
 import { intakeSummaryForHuman } from "../human/summary";
+import { attachmentForAgent, intakeForAgent } from "../agent/privacy";
 
 const newWorkValidator = v.object({
   title: v.string(),
@@ -31,21 +32,67 @@ const newWorkValidator = v.object({
   parentId: v.optional(v.id("workItems")),
 });
 
+const MAX_INTAKE_ATTACHMENTS = 20;
+const MAX_INTAKE_LINKS = 100;
+const MAX_INTAKE_LINK_LENGTH = 2_048;
+
+function normalizedIntakeLinks(
+  values: string[] | undefined,
+): string[] | undefined {
+  if (values === undefined) return undefined;
+  if (values.length > MAX_INTAKE_LINKS) {
+    fail("validation", `Intake may include at most ${MAX_INTAKE_LINKS} links`);
+  }
+  const links = values.map((value, index) => {
+    const raw = requireString(
+      value,
+      `links[${index}]`,
+      MAX_INTAKE_LINK_LENGTH,
+    );
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      fail("validation", `links[${index}] must be a valid URL`);
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      fail("validation", `links[${index}] must use HTTP or HTTPS`);
+    }
+    return parsed.toString();
+  });
+  return [...new Set(links)];
+}
+
+function sameStrings(
+  left: string[] | undefined,
+  right: string[] | undefined,
+): boolean {
+  return (left ?? []).length === (right ?? []).length &&
+    (left ?? []).every((value, index) => value === (right ?? [])[index]);
+}
+
 export const create = mutation({
   args: {
     projectId: v.id("projects"),
     text: v.optional(v.string()),
+    context: v.optional(v.string()),
+    links: v.optional(v.array(v.string())),
     attachmentIds: v.array(v.id("attachments")),
     idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
     const principal = await requireHumanProject(ctx, args.projectId);
     const text = optionalString(args.text, "text", MAX_BODY_LENGTH);
+    const context = optionalString(args.context, "context", MAX_BODY_LENGTH);
+    const links = normalizedIntakeLinks(args.links);
     if (!text && args.attachmentIds.length === 0) {
       fail("validation", "Intake requires text or an attachment");
     }
-    if (args.attachmentIds.length > 20) {
-      fail("validation", "An Intake may include at most 20 attachments");
+    if (args.attachmentIds.length > MAX_INTAKE_ATTACHMENTS) {
+      fail(
+        "validation",
+        `An Intake may include at most ${MAX_INTAKE_ATTACHMENTS} attachments`,
+      );
     }
     const now = Date.now();
     return await runIdempotent(
@@ -56,7 +103,7 @@ export const create = mutation({
         principalKey: principal.principalKey,
         operation: "intake.create",
         key: args.idempotencyKey,
-        payload: { text, attachmentIds: args.attachmentIds },
+        payload: { text, context, links, attachmentIds: args.attachmentIds },
         now,
       },
       async () => {
@@ -69,6 +116,7 @@ export const create = mutation({
             attachment.organizationId !== principal.project!.organizationId ||
             attachment.createdByProfileId !== principal.profile._id ||
             attachment.status !== "available" ||
+            attachment.ideaId !== undefined ||
             attachment.intakeId !== undefined ||
             attachment.workItemId !== undefined
           ) {
@@ -83,6 +131,8 @@ export const create = mutation({
           createdByActorId: principal.actor._id,
           clientRequestId: args.idempotencyKey,
           text,
+          context,
+          links,
           status: "new",
           revision: 1,
           createdAt: now,
@@ -97,10 +147,168 @@ export const create = mutation({
           intakeId,
           actorId: principal.actor._id,
           type: "intake.created",
-          data: { attachmentCount: attachments.length },
+          data: {
+            attachmentCount: attachments.length,
+            hasContext: context !== undefined,
+            linkCount: links?.length ?? 0,
+          },
           createdAt: now,
         });
         return { intakeId, revision: 1 };
+      },
+    );
+  },
+});
+
+export const updateForHuman = mutation({
+  args: {
+    intakeId: v.id("intakes"),
+    expectedRevision: v.number(),
+    text: v.optional(v.string()),
+    context: v.optional(v.string()),
+    links: v.optional(v.array(v.string())),
+    addAttachmentIds: v.optional(v.array(v.id("attachments"))),
+    idempotencyKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const intake = await ctx.db.get(args.intakeId);
+    if (!intake) fail("not_found", "Intake not found");
+    const principal = await requireHumanProject(ctx, intake.projectId);
+    if (
+      args.text === undefined &&
+      args.context === undefined &&
+      args.links === undefined &&
+      args.addAttachmentIds === undefined
+    ) {
+      fail("validation", "At least one Intake change is required");
+    }
+    const text = args.text === undefined
+      ? intake.text
+      : optionalString(args.text, "text", MAX_BODY_LENGTH);
+    const context = args.context === undefined
+      ? intake.context
+      : optionalString(args.context, "context", MAX_BODY_LENGTH);
+    const links = args.links === undefined
+      ? intake.links
+      : normalizedIntakeLinks(args.links);
+    const addAttachmentIds = [...new Set(args.addAttachmentIds ?? [])];
+    const now = Date.now();
+    return await runIdempotent(
+      ctx,
+      {
+        organizationId: intake.organizationId,
+        projectId: intake.projectId,
+        principalKey: principal.principalKey,
+        operation: "intake.update_for_human",
+        key: args.idempotencyKey,
+        payload: {
+          intakeId: intake._id,
+          expectedRevision: args.expectedRevision,
+          text: args.text,
+          context: args.context,
+          links: args.links,
+          addAttachmentIds,
+        },
+        now,
+      },
+      async () => {
+        if (intake.revision !== args.expectedRevision) {
+          fail("revision_conflict", "The Intake changed since it was read", {
+            expectedRevision: args.expectedRevision,
+            currentRevision: intake.revision,
+          });
+        }
+        if (intake.status !== "new" && intake.status !== "claimed") {
+          fail("invalid_transition", "Processed Intake cannot be edited");
+        }
+        const existingAttachments = await ctx.db
+          .query("attachments")
+          .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
+          .take(MAX_INTAKE_ATTACHMENTS + 1);
+        if (existingAttachments.length > MAX_INTAKE_ATTACHMENTS) {
+          fail("internal", "Intake attachment limit is inconsistent");
+        }
+        const existingIds = new Set(
+          existingAttachments.map((attachment) => attachment._id),
+        );
+        const additions = [];
+        for (const attachmentId of addAttachmentIds) {
+          if (existingIds.has(attachmentId)) continue;
+          const attachment = await ctx.db.get(attachmentId);
+          if (
+            !attachment ||
+            attachment.organizationId !== intake.organizationId ||
+            attachment.projectId !== intake.projectId ||
+            attachment.createdByProfileId !== principal.profile._id ||
+            attachment.status !== "available" ||
+            attachment.ideaId !== undefined ||
+            attachment.intakeId !== undefined ||
+            attachment.workItemId !== undefined
+          ) {
+            fail("not_found", "Attachment is not available for this Intake");
+          }
+          additions.push(attachment);
+        }
+        if (
+          existingAttachments.length + additions.length >
+          MAX_INTAKE_ATTACHMENTS
+        ) {
+          fail(
+            "validation",
+            `An Intake may include at most ${MAX_INTAKE_ATTACHMENTS} attachments`,
+          );
+        }
+        const hasAvailableAttachment = existingAttachments.some(
+          (attachment) => attachment.status === "available",
+        ) || additions.length > 0;
+        if (!text && !hasAvailableAttachment) {
+          fail("validation", "Intake requires text or an attachment");
+        }
+        const changedFields = [
+          ...(text !== intake.text ? ["text"] : []),
+          ...(context !== intake.context ? ["context"] : []),
+          ...(!sameStrings(links, intake.links) ? ["links"] : []),
+          ...(additions.length > 0 ? ["attachments"] : []),
+        ];
+        const editableFieldsWereSaved = args.text !== undefined ||
+          args.context !== undefined || args.links !== undefined;
+        if (!editableFieldsWereSaved && changedFields.length === 0) {
+          return {
+            intakeId: intake._id,
+            revision: intake.revision,
+            updatedAt: intake.updatedAt,
+            addedAttachmentIds: [],
+          };
+        }
+        const revision = intake.revision + 1;
+        await ctx.db.patch(intake._id, {
+          text,
+          context,
+          links,
+          revision,
+          updatedAt: now,
+        });
+        for (const attachment of additions) {
+          await ctx.db.patch(attachment._id, { intakeId: intake._id });
+        }
+        await appendEvent(ctx, {
+          organizationId: intake.organizationId,
+          projectId: intake.projectId,
+          intakeId: intake._id,
+          actorId: principal.actor._id,
+          type: "intake.updated",
+          data: {
+            changedFields,
+            addedAttachmentCount: additions.length,
+          },
+          createdAt: now,
+        });
+        return {
+          intakeId: intake._id,
+          revision,
+          updatedAt: now,
+          addedAttachmentIds: additions.map((attachment) => attachment._id),
+        };
       },
     );
   },
@@ -116,13 +324,15 @@ export const getForHuman = query({
       .query("attachments")
       .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
       .take(100)
-      .then((items) => items.map(attachmentSummary));
+      .then((items) => items
+        .filter((attachment) => attachment.status === "available")
+        .map(attachmentSummary));
     const links = await ctx.db
       .query("intakeWorkLinks")
       .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
       .take(100);
     return {
-      intake: intakeSummaryForHuman(intake),
+      intake: intakeSummaryForHuman(intake, attachments[0]),
       attachments,
       links: links.map((link) => ({
         workItemId: link.workItemId,
@@ -152,7 +362,11 @@ export const getForAgent = internalQuery({
       .query("intakeWorkLinks")
       .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
       .take(100);
-    return { intake, attachments, links };
+    return {
+      intake: intakeForAgent(intake),
+      attachments: attachments.map(attachmentForAgent),
+      links,
+    };
   },
 });
 

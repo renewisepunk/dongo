@@ -11,10 +11,12 @@ import type {
 } from "../features/overview/model";
 import { convexAccessToken } from "./auth-client";
 import { convexDeploymentUrl } from "./auth-config";
+import { lowercaseDongoBrand } from "./brand-case";
 import {
   deliverAttachment,
   type AttachmentUploadReservation,
 } from "./attachment-upload";
+import { intakeDisplayLabel } from "./intake-editing";
 
 export type ProjectGroup = {
   membership: { organizationId: string; role: "owner" | "member" };
@@ -24,6 +26,15 @@ export type ProjectGroup = {
     slug: string;
     plan: "free" | "paid";
   } | null;
+  projectAllowance?: {
+    resource: "active_projects";
+    plan: "free" | "paid";
+    activeProjectCount: number;
+    limit: number | null;
+    remaining: number | null;
+    canCreate: boolean;
+    actions: Array<"use_existing" | "archive_existing" | "upgrade">;
+  } | null;
   projects: Array<{
     _id: string;
     publicRef: string;
@@ -32,6 +43,7 @@ export type ProjectGroup = {
     repositoryUrl?: string;
     identifierPrefix: string;
     executionMode: "manual" | "autonomous";
+    parallelExecution?: ParallelExecutionPolicy;
     archivedAt?: number;
   }>;
 };
@@ -46,10 +58,25 @@ export type ProjectInfo = {
   organizationPlan: "free" | "paid";
   membershipRole: "owner" | "member";
   activeProjectCount: number;
+  activeProjectLimit: number | null;
+  canCreateProject: boolean;
   repositoryUrl?: string;
   identifierPrefix: string;
   executionMode: "manual" | "autonomous";
+  parallelExecution: ParallelExecutionPolicy;
   archivedAt?: number;
+};
+
+export type ParallelExecutionPolicy = {
+  enabled: boolean;
+  maxConcurrentRuns: number;
+  requiresIsolatedWorkspaces: true;
+};
+
+const SINGLE_AGENT_POLICY: ParallelExecutionPolicy = {
+  enabled: false,
+  maxConcurrentRuns: 1,
+  requiresIsolatedWorkspaces: true,
 };
 
 function mapProjectInfo(
@@ -66,12 +93,19 @@ function mapProjectInfo(
     organizationSlug: group.organization.slug,
     organizationPlan: group.organization.plan,
     membershipRole: group.membership.role,
-    activeProjectCount: group.projects.filter(
+    activeProjectCount: group.projectAllowance?.activeProjectCount ?? group.projects.filter(
       (candidate) => candidate.archivedAt === undefined,
     ).length,
+    activeProjectLimit: group.projectAllowance?.limit ??
+      (group.organization.plan === "free" ? 1 : null),
+    canCreateProject: group.projectAllowance?.canCreate ??
+      (group.organization.plan === "paid" || group.projects.every(
+        (candidate) => candidate.archivedAt !== undefined,
+      )),
     repositoryUrl: project.repositoryUrl,
     identifierPrefix: project.identifierPrefix,
     executionMode: project.executionMode,
+    parallelExecution: project.parallelExecution ?? SINGLE_AGENT_POLICY,
     archivedAt: project.archivedAt,
   };
 }
@@ -104,7 +138,9 @@ export type ProjectAdministration = {
     slug: string;
     repositoryUrl?: string;
     identifierPrefix: string;
+    compactIdentifierPrefix: string;
     executionMode: "manual" | "autonomous";
+    parallelExecution?: ParallelExecutionPolicy;
     archivedAt?: number;
   };
   organization: {
@@ -135,6 +171,125 @@ export type ProjectInstallation = {
   lastUsedAt?: number;
 };
 
+export type AgentUpdatePresence = {
+  serverTime: number;
+  installations: Array<{
+    installationId: string;
+    actor: {
+      id: string;
+      displayName: string;
+      agentType?: string;
+      machineLabel?: string;
+    };
+    capability: "get_updates" | "unknown";
+    state: "waiting" | "recently_active" | "stopped";
+    delivery: "bounded_wait" | "next_pull" | "offline";
+    lastPulledAt?: number;
+    waitingUntil?: number;
+  }>;
+  truth: { stoppedAgentsRestarted: false };
+};
+
+export type IntakeNudgePriority = "normal" | "important";
+
+export type IntakeNudgeResult = {
+  signal: {
+    id: string;
+    version: number;
+    kind: "intake_available";
+    intakeId: string;
+    priority: IntakeNudgePriority;
+    createdAt: number;
+  };
+  delivery: {
+    mechanism: "bounded_pull";
+    waitingInstallations: number;
+    recentlyActiveInstallations: number;
+    stoppedInstallations: number;
+    stoppedAgentsRestarted: false;
+  };
+};
+
+export type IntakeUpdateInput = {
+  intakeId: string;
+  expectedRevision: number;
+  text?: string;
+  context?: string;
+  links?: string[];
+  addAttachmentIds?: string[];
+  idempotencyKey: string;
+};
+
+export type IntakeUpdateResult = {
+  intakeId: string;
+  revision: number;
+  updatedAt: number;
+  addedAttachmentIds: string[];
+};
+
+export type IdeaState = "open" | "archived" | "promoted";
+
+export type IdeaAttribution = {
+  _id?: string;
+  kind?: "human";
+  type?: "human";
+  profileId?: string;
+  name?: string;
+  displayName?: string;
+};
+
+export type IdeaSummary = {
+  _id: string;
+  projectId: string;
+  title: string;
+  text?: string;
+  context?: string;
+  links?: string[];
+  state: IdeaState;
+  position: number;
+  revision: number;
+  createdBy: IdeaAttribution;
+  updatedBy?: IdeaAttribution;
+  attachmentCount: number;
+  archivedAt?: number;
+  promotedAt?: number;
+  promotedIntakeId?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type IdeaDetail = IdeaSummary & {
+  attachments: AttachmentSummary[];
+};
+
+export type IdeaCreateInput = {
+  title: string;
+  text?: string;
+  context?: string;
+  links?: string[];
+  attachmentIds?: string[];
+  position?: number;
+  idempotencyKey: string;
+};
+
+export type IdeaUpdateInput = {
+  ideaId: string;
+  expectedRevision: number;
+  title?: string;
+  text?: string;
+  context?: string;
+  links?: string[];
+  addAttachmentIds?: string[];
+  idempotencyKey: string;
+};
+
+export type IdeaMutationResult = { ideaId: string; revision: number };
+
+export type IdeaPromotionResult = IdeaMutationResult & {
+  intakeId: string;
+  created: boolean;
+};
+
 export type CreatedServiceCredential = {
   installationId: string;
   serviceCredentialId: string;
@@ -145,6 +300,7 @@ export type CreatedServiceCredential = {
 type WorkDoc = {
   _id: string;
   identifier: string;
+  legacyIdentifiers?: string[];
   title: string;
   description?: string;
   state: "ready" | "working" | "done" | "cancelled";
@@ -160,6 +316,7 @@ type ActorDoc = {
   _id: string;
   type: "human" | "agent" | "system";
   name: string;
+  displayName?: string;
   agentType?: string;
 };
 
@@ -190,9 +347,15 @@ type AttentionDoc = {
 
 type IntakeDoc = {
   _id: string;
+  sourceIdeaId?: string;
+  displayLabel?: string;
   clientRequestId?: string;
   text?: string;
+  context?: string;
+  links?: string[];
   status: "new" | "claimed" | "processed" | "dismissed";
+  revision: number;
+  updatedAt: number;
   createdAt: number;
   claimExpiresAt?: number;
 };
@@ -262,6 +425,56 @@ export type ProjectOverview = {
   intakes: Intake[];
 };
 
+export type HostCapability = "supported" | "unsupported" | "undisclosed";
+
+export type ProjectConcurrencySnapshot = {
+  serverTime: number;
+  policy: {
+    enabled: boolean;
+    maxConcurrentRuns: number;
+    requiresIsolatedWorkspaces: true;
+  };
+  capacity: {
+    activeRuns: number;
+    maxConcurrentRuns: number;
+    remaining: number;
+  };
+  runs: Array<{
+    id: string;
+    workItem: {
+      id: string;
+      identifier: string;
+      title: string;
+    };
+    actor: {
+      _id: string;
+      type: "agent" | "system";
+      name: string;
+      displayName?: string;
+      agentType?: string;
+      machineLabel?: string;
+    };
+    state: "running" | "waiting";
+    latestProgress?: string;
+    startedAt: number;
+    lastHeartbeatAt: number;
+    elapsedMilliseconds: number;
+    lease: {
+      status: "healthy" | "expiring" | "expired" | "released";
+      expiresAt?: number;
+    };
+    hostCapabilities: {
+      parallelExecution: HostCapability;
+      worktreeIsolation: HostCapability;
+    };
+    workspace: {
+      kind: "worktree" | "shared_checkout" | "undisclosed";
+      worktreeName?: string;
+      branch?: string;
+    };
+  }>;
+};
+
 type SearchSourceCursor = {
   cursor: string | null;
   done: boolean;
@@ -313,6 +526,11 @@ const listProjectsReference = makeFunctionReference<"query", Record<string, neve
 const overviewReference = makeFunctionReference<"query", { projectId: string }, OverviewSnapshot>(
   "domains/overview/index:getForHuman",
 );
+const concurrencyReference = makeFunctionReference<
+  "query",
+  { projectId: string },
+  ProjectConcurrencySnapshot
+>("domains/work/index:concurrencyForHuman");
 const searchWorkReference = makeFunctionReference<
   "query",
   { projectId: string; term: string; paginationOpts: SearchPagination },
@@ -331,9 +549,59 @@ const searchCommentsReference = makeFunctionReference<
 const workDetailReference = makeFunctionReference<"query", { workItemId: string }, WorkDetailSnapshot>(
   "domains/work/index:getDetailForHuman",
 );
+const workDetailByIdentifierReference = makeFunctionReference<
+  "query",
+  { projectId: string; identifier: string },
+  WorkDetailSnapshot
+>("domains/work/index:getByIdentifierForHuman");
 const intakeDetailReference = makeFunctionReference<"query", { intakeId: string }, IntakeDetailSnapshot>(
   "domains/intake/index:getForHuman",
 );
+const ideasReference = makeFunctionReference<
+  "query",
+  { projectId: string; state?: IdeaState | "all" },
+  IdeaSummary[]
+>("domains/ideas/index:listForHuman");
+const ideaDetailReference = makeFunctionReference<
+  "query",
+  { ideaId: string },
+  { idea: IdeaSummary; attachments: AttachmentDoc[] }
+>("domains/ideas/index:getForHuman");
+const createIdeaReference = makeFunctionReference<
+  "mutation",
+  IdeaCreateInput & { projectId: string },
+  IdeaMutationResult & { created: boolean }
+>("domains/ideas/index:create");
+const updateIdeaReference = makeFunctionReference<
+  "mutation",
+  IdeaUpdateInput,
+  IdeaMutationResult
+>("domains/ideas/index:update");
+const reorderIdeasReference = makeFunctionReference<
+  "mutation",
+  {
+    projectId: string;
+    orderedIdeaIds: string[];
+    expectedRevisions: Array<{ ideaId: string; revision: number }>;
+    idempotencyKey: string;
+  },
+  { ideas: Array<{ ideaId: string; revision: number; position: number }> }
+>("domains/ideas/index:reorder");
+const archiveIdeaReference = makeFunctionReference<
+  "mutation",
+  { ideaId: string; expectedRevision: number; idempotencyKey: string },
+  IdeaMutationResult
+>("domains/ideas/index:archive");
+const restoreIdeaReference = makeFunctionReference<
+  "mutation",
+  { ideaId: string; expectedRevision: number; idempotencyKey: string },
+  IdeaMutationResult
+>("domains/ideas/index:restore");
+const promoteIdeaReference = makeFunctionReference<
+  "mutation",
+  { ideaId: string; expectedRevision: number; idempotencyKey: string },
+  IdeaPromotionResult
+>("domains/ideas/index:promote");
 const completedWorkReference = makeFunctionReference<
   "query",
   { projectId: string; paginationOpts: SearchPagination },
@@ -344,6 +612,34 @@ const createIntakeReference = makeFunctionReference<
   { projectId: string; text?: string; attachmentIds: string[]; idempotencyKey: string },
   { intakeId: string; revision: number }
 >("domains/intake/index:create");
+const updateIntakeReference = makeFunctionReference<
+  "mutation",
+  {
+    intakeId: string;
+    expectedRevision: number;
+    text?: string;
+    context?: string;
+    links?: string[];
+    addAttachmentIds?: string[];
+    idempotencyKey: string;
+  },
+  { intakeId: string; revision: number; updatedAt: number; addedAttachmentIds: string[] }
+>("domains/intake/index:updateForHuman");
+const agentUpdatePresenceReference = makeFunctionReference<
+  "query",
+  { projectId: string },
+  AgentUpdatePresence
+>("domains/agentUpdates/index:presence");
+const nudgeIntakeReference = makeFunctionReference<
+  "mutation",
+  {
+    projectId: string;
+    intakeId: string;
+    priority: IntakeNudgePriority;
+    idempotencyKey: string;
+  },
+  IntakeNudgeResult
+>("domains/agentUpdates/index:nudgeForIntake");
 const reorderWorkReference = makeFunctionReference<
   "mutation",
   { workItemId: string; expectedRevision: number; rank: number; idempotencyKey: string },
@@ -416,11 +712,13 @@ const updateProjectReference = makeFunctionReference<
     name: string;
     repositoryUrl?: string;
     executionMode: "manual" | "autonomous";
+    parallelExecution?: ParallelExecutionPolicy;
   },
   {
     name: string;
     repositoryUrl?: string;
     executionMode: "manual" | "autonomous";
+    parallelExecution?: ParallelExecutionPolicy;
   }
 >("domains/projects/index:updateProject");
 const updateOrganizationReference = makeFunctionReference<
@@ -485,10 +783,45 @@ function attentionKind(kind: AttentionDoc["kind"]): Attention["kind"] {
   return `${kind[0]!.toUpperCase()}${kind.slice(1)}` as Attention["kind"];
 }
 
+const GENERIC_AGENT_IDENTITIES = new Set([
+  "agent",
+  "cli",
+  "dongo cli",
+  "mcp",
+  "mcp host",
+  "remote mcp",
+  "service",
+  "service credential",
+  "development",
+]);
+
+export function actorDisplayIdentity(
+  actor: Pick<ActorDoc, "type" | "name" | "displayName" | "agentType"> | null | undefined,
+): string {
+  if (!actor) return "Agent";
+  if (actor.type === "human") return actor.displayName?.trim() || actor.name.trim() || "Person";
+  if (actor.type === "system") {
+    return lowercaseDongoBrand(actor.displayName?.trim() || actor.name.trim() || "dongo");
+  }
+  const displayName = lowercaseDongoBrand(actor.displayName?.trim() ?? "");
+  if (displayName && !GENERIC_AGENT_IDENTITIES.has(displayName.toLowerCase())) return displayName;
+  const name = lowercaseDongoBrand(actor.name.trim());
+  const normalizedName = name.toLowerCase();
+  const normalizedType = actor.agentType?.trim().toLowerCase();
+  if (
+    !name ||
+    GENERIC_AGENT_IDENTITIES.has(normalizedName) ||
+    normalizedName === normalizedType ||
+    normalizedName === `${normalizedType} agent`
+  ) return "Agent";
+  return name;
+}
+
 function baseWork(work: WorkDoc, state: WorkItem["state"], now: number): WorkItem {
   return {
     id: work._id,
     identifier: work.identifier,
+    legacyIdentifiers: work.legacyIdentifiers ?? [],
     title: work.title,
     state,
     goal: work.description || work.title,
@@ -507,7 +840,7 @@ export function mapOverviewSnapshot(snapshot: OverviewSnapshot): ProjectOverview
     if (!work) return [];
     return [{
       ...baseWork(work, "needs", now),
-      agent: actor?.name || "Agent",
+      agent: actorDisplayIdentity(actor),
       unseen: request.status === "open",
       attention: {
         id: request._id,
@@ -522,25 +855,35 @@ export function mapOverviewSnapshot(snapshot: OverviewSnapshot): ProjectOverview
   });
   const working = snapshot.working.map(({ work, run, actor }) => ({
     ...baseWork(work, "working", now),
-    agent: actor?.name || "Agent",
+    agent: actorDisplayIdentity(actor),
     elapsed: run ? `active ${relativeTime(run.startedAt, now)}` : undefined,
     latest: run?.summary,
   }));
   const ready = snapshot.ready.map(({ work }) => baseWork(work, "ready", now));
   const done = snapshot.recentlyDone.map((work) => baseWork(work, "done", now));
-  const intakes = snapshot.inbox.map(({ intake, attachments, staleClaim }) => ({
-    id: intake._id,
-    submissionKey: intake.clientRequestId,
-    text: intake.text || attachments[0]?.filename || "Attachment",
-    attachment: attachments[0]?.filename,
-    attachmentCount: attachments.length,
-    status:
-      intake.status === "claimed" && !staleClaim
-        ? "triaging" as const
-        : "waiting" as const,
-    age: relativeTime(intake.createdAt, now) || "now",
-    createdAt: intake.createdAt,
-  }));
+  const intakes = snapshot.inbox.map(({ intake, attachments, staleClaim }) => {
+    const mappedAttachments = attachments.map(mapAttachment);
+    return {
+      id: intake._id,
+      sourceIdeaId: intake.sourceIdeaId,
+      submissionKey: intake.clientRequestId,
+      text: intakeDisplayLabel(intake.text, mappedAttachments, intake.displayLabel),
+      submittedText: intake.text,
+      context: intake.context,
+      links: intake.links ?? [],
+      revision: intake.revision,
+      editable: intake.status === "new" || intake.status === "claimed",
+      attachment: attachments[0]?.filename,
+      attachments: mappedAttachments,
+      attachmentCount: attachments.length,
+      status:
+        intake.status === "claimed" && !staleClaim
+          ? "triaging" as const
+          : "waiting" as const,
+      age: relativeTime(intake.createdAt, now) || "now",
+      createdAt: intake.createdAt,
+    };
+  });
   return {
     projectId: snapshot.project._id,
     projectName: snapshot.project.name,
@@ -689,11 +1032,11 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
   const conversation: ConversationEntry[] = detail.comments.map((comment) => {
     const actor = actors.get(comment.actorId);
     return {
-      who: actor?.name || "dongo",
+      who: actorDisplayIdentity(actor),
       when: relativeTime(comment.createdAt, now) || "now",
       text: comment.body,
       human: actor?.type === "human",
-      role: actor?.type ?? "system",
+      role: actor?.type ?? "agent",
       agentType: actor?.agentType,
       attachments: (comment.attachmentIds ?? []).flatMap((attachmentId) => {
         const attachment = attachments.get(attachmentId);
@@ -747,7 +1090,7 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
     attention: mappedAttention,
     goal: detail.work.description || detail.work.title,
     latest: latestRun?.summary || base.latest,
-    agent: latestRun ? actors.get(latestRun.actorId)?.name || base.agent : base.agent,
+    agent: latestRun ? actorDisplayIdentity(actors.get(latestRun.actorId)) : base.agent,
     elapsed:
       latestRun?.status === "running"
         ? `active ${relativeTime(latestRun.startedAt, now)}`
@@ -759,7 +1102,7 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
       .map(mapAttachment),
     sources: detail.sourceIntakes.map(({ intake, attachments }) => ({
       id: intake._id,
-      text: intake.text || attachments[0]?.filename || "Attachment",
+      text: intakeDisplayLabel(intake.text, attachments.map(mapAttachment), intake.displayLabel),
       age: relativeTime(intake.createdAt, now) || "now",
       attachments: attachments.map(mapAttachment),
     })),
@@ -770,8 +1113,18 @@ export function mapIntakeDetail(detail: IntakeDetailSnapshot): Intake {
   const first = detail.attachments[0];
   return {
     id: detail.intake._id,
+    sourceIdeaId: detail.intake.sourceIdeaId,
     submissionKey: detail.intake.clientRequestId,
-    text: detail.intake.text || first?.filename || "Attachment",
+    text: intakeDisplayLabel(
+      detail.intake.text,
+      detail.attachments.map(mapAttachment),
+      detail.intake.displayLabel,
+    ),
+    submittedText: detail.intake.text,
+    context: detail.intake.context,
+    links: detail.intake.links ?? [],
+    revision: detail.intake.revision,
+    editable: detail.intake.status === "new" || detail.intake.status === "claimed",
     attachment: first?.filename,
     attachments: detail.attachments.map(mapAttachment),
     attachmentCount: detail.attachments.length,
@@ -891,6 +1244,18 @@ export class ProjectDataConnection {
     );
   }
 
+  subscribeConcurrency(
+    onUpdate: (snapshot: ProjectConcurrencySnapshot) => void,
+    onError: (error: Error) => void,
+  ): () => void {
+    return this.#client.onUpdate(
+      concurrencyReference,
+      { projectId: this.projectId },
+      onUpdate,
+      onError,
+    );
+  }
+
   subscribeWorkDetail(
     workItem: WorkItem,
     onUpdate: (work: WorkItem) => void,
@@ -925,6 +1290,27 @@ export class ProjectDataConnection {
     );
   }
 
+  subscribeWorkByIdentifier(
+    identifier: string,
+    onUpdate: (work: WorkItem) => void,
+    onError: (error: Error) => void,
+  ): () => void {
+    return this.#client.onUpdate(
+      workDetailByIdentifierReference,
+      { projectId: this.projectId, identifier },
+      (detail) => {
+        const state =
+          detail.work.state === "done" || detail.work.state === "cancelled"
+            ? "done"
+            : detail.work.state === "working"
+              ? "working"
+              : "ready";
+        onUpdate(mapWorkDetail(baseWork(detail.work, state, Date.now()), detail));
+      },
+      onError,
+    );
+  }
+
   subscribeIntakeDetail(
     intakeId: string,
     onUpdate: (intake: Intake) => void,
@@ -934,6 +1320,47 @@ export class ProjectDataConnection {
       intakeDetailReference,
       { intakeId },
       (detail) => onUpdate(mapIntakeDetail(detail)),
+      onError,
+    );
+  }
+
+  subscribeIdeas(
+    state: IdeaState | "all",
+    onUpdate: (ideas: IdeaSummary[]) => void,
+    onError: (error: Error) => void,
+  ): () => void {
+    return this.#client.onUpdate(
+      ideasReference,
+      { projectId: this.projectId, state },
+      onUpdate,
+      onError,
+    );
+  }
+
+  subscribeIdeaDetail(
+    ideaId: string,
+    onUpdate: (idea: IdeaDetail) => void,
+    onError: (error: Error) => void,
+  ): () => void {
+    return this.#client.onUpdate(
+      ideaDetailReference,
+      { ideaId },
+      (detail) => onUpdate({
+        ...detail.idea,
+        attachments: detail.attachments.map(mapAttachment),
+      }),
+      onError,
+    );
+  }
+
+  subscribeAgentUpdatePresence(
+    onUpdate: (presence: AgentUpdatePresence) => void,
+    onError: (error: Error) => void,
+  ): () => void {
+    return this.#client.onUpdate(
+      agentUpdatePresenceReference,
+      { projectId: this.projectId },
+      onUpdate,
       onError,
     );
   }
@@ -1000,8 +1427,8 @@ export class ProjectDataConnection {
         id: intake._id,
         targetKind: "intake" as const,
         targetId: intake._id,
-        title: intake.text || "Intake",
-        excerpt: intake.text || "Intake",
+        title: intakeDisplayLabel(intake.text, [], intake.displayLabel),
+        excerpt: intakeDisplayLabel(intake.text, [], intake.displayLabel),
         state: intake.status,
         age: relativeTime(intake.createdAt, now) || "now",
         createdAt: intake.createdAt,
@@ -1056,6 +1483,58 @@ export class ProjectDataConnection {
       projectId: this.projectId,
       ...(text ? { text } : {}),
       attachmentIds,
+      idempotencyKey,
+    });
+  }
+
+  async updateIntake(input: IntakeUpdateInput): Promise<IntakeUpdateResult> {
+    return await this.#client.mutation(updateIntakeReference, input);
+  }
+
+  async createIdea(input: IdeaCreateInput): Promise<IdeaMutationResult & { created: boolean }> {
+    return await this.#client.mutation(createIdeaReference, {
+      projectId: this.projectId,
+      ...input,
+    });
+  }
+
+  async updateIdea(input: IdeaUpdateInput): Promise<IdeaMutationResult> {
+    return await this.#client.mutation(updateIdeaReference, input);
+  }
+
+  async reorderIdeas(
+    ideas: Array<Pick<IdeaSummary, "_id" | "revision">>,
+    idempotencyKey: string,
+  ): Promise<{ ideas: Array<{ ideaId: string; revision: number; position: number }> }> {
+    return await this.#client.mutation(reorderIdeasReference, {
+      projectId: this.projectId,
+      orderedIdeaIds: ideas.map((idea) => idea._id),
+      expectedRevisions: ideas.map((idea) => ({ ideaId: idea._id, revision: idea.revision })),
+      idempotencyKey,
+    });
+  }
+
+  async archiveIdea(ideaId: string, expectedRevision: number, idempotencyKey: string): Promise<IdeaMutationResult> {
+    return await this.#client.mutation(archiveIdeaReference, { ideaId, expectedRevision, idempotencyKey });
+  }
+
+  async restoreIdea(ideaId: string, expectedRevision: number, idempotencyKey: string): Promise<IdeaMutationResult> {
+    return await this.#client.mutation(restoreIdeaReference, { ideaId, expectedRevision, idempotencyKey });
+  }
+
+  async promoteIdea(ideaId: string, expectedRevision: number, idempotencyKey: string): Promise<IdeaPromotionResult> {
+    return await this.#client.mutation(promoteIdeaReference, { ideaId, expectedRevision, idempotencyKey });
+  }
+
+  async nudgeIntake(
+    intakeId: string,
+    priority: IntakeNudgePriority,
+    idempotencyKey: string,
+  ): Promise<IntakeNudgeResult> {
+    return await this.#client.mutation(nudgeIntakeReference, {
+      projectId: this.projectId,
+      intakeId,
+      priority,
       idempotencyKey,
     });
   }
@@ -1188,7 +1667,7 @@ export class ProjectDataConnection {
         kind: installation.kind,
         status: installation.status,
         clientId: installation.clientId,
-        label: installation.label,
+        label: lowercaseDongoBrand(installation.label),
         machineLabel: installation.machineLabel,
         scopes: installation.scopes,
         createdAt: installation.createdAt,
@@ -1222,6 +1701,7 @@ export class ProjectDataConnection {
     name: string;
     repositoryUrl?: string;
     executionMode: "manual" | "autonomous";
+    parallelExecution?: ParallelExecutionPolicy;
   }): Promise<void> {
     const updated = await this.#client.mutation(updateProjectReference, {
       projectId: this.projectId,

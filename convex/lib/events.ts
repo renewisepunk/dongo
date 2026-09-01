@@ -7,6 +7,7 @@ export async function appendEvent(
   event: {
     organizationId: Id<"organizations">;
     projectId?: Id<"projects">;
+    ideaId?: Id<"ideas">;
     intakeId?: Id<"intakes">;
     workItemId?: Id<"workItems">;
     runId?: Id<"runs">;
