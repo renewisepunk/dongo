@@ -56,6 +56,7 @@ import type * as lib_leases from "../lib/leases.js";
 import type * as lib_plans from "../lib/plans.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as maintenance from "../maintenance.js";
+import type * as operators_projectCapacity from "../operators/projectCapacity.js";
 import type * as testing_fixtures from "../testing/fixtures.js";
 
 import type {
@@ -113,6 +114,7 @@ declare const fullApi: ApiFromModules<{
   "lib/plans": typeof lib_plans;
   "lib/validators": typeof lib_validators;
   maintenance: typeof maintenance;
+  "operators/projectCapacity": typeof operators_projectCapacity;
   "testing/fixtures": typeof testing_fixtures;
 }>;
 

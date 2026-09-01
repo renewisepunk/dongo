@@ -149,10 +149,11 @@ describe("live project overview mapping", () => {
         projectAllowance: {
           resource: "active_projects",
           plan: "free",
+          source: "operator_override",
           activeProjectCount: 1,
-          limit: 1,
-          remaining: 0,
-          canCreate: false,
+          limit: 4,
+          remaining: 3,
+          canCreate: true,
           actions: ["use_existing", "archive_existing", "upgrade"],
         },
         projects: [
@@ -201,8 +202,9 @@ describe("live project overview mapping", () => {
         organizationSlug: "studio",
         membershipRole: "owner",
         activeProjectCount: 1,
-        activeProjectLimit: 1,
-        canCreateProject: false,
+        activeProjectLimit: 4,
+        projectCapacitySource: "operator_override",
+        canCreateProject: true,
       }),
       expect.objectContaining({
         id: "project-2",

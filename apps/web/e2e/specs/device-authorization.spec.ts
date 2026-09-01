@@ -133,6 +133,22 @@ test("creates another paid-plan project instead of rebinding an existing match",
   );
 });
 
+test("creates another project from CLI when Free capacity was granted", async ({ page }) => {
+  const requestPath = "/device?user_code=OVRD-0001&project_action=create&project_name=Capacity%20API&execution_mode=manual";
+  await page.goto(requestPath);
+
+  await expect(page.getByText(
+    "Free plan · 2 of 5 active projects used. Additional capacity granted.",
+    { exact: true },
+  )).toBeVisible();
+  await page.getByRole("button", { name: "Create & approve" }).click();
+
+  await expect(page.getByText("Approved — you can close this window")).toBeVisible();
+  expect(await page.locator("html").getAttribute("data-fixture-device-created-project")).toContain(
+    '"name":"Capacity API"',
+  );
+});
+
 test("explains the free-plan limit for an explicit CLI project creation request", async ({ page }) => {
   await page.goto("/device?user_code=LIMI-T001&project_action=create&project_name=Another&execution_mode=manual");
 

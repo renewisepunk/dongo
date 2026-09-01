@@ -18,45 +18,63 @@ import {
   derivedCompactIdentifierPrefix,
 } from "../work/identifiers";
 import { fail, optionalString, requireString } from "../../lib/errors";
-import { MAX_ATTACHMENT_BYTES, organizationStorageLimit } from "../../lib/plans";
+import {
+  activeProjectLimit,
+  MAX_ATTACHMENT_BYTES,
+  organizationStorageLimit,
+  projectCapacitySource,
+} from "../../lib/plans";
 import {
   DEFAULT_MAX_CONCURRENT_RUNS,
   normalizeParallelExecutionSettings,
   parallelExecutionPolicy,
 } from "../work/concurrency";
 
-const FREE_ACTIVE_PROJECT_LIMIT = 1;
-
 function activeProjectAllowance(
-  plan: "free" | "paid",
+  organization: {
+    plan: "free" | "paid";
+    activeProjectLimitOverride?: number;
+  },
   activeProjectCount: number,
 ) {
-  const limit = plan === "free" ? FREE_ACTIVE_PROJECT_LIMIT : undefined;
+  const limit = activeProjectLimit(
+    organization.plan,
+    organization.activeProjectLimitOverride,
+  );
   const remaining = limit === undefined
     ? undefined
     : Math.max(0, limit - activeProjectCount);
   return {
     resource: "active_projects" as const,
-    plan,
+    plan: organization.plan,
+    source: projectCapacitySource(
+      organization.plan,
+      organization.activeProjectLimitOverride,
+    ),
     activeProjectCount,
     limit,
     remaining,
     canCreate: remaining === undefined || remaining > 0,
-    actions: plan === "free"
+    actions: organization.plan === "free"
       ? ["use_existing", "archive_existing", "upgrade"] as const
       : [] as const,
   };
 }
 
-function failActiveProjectPlanLimit(activeProjectCount: number): never {
+function failActiveProjectPlanLimit(
+  activeProjectCount: number,
+  limit: number,
+  source: "plan" | "operator_override",
+): never {
   fail(
     "plan_limit",
-    "The free plan includes one active project. Use the existing project, archive it, or upgrade to create another.",
+    `This organization has reached its ${limit}-active-project allowance. Use an existing project, archive one, or review plan options.`,
     {
       resource: "active_projects",
       plan: "free",
+      source,
       activeProjectCount,
-      limit: FREE_ACTIVE_PROJECT_LIMIT,
+      limit,
       remaining: 0,
       retryable: false,
       actions: ["use_existing", "archive_existing", "upgrade"],
@@ -234,11 +252,19 @@ export const createProject = internalMutation({
           .eq("archivedAt", undefined),
       )
       .take(100);
-    if (
-      organization.plan === "free"
-      && activeProjects.length >= FREE_ACTIVE_PROJECT_LIMIT
-    ) {
-      failActiveProjectPlanLimit(activeProjects.length);
+    const projectLimit = activeProjectLimit(
+      organization.plan,
+      organization.activeProjectLimitOverride,
+    );
+    if (projectLimit !== undefined && activeProjects.length >= projectLimit) {
+      failActiveProjectPlanLimit(
+        activeProjects.length,
+        projectLimit,
+        projectCapacitySource(
+          organization.plan,
+          organization.activeProjectLimitOverride,
+        ),
+      );
     }
     if (
       await ctx.db
@@ -332,7 +358,7 @@ export const listMine = query({
               }
             : null,
           projectAllowance: organization
-            ? activeProjectAllowance(organization.plan, activeProjectCount)
+            ? activeProjectAllowance(organization, activeProjectCount)
             : null,
           projects: projects.map((project) => ({
             _id: project._id,
@@ -419,6 +445,10 @@ export const administration = query({
       activeProjectCount: projects.filter(
         (candidate) => candidate.archivedAt === undefined,
       ).length,
+      projectAllowance: activeProjectAllowance(
+        organization,
+        projects.filter((candidate) => candidate.archivedAt === undefined).length,
+      ),
       storage: {
         activeBytes: ledger?.activeBytes ?? 0,
         reservedBytes: ledger?.reservedBytes ?? 0,
@@ -709,15 +739,26 @@ export const unarchiveProject = mutation({
     if (project.archivedAt === undefined) return { unarchived: true as const };
     const organization = await ctx.db.get(project.organizationId);
     if (!organization) fail("not_found", "Organization or project not found");
-    if (organization.plan === "free") {
+    const projectLimit = activeProjectLimit(
+      organization.plan,
+      organization.activeProjectLimitOverride,
+    );
+    if (projectLimit !== undefined) {
       const active = await ctx.db
         .query("projects")
         .withIndex("by_organization_archived", (q) =>
           q.eq("organizationId", organization._id).eq("archivedAt", undefined),
         )
         .take(100);
-      if (active.length >= FREE_ACTIVE_PROJECT_LIMIT) {
-        failActiveProjectPlanLimit(active.length);
+      if (active.length >= projectLimit) {
+        failActiveProjectPlanLimit(
+          active.length,
+          projectLimit,
+          projectCapacitySource(
+            organization.plan,
+            organization.activeProjectLimitOverride,
+          ),
+        );
       }
     }
     const now = Date.now();

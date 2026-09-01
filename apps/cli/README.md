@@ -87,8 +87,9 @@ the repository marker after approval. A current dongo browser session is reused,
 so project approval does not require another account sign-in; the new CLI grant
 is still scoped to that project and approved separately.
 
-The free plan includes one active project. Before creation, the approval page
-shows the organization’s active-project allowance. If it is exhausted, dongo
+The standard Free allowance is one active project. Before creation, the approval
+page shows the organization’s effective active-project allowance, including any
+finite additional capacity granted by a dongo operator. If it is exhausted, dongo
 returns a non-retryable `plan_limit` result with the current count and the safe
 next choices: use the existing project, archive it, or upgrade when upgrades are
 available. Rerunning authorization does not bypass the plan limit. To bind this

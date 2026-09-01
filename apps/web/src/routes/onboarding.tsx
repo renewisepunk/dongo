@@ -211,7 +211,7 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
             </Show>
             <p class="note">
               {organization().plan === "free"
-                ? `Free plan · ${organization().activeProjectCount} of ${organization().activeProjectLimit} active projects used.`
+                ? `Free plan · ${organization().activeProjectCount} of ${organization().activeProjectLimit} active projects used.${organization().projectCapacitySource === "operator_override" ? " Additional capacity granted." : ""}`
                 : `Paid plan · ${organization().activeProjectCount} active projects; no project limit.`}
             </p>
           </div>
@@ -220,7 +220,7 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
         <Show when={!contextLoading() && planLimitReached()}>
           <div class="notice" role="alert">
             <strong>Free plan project limit reached.</strong>
-            <p>Your organization already uses its 1 included active project. Signing in again will not change this allowance.</p>
+            <p>Your organization already uses all {selectedOrganization()?.activeProjectLimit ?? 1} active projects in its current allowance. Signing in again will not change this allowance.</p>
           </div>
           <div class="button-stack">
             <A class="button button--primary button--full" href={existingProjectHref()}>Use existing project</A>

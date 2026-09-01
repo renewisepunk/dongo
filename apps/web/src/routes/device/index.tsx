@@ -435,7 +435,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
                     </select>
                   </Show>
                   <p class="note">{organization().plan === "free"
-                    ? `Free plan · ${organization().activeProjectCount} of ${organization().activeProjectLimit} active projects used.`
+                    ? `Free plan · ${organization().activeProjectCount} of ${organization().activeProjectLimit} active projects used.${organization().projectCapacitySource === "operator_override" ? " Additional capacity granted." : ""}`
                     : `Paid plan · ${organization().activeProjectCount} active projects; no project limit.`}</p>
                 </div>
               )}</Show>
@@ -452,7 +452,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
           <Show when={projectLimitReached()}>
             <div class="notice" role="alert">
               <strong>Free plan project limit reached.</strong>
-              <p>This organization already uses its 1 included active project. Your account is signed in; logging in again will not create more capacity.</p>
+              <p>This organization already uses all {selectedOrganization()?.activeProjectLimit ?? 1} active projects in its current allowance. Your account is signed in; logging in again will not create more capacity.</p>
             </div>
             <div class="button-stack">
               <A class="button button--full" href={creationTargetHref()}>Use existing project</A>

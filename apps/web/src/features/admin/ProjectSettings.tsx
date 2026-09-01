@@ -662,18 +662,18 @@ export function ProjectSettings(props: ProjectSettingsProps) {
             <>
               <div class="settings-title-group"><div class="eyebrow">Organization</div><h1 class="settings-title">Plan & storage</h1><p class="auth-lede">Current limits for {admin().organization.name}.</p></div>
               <div class="plan-card">
-                <div class="plan-stat"><span class="plan-stat__value">{admin().activeProjectCount} / {admin().organization.plan === "free" ? "1" : "∞"}</span><span class="plan-stat__label">active projects</span></div>
+                <div class="plan-stat"><span class="plan-stat__value">{admin().activeProjectCount} / {admin().projectAllowance.limit ?? "∞"}</span><span class="plan-stat__label">active projects</span></div>
                 <div class="plan-stat"><span class="plan-stat__value">{formatBytes(admin().storage.activeBytes + admin().storage.reservedBytes)} / {formatBytes(admin().storage.limitBytes)}</span><span class="plan-stat__label">media storage</span></div>
               </div>
               <section class="settings-section">
                 <div class="settings-section__title">{admin().organization.plan === "free" ? "Free" : "Paid"} plan</div>
                 <Show when={admin().organization.plan === "free"} fallback={<p class="note">This organization can create multiple active projects.</p>}>
-                  <p class="note">Free includes 1 active project. This organization is using {admin().activeProjectCount} of 1; archive its active project before creating another, or review upgrade availability.</p>
+                  <p class="note">This organization is using {admin().activeProjectCount} of {admin().projectAllowance.limit ?? 1} active projects.{admin().projectAllowance.source === "operator_override" ? " Additional capacity has been granted to this organization." : " The standard Free allowance is 1."} Archive an active project when the allowance is full, or review plan availability.</p>
                 </Show>
                 <p class="note">Individual uploads are limited to {formatBytes(admin().storage.maximumAttachmentBytes)}. dongo does not meter people, agents, or WorkItems.</p>
                 <Show when={owner()}>
                   <A class="button" href={`/onboarding?organization=${encodeURIComponent(admin().organization.slug)}`} style={{ "align-self": "flex-start" }}>
-                    {admin().organization.plan === "free" && admin().activeProjectCount >= 1 ? "Review project creation options" : "Create another project"}
+                    {!admin().projectAllowance.canCreate ? "Review project creation options" : "Create another project"}
                   </A>
                 </Show>
                 <Show when={admin().organization.plan === "free"}><p class="security-note">Plan upgrades are not available yet; dongo shows that state instead of sending you to sign in or presenting a dead checkout control.</p></Show>

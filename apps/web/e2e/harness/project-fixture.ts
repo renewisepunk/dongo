@@ -22,6 +22,7 @@ const currentProject: ProjectInfo = {
   membershipRole: "owner",
   activeProjectCount: 2,
   activeProjectLimit: null,
+  projectCapacitySource: "plan",
   canCreateProject: true,
   repositoryUrl: "https://github.com/renewisepunk/dongo",
   identifierPrefix: "DONGO",

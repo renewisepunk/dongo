@@ -43,6 +43,7 @@ type ProjectGroup = {
   projectAllowance?: {
     resource: "active_projects";
     plan: "free" | "paid";
+    source: "plan" | "operator_override";
     activeProjectCount: number;
     limit: number | null;
     remaining: number | null;
@@ -60,6 +61,7 @@ export type ProjectCreationContext = {
     plan: "free" | "paid";
     activeProjectCount: number;
     activeProjectLimit: number | null;
+    projectCapacitySource: "plan" | "operator_override";
     canCreate: boolean;
   }>;
   projects: AuthorizableProject[];
@@ -259,6 +261,7 @@ export async function getProjectCreationContext(): Promise<ProjectCreationContex
           plan: group.organization.plan,
           activeProjectCount,
           activeProjectLimit,
+          projectCapacitySource: group.projectAllowance?.source ?? "plan",
           canCreate: group.projectAllowance?.canCreate ??
             (activeProjectLimit === null || activeProjectCount < activeProjectLimit),
         }];
@@ -339,9 +342,16 @@ export async function createFirstProject(input: {
       ? (data as { code?: unknown }).code
       : undefined;
     if (code === "plan_limit") {
+      const details = typeof data === "object" && data !== null && "details" in data
+        ? (data as { details?: unknown }).details
+        : undefined;
+      const limit = typeof details === "object" && details !== null && "limit" in details
+        && typeof (details as { limit?: unknown }).limit === "number"
+        ? (details as { limit: number }).limit
+        : 1;
       throw new AuthorizationFlowError(
         "conflict",
-        "The free plan already uses its 1 active project. Use it, archive it, or review upgrade options.",
+        `The free plan allowance for this organization is ${limit} active project${limit === 1 ? "" : "s"}, and all are in use. Use an existing project, archive one, or review plan options.`,
       );
     }
     const message = cause instanceof Error ? cause.message : "";

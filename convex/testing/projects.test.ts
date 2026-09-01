@@ -35,6 +35,7 @@ describe("project resource provisioning", () => {
     expect(before[0]?.projectAllowance).toEqual({
       resource: "active_projects",
       plan: "free",
+      source: "plan",
       activeProjectCount: 0,
       limit: 1,
       remaining: 1,
@@ -75,10 +76,11 @@ describe("project resource provisioning", () => {
     })).rejects.toMatchObject({
       data: {
         code: "plan_limit",
-        message: expect.stringMatching(/use the existing project, archive it, or upgrade/i),
+        message: expect.stringMatching(/use an existing project, archive one, or review plan options/i),
         details: {
           resource: "active_projects",
           plan: "free",
+          source: "plan",
           activeProjectCount: 1,
           limit: 1,
           remaining: 0,
@@ -87,6 +89,202 @@ describe("project resource provisioning", () => {
         },
       },
     });
+  });
+
+  it("grants finite project capacity to an existing owner email without changing plan or storage", async () => {
+    const email = "capacity-owner@example.test";
+    const t = convexTest(schema, modules).withIdentity({
+      tokenIdentifier: "https://human.example.test|capacity-owner",
+      subject: "capacity-owner",
+      issuer: "https://human.example.test",
+      email,
+      name: "Capacity Owner",
+    });
+    await t.mutation(api.domains.identity.index.bootstrapCurrentUser, {});
+    const organization = await t.mutation(
+      api.domains.projects.index.createPersonalOrganization,
+      { name: "Capacity Test", slug: `capacity-${crypto.randomUUID()}` },
+    );
+    const create = async (name: string, slug: string, identifierPrefix: string) =>
+      await t.mutation(internal.domains.projects.index.createProject, {
+        organizationId: organization.organizationId,
+        name,
+        slug,
+        identifierPrefix,
+        executionMode: "manual" as const,
+      });
+    await create("First", "first", "FIRST");
+
+    await expect(t.query(internal.operators.projectCapacity.inspect, {
+      email: "missing@example.test",
+    })).rejects.toMatchObject({ data: { code: "not_found" } });
+
+    expect(await t.query(internal.operators.projectCapacity.inspect, {
+      email: ` ${email.toUpperCase()} `,
+    })).toMatchObject({
+      plan: "free",
+      source: "plan",
+      activeProjectCount: 1,
+      activeProjectLimit: 1,
+      revision: 0,
+    });
+
+    const granted = await t.mutation(internal.operators.projectCapacity.setOverride, {
+      email,
+      activeProjectLimit: 3,
+      expectedRevision: 0,
+      reason: "Approved beta capacity",
+      requestId: "capacity-grant-1",
+    });
+    expect(granted).toMatchObject({
+      changed: true,
+      plan: "free",
+      source: "operator_override",
+      activeProjectLimit: 3,
+      revision: 1,
+    });
+    expect(await t.mutation(internal.operators.projectCapacity.setOverride, {
+      email,
+      activeProjectLimit: 3,
+      expectedRevision: 0,
+      reason: "Uncertain retry",
+      requestId: "capacity-grant-retry",
+    })).toMatchObject({ changed: false, revision: 1 });
+
+    await create("Second", "second", "SECOND");
+    await create("Third", "third", "THIRD");
+    await expect(create("Fourth", "fourth", "FOURTH")).rejects.toMatchObject({
+      data: {
+        code: "plan_limit",
+        details: {
+          source: "operator_override",
+          activeProjectCount: 3,
+          limit: 3,
+        },
+      },
+    });
+
+    const lowered = await t.mutation(internal.operators.projectCapacity.setOverride, {
+      email,
+      activeProjectLimit: 2,
+      expectedRevision: 1,
+      reason: "Reduce unused future capacity",
+      requestId: "capacity-lower-1",
+    });
+    expect(lowered).toMatchObject({
+      changed: true,
+      activeProjectCount: 3,
+      activeProjectLimit: 2,
+      overLimit: true,
+      revision: 2,
+    });
+    const projects = await t.run(async (ctx) =>
+      await ctx.db
+        .query("projects")
+        .withIndex("by_organization", (query) =>
+          query.eq("organizationId", organization.organizationId),
+        )
+        .collect()
+    );
+    expect(projects.filter((project) => project.archivedAt === undefined)).toHaveLength(3);
+
+    const events = await t.run(async (ctx) =>
+      await ctx.db.query("events").collect()
+    );
+    const capacityEvents = events.filter(
+      (event) => event.type === "organization.project_capacity_changed",
+    );
+    expect(capacityEvents).toHaveLength(2);
+    expect(capacityEvents[0]).toMatchObject({
+      organizationId: organization.organizationId,
+      requestId: "capacity-grant-1",
+      data: {
+        beforeLimit: 1,
+        afterLimit: 3,
+        reason: "Approved beta capacity",
+      },
+    });
+    expect(JSON.stringify(capacityEvents)).not.toContain(email);
+
+    const cleared = await t.mutation(internal.operators.projectCapacity.setOverride, {
+      email,
+      activeProjectLimit: null,
+      expectedRevision: 2,
+      reason: "Return to the standard free allowance",
+      requestId: "capacity-clear-1",
+    });
+    expect(cleared).toMatchObject({
+      changed: true,
+      source: "plan",
+      activeProjectLimit: 1,
+      overLimit: true,
+      revision: 3,
+    });
+  });
+
+  it("enforces the effective capacity when an archived project is restored", async () => {
+    const email = "restore-capacity@example.test";
+    const t = convexTest(schema, modules).withIdentity({
+      tokenIdentifier: "https://human.example.test|restore-capacity",
+      subject: "restore-capacity",
+      issuer: "https://human.example.test",
+      email,
+      name: "Restore Capacity",
+    });
+    await t.mutation(api.domains.identity.index.bootstrapCurrentUser, {});
+    const organization = await t.mutation(
+      api.domains.projects.index.createPersonalOrganization,
+      { name: "Restore Test", slug: `restore-${crypto.randomUUID()}` },
+    );
+    await t.mutation(internal.operators.projectCapacity.setOverride, {
+      email,
+      activeProjectLimit: 2,
+      expectedRevision: 0,
+      reason: "Allow a second active project",
+      requestId: "restore-capacity-grant",
+    });
+    await t.mutation(internal.domains.projects.index.createProject, {
+      organizationId: organization.organizationId,
+      name: "First",
+      slug: "first",
+      identifierPrefix: "FIRST",
+      executionMode: "manual",
+    });
+    const second = await t.mutation(internal.domains.projects.index.createProject, {
+      organizationId: organization.organizationId,
+      name: "Second",
+      slug: "second",
+      identifierPrefix: "SECOND",
+      executionMode: "manual",
+    });
+    await t.mutation(api.domains.projects.index.archiveProject, {
+      projectId: second.projectId,
+    });
+    await t.mutation(internal.operators.projectCapacity.setOverride, {
+      email,
+      activeProjectLimit: null,
+      expectedRevision: 1,
+      reason: "Return to the standard allowance",
+      requestId: "restore-capacity-clear",
+    });
+    await expect(t.mutation(api.domains.projects.index.unarchiveProject, {
+      projectId: second.projectId,
+    })).rejects.toMatchObject({
+      data: {
+        code: "plan_limit",
+        details: { source: "plan", limit: 1, activeProjectCount: 1 },
+      },
+    });
+    await t.mutation(internal.operators.projectCapacity.setOverride, {
+      email,
+      activeProjectLimit: 2,
+      expectedRevision: 2,
+      reason: "Restore the second-project allowance",
+      requestId: "restore-capacity-regrant",
+    });
+    await expect(t.mutation(api.domains.projects.index.unarchiveProject, {
+      projectId: second.projectId,
+    })).resolves.toEqual({ unarchived: true });
   });
 
   it("recovers an external provisioning failure without duplicating the project", async () => {

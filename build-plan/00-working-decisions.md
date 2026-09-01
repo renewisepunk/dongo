@@ -207,6 +207,18 @@ host starts or resumes it and explicitly pulls dongo state. A future control may
 return only after each supported harness has a separately implemented,
 observable, and tested wake-and-pickup adapter with truthful unavailable states.
 
+### D-23 — Finite operator-managed project capacity
+
+Decided: the standard Free entitlement remains one active project per
+organization. A deployment operator may grant a finite 1–100 active-project
+override to an existing organization, located through the exact normalized
+email of an owner account. The override does not change the organization to
+Paid, raise storage quota, meter people or agents, or expose a public entitlement
+mutation. Operator changes are deployment-admin-only, revision checked, and
+recorded through the organization system Actor without copying the email into
+event data. Lowering an allowance never archives or deletes existing projects;
+it blocks creation and unarchive until usage returns within the effective limit.
+
 ### D-21 — Human Ideas backlog
 
 Decided: Ideas are a dedicated human-only project backlog, not Intake, Work, or

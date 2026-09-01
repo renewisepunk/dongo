@@ -136,8 +136,18 @@ test("enforces member read-only administration and shows plan limits", async ({ 
   await expect(page.getByText("1 / 1", { exact: true })).toBeVisible();
   await expect(page.getByText("2.0 MB / 10 GB", { exact: true })).toBeVisible();
   await expect(page.getByText(/Individual uploads are limited to 250 MB/)).toBeVisible();
-  await expect(page.getByText(/Free includes 1 active project.*using 1 of 1/)).toBeVisible();
+  await expect(page.getByText(/using 1 of 1 active projects.*standard Free allowance is 1/)).toBeVisible();
   await expect(page.getByText(/Plan upgrades are not available yet/)).toBeVisible();
+});
+
+test("shows finite additional project capacity without claiming a paid plan", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo/settings?scenario=capacity-override");
+  await page.getByRole("button", { name: "Plan & storage" }).click();
+
+  await expect(page.getByText("2 / 5", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Additional capacity has been granted to this organization/)).toBeVisible();
+  await expect(page.getByText(/Paid plan/)).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Create another project" })).toBeVisible();
 });
 
 test("archives and restores a project only after explicit confirmation", async ({ page }) => {

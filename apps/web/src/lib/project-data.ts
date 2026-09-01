@@ -29,6 +29,7 @@ export type ProjectGroup = {
   projectAllowance?: {
     resource: "active_projects";
     plan: "free" | "paid";
+    source: "plan" | "operator_override";
     activeProjectCount: number;
     limit: number | null;
     remaining: number | null;
@@ -59,6 +60,7 @@ export type ProjectInfo = {
   membershipRole: "owner" | "member";
   activeProjectCount: number;
   activeProjectLimit: number | null;
+  projectCapacitySource: "plan" | "operator_override";
   canCreateProject: boolean;
   repositoryUrl?: string;
   identifierPrefix: string;
@@ -98,6 +100,7 @@ function mapProjectInfo(
     ).length,
     activeProjectLimit: group.projectAllowance?.limit ??
       (group.organization.plan === "free" ? 1 : null),
+    projectCapacitySource: group.projectAllowance?.source ?? "plan",
     canCreateProject: group.projectAllowance?.canCreate ??
       (group.organization.plan === "paid" || group.projects.every(
         (candidate) => candidate.archivedAt !== undefined,
@@ -151,6 +154,16 @@ export type ProjectAdministration = {
   membershipRole: "owner" | "member";
   members: ProjectMember[];
   activeProjectCount: number;
+  projectAllowance: {
+    resource: "active_projects";
+    plan: "free" | "paid";
+    source: "plan" | "operator_override";
+    activeProjectCount: number;
+    limit?: number;
+    remaining?: number;
+    canCreate: boolean;
+    actions: Array<"use_existing" | "archive_existing" | "upgrade">;
+  };
   storage: {
     activeBytes: number;
     reservedBytes: number;

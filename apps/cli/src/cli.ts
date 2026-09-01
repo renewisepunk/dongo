@@ -280,7 +280,7 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
               output.stderr(
                 `${browserOpened ? "Opened" : "Open"} this secure link:\n${verificationUriComplete}\n\n` +
                   (projectProposal
-                    ? `Approval may create “${projectProposal.name}”${projectProposal.repositoryUrl ? ` for ${projectProposal.repositoryUrl}` : ""}. Free plans include one active project; use --project-ref to bind an existing project.\n`
+                    ? `Approval may create “${projectProposal.name}”${projectProposal.repositoryUrl ? ` for ${projectProposal.repositoryUrl}` : ""}. The standard Free allowance is one active project; the approval page shows this account’s effective capacity. Use --project-ref to bind an existing project.\n`
                     : "") +
                   `Confirm code ${userCode} in the browser. Waiting until ${new Date(expiresAt).toISOString()}…\n`,
               );
@@ -317,7 +317,7 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
               output.stderr(
                 `${browserOpened ? "Opened" : "Open"} this secure link:\n${verificationUriComplete}\n\n` +
                   `Approval will create “${projectProposal?.name ?? newProjectName}” and bind this repository. ` +
-                  "Free plans include one active project; the approval page will show whether you can create this one. " +
+                  "The standard Free allowance is one active project; the approval page will show this account’s effective capacity and whether you can create this one. " +
                   "Your existing browser session can approve it without another account sign-in.\n" +
                   `Confirm code ${userCode} in the browser. Waiting until ${new Date(expiresAt).toISOString()}…\n`,
               );

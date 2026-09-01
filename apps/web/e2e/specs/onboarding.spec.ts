@@ -106,6 +106,22 @@ test("creates another project on a paid plan and selects it for setup", async ({
   });
 });
 
+test("creates another Free project when additional capacity was granted", async ({ page }) => {
+  await page.goto("/onboarding?scenario=free-override&organization=fixture-studio");
+
+  await expect(page.getByText(
+    "Free plan · 1 of 4 active projects used. Additional capacity granted.",
+    { exact: true },
+  )).toBeVisible();
+  await page.getByLabel("Project name").fill("Capacity project");
+  await page.getByRole("button", { name: "Create project" }).click();
+
+  await expect(page).toHaveURL(/\/connect\?created=1$/);
+  expect(await page.locator("html").getAttribute("data-fixture-onboarding-project")).toContain(
+    '"organizationId":"organization-fixture"',
+  );
+});
+
 test("explains a free-plan project limit without sending the account back to login", async ({ page }) => {
   await page.goto("/onboarding?scenario=free-limit&organization=fixture-studio");
 

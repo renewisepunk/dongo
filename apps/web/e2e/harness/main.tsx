@@ -108,7 +108,7 @@ const onboardingDependencies = {
     if (scenario === "allowance-error") {
       throw new Error("fixture allowance detail must stay hidden");
     }
-    if (scenario === "paid" || scenario === "free-limit" || scenario === "member-only") {
+    if (scenario === "paid" || scenario === "free-limit" || scenario === "free-override" || scenario === "member-only") {
       return {
         organizations: scenario === "member-only" ? [] : [{
           id: "organization-fixture",
@@ -116,8 +116,9 @@ const onboardingDependencies = {
           slug: "fixture-studio",
           plan: scenario === "paid" ? "paid" as const : "free" as const,
           activeProjectCount: 1,
-          activeProjectLimit: scenario === "paid" ? null : 1,
-          canCreate: scenario === "paid",
+          activeProjectLimit: scenario === "paid" ? null : scenario === "free-override" ? 4 : 1,
+          projectCapacitySource: scenario === "free-override" ? "operator_override" as const : "plan" as const,
+          canCreate: scenario === "paid" || scenario === "free-override",
         }],
         projects: [{
           publicRef: "fixture-project",
@@ -205,14 +206,16 @@ const deviceDependencies = {
     const code = new URLSearchParams(window.location.search).get("user_code")?.replace(/-/g, "");
     if (code === "NOPROJ00") return { organizations: [], projects: [] };
     const freeLimit = code === "LIMIT001";
+    const freeOverride = code === "OVRD0001";
     return {
       organizations: [{
         id: "organization-fixture",
         name: "Fixture Studio",
         slug: "fixture-studio",
-        plan: freeLimit ? "free" as const : "paid" as const,
+        plan: freeLimit || freeOverride ? "free" as const : "paid" as const,
         activeProjectCount: freeLimit ? 1 : 2,
-        activeProjectLimit: freeLimit ? 1 : null,
+        activeProjectLimit: freeLimit ? 1 : freeOverride ? 5 : null,
+        projectCapacitySource: freeOverride ? "operator_override" as const : "plan" as const,
         canCreate: !freeLimit,
       }],
       projects: [
@@ -377,6 +380,7 @@ const connectDependencies = {
         membershipRole: "owner" as const,
         activeProjectCount: 1,
         activeProjectLimit: null,
+        projectCapacitySource: "plan" as const,
         canCreateProject: true,
         identifierPrefix: "DONGO",
         executionMode: "manual" as const,
@@ -470,7 +474,7 @@ function fixtureAdministration() {
     organization: {
       name: "Fixture Studio",
       slug: "fixture-studio",
-      plan: memberRole ? "free" as const : "paid" as const,
+      plan: memberRole || oauthScenario() === "capacity-override" ? "free" as const : "paid" as const,
     },
     membershipRole: memberRole ? "member" as const : "owner" as const,
     members: [
@@ -493,7 +497,18 @@ function fixtureAdministration() {
         current: memberRole,
       },
     ],
-    activeProjectCount: 1,
+    activeProjectCount: oauthScenario() === "capacity-override" ? 2 : 1,
+    projectAllowance: {
+      resource: "active_projects" as const,
+      plan: memberRole || oauthScenario() === "capacity-override" ? "free" as const : "paid" as const,
+      source: oauthScenario() === "capacity-override" ? "operator_override" as const : "plan" as const,
+      activeProjectCount: oauthScenario() === "capacity-override" ? 2 : 1,
+      ...(memberRole ? { limit: 1, remaining: 0 } : oauthScenario() === "capacity-override" ? { limit: 5, remaining: 3 } : {}),
+      canCreate: !memberRole,
+      actions: memberRole || oauthScenario() === "capacity-override"
+        ? ["use_existing" as const, "archive_existing" as const, "upgrade" as const]
+        : [],
+    },
     storage: {
       activeBytes: 1_572_864,
       reservedBytes: 524_288,
@@ -520,8 +535,9 @@ const settingsDependencies = {
       organizationPlan: administration.organization.plan,
       membershipRole: administration.membershipRole,
       activeProjectCount: administration.activeProjectCount,
-      activeProjectLimit: administration.organization.plan === "free" ? 1 : null,
-      canCreateProject: administration.organization.plan === "paid" || administration.activeProjectCount < 1,
+      activeProjectLimit: administration.projectAllowance.limit ?? null,
+      projectCapacitySource: administration.projectAllowance.source,
+      canCreateProject: administration.projectAllowance.canCreate,
       repositoryUrl: administration.project.repositoryUrl,
       identifierPrefix: administration.project.identifierPrefix,
       executionMode: administration.project.executionMode,

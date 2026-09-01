@@ -69,6 +69,8 @@ export default defineSchema({
     slug: v.string(),
     createdByProfileId: v.id("humanProfiles"),
     plan: v.union(v.literal("free"), v.literal("paid")),
+    activeProjectLimitOverride: v.optional(v.number()),
+    projectCapacityRevision: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_slug", ["slug"]),

@@ -297,7 +297,8 @@ test("project create carries explicit creation intent and explains the free-plan
   assert.equal(received?.executionMode, "autonomous");
   assert.equal(received?.noBrowser, true);
   assert.equal(JSON.parse(stream.values().stdout).command, "project create");
-  assert.match(stream.values().stderr, /free plans include one active project/i);
+  assert.match(stream.values().stderr, /standard Free allowance is one active project/i);
+  assert.match(stream.values().stderr, /effective capacity/i);
   assert.match(stream.values().stderr, /without another account sign-in/i);
 });
 

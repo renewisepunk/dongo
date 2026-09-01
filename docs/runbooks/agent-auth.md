@@ -34,7 +34,9 @@ decision confirms that the new checkout belongs to that exact existing project.
 
 ### Free-plan active-project limit
 
-The free plan permits one active project. If another project cannot be created
+The standard Free allowance permits one active project. A finite operator grant
+may raise one organization's effective allowance without changing its plan; see
+[Project capacity overrides](project-capacity.md). If another project cannot be created
 because the allowance is full, treat the response as an entitlement decision,
 not an authentication error. Keep the account session and existing repository
 connections intact, stop automatic retries, and present these recoveries:
