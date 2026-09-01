@@ -73,7 +73,7 @@ A fresh Codex MCP session resolved the same attachment through the agent contrac
 
 ### Published security boundary
 
-`https://dongo.so/security` now publishes the repository-access boundary, project-scoped authorization model, exact data and retention matrix, infrastructure isolation, current assurance evidence, and controls dongo does not yet claim. The accompanying repository documents are [`../security/README.md`](../security/README.md), [`../security/architecture-and-isolation.md`](../security/architecture-and-isolation.md), [`../security/data-and-retention.md`](../security/data-and-retention.md), and [`../../SECURITY.md`](../../SECURITY.md).
+`https://dongo.so/security` launched with a public repository-access boundary and assurance summary. A later disclosure review consolidated the public material around customer-facing safeguards and removed implementation-level architecture, authorization, infrastructure, and release details. The current public sources are the security page and [`SECURITY.md`](../../SECURITY.md).
 
 The claim is deliberately narrow: dongo has zero repository-content ingestion by default, not zero product-data retention. Work, comments, attention state, authorization installations, and explicitly uploaded attachments persist because they are product state. Current v1 does not claim configurable retention, self-service project erasure, a contractual deletion SLA, customer-managed encryption keys, independent dongo SOC 2/ISO certification, or a complete-service penetration test.
 

@@ -85,7 +85,7 @@ dongo connect
 dongo doctor
 ```
 
-`dongo connect` targets production by default and opens one complete browser link. The browser shows the terminal comparison code, account, fixed agent-selected project, resource, and scopes; the terminal polls until explicit approval, stores its own grant in a private user credential file outside the repository, writes only a non-secret repository marker, and runs diagnostics. It never invokes Keychain or asks the user to approve a credential helper. SSH/headless environments can add `--no-browser` and open the same complete link elsewhere—no token is copied into the CLI. Development work must opt in explicitly with `dongo connect --environment development --origin https://dev.dongo.so`. The threat model and exact storage contract are in [build-plan/07-cli-credential-storage.md](build-plan/07-cli-credential-storage.md).
+`dongo connect` targets production by default and opens a browser for project approval. Authentication stays outside the repository, which receives only a non-secret connection marker. SSH and headless environments can use `--no-browser`; development connections require an explicit environment selection.
 
 ## Connect an MCP host
 
@@ -103,16 +103,14 @@ dongo integrate claude
 dongo integrate generic
 ```
 
-Use `--apply` only after reviewing the exact managed configuration. dongo writes URL-only MCP entries and versioned instruction blocks; it never copies CLI credentials into Codex, Claude, or another host. Each host completes its own OAuth flow and receives an independently revocable installation Actor and token family.
+Use `--apply` only after reviewing the managed configuration. dongo adds the project connection without copying CLI authentication into Codex, Claude, or another host. Each host authorizes its own connection.
 
 ## Security model
 
-- Human Better Auth/Convex sessions and agent OAuth are isolated; a short-lived, signed, single-use assertion bridges authenticated project consent.
-- The server derives organization, project, Actor, installation, and scopes from validated grants. Caller-provided identity is never trusted.
-- Access tokens are short-lived and audience/resource-bound; refresh families rotate and are independently revocable.
-- Every mutation is idempotent and revision/lease conflicts fail closed.
-- Attachment links are short-lived and method-, project-, object-, size-, and checksum-bound. Large bytes never transit Convex.
-- Credentials, OTPs, device/authorization codes, signed URLs, and private work content are excluded from repository files and default logs.
-- `.agent-work` export is deterministic and one-way. dongo never stages, commits, pushes, or imports edits.
+- Repository content stays local unless a person or authorized agent deliberately shares it.
+- Agent connections are approved for one project and can be revoked independently.
+- People and agent installations act under separate identities.
+- Work, comments, decisions, and explicit attachments become durable project data.
+- Local agent permissions and repository data-handling rules still apply.
 
-Operational recovery and rollback procedures live in [`docs/runbooks/`](docs/runbooks/README.md). The complete release criteria are in [`build-plan/03-release-gates.md`](build-plan/03-release-gates.md).
+See the customer-facing [security and privacy overview](https://dongo.so/security) or [report a vulnerability privately](SECURITY.md).

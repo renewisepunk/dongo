@@ -36,22 +36,27 @@ test("keeps the complete help guide public without a project session", async ({ 
   await expect(page.getByText("Re-authenticate this host", { exact: true })).toBeVisible();
   await expect(page.getByText("Revoke server access", { exact: true })).toBeVisible();
   await expect(page.locator(".shortcut-reference__row")).toHaveCount(15);
-  await expect(page.getByRole("link", { name: /Auth recovery runbook/ })).toHaveAttribute("href", /agent-auth\.md$/);
+  await expect(page.getByRole("link", { name: /Security and privacy/ })).toHaveAttribute("href", "/security");
+  await expect(page.getByRole("link", { name: /Report a vulnerability/ })).toHaveAttribute("href", /SECURITY\.md$/);
+  await expect(page.getByRole("link", { name: /Auth recovery runbook/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Credential storage decision/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /CLI and MCP architecture/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /MCP setup and recovery/ })).toHaveAttribute("href", "#mcp-resources");
 });
 
-test("publishes an exact, public security and retention boundary", async ({ page }) => {
+test("publishes a clear security boundary without exposing implementation details", async ({ page }) => {
   await page.goto("/security");
 
   await expect(page).toHaveURL(/\/security$/);
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-human-session-checked", "true");
-  await expect(page.getByRole("heading", { name: "Connect an agent, not your repository." })).toBeVisible();
-  await expect(page.getByText("0", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("automatic repository reads", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Zero repository retention—not zero product data." })).toBeVisible();
-  await expect(page.getByText("No configurable window in v1", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Evidence, not inherited badges." })).toBeVisible();
-  await expect(page.getByText("dongo SOC 2 or ISO 27001 certification", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your work stays yours." })).toBeVisible();
+  await expect(page.getByText("repository and Git state", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Security without broad repository access." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Collect less. Share intentionally." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Claims you can trust." })).toBeVisible();
+  await expect(page.getByText("dongo does not currently claim SOC 2 or ISO 27001 certification.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cloudflare Workers + D1", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("OAuth + PKCE", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Open a private report/ })).toHaveAttribute("href", /security\/advisories\/new$/);
 });
 
@@ -59,8 +64,8 @@ test("keeps the security boundary readable on mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/security");
 
-  await expect(page.getByRole("heading", { name: "Connect an agent, not your repository." })).toBeVisible();
-  await expect(page.getByLabel("dongo cloud trust boundary")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Repository content stays local by default." })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Audit the boundary yourself." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your work stays yours." })).toBeVisible();
+  await expect(page.getByLabel("dongo data boundary")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Security without broad repository access." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Claims you can trust." })).toBeVisible();
 });

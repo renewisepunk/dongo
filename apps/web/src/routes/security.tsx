@@ -4,13 +4,12 @@ import { SecurityOverview } from "../features/security/SecurityOverview";
 export default function SecurityRoute() {
   return (
     <>
-      <Title>Security + data boundary — dongo</Title>
+      <Title>Security and privacy — dongo</Title>
       <Meta
         name="description"
-        content="Inspect dongo's repository boundary, project-scoped authorization, data retention, infrastructure, current assurance, and private vulnerability-reporting process."
+        content="Learn how dongo keeps repository access local, limits agent connections to approved projects, and protects the work you choose to share."
       />
       <SecurityOverview />
     </>
   );
 }
-

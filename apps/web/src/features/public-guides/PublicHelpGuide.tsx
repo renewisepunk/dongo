@@ -139,12 +139,11 @@ export function PublicHelpGuide() {
       </GuideSection>
 
       <section class="public-resources" aria-labelledby="resources-title">
-        <div><div class="eyebrow eyebrow--amber">Source resources</div><h2 id="resources-title">Go deeper when you need the contract.</h2></div>
+        <div><div class="eyebrow eyebrow--amber">Useful links</div><h2 id="resources-title">Keep the right guidance close.</h2></div>
         <div class="public-resources__links">
           <a href="https://github.com/renewisepunk/dongo/blob/main/README.md"><span>Repository guide</span><b aria-hidden="true">↗</b></a>
-          <a href="https://github.com/renewisepunk/dongo/blob/main/docs/runbooks/agent-auth.md"><span>Auth recovery runbook</span><b aria-hidden="true">↗</b></a>
-          <a href="https://github.com/renewisepunk/dongo/blob/main/build-plan/07-cli-credential-storage.md"><span>Credential storage decision</span><b aria-hidden="true">↗</b></a>
-          <a href="https://github.com/renewisepunk/dongo/blob/main/build-plan/05-agent-first-cli-mcp.md"><span>CLI and MCP architecture</span><b aria-hidden="true">↗</b></a>
+          <A href="/security"><span>Security and privacy</span><b aria-hidden="true">→</b></A>
+          <a href="https://github.com/renewisepunk/dongo/blob/main/SECURITY.md"><span>Report a vulnerability</span><b aria-hidden="true">↗</b></a>
           <a href="#mcp-resources"><span>MCP setup and recovery</span><b aria-hidden="true">↑</b></a>
           <A href="/get-started"><span>Get started</span><b aria-hidden="true">→</b></A>
         </div>
