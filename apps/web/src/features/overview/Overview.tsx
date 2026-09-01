@@ -2757,6 +2757,7 @@ type IntakeDetailProps = {
 function IntakeDetail(props: IntakeDetailProps) {
   const linked = () => props.work.filter((item) => props.intake.linkedWorkIds?.includes(item.id));
   const [editorVisible, setEditorVisible] = createSignal(props.intake.editable);
+  let editorIntakeId = props.intake.id;
   let closeButton: HTMLButtonElement | undefined;
   let detailPanel: HTMLElement | undefined;
 
@@ -2769,6 +2770,12 @@ function IntakeDetail(props: IntakeDetailProps) {
   });
 
   createEffect(() => {
+    const intakeId = props.intake.id;
+    if (intakeId === editorIntakeId) {
+      if (props.intake.editable) setEditorVisible(true);
+      return;
+    }
+    editorIntakeId = intakeId;
     setEditorVisible(props.intake.editable);
   });
 
