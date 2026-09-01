@@ -14,6 +14,7 @@ export function MarketingHome() {
           <nav class="marketing-nav" aria-label="Main navigation">
             <a href="#how-it-works">How it works</a>
             <a href="#for-agents">For agents</a>
+            <A href="/security">Security</A>
             <A href="/get-started">Get started</A>
             <A href="/help">Help</A>
           </nav>
@@ -149,6 +150,7 @@ export function MarketingHome() {
           <nav aria-label="Footer navigation">
             <A href="/get-started">Get started</A>
             <A href="/help">Help</A>
+            <A href="/security">Security</A>
             <a href="https://github.com/renewisepunk/dongo" rel="external">Source</a>
           </nav>
         </div>

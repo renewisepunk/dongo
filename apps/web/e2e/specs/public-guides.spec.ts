@@ -39,3 +39,28 @@ test("keeps the complete help guide public without a project session", async ({ 
   await expect(page.getByRole("link", { name: /Auth recovery runbook/ })).toHaveAttribute("href", /agent-auth\.md$/);
   await expect(page.getByRole("link", { name: /MCP setup and recovery/ })).toHaveAttribute("href", "#mcp-resources");
 });
+
+test("publishes an exact, public security and retention boundary", async ({ page }) => {
+  await page.goto("/security");
+
+  await expect(page).toHaveURL(/\/security$/);
+  await expect(page.locator("html")).not.toHaveAttribute("data-fixture-human-session-checked", "true");
+  await expect(page.getByRole("heading", { name: "Connect an agent, not your repository." })).toBeVisible();
+  await expect(page.getByText("0", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("automatic repository reads", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Zero repository retention—not zero product data." })).toBeVisible();
+  await expect(page.getByText("No configurable window in v1", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Evidence, not inherited badges." })).toBeVisible();
+  await expect(page.getByText("dongo SOC 2 or ISO 27001 certification", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Open a private report/ })).toHaveAttribute("href", /security\/advisories\/new$/);
+});
+
+test("keeps the security boundary readable on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/security");
+
+  await expect(page.getByRole("heading", { name: "Connect an agent, not your repository." })).toBeVisible();
+  await expect(page.getByLabel("dongo cloud trust boundary")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Repository content stays local by default." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Audit the boundary yourself." })).toBeVisible();
+});

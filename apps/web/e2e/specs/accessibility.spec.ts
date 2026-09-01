@@ -37,9 +37,9 @@ test("keeps the authenticated overview and work detail free of detectable WCAG A
   await expectWcagConformance(page);
 });
 
-test("keeps the public homepage, get started, and help guides free of detectable WCAG A/AA violations", async ({ page }) => {
+test("keeps the public homepage and guides free of detectable WCAG A/AA violations", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  for (const route of ["/", "/get-started", "/help"]) {
+  for (const route of ["/", "/get-started", "/help", "/security"]) {
     await page.goto(route);
     await expect(page.locator("main")).toBeVisible();
     await expectWcagConformance(page);

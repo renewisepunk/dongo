@@ -5,6 +5,7 @@ import { HelpGuide } from "../../src/features/help/HelpGuide";
 import { MarketingHome } from "../../src/features/marketing/MarketingHome";
 import { GetStartedGuide } from "../../src/features/public-guides/GetStartedGuide";
 import { PublicHelpGuide } from "../../src/features/public-guides/PublicHelpGuide";
+import { SecurityOverview } from "../../src/features/security/SecurityOverview";
 import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
 import type { WorkItem } from "../../src/features/overview/model";
 import { CompletedWork } from "../../src/routes/app/[orgSlug]/[projectSlug]/done";
@@ -661,6 +662,7 @@ render(
       <Route path="/open" component={FixtureOpen} />
       <Route path="/get-started" component={GetStartedGuide} />
       <Route path="/help" component={PublicHelpGuide} />
+      <Route path="/security" component={SecurityOverview} />
       <Route path="/login" component={FixtureLogin} />
       <Route path="/auth/code" component={FixtureEmailCode} />
       <Route path="/auth/callback" component={FixtureAuthCallback} />
