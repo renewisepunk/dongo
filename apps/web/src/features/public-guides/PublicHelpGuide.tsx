@@ -105,7 +105,7 @@ export function PublicHelpGuide() {
 
       <GuideSection index="05" id="auth" title="Authentication and approval" lede="Human browser sessions, CLI grants, and MCP-host grants are intentionally separate.">
         <div class="auth-help-grid">
-          <article><span>CLI</span><h3>Device authorization</h3><p><code>dongo connect</code> opens one complete browser link. Compare the terminal and browser code, account, project proposal, resource, and requested access.</p></article>
+          <article><span>CLI</span><h3>Device authorization</h3><p><code>dongo connect</code> opens one complete browser link to <code>dongo.so</code>. There is no dev or production choice. Compare the terminal and browser code, account, project proposal, resource, and requested access.</p></article>
           <article><span>MCP</span><h3>Host-owned OAuth</h3><p>Codex, Claude Code, and generic clients follow discovery and PKCE. Revoking one host does not revoke the CLI or another host.</p></article>
           <article><span>Completion</span><h3>Know who owns the last page</h3><p>The dongo approval page is branded and says when it is safe to close. A final <code>localhost</code> or <code>127.0.0.1</code> callback is served by the MCP host, not dongo.</p></article>
         </div>

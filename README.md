@@ -85,7 +85,7 @@ dongo connect
 dongo doctor
 ```
 
-`dongo connect` targets production by default and opens a browser for project approval. Authentication stays outside the repository, which receives only a non-secret connection marker. SSH and headless environments can use `--no-browser`; development connections require an explicit environment selection.
+`dongo connect` always connects to the live service at `dongo.so` and opens a browser for project approval. Authentication stays outside the repository, which receives only a non-secret connection marker. SSH and headless environments can use `--no-browser`. Development infrastructure is private to dongo's own source-level test harnesses and is not selectable from the installed CLI.
 
 ## Connect an MCP host
 

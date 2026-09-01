@@ -38,7 +38,8 @@ The gate inspects the archive, installs it into an isolated prefix, runs it from
 ## Commands
 
 ```text
-dongo connect [--environment development|production] [--origin URL] [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
+dongo connect [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
+dongo ci setup
 dongo auth status
 dongo auth logout
 dongo doctor
@@ -55,6 +56,8 @@ dongo integrate codex|claude|generic [--apply]
 
 Add `--json` to receive one JSON object on stdout. Progress and the one complete browser approval link are written to stderr. The normal flow opens that link, waits for browser approval, stores the resulting credential, writes a non-secret project marker, and returns control to the terminal. `--no-browser` supports SSH/headless sessions by printing the same complete link while polling continues; no code or token needs to be copied into the CLI.
 
+Every installed CLI connection targets the live service at `https://dongo.so`. There is no environment picker or custom-origin flag. Development infrastructure is available only to dongo's source-level internal harnesses, and a released CLI refuses a repository marker from any non-production origin before sending credentials.
+
 `dongo --version` (or `dongo -V`) prints the installed package version. Combining it with `--json` returns the same version in the stable command envelope without accessing repository or credential state.
 
 ## Credential safety
@@ -67,7 +70,7 @@ This file is not encrypted. Its security boundary is the local OS user plus full
 
 Persistent interactive login on native Windows is release-blocked until dongo can create and verify an owner-only Windows ACL or ship a stable signed helper. WSL is supported only when the dongo configuration directory is on the Linux filesystem.
 
-`DONGO_TOKEN` is accepted only as an explicit non-interactive CI/service override for an already connected fixed dongo environment. Interactive `connect`, custom origins, and `auth logout` reject it; the external system that supplied the service credential remains responsible for revocation. It is never copied into the user credential file.
+`DONGO_TOKEN` is accepted only as an explicit non-interactive CI/service override for an already connected production project. Interactive `connect` and `auth logout` reject it; the external system that supplied the service credential remains responsible for revocation. It is never copied into the user credential file.
 
 `.agent-work/project.json` contains environment, project, installation, and credential-profile references only. The CLI validates its origin/audience binding before sending a bearer credential. `dongo auth logout` revokes the server grant before deleting local material; a revocation failure retains the local credential so logout can be retried safely.
 

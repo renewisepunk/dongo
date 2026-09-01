@@ -28,6 +28,7 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
   const service = new CoreService({
     cwd: repositoryRoot,
     configDirectory,
+    allowNonProduction: true,
     secretStore: store,
     now: () => 1_788_086_400_000,
     deviceClock: { now: () => 1_788_086_400_000, sleep: async () => undefined },
@@ -203,12 +204,38 @@ test("CI setup refuses to proceed without an exact service credential", async ()
   }
 });
 
+test("the released service rejects non-production connection options", async () => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-production-only-"));
+  await mkdir(path.join(repositoryRoot, ".git"));
+  const service = new CoreService({
+    cwd: repositoryRoot,
+    secretStore: new MemorySecretStore(),
+    fetch: async () => {
+      throw new Error("non-production options must be rejected before network access");
+    },
+  });
+
+  await assert.rejects(
+    service.connect({ environment: "development" }),
+    (error: unknown) => error instanceof CliCoreError && error.code === "validation" && /internal-only/u.test(error.message),
+  );
+  await assert.rejects(
+    service.connect({ origin: "http://localhost:8787" }),
+    (error: unknown) => error instanceof CliCoreError && error.code === "validation" && /internal-only/u.test(error.message),
+  );
+  await assert.rejects(
+    service.setupCi({ environment: "development" }),
+    (error: unknown) => error instanceof CliCoreError && error.code === "validation" && /internal-only/u.test(error.message),
+  );
+});
+
 test("interactive credentials cannot be redirected into the repository", async () => {
   const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-config-boundary-"));
   await mkdir(path.join(repositoryRoot, ".git"));
   const service = new CoreService({
     cwd: repositoryRoot,
     configDirectory: path.join(repositoryRoot, ".dongo-config"),
+    allowNonProduction: true,
     browserOpener: { open: async () => true },
     fetch: async () => {
       throw new Error("network must not run for an unsafe credential path");
@@ -231,6 +258,7 @@ test("interactive credentials cannot reach the repository through a symlinked co
   const service = new CoreService({
     cwd: repositoryRoot,
     configDirectory: path.join(linkedParent, "credentials-root"),
+    allowNonProduction: true,
     browserOpener: { open: async () => true },
     fetch: async () => {
       throw new Error("network must not run for a symlinked repository credential path");

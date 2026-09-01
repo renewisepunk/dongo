@@ -1,5 +1,4 @@
 import { CliCoreError } from "@dongo/cli-core";
-import type { DongoEnvironment } from "@dongo/cli-core";
 
 export interface ParsedArgs {
   command: string;
@@ -11,8 +10,6 @@ export interface ParsedArgs {
   apply: boolean;
   important: boolean;
   resolveWithoutResponse: boolean;
-  environment?: Exclude<DongoEnvironment, "custom">;
-  origin?: string;
   values: Record<string, string[]>;
 }
 
@@ -56,8 +53,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let important = false;
   let resolveWithoutResponse = false;
   let help = false;
-  let environment: Exclude<DongoEnvironment, "custom"> | undefined;
-  let origin: string | undefined;
   const values: Record<string, string[]> = {};
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -69,16 +64,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     else if (argument === "--apply") apply = true;
     else if (argument === "--important") important = true;
     else if (argument === "--resolve-without-response") resolveWithoutResponse = true;
-    else if (argument === "--environment") {
-      const value = argv[++index];
-      if (value !== "development" && value !== "production") {
-        throw new CliCoreError({ code: "validation", message: "--environment must be development or production.", exitCode: 2 });
-      }
-      environment = value;
-    } else if (argument === "--origin") {
-      origin = argv[++index];
-      if (!origin) throw new CliCoreError({ code: "validation", message: "--origin requires a URL.", exitCode: 2 });
-    } else if (argument.startsWith("--") && VALUE_OPTIONS.has(argument.slice(2))) {
+    else if (argument.startsWith("--") && VALUE_OPTIONS.has(argument.slice(2))) {
       const name = argument.slice(2);
       const value = argv[++index];
       if (value === undefined) {
@@ -100,8 +86,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
     apply,
     important,
     resolveWithoutResponse,
-    environment,
-    origin,
     values,
   };
 }

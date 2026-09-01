@@ -45,27 +45,16 @@ const fakeService = {
   integration: async (host: string, apply: boolean) => ({ host, applied: apply, files: [] }),
 };
 
-test("ci setup accepts only a non-interactive environment selection", async () => {
+test("ci setup is production-only and accepts no environment selection", async () => {
   const stream = capture();
-  let environment: string | undefined;
   const exitCode = await runCli(
-    ["ci", "setup", "--environment", "production", "--json"],
+    ["ci", "setup", "--json"],
     {
       output: stream.output,
-      serviceFactory: () => ({
-        ...fakeService,
-        setupCi: async (options: { environment?: string }) => {
-          environment = options.environment;
-          return {
-            project: { publicRef: "pub_ci" },
-            credentialStore: "environment",
-          };
-        },
-      }) as never,
+      serviceFactory: () => fakeService as never,
     },
   );
   assert.equal(exitCode, 0);
-  assert.equal(environment, "production");
   assert.deepEqual(JSON.parse(stream.values().stdout), {
     ok: true,
     command: "ci setup",
@@ -75,14 +64,25 @@ test("ci setup accepts only a non-interactive environment selection", async () =
     },
   });
 
-  const rejected = capture();
-  assert.equal(
-    await runCli(["ci", "setup", "--origin", "https://other.example", "--json"], {
+  for (const args of [
+    ["connect", "--environment", "development", "--json"],
+    ["connect", "--origin", "https://dev.dongo.so", "--json"],
+    ["ci", "setup", "--environment", "production", "--json"],
+  ]) {
+    const rejected = capture();
+    assert.equal(await runCli(args, {
       output: rejected.output,
       serviceFactory: () => fakeService as never,
-    }),
-    2,
-  );
+    }), 2);
+    assert.equal(JSON.parse(rejected.values().stdout).error.code, "validation");
+  }
+});
+
+test("help exposes only the production connection flow", async () => {
+  const stream = capture();
+  assert.equal(await runCli(["help"], { output: stream.output }), 0);
+  assert.match(stream.values().stdout, /dongo connect/u);
+  assert.doesNotMatch(stream.values().stdout, /--environment|--origin|dev\.dongo\.so/u);
 });
 
 test("--version reports the package version in human and JSON modes", async () => {
@@ -145,7 +145,7 @@ test("unknown options fail without contaminating JSON stdout", async () => {
 
 test("connect keeps the complete approval link out of JSON stdout", async () => {
   const stream = capture();
-  const verificationUriComplete = "https://dev.dongo.so/device?user_code=ABCD-EFGH";
+  const verificationUriComplete = "https://dongo.so/device?user_code=ABCD-EFGH";
   const exitCode = await runCli(["connect", "--json", "--no-browser"], {
     output: stream.output,
     serviceFactory: () => ({
@@ -163,7 +163,7 @@ test("connect keeps the complete approval link out of JSON stdout", async () => 
   });
   assert.equal(exitCode, 0);
   assert.doesNotMatch(stream.values().stdout, /ABCD-EFGH|verification|user_code/);
-  assert.match(stream.values().stderr, /https:\/\/dev\.dongo\.so\/device\?user_code=ABCD-EFGH/);
+  assert.match(stream.values().stderr, /https:\/\/dongo\.so\/device\?user_code=ABCD-EFGH/);
   assert.equal(JSON.parse(stream.values().stdout).data.project.publicRef, "pub_1");
 });
 

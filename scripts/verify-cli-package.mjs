@@ -63,6 +63,7 @@ try {
   const cleanRepository = join(temporaryRoot, "repository");
   const helperDirectory = join(temporaryRoot, "helpers");
   const helperLog = join(temporaryRoot, "helper-invocations.log");
+  const fetchPreloader = join(temporaryRoot, "production-fetch-preloader.mjs");
 
   await Promise.all([
     mkdir(packageDirectory),
@@ -136,6 +137,25 @@ try {
     help.includes("dongo integrate codex|claude|generic"),
     "Packaged CLI help is missing agent integrations.",
   );
+  invariant(
+    !/--environment|--origin|dev\.dongo\.so/u.test(help),
+    "Packaged CLI help exposes an internal environment control.",
+  );
+  for (const args of [
+    ["connect", "--environment", "development", "--json"],
+    ["connect", "--origin", "https://dev.dongo.so", "--json"],
+    ["ci", "setup", "--environment", "production", "--json"],
+  ]) {
+    let rejected;
+    try {
+      await runAsync(binaryPath, args, { cwd: cleanRepository, env: isolatedEnvironment });
+    } catch (error) {
+      rejected = error;
+    }
+    invariant(rejected?.code === 2, `Packaged CLI accepted internal option ${args[1]}.`);
+    const result = JSON.parse(rejected.stdout);
+    invariant(result.error?.code === "validation", `Packaged CLI returned the wrong error for ${args[1]}.`);
+  }
 
   const authStatus = JSON.parse(run(binaryPath, ["auth", "status", "--json"], {
     cwd: cleanRepository,
@@ -214,8 +234,8 @@ try {
       jsonResponse(response, 200, {
         device_code: "package-device-secret",
         user_code: "PKG1-TEST",
-        verification_uri: `${origin}/device`,
-        verification_uri_complete: `${origin}/device?user_code=PKG1-TEST`,
+        verification_uri: "https://dongo.so/device",
+        verification_uri_complete: "https://dongo.so/device?user_code=PKG1-TEST",
         expires_in: 60,
         interval: 0.01,
       });
@@ -256,10 +276,28 @@ try {
   invariant(address && typeof address === "object", "Mock authorization server did not bind.");
   origin = `http://127.0.0.1:${address.port}`;
 
+  await writeFile(fetchPreloader, `
+const nativeFetch = globalThis.fetch;
+const testOrigin = process.env.DONGO_PACKAGE_TEST_ORIGIN;
+if (!testOrigin) throw new Error("DONGO_PACKAGE_TEST_ORIGIN is required");
+globalThis.fetch = (input, init) => {
+  const source = input instanceof Request ? input.url : String(input);
+  const url = new URL(source);
+  if (url.origin !== "https://dongo.so") return nativeFetch(input, init);
+  const rewritten = new URL(url.pathname + url.search, testOrigin);
+  return input instanceof Request
+    ? nativeFetch(new Request(rewritten, input), init)
+    : nativeFetch(rewritten, init);
+};
+`, { mode: 0o600 });
+  const productionInterceptEnvironment = {
+    ...isolatedEnvironment,
+    DONGO_PACKAGE_TEST_ORIGIN: origin,
+    NODE_OPTIONS: `${isolatedEnvironment.NODE_OPTIONS ? `${isolatedEnvironment.NODE_OPTIONS} ` : ""}--import=${fetchPreloader}`,
+  };
+
   const connect = await runAsync(binaryPath, [
     "connect",
-    "--origin",
-    origin,
     "--project-name",
     "dongo package verification",
     "--repository-url",
@@ -268,7 +306,7 @@ try {
     "manual",
     "--no-browser",
     "--json",
-  ], { cwd: cleanRepository, env: isolatedEnvironment });
+  ], { cwd: cleanRepository, env: productionInterceptEnvironment });
   const connected = JSON.parse(connect.stdout);
   invariant(connected.ok === true, "Installed CLI did not complete local device authorization.");
   invariant(
@@ -290,17 +328,17 @@ try {
 
   const authenticated = JSON.parse((await runAsync(binaryPath, ["auth", "status", "--json"], {
     cwd: cleanRepository,
-    env: isolatedEnvironment,
+    env: productionInterceptEnvironment,
   })).stdout);
   invariant(authenticated.data?.authenticated === true, "Installed CLI did not persist authentication.");
   const doctor = JSON.parse((await runAsync(binaryPath, ["doctor", "--json"], {
     cwd: cleanRepository,
-    env: isolatedEnvironment,
+    env: productionInterceptEnvironment,
   })).stdout);
   invariant(doctor.data?.ok === true, "Installed CLI doctor failed after connection.");
   const repeatedSession = JSON.parse((await runAsync(binaryPath, ["session-start", "--json"], {
     cwd: cleanRepository,
-    env: isolatedEnvironment,
+    env: productionInterceptEnvironment,
   })).stdout);
   invariant(repeatedSession.ok === true, "Installed CLI follow-up session failed.");
 
@@ -322,13 +360,13 @@ try {
 
   const logout = JSON.parse((await runAsync(binaryPath, ["auth", "logout", "--json"], {
     cwd: cleanRepository,
-    env: isolatedEnvironment,
+    env: productionInterceptEnvironment,
   })).stdout);
   invariant(logout.data?.revoked === true, "Installed CLI logout did not revoke first.");
   invariant((await regularFiles(configDirectory)).length === 0, "Installed CLI logout retained a credential.");
   const loggedOut = JSON.parse((await runAsync(binaryPath, ["auth", "status", "--json"], {
     cwd: cleanRepository,
-    env: isolatedEnvironment,
+    env: productionInterceptEnvironment,
   })).stdout);
   invariant(loggedOut.data?.authenticated === false, "Installed CLI remained authenticated after logout.");
 

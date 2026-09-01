@@ -41,6 +41,8 @@ export interface CoreServiceOptions {
   now?: () => number;
   secretStore?: SecretStore;
   configDirectory?: string;
+  /** Source-only escape hatch for dongo's own isolated development harnesses. */
+  allowNonProduction?: boolean;
 }
 
 export interface ConnectOptions {
@@ -104,6 +106,7 @@ export class CoreService {
   readonly #now: () => number;
   readonly #providedStore?: SecretStore;
   readonly #configDirectory: string;
+  readonly #allowNonProduction: boolean;
 
   constructor(options: CoreServiceOptions = {}) {
     this.#cwd = options.cwd ?? process.cwd();
@@ -113,6 +116,7 @@ export class CoreService {
     this.#now = options.now ?? Date.now;
     this.#providedStore = options.secretStore;
     this.#configDirectory = options.configDirectory ?? defaultConfigDirectory();
+    this.#allowNonProduction = options.allowNonProduction ?? false;
   }
 
   async connect(options: ConnectOptions = {}): Promise<ConnectResult> {
@@ -120,6 +124,13 @@ export class CoreService {
       throw new CliCoreError({
         code: "validation",
         message: "Unset DONGO_TOKEN before interactive dongo connect; it is only a non-interactive CI/service override.",
+        exitCode: 2,
+      });
+    }
+    if (!this.#allowNonProduction && (options.environment !== undefined || options.origin !== undefined)) {
+      throw new CliCoreError({
+        code: "validation",
+        message: "The dongo CLI connects to dongo.so. Development and custom origins are internal-only.",
         exitCode: 2,
       });
     }
@@ -225,6 +236,13 @@ export class CoreService {
   }
 
   async setupCi(options: CiSetupOptions = {}): Promise<CiSetupResult> {
+    if (!this.#allowNonProduction && options.environment !== undefined) {
+      throw new CliCoreError({
+        code: "validation",
+        message: "The dongo CLI connects to dongo.so. Development environments are internal-only.",
+        exitCode: 2,
+      });
+    }
     const token = process.env.DONGO_TOKEN;
     if (
       !token ||
@@ -490,6 +508,13 @@ export class CoreService {
   }
 
   #validateMarker(repositoryRoot: string, marker: ProjectMarker): EnvironmentConfig {
+    if (!this.#allowNonProduction && marker.environment !== "production") {
+      throw new CliCoreError({
+        code: "validation",
+        message: "This repository uses an internal dongo environment. Run dongo connect to connect it to dongo.so.",
+        exitCode: 2,
+      });
+    }
     const environment =
       marker.environment === "custom"
         ? resolveEnvironment({ origin: marker.productOrigin })

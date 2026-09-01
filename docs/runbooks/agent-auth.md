@@ -5,7 +5,7 @@
 Expected flow:
 
 ```sh
-dongo connect --environment development --origin https://dev.dongo.so
+dongo connect
 dongo auth status --json
 dongo doctor --json
 ```
@@ -32,7 +32,7 @@ Do not move the credential into the repository, relax permissions, follow a syml
 
 ```sh
 dongo auth logout --json
-dongo connect --environment development --origin https://dev.dongo.so
+dongo connect
 ```
 
 Logout revokes server access before local deletion. If revocation fails, local material is intentionally retained so logout can be retried.
@@ -48,21 +48,21 @@ Confirm recovery with `dongo doctor --json` and `dongo session-start --json`. Sa
 
 ## MCP discovery and OAuth login
 
-For project ref `<project-ref>`, the exact development resource is:
+For project ref `<project-ref>`, the exact live resource is:
 
 ```text
-https://dev.dongo.so/p/<project-ref>/mcp
+https://dongo.so/p/<project-ref>/mcp
 ```
 
 Unauthenticated access must return `401` with a `resource_metadata` link. Verify discovery without credentials:
 
 ```sh
-curl -i https://dev.dongo.so/p/<project-ref>/mcp
-curl -fsS https://dev.dongo.so/.well-known/oauth-protected-resource/p/<project-ref>/mcp
-curl -fsS https://dev.dongo.so/.well-known/oauth-authorization-server/api/auth
+curl -i https://dongo.so/p/<project-ref>/mcp
+curl -fsS https://dongo.so/.well-known/oauth-protected-resource/p/<project-ref>/mcp
+curl -fsS https://dongo.so/.well-known/oauth-authorization-server/api/auth
 ```
 
-The protected-resource document must identify the exact MCP URL, authorization server `https://dev.dongo.so/api/auth`, and the supported dongo scopes. A resource, issuer, redirect, PKCE, client, project, or scope mismatch must be repaired at discovery/configuration; never weaken validation.
+The protected-resource document must identify the exact MCP URL, authorization server `https://dongo.so/api/auth`, and the supported dongo scopes. A resource, issuer, redirect, PKCE, client, project, or scope mismatch must be repaired at discovery/configuration; never weaken validation.
 
 Preview host changes first:
 

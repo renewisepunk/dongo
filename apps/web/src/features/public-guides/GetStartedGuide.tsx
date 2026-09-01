@@ -61,6 +61,10 @@ export function GetStartedGuide() {
         lede="Authentication begins in the terminal, moves to the web for human approval, then finishes back in the terminal."
       >
         <GuideCode label="connect this repository">{CONNECT_COMMAND}</GuideCode>
+        <aside class="guide-callout guide-callout--green">
+          <div class="guide-callout__label">One live service</div>
+          <div><h3>There is no environment choice.</h3><p>The installed CLI always connects to <code>dongo.so</code>. Development infrastructure is private to dongo's own testing and cannot be selected by a user or agent.</p></div>
+        </aside>
         <div class="guide-process" role="list" aria-label="Browser authorization steps">
           <article role="listitem"><span>1</span><h3>Terminal opens the link</h3><p>The CLI prints and opens a complete approval URL. Over SSH, add <code>--no-browser</code> and open that same URL yourself.</p></article>
           <article role="listitem"><span>2</span><h3>You compare the code</h3><p>Sign in if needed, confirm the matching short code, account, proposed project, API resource, and requested access.</p></article>

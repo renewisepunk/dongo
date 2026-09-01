@@ -1,5 +1,4 @@
 import { CliCoreError, CoreService } from "@dongo/cli-core";
-import type { CoreServiceOptions } from "@dongo/cli-core";
 import { DongoClient } from "@dongo/client";
 import type { OperationInput } from "@dongo/contracts";
 import { readFileSync } from "node:fs";
@@ -15,7 +14,7 @@ const CLI_VERSION = (JSON.parse(
 export interface CliDependencies {
   output?: OutputWriter;
   signal?: AbortSignal;
-  serviceFactory?: (options: CoreServiceOptions) => Pick<
+  serviceFactory?: () => Pick<
     CoreService,
     | "connect"
     | "setupCi"
@@ -30,14 +29,13 @@ export interface CliDependencies {
     | "fetchAttachment"
     | "integration"
   >;
-  serviceOptions?: CoreServiceOptions;
 }
 
 const HELP = `dongo CLI
 
 Usage:
-  dongo connect [--environment development|production] [--origin URL] [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
-  dongo ci setup [--environment development|production]
+  dongo connect [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
+  dongo ci setup
   dongo auth status
   dongo auth logout
   dongo doctor
@@ -141,11 +139,8 @@ function allowOnlyValues(parsed: ParsedArgs, allowed: string[]): void {
 }
 
 function validateModeFlags(parsed: ParsedArgs): void {
-  const ciSetup = parsed.command === "ci" && parsed.subcommand === "setup";
   const invalid =
     (parsed.noBrowser && parsed.command !== "connect") ||
-    (parsed.environment !== undefined && parsed.command !== "connect" && !ciSetup) ||
-    (parsed.origin !== undefined && parsed.command !== "connect") ||
     (parsed.apply && parsed.command !== "integrate") ||
     (parsed.important && !(parsed.command === "attention" && parsed.subcommand === "request")) ||
     (parsed.resolveWithoutResponse && !(parsed.command === "attention" && parsed.subcommand === "resolve"));
@@ -161,9 +156,7 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
     parsed = parseArgs(argv);
     validateModeFlags(parsed);
     const commandArgs = parsed;
-    const service = (dependencies.serviceFactory ?? ((options) => new CoreService(options)))({
-      ...dependencies.serviceOptions,
-    });
+    const service = (dependencies.serviceFactory ?? (() => new CoreService()))();
     const commandMutationKey = () =>
       mutationKey(commandArgs, (key) => {
         mutationRecoveryKey = key;
@@ -194,8 +187,6 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           throw new CliCoreError({ code: "validation", message: "--execution-mode must be manual or autonomous.", exitCode: 2 });
         }
         data = await service.connect({
-          environment: parsed.environment,
-          origin: parsed.origin,
           noBrowser: parsed.noBrowser,
           projectRef: option(parsed, "project-ref"),
           projectName: option(parsed, "project-name"),
@@ -222,21 +213,18 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         requirePositionals(
           parsed,
           2,
-          "Usage: dongo ci setup [--environment development|production]",
+          "Usage: dongo ci setup",
         );
         if (parsed.subcommand !== "setup") {
           throw new CliCoreError({
             code: "validation",
             message:
-              "Usage: dongo ci setup [--environment development|production]",
+              "Usage: dongo ci setup",
             exitCode: 2,
           });
         }
         command = "ci setup";
-        data = await service.setupCi({
-          environment: parsed.environment,
-          signal: dependencies.signal,
-        });
+        data = await service.setupCi({ signal: dependencies.signal });
         break;
       case "auth":
         allowOnlyValues(parsed, []);
