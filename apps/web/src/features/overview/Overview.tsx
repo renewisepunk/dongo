@@ -329,7 +329,16 @@ export function Overview(props: OverviewProps) {
   };
 
   const needs = createMemo(() => work().filter((item) => item.state === "needs"));
-  const working = createMemo(() => work().filter((item) => item.state === "working"));
+  const activeRunWorkIds = createMemo(() =>
+    concurrencyStatus() === "ready"
+      ? new Set((concurrency()?.runs ?? []).map((run) => run.workItem.id))
+      : new Set<string>(),
+  );
+  const working = createMemo(() =>
+    work().filter(
+      (item) => item.state === "working" && !activeRunWorkIds().has(item.id),
+    ),
+  );
   const ready = createMemo(() => work().filter((item) => item.state === "ready"));
   const done = createMemo(() => work().filter((item) => item.state === "done"));
   const uploadPending = createMemo(() =>

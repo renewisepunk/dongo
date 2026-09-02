@@ -58,6 +58,8 @@ test("shows concurrent agents, safe workspace detail, and live progress", async 
   await expect(waiting).toContainText("Isolated workspace");
   await expect(waiting).toContainText("Lease released");
   await expect(running).toContainText("Live progress: retry cancellation verified.");
+  await expect(page.locator('[data-work-id="work-working"]')).toBeHidden();
+  await expect(page.getByText("working", { exact: true })).toBeHidden();
   await running.click();
   await expect(page.getByRole("region", { name: "Harden attachment delivery" })).toBeVisible();
   await expect(running).toHaveAttribute("aria-current", "page");

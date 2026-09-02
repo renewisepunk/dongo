@@ -71,6 +71,10 @@ yet.` Lease states are `Lease healthy`, `renewing`, `released`, and `expired`.
 A query failure says activity is temporarily unavailable without disabling
 canonical Working navigation.
 
+When an active Run card already represents a Working item, do not repeat that
+item in the Working section. Keep the ordinary Working row for items without a
+matching active Run and whenever live agent activity is unavailable.
+
 Ideas use `/app/:orgSlug/:projectSlug/ideas` with query-backed `?idea={ideaId}`
 detail. Keep the Ideas header link visible, state plainly “Possible future work.
 Agents cannot see or claim Ideas.”, and use the existing square, compact

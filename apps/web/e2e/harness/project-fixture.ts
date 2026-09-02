@@ -350,6 +350,9 @@ const connection: OverviewConnection = {
       queueMicrotask(() => onError(new Error("fixture concurrency detail must stay hidden")));
       return () => undefined;
     }
+    const hasVisibleRuns = () =>
+      fixtureScenario() === "concurrency-live" ||
+      fixtureScenario() === "concurrency-undisclosed";
     const snapshot = (latestProgress: string): ProjectConcurrencySnapshot => ({
       serverTime: Date.now(),
       policy: {
@@ -357,8 +360,12 @@ const connection: OverviewConnection = {
         maxConcurrentRuns: 4,
         requiresIsolatedWorkspaces: true,
       },
-      capacity: { activeRuns: 1, maxConcurrentRuns: 4, remaining: 3 },
-      runs: [
+      capacity: {
+        activeRuns: hasVisibleRuns() ? 1 : 0,
+        maxConcurrentRuns: 4,
+        remaining: hasVisibleRuns() ? 3 : 4,
+      },
+      runs: hasVisibleRuns() ? [
         {
           id: "run-attachments",
           workItem: {
@@ -407,7 +414,7 @@ const connection: OverviewConnection = {
           },
           workspace: { kind: "undisclosed" },
         },
-      ],
+      ] : [],
     });
     queueMicrotask(() => onUpdate(snapshot("Testing retry and cancellation semantics.")));
     if (fixtureScenario() === "concurrency-live") {
