@@ -353,7 +353,10 @@ const connection: OverviewConnection = {
     const hasVisibleRuns = () =>
       fixtureScenario() === "concurrency-live" ||
       fixtureScenario() === "concurrency-undisclosed";
-    const snapshot = (latestProgress: string): ProjectConcurrencySnapshot => ({
+    const snapshot = (
+      latestProgress: string,
+      visibleRuns = hasVisibleRuns(),
+    ): ProjectConcurrencySnapshot => ({
       serverTime: Date.now(),
       policy: {
         enabled: true,
@@ -361,11 +364,11 @@ const connection: OverviewConnection = {
         requiresIsolatedWorkspaces: true,
       },
       capacity: {
-        activeRuns: hasVisibleRuns() ? 1 : 0,
+        activeRuns: visibleRuns ? 1 : 0,
         maxConcurrentRuns: 4,
-        remaining: hasVisibleRuns() ? 3 : 4,
+        remaining: visibleRuns ? 3 : 4,
       },
-      runs: hasVisibleRuns() ? [
+      runs: visibleRuns ? [
         {
           id: "run-attachments",
           workItem: {
@@ -422,6 +425,13 @@ const connection: OverviewConnection = {
         onUpdate(snapshot("Live progress: retry cancellation verified."));
       }, 650);
       return () => window.clearTimeout(timer);
+    }
+    if (fixtureScenario() === "concurrency-transition") {
+      const publishRun = () =>
+        onUpdate(snapshot("Live progress: focus handoff verified.", true));
+      window.addEventListener("dongo:test:publish-concurrency", publishRun);
+      return () =>
+        window.removeEventListener("dongo:test:publish-concurrency", publishRun);
     }
     return () => undefined;
   },

@@ -1605,6 +1605,23 @@ export function Overview(props: OverviewProps) {
         );
         unsubscribeConcurrency = connected.subscribeConcurrency(
           (snapshot) => {
+            const focusedWorkId = document.activeElement instanceof HTMLElement
+              ? document.activeElement.closest<HTMLElement>("[data-work-id]")?.dataset.workId
+              : undefined;
+            const focusedWorkingId = work().some(
+              (item) => item.id === focusedWorkId && item.state === "working",
+            )
+              ? focusedWorkId
+              : undefined;
+            const replacementRun = focusedWorkingId
+              ? snapshot.runs.find((run) => run.workItem.id === focusedWorkingId)
+              : undefined;
+            if (replacementRun) {
+              restoreFocusAfterRender(undefined, () =>
+                [...document.querySelectorAll<HTMLElement>("[data-run-id]")]
+                  .find((element) => element.dataset.runId === replacementRun.id),
+              );
+            }
             setConcurrency(snapshot);
             setConcurrencyStatus("ready");
           },

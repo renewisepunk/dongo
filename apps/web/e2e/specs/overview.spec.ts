@@ -81,6 +81,29 @@ test("keeps Working usable when live agent activity is unavailable", async ({ pa
   await expect(page.locator('[data-work-id="work-working"]')).toBeVisible();
 });
 
+test("hands focus to a replacement Run without stealing retained row focus", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=concurrency-transition");
+  const working = page.locator('[data-work-id="work-working"]');
+  await expect(working).toBeVisible();
+  await working.focus();
+  await expect(working).toBeFocused();
+
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("dongo:test:publish-concurrency")),
+  );
+
+  const run = page.locator('[data-run-id="run-attachments"]');
+  await expect(working).toBeHidden();
+  await expect(run).toBeFocused();
+
+  const needs = page.locator('[data-work-id="work-needs"]');
+  await needs.focus();
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("dongo:test:publish-concurrency")),
+  );
+  await expect(needs).toBeFocused();
+});
+
 test("uses canonical compact IDs in live rows and links", async ({ page }) => {
   const needs = page.locator('[data-work-id="work-needs"]');
   const ready = page.locator('[data-work-id="work-ready-a"]');

@@ -73,7 +73,9 @@ canonical Working navigation.
 
 When an active Run card already represents a Working item, do not repeat that
 item in the Working section. Keep the ordinary Working row for items without a
-matching active Run and whenever live agent activity is unavailable.
+matching active Run and whenever live agent activity is unavailable. If a
+focused Working row is replaced by its matching Run card, move focus to that
+card so live reconciliation does not strand keyboard users.
 
 Ideas use `/app/:orgSlug/:projectSlug/ideas` with query-backed `?idea={ideaId}`
 detail. Keep the Ideas header link visible, state plainly “Possible future work.
