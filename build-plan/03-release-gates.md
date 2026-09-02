@@ -99,6 +99,37 @@
 - Published CLI/MCP host packages use immutable artifacts and provenance where supported.
 - Runbooks cover device-flow failure, MCP discovery/login failure, auth-provider isolation, revoked/expired tokens, refresh replay, corrupted host/repo config, export conflict, expired claim, backend outage, upload failure, notification failure, and package rollback.
 
+## Local runner gate
+
+- Runner jobs are command-free, project-derived, idempotent, revision-aware,
+  leased, cancellable, and terminally immutable.
+- A runner proves both its current project-scoped OAuth grant and independently
+  revocable subordinate registration credential.
+- The runner opens no inbound port, runs without elevation, stores credentials
+  outside repositories with owner-only permissions, and installs/removes cleanly
+  through macOS launchd and Linux user-level systemd.
+- The server cannot select an executable, arguments, environment, system prompt,
+  repository path, sandbox bypass, or automatic approval mode.
+- Local policy revalidates repository and executable identity immediately before
+  launch. Changed, missing, symlinked, dirty, unsupported, or unauthorized state
+  fails closed with a truthful code.
+- Codex runs through stable non-interactive JSONL and resumes only an exact
+  captured session ID for the same job and repository. Claude Code runs through
+  print-mode streaming JSON under the same exact-ID rule.
+- Ask-before-run is the default. Automatic execution requires explicit local
+  approval for one repository and cannot be enabled remotely.
+- Offline, reconnect, reboot, duplicate delivery, multiple-runner race, response
+  loss, cancellation race, revocation, lease loss, unsafe output, and uninstall
+  paths pass without duplicate execution or disclosure.
+- Server-visible events contain bounded, redacted lifecycle state only. Raw
+  process output, local paths, session IDs, repository content, environment, and
+  credentials remain local.
+- The web distinguishes no runner, online, offline queued, waiting for local
+  approval, starting, running, blocked, cancelled, failed, expired, and complete
+  states without claiming to wake a sleeping machine.
+- Both real harness journeys and the complete browser matrix pass against the
+  exact development candidate before production promotion.
+
 ## V1 product gate
 
 The exact PRD success flow passes against production candidates:

@@ -52,7 +52,8 @@ The implementation pod is designed for four concurrent slots:
 6. [`05-agent-first-cli-mcp.md`](05-agent-first-cli-mcp.md) — researched agent-first architecture, authentication flows, MCP surface, and compatibility matrix.
 7. [`06-design-implementation-contract.md`](06-design-implementation-contract.md) — the visual source of truth, responsive behavior, and the approved device-auth adaptation.
 8. [`07-cli-credential-storage.md`](07-cli-credential-storage.md) — the accepted npm CLI credential architecture, precedent research, threat model, lifecycle, migration, and release gates.
-9. [`agents/`](agents/) — the mission, ownership, tasks, and acceptance criteria for each agent.
+9. [`08-local-runner.md`](08-local-runner.md) — the accepted outbound local-runner contract for Codex and Claude Code, including trust, lifecycle, adapters, and release gates.
+10. [`agents/`](agents/) — the mission, ownership, tasks, and acceptance criteria for each agent.
 
 ## Agent roster
 

@@ -63,3 +63,7 @@ The current service does not offer customer-configurable retention windows or se
 dongo describes only the safeguards it operates today. It does not present an infrastructure provider's certification as a dongo certification and does not currently claim SOC 2 or ISO 27001 certification.
 
 For customer-facing security information, visit [dongo.so/security](https://dongo.so/security). For vulnerabilities or suspected credential exposure, use the [private reporting process](../../SECURITY.md).
+
+Future local-execution work is gated by the internal
+[local runner threat model](local-runner-threat-model.md). That document is a
+design and release gate, not a claim that the capability is currently live.

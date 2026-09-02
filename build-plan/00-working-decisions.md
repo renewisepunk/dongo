@@ -219,6 +219,38 @@ recorded through the organization system Actor without copying the email into
 event data. Lowering an allowance never archives or deletes existing projects;
 it blocks creation and unarchive until usage returns within the effective limit.
 
+### D-24 — Outbound local runner for Codex and Claude Code
+
+Decided: dongo may start local agent work only through an explicitly installed,
+unprivileged `dongo runner` process. The runner starts at user login, opens an
+authenticated outbound long-poll connection, and maps one project-scoped dongo
+grant to one locally approved repository. It never opens a listening port. The
+first release supports only Codex and Claude Code on macOS and Linux; Windows,
+OpenClaw, SMS execution, generic command adapters, and arbitrary executables are
+outside this contract.
+
+A queued runner job contains only server-derived identifiers, a fixed operation
+kind, the selected supported harness, timestamps, and revision/lease metadata.
+It never contains an executable, command-line arguments, environment variables,
+model credentials, repository contents, or a remotely supplied shell command.
+The local runner resolves its executable and absolute repository path from
+owner-only local configuration, constructs a bounded product-owned instruction,
+and starts the harness under that harness's own authentication and permission
+model. Ask-before-run is the default. Automatic execution is an explicit local
+opt-in for one approved repository and harness.
+
+Runner jobs are durable, idempotent, revision-aware, leased, cancellable, and
+audited. One job can have one live execution; reconnect and response loss return
+the existing result. Offline or sleeping machines leave jobs queued, and the UI
+must say so. Presence is a bounded server fact, not proof that a process can be
+woken. Codex uses its stable non-interactive JSONL interface and resumes only by
+an exact captured session ID. Claude Code uses print-mode streaming JSON and
+resumes only by an exact captured session ID. Missing or incompatible session
+references start a new session and are presented truthfully.
+
+The complete contract, state machine, security boundary, retention, and rollout
+requirements are recorded in [`08-local-runner.md`](08-local-runner.md).
+
 ### D-21 — Human Ideas backlog
 
 Decided: Ideas are a dedicated human-only project backlog, not Intake, Work, or

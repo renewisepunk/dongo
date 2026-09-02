@@ -1,0 +1,320 @@
+# Local runner contract for Codex and Claude Code
+
+Status: accepted implementation contract
+Last reviewed: 2026-09-02
+
+## Outcome
+
+The local runner closes the gap between durable dongo work and a stopped local
+agent process. It is a small, unprivileged companion distributed with the dongo
+CLI. It starts at user login, keeps a bounded outbound wait open against the
+project-scoped agent API, launches a locally configured Codex or Claude Code
+process only after local policy permits it, and reports safe execution state to
+dongo.
+
+The runner is not a remote shell. dongo coordinates a WorkItem and execution
+lease; the local machine owns the repository path, executable, credentials,
+agent permissions, sandbox, worktree, and process lifecycle.
+
+## Initial scope
+
+Included:
+
+- Codex through stable `codex exec --json` and exact-ID `codex exec resume`;
+- Claude Code through `claude --print --output-format stream-json` and exact-ID
+  `--resume`;
+- macOS user LaunchAgent and Linux user-level systemd service installation;
+- one project-scoped runner registration per local repository connection;
+- local ask-before-run and explicit per-repository automatic modes;
+- durable queueing, status, cancellation, revocation, and bounded diagnostics.
+
+Excluded:
+
+- Windows service installation;
+- OpenClaw, generic commands, user-provided adapter scripts, and other harnesses;
+- server-provided executables, flags, prompts, environment variables, or shell;
+- waking a sleeping or powered-off computer;
+- claiming an existing interactive session without an exact supported ID;
+- raw terminal, repository, diff, environment, or credential upload;
+- SMS as an execution or authorization channel.
+
+## Trust boundary
+
+### Hosted dongo may
+
+- identify the authorized project and WorkItem from server state;
+- accept a human request to queue that Ready WorkItem for `codex` or `claude`;
+- select an eligible online registration or leave the job durably unassigned;
+- grant one revision-aware execution lease;
+- accept bounded status events from the registration holding that lease;
+- request cancellation and revoke a registration;
+- retain the safe job state, actor attribution, timestamps, and final summary.
+
+### Hosted dongo must never
+
+- provide an executable path, command, flags, environment, or arbitrary prompt;
+- receive a model-provider credential or copy another harness's session store;
+- receive an absolute path or automatically collect repository contents;
+- bypass the harness sandbox, approval policy, repository instructions, or Git
+  safety rules;
+- interpret presence as proof that a machine is awake or a process started;
+- reassign a live lease because a second runner reports itself available.
+
+### The local runner may
+
+- resolve the approved repository and executable from owner-only local config;
+- validate the repository identity and refuse a moved, replaced, or unsafe path;
+- build a fixed instruction from the project and canonical Work identifier;
+- create an isolated worktree when local policy requires and Git permits it;
+- start, monitor, interrupt, and terminate only the selected supported harness;
+- retain raw process output locally under an owner-only bounded log policy;
+- send redacted lifecycle events and a bounded human-readable final summary.
+
+## Identity and authorization
+
+The runner uses the repository's existing project-scoped CLI OAuth grant to
+register a subordinate runner device. Registration creates a random runner
+secret locally, stores only its verifier server-side, and binds the registration
+to the installation Actor and project derived from the validated OAuth grant.
+The secret is never printed, placed in the repository, accepted in a URL, or
+reused across registrations.
+
+Every runner request proves both the current project-scoped OAuth authorization
+and the subordinate runner secret. Revoking the OAuth installation invalidates
+all subordinate registrations. Revoking one runner registration stops only that
+registration. Rotation replaces the runner secret atomically after proof of the
+current credential. The server never accepts caller-provided organization,
+project, Actor, or installation identity.
+
+Local files use the existing dongo owner-only directory and atomic-write rules.
+Repository markers remain non-secret. Service definitions contain only the
+dongo executable path and a registration identifier; credentials stay in the
+owner-only credential store.
+
+## Versioned job shape
+
+The transport-neutral v1 job is deliberately command-free:
+
+```ts
+type RunnerHarness = "codex" | "claude";
+type RunnerApprovalMode = "ask" | "automatic";
+type RunnerJobState =
+  | "queued"
+  | "delivered"
+  | "awaiting_local_approval"
+  | "starting"
+  | "running"
+  | "blocked"
+  | "cancel_requested"
+  | "cancelled"
+  | "failed"
+  | "completed"
+  | "expired";
+
+type RunnerJob = {
+  id: string;
+  projectRef: string;
+  workItemId: string;
+  workIdentifier: string;
+  harness: RunnerHarness;
+  state: RunnerJobState;
+  revision: number;
+  requestedAt: number;
+  expiresAt: number;
+  registrationId?: string;
+  deliveredAt?: number;
+  leaseExpiresAt?: number;
+  cancellationRequestedAt?: number;
+  terminalAt?: number;
+  safeSummary?: string;
+  sessionReferencePresent: boolean;
+};
+```
+
+`projectRef`, `workItemId`, and `workIdentifier` are returned for local
+validation and display but are derived from the authorized server context. The
+job does not copy the Work goal or comments into a remote command. The local
+instruction tells the selected harness to start a dongo session in the approved
+repository and fetch the canonical item by identifier through its existing
+project-scoped dongo integration.
+
+## State machine
+
+```text
+queued
+  -> delivered
+  -> awaiting_local_approval -> starting -> running -> completed
+                                        \-> blocked
+                                        \-> failed
+
+queued|delivered|awaiting_local_approval -> cancel_requested -> cancelled
+starting|running|blocked                 -> cancel_requested -> cancelled|failed
+queued|delivered|awaiting_local_approval -> expired
+```
+
+- Enqueue is idempotent for one WorkItem while a non-terminal job exists.
+- Delivery is a reservation, not execution. The runner acknowledges before it
+  asks locally or starts a process.
+- Only the selected registration may advance the job after delivery.
+- `starting` atomically acquires the execution lease. Lease loss stops local
+  mutation and the harness process before any reclaim attempt.
+- `blocked` retains the lease only for a short, explicit local condition. Human
+  Attention inside the Work lifecycle uses normal dongo Attention and releases
+  the Work claim according to the existing contract.
+- Cancellation is cooperative first and forceful after a bounded grace period.
+- Terminal states are immutable. Exact idempotency replay returns the original
+  result; a changed payload fails.
+
+Jobs expire after 24 hours when execution has not started. Presence expires 90
+seconds after the latest authenticated check-in. A delivered job returns to
+`queued` after its 60-second delivery reservation expires. A running execution
+uses the existing Work lease and a runner job lease renewed together at a
+bounded cadence.
+
+## Outbound delivery
+
+The first release uses authenticated long polling rather than a permanent
+WebSocket. `runner_wait` checks immediately, then waits for at most 20 seconds
+using bounded server intervals. The local loop immediately drains returned work
+and backs off after transport failure through 1, 2, 5, 10, and at most 30
+seconds with jitter. Successful empty waits do not invoke a model and reopen
+without an artificial delay. This reuses the deployed API boundary, survives
+edge restarts, and keeps Convex authoritative without adding socket-local state.
+
+Each wait updates bounded presence: registration ID, runner version, operating
+system, supported harnesses, approval modes, and safe health codes. It never
+includes hostnames, usernames, absolute paths, process arguments, environment,
+or repository content. The web considers a runner online only while presence is
+fresh.
+
+## Local policy
+
+Each registration has an owner-only local record containing:
+
+- the exact repository root and repository identity captured during approval;
+- the selected `codex` or `claude` executable resolved locally;
+- approval mode, defaulting to `ask`;
+- whether isolated worktrees are required and their local parent directory;
+- a concurrency limit of one for the initial release;
+- the last exact harness session ID created for each runner job, when available.
+
+Server state may display the locally reported mode but cannot raise its
+privilege. A remote request for automatic execution is ignored; only the local
+record decides. Changing the executable, repository identity, or automatic mode
+requires local confirmation and rotates the policy revision.
+
+## Harness adapters
+
+### Codex
+
+The adapter resolves `codex` locally and verifies a supported version. It passes
+the approved repository through `--cd`, selects `workspace-write` or a stricter
+locally configured sandbox, uses `--json`, and sends the fixed instruction on
+stdin. It never uses `--yolo`, `--dangerously-bypass-approvals-and-sandbox`,
+`--skip-git-repo-check`, or a server-provided `-c` override. JSONL events are
+parsed defensively with line and total-size limits. The adapter captures the
+exact session ID and uses `codex exec resume <id>` only for a later continuation
+of the same runner job and repository identity.
+
+### Claude Code
+
+The adapter resolves `claude` locally and verifies a supported version. It runs
+from the approved repository with `--print --output-format stream-json`, keeps
+Claude Code's configured permission system, and sends the fixed instruction on
+stdin. It never uses `--dangerously-skip-permissions`, a server-provided tool
+allowlist, or a server-provided system prompt. Streaming JSON is parsed with the
+same bounds. The adapter captures the exact `session_id` and uses `--resume
+<id>` only for a later continuation of the same runner job and repository
+identity.
+
+For both adapters, missing authentication, unsupported versions, local approval
+denial, an unsafe repository, a dirty-worktree policy failure, or an unavailable
+resume reference becomes a specific safe state. A resume failure may start a
+new session only after recording that fallback; it must never silently continue
+the most recent unrelated session.
+
+## Status, logs, and retention
+
+Server-visible events are structured and bounded:
+
+```ts
+type RunnerJobEvent = {
+  sequence: number;
+  state: RunnerJobState;
+  occurredAt: number;
+  code?: string;
+  message?: string;
+};
+```
+
+`code` comes from a fixed registry. `message` is runner-authored, terminal-control
+stripped, secret-redacted, single-line, and limited to 500 UTF-8 bytes. No raw
+stdout or stderr is uploaded. The final safe summary is limited to 2,000 bytes.
+Detailed process logs remain local, owner-only, rotate at 5 MiB, retain at most
+three files, and are deleted on runner removal.
+
+Runner jobs and safe events follow the WorkItem's retained project history.
+Presence samples are overwritten rather than appended. Revoked registration
+records remain as bounded audit history without secrets. Local session IDs and
+raw process logs are not server data.
+
+## Failure, concurrency, and recovery
+
+- Two enqueue requests for the same eligible WorkItem return one active job.
+- Two runners may receive availability, but one atomic delivery reservation wins.
+- A registration cannot deliver, start, update, or cancel a job from another
+  project or registration.
+- A WorkItem already claimed outside the runner fails start without launching a
+  process.
+- If the runner loses either lease, it interrupts the process and refetches; it
+  never fabricates a new session ID to reclaim work.
+- Restart reloads only owner-only local state, reconciles the exact job, and
+  resumes only when the server lease and stored process/session facts agree.
+- Server outage leaves the local process running only through a short bounded
+  grace period. Failure to renew after that period interrupts it.
+- Cancellation, revocation, or local disable always outranks queued execution.
+
+## Observability
+
+Safe metrics cover registrations online by version/platform, wait success and
+failure, queue latency, delivery-reservation expiry, local-approval latency,
+state-transition failures, lease loss, cancellation latency, harness exit class,
+and redaction drops. Logs use request, registration, and job IDs only. They never
+include user email, Work text, safe summary content, repository URL/path, session
+ID, command arguments, or credentials.
+
+Readiness remains independent from runner presence. A project with no online
+runner is healthy; its queued jobs are visibly pending rather than treated as a
+service outage.
+
+## Compatibility and rollout
+
+All schema and operation additions are additive. Existing CLI, API, MCP, Work,
+Attention, and update-stream behavior remains valid. The old Intake pull signal
+is not reinterpreted as a runner job. Older clients ignore runner fields. New
+clients reject a server contract newer than they support before launching.
+
+Development rollout order is schema/functions, agent API, CLI package, runner
+service install, then web controls. Production uses the same accepted revision.
+Disabling queue creation is the immediate kill switch. Revoking registrations
+stops delivery. Because job data is additive and terminal records are retained,
+rollback does not delete or rewrite Work history. A rolled-back UI must leave
+existing jobs visible through the operator read path until compatible code is
+restored.
+
+## Release acceptance
+
+- Contract fixtures prove every allowed and rejected state transition.
+- Tenant, project, installation, registration, and lease boundaries fail closed.
+- Registration secret storage, rotation, revocation, corruption, permissions,
+  symlink, and response-loss paths pass on clean macOS and Linux environments.
+- Real Codex and Claude Code runs prove new session, exact-ID continuation,
+  structured output bounds, local approval, automatic local opt-in, Attention,
+  cancellation, failure, completion, and attribution.
+- Offline, reconnect, edge restart, computer restart, duplicate delivery,
+  multiple runners, stale lease, dirty repository, unsafe path, and uninstall
+  journeys pass without duplicate execution or secret/content disclosure.
+- The web renders no execution action without an eligible supported runner and
+  labels offline, queued, waiting, running, blocked, and terminal states exactly.
+- Full repository, contract, package, browser, development, security, rollback,
+  production, and post-cutover gates pass for the exact committed candidate.
