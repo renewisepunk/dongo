@@ -223,8 +223,10 @@ async function waitForIntegrity(version, expectedIntegrity) {
 function verifyRegistryInstall(temporaryRoot, version) {
   const prefix = join(temporaryRoot, "registry-install");
   const configDirectory = join(temporaryRoot, "registry-config");
+  const repository = join(temporaryRoot, "registry-repository");
   mkdirSync(prefix);
   mkdirSync(configDirectory, { mode: 0o700 });
+  mkdirSync(repository);
   chmodSync(configDirectory, 0o700);
   runPublicNpm([
     "install",
@@ -237,14 +239,15 @@ function verifyRegistryInstall(temporaryRoot, version) {
   const binary = join(prefix, "bin", process.platform === "win32" ? "dongo.cmd" : "dongo");
   const environment = { ...process.env, DONGO_CONFIG_DIR: configDirectory };
   delete environment.DONGO_TOKEN;
-  const reportedVersion = run(binary, ["--version"], { cwd: temporaryRoot, env: environment }).trim();
+  run("git", ["init", "--quiet"], { cwd: repository, env: environment });
+  const reportedVersion = run(binary, ["--version"], { cwd: repository, env: environment }).trim();
   invariant(reportedVersion === `dongo ${version}`, `Registry install reported ${reportedVersion}.`);
-  const help = run(binary, ["--help"], { cwd: temporaryRoot, env: environment });
+  const help = run(binary, ["--help"], { cwd: repository, env: environment });
   for (const command of ["dongo updates wait", "dongo runner install", "dongo work create"]) {
     invariant(help.includes(command), `Registry install help is missing ${command}.`);
   }
   const authStatus = JSON.parse(run(binary, ["auth", "status", "--json"], {
-    cwd: temporaryRoot,
+    cwd: repository,
     env: environment,
   }));
   invariant(authStatus.ok === true && authStatus.data?.authenticated === false, "Registry install auth status was not clean.");

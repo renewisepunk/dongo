@@ -89,7 +89,8 @@ test("ambient registry overrides cannot redirect public release inspection", asy
       maxBuffer: 8 * 1_024 * 1_024,
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout.trim().split("\n").at(-1)).latestVersion, "0.1.0");
+    const manifest = JSON.parse(await readFile(new URL("../apps/cli/package.json", import.meta.url), "utf8"));
+    assert.equal(JSON.parse(result.stdout.trim().split("\n").at(-1)).latestVersion, manifest.version);
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
   }
@@ -100,6 +101,8 @@ test("an already-published payload is reverified on preflight and publish retrie
   assert.match(source, /release\.action === "skip" && mode !== "--plan"/u);
   assert.match(source, /verifyPublishedRelease\(temporaryRoot, release\)/u);
   assert.match(source, /verifyRegistryInstall\(temporaryRoot, release\.localVersion\)/u);
+  assert.match(source, /run\("git", \["init", "--quiet"\], \{ cwd: repository/u);
+  assert.match(source, /\["auth", "status", "--json"\], \{\s+cwd: repository/u);
 });
 
 test("CI always checks the public CLI release state", async () => {
