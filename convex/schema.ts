@@ -2,6 +2,11 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 const role = v.union(v.literal("owner"), v.literal("member"));
+const platformRole = v.literal("super_admin");
+const workItemCountState = v.union(
+  v.literal("exact"),
+  v.literal("at_least_limit"),
+);
 const executionMode = v.union(v.literal("manual"), v.literal("autonomous"));
 const actorType = v.union(
   v.literal("human"),
@@ -58,6 +63,10 @@ export default defineSchema({
     email: v.optional(v.string()),
     name: v.string(),
     avatarUrl: v.optional(v.string()),
+    platformRole: v.optional(platformRole),
+    createdWorkItemCount: v.optional(v.number()),
+    closedWorkItemCount: v.optional(v.number()),
+    usageTrackingStartedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -70,10 +79,18 @@ export default defineSchema({
     createdByProfileId: v.id("humanProfiles"),
     plan: v.union(v.literal("free"), v.literal("paid")),
     activeProjectLimitOverride: v.optional(v.number()),
+    totalWorkItemLimitOverride: v.optional(v.number()),
+    createdWorkItemCount: v.optional(v.number()),
+    workItemCountState: v.optional(workItemCountState),
+    closedWorkItemCount: v.optional(v.number()),
+    usageTrackingStartedAt: v.optional(v.number()),
     projectCapacityRevision: v.optional(v.number()),
+    workCapacityRevision: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_slug", ["slug"]),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_work_item_count_state", ["workItemCountState"]),
 
   memberships: defineTable({
     organizationId: v.id("organizations"),
@@ -435,6 +452,7 @@ export default defineSchema({
     updatedAt: v.number(),
     completedAt: v.optional(v.number()),
   })
+    .index("by_organization", ["organizationId"])
     .index("by_project_identifier", ["projectId", "identifier"])
     .index("by_project_number", ["projectId", "number"])
     .index("by_project_state_rank", ["projectId", "state", "rank"])
@@ -640,11 +658,25 @@ export default defineSchema({
     requestId: v.optional(v.string()),
     createdAt: v.number(),
   })
+    .index("by_organization_created", ["organizationId", "createdAt"])
+    .index("by_actor_created", ["actorId", "createdAt"])
     .index("by_project_created", ["projectId", "createdAt"])
     .index("by_idea_created", ["ideaId", "createdAt"])
     .index("by_work_created", ["workItemId", "createdAt"])
     .index("by_intake_created", ["intakeId", "createdAt"])
     .index("by_run_created", ["runId", "createdAt"]),
+
+  platformAdminMutationKeys: defineTable({
+    profileId: v.id("humanProfiles"),
+    operation: v.string(),
+    key: v.string(),
+    canonicalPayload: v.string(),
+    resultJson: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_profile_operation_key", ["profileId", "operation", "key"])
+    .index("by_expires_at", ["expiresAt"]),
 
   idempotencyKeys: defineTable({
     organizationId: v.id("organizations"),

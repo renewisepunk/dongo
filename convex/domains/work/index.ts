@@ -45,6 +45,7 @@ import {
   createWorkItem,
   linkIntakeToWork,
   MAX_CHILD_WORK_ITEMS,
+  recordClosedWorkItem,
 } from "./service";
 import { workByIdentifier } from "./identifiers";
 import {
@@ -1250,6 +1251,9 @@ export const finish = internalMutation({
           revision: work.revision + 1,
           updatedAt: now,
         });
+        if (state === "done" || state === "cancelled") {
+          await recordClosedWorkItem(ctx, work.organizationId, principal.actor._id, now);
+        }
         const artifactIds = await recordInlineArtifacts(
           ctx,
           work,
@@ -1403,6 +1407,7 @@ export const cancelForHuman = mutation({
           revision: work.revision + 1,
           updatedAt: now,
         });
+        await recordClosedWorkItem(ctx, work.organizationId, principal.actor._id, now);
         await appendEvent(ctx, {
           organizationId: work.organizationId,
           projectId: work.projectId,

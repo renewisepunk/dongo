@@ -1,0 +1,131 @@
+.platform-admin {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.platform-admin__header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in oklab, var(--bg) 94%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.platform-admin__brand {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.platform-admin__header h1,
+.platform-admin__section-heading h2,
+.platform-admin__organization h3 {
+  margin: 0;
+}
+
+.platform-admin__header h1 { font-size: 18px; }
+
+.platform-admin__body {
+  width: min(1080px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0 72px;
+}
+
+.platform-admin__lede {
+  max-width: 700px;
+  color: var(--text-muted);
+}
+
+.platform-admin__tabs {
+  display: flex;
+  gap: 0;
+  margin: 24px 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.platform-admin__tabs button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.platform-admin__tabs button[aria-selected="true"] {
+  border-color: var(--line);
+  background: var(--surface-1);
+  color: var(--amber);
+}
+
+.platform-admin__search { display: block; margin-bottom: 24px; }
+.platform-admin__search input { width: min(440px, 100%); min-height: 44px; }
+
+.platform-admin__section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  color: var(--text-muted);
+}
+
+.platform-admin__section-heading h2 { color: var(--text); }
+.platform-admin__table-wrap { overflow-x: auto; border: 1px solid var(--line); }
+.platform-admin table { width: 100%; border-collapse: collapse; min-width: 720px; }
+.platform-admin th, .platform-admin td { padding: 12px; border-bottom: 1px solid var(--line); text-align: left; }
+.platform-admin tbody tr:last-child th, .platform-admin tbody tr:last-child td { border-bottom: 0; }
+.platform-admin tbody th span { display: block; margin-top: 3px; color: var(--text-muted); font-weight: 400; }
+
+.platform-admin__organizations { display: grid; gap: 16px; }
+.platform-admin__organization { padding: 18px; border: 1px solid var(--line); background: var(--surface-0); }
+.platform-admin__organization > header { display: flex; justify-content: space-between; gap: 16px; }
+.platform-admin__organization > header .mono { color: var(--text-muted); }
+.platform-admin__plan { align-self: start; padding: 4px 8px; border: 1px solid var(--line); color: var(--amber); }
+.platform-admin__organization dl { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; margin: 18px 0; background: var(--line); border: 1px solid var(--line); }
+.platform-admin__organization dl div { padding: 10px; background: var(--surface-1); }
+.platform-admin__organization dt { color: var(--text-muted); font-size: 12px; }
+.platform-admin__organization dd { margin: 5px 0 0; font-family: ui-monospace, Menlo, monospace; }
+
+.platform-admin__allowance-form {
+  display: grid;
+  grid-template-columns: minmax(140px, .7fr) minmax(140px, .7fr) minmax(220px, 1.6fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.platform-admin__allowance-form label { display: grid; gap: 6px; color: var(--text-muted); font-size: 12px; }
+.platform-admin__allowance-form input { width: 100%; min-height: 44px; }
+.platform-admin__allowance-form .button { min-height: 44px; }
+.platform-admin__allowance-form .form-error { grid-column: 1 / -1; margin: 0; }
+.platform-admin__error { padding: 20px; border: 1px solid var(--danger); }
+
+@media (max-width: 760px) {
+  .platform-admin__header { grid-template-columns: auto 1fr; }
+  .platform-admin__header > .button { grid-column: 2; justify-self: start; }
+  .platform-admin__body { width: min(100% - 24px, 1080px); padding-top: 22px; }
+  .platform-admin__tabs { overflow-x: auto; }
+  .platform-admin__tabs button { flex: 1 0 auto; }
+  .platform-admin__section-heading { align-items: start; }
+  .platform-admin__organization dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .platform-admin__allowance-form { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .platform-admin *, .platform-admin *::before, .platform-admin *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}

@@ -37,7 +37,7 @@ describe("human identity bootstrap", () => {
       _id: profile!._id,
       email: identity.email,
       name: identity.email,
-      avatarUrl: undefined,
+      isSuperAdmin: false,
       createdAt: profile!.createdAt,
       updatedAt: profile!.updatedAt,
     });

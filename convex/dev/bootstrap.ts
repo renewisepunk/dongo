@@ -62,6 +62,10 @@ export const createWalkingSkeleton = internalMutation({
       slug: args.organizationSlug,
       createdByProfileId: profileId,
       plan: "free",
+      createdWorkItemCount: 0,
+      workItemCountState: "exact",
+      closedWorkItemCount: 0,
+      usageTrackingStartedAt: now,
       createdAt: now,
       updatedAt: now,
     });

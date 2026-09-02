@@ -82,6 +82,8 @@ function safeErrorMessage(code: string): string {
       return "The next dongo work identifier is already in use. Refresh the project before creating more work.";
     case "identifier_exhausted":
       return "This project has used all 999 work identifiers. Use another project for new work.";
+    case "plan_limit":
+      return "This organization has reached its dongo plan allowance. Review the available recovery actions before retrying.";
     case "parallel_execution_unavailable":
       return "This agent session cannot start additional parallel work. Continue serially or use a supported isolated worktree.";
     case "concurrency_limit":
@@ -137,6 +139,61 @@ function safeErrorDetails(code: string, value: unknown): unknown {
     return {
       identifier: details.identifier,
       sequence: details.sequence,
+    };
+  }
+  if (code === "plan_limit") {
+    if (
+      details.resource === "active_projects" &&
+      details.plan === "free" &&
+      ["plan", "operator_override"].includes(String(details.source)) &&
+      Number.isSafeInteger(details.activeProjectCount) &&
+      Number(details.activeProjectCount) >= 0 &&
+      Number.isSafeInteger(details.limit) &&
+      Number(details.limit) >= 1 &&
+      Number(details.limit) <= 100 &&
+      details.remaining === 0 &&
+      details.retryable === false &&
+      Array.isArray(details.actions) &&
+      details.actions.every((action) =>
+        ["use_existing", "archive_existing", "upgrade"].includes(String(action)),
+      )
+    ) {
+      return {
+        resource: "active_projects",
+        plan: "free",
+        source: details.source,
+        activeProjectCount: details.activeProjectCount,
+        limit: details.limit,
+        remaining: 0,
+        retryable: false,
+        actions: details.actions,
+      };
+    }
+    if (
+      details.resource !== "total_work_items" ||
+      !["free", "paid"].includes(String(details.plan)) ||
+      !["plan", "operator_override"].includes(String(details.source)) ||
+      !Number.isSafeInteger(details.totalWorkItemCount) ||
+      Number(details.totalWorkItemCount) < 0 ||
+      !Number.isSafeInteger(details.limit) ||
+      Number(details.limit) < 1 ||
+      Number(details.limit) > 1_000 ||
+      details.remaining !== 0 ||
+      details.retryable !== false ||
+      !Array.isArray(details.actions) ||
+      details.actions.some((action) => !["upgrade", "contact_operator"].includes(String(action)))
+    ) {
+      return undefined;
+    }
+    return {
+      resource: "total_work_items",
+      plan: details.plan,
+      source: details.source,
+      totalWorkItemCount: details.totalWorkItemCount,
+      limit: details.limit,
+      remaining: 0,
+      retryable: false,
+      actions: details.actions,
     };
   }
   if (code === "parallel_execution_unavailable") {

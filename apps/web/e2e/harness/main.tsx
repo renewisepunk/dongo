@@ -8,6 +8,11 @@ import { PublicHelpGuide } from "../../src/features/public-guides/PublicHelpGuid
 import { SecurityOverview } from "../../src/features/security/SecurityOverview";
 import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
 import { UpgradePlan } from "../../src/features/admin/UpgradePlan";
+import { PlatformAdmin } from "../../src/features/admin/PlatformAdmin";
+import type {
+  PlatformAdminConnection,
+  PlatformDashboard,
+} from "../../src/lib/platform-data";
 import { Ideas } from "../../src/features/ideas/Ideas";
 import type { WorkItem } from "../../src/features/overview/model";
 import { CompletedWork } from "../../src/routes/app/[orgSlug]/[projectSlug]/done";
@@ -512,6 +517,17 @@ function fixtureAdministration() {
         ? ["use_existing" as const, "archive_existing" as const, "upgrade" as const]
         : [],
     },
+    workItemAllowance: {
+      resource: "total_work_items" as const,
+      plan: freePlan ? "free" as const : "paid" as const,
+      source: "plan" as const,
+      totalWorkItemCount: 42,
+      totalIsExact: true,
+      ...(freePlan ? { limit: 250, remaining: 208 } : {}),
+      canCreate: true,
+      trackedFrom: Date.now() - 86_400_000,
+      actions: [],
+    },
     storage: {
       activeBytes: 1_572_864,
       reservedBytes: 524_288,
@@ -815,6 +831,121 @@ function FixtureOverview() {
         };
       }}
       loadSession={fixtureSession}
+      loadPlatformAccess={async () => oauthScenario() === "overview-super-admin"}
+    />
+  );
+}
+
+const platformDashboard: PlatformDashboard = {
+  generatedAt: Date.now(),
+  accounts: [{
+    profileId: "profile-owner",
+    name: "Fixture Owner",
+    email: "owner@example.test",
+    signedUpAt: Date.now() - 86_400_000,
+    lastActiveAt: Date.now() - 60_000,
+    organizationCount: 1,
+    organizationsTruncated: false,
+    usage: {
+      workItemsCreated: 42,
+      workItemsClosed: 30,
+      trackedFrom: Date.now() - 86_400_000,
+    },
+  }],
+  organizations: [{
+    organizationId: "organization-fixture",
+    name: "Fixture Studio",
+    slug: "fixture-studio",
+    plan: "free",
+    createdAt: Date.now() - 86_400_000,
+    updatedAt: Date.now() - 60_000,
+    projectCapacityRevision: 2,
+    workCapacityRevision: 3,
+    members: { count: 2, truncated: false },
+    projects: { active: 2, activeTruncated: false, total: 2, truncated: false, limit: 4, source: "operator_override" },
+    workItems: {
+      total: 42,
+      totalIsExact: true,
+      closed: 30,
+      truncated: false,
+      limit: 250,
+      source: "plan",
+      trackedFrom: Date.now() - 86_400_000,
+    },
+    billing: { status: "not_configured", provider: null },
+  }],
+  accountsTruncated: false,
+  organizationsTruncated: false,
+  privacy: "Aggregated product activity only. Work titles, comments, attachments, and raw billing data are not included.",
+};
+
+function FixturePlatformAdmin() {
+  return (
+    <PlatformAdmin
+      connect={async (): Promise<PlatformAdminConnection> => {
+        if (oauthScenario() === "admin-error") throw new Error("private fixture detail");
+        let current = structuredClone(platformDashboard);
+        if (oauthScenario() === "admin-pagination") {
+          current.accountCursor = "accounts-next";
+          current.organizationCursor = "organizations-next";
+          current.accountsTruncated = true;
+          current.organizationsTruncated = true;
+        }
+        return {
+          async loadDashboard() {
+            return structuredClone(current);
+          },
+          async loadAccounts() {
+            return {
+              rows: [{
+                profileId: "profile-older",
+                name: "Older Account",
+                email: "older@example.test",
+                signedUpAt: Date.now() - 172_800_000,
+                lastActiveAt: Date.now() - 86_400_000,
+                organizationCount: 1,
+                organizationsTruncated: false,
+                usage: { workItemsCreated: 7, workItemsClosed: 5 },
+              }],
+            };
+          },
+          async loadOrganizations() {
+            return {
+              rows: [{
+                ...current.organizations[0]!,
+                organizationId: "organization-older",
+                name: "Older Studio",
+                slug: "older-studio",
+              }],
+            };
+          },
+          async updateOrganizationAllowances(input) {
+            const organization = current.organizations[0]!;
+            const updated = {
+              ...organization,
+              changed: true,
+              projectCapacityRevision: organization.projectCapacityRevision + 1,
+              workCapacityRevision: organization.workCapacityRevision + 1,
+              projects: {
+                ...organization.projects,
+                limit: input.activeProjectLimit ?? 1,
+                source: input.activeProjectLimit === null ? "plan" as const : "operator_override" as const,
+              },
+              workItems: {
+                ...organization.workItems,
+                limit: input.totalWorkItemLimit ?? 250,
+                source: input.totalWorkItemLimit === null ? "plan" as const : "operator_override" as const,
+              },
+            };
+            current = { ...current, organizations: [updated] };
+            document.documentElement.dataset.fixtureAdminUpdate = JSON.stringify(input);
+            return updated;
+          },
+          async close() {
+            document.documentElement.dataset.fixtureAdminClosed = "true";
+          },
+        };
+      }}
     />
   );
 }
@@ -889,6 +1020,7 @@ render(
         <Route path="/oauth/project" component={() => <OAuthProjectRoute dependencies={oauthProjectDependencies} />} />
         <Route path="/oauth/consent" component={() => <OAuthConsentRoute dependencies={oauthConsentDependencies} />} />
         <Route path="/connect" component={() => <ConnectRoute dependencies={connectDependencies} />} />
+        <Route path="/admin" component={FixturePlatformAdmin} />
         <Route
           path="/app/:orgSlug/:projectSlug/settings"
           component={() => (

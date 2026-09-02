@@ -13,6 +13,11 @@ import {
   legacyWorkIdentifiers,
   MAX_WORK_SEQUENCE,
 } from "./identifiers";
+import {
+  totalWorkItemLimit,
+  workCapacitySource,
+} from "../../lib/plans";
+import { measureOrganizationWorkItems } from "../../lib/workUsage";
 
 export type NewWorkInput = {
   title: string;
@@ -22,6 +27,53 @@ export type NewWorkInput = {
   kind: "task" | "bug" | "feature" | "investigation" | "decision";
   parentId?: Id<"workItems">;
 };
+
+async function accountableProfileId(
+  ctx: Pick<MutationCtx, "db">,
+  actorId: Id<"actors">,
+): Promise<Id<"humanProfiles"> | undefined> {
+  const actor = await ctx.db.get(actorId);
+  if (!actor) return undefined;
+  if (actor.type === "human") return actor.profileId;
+  if (!actor.installationId) return undefined;
+  const installation = await ctx.db.get(actor.installationId);
+  return installation?.organizationId === actor.organizationId
+    ? installation.authorizedByProfileId
+    : undefined;
+}
+
+async function incrementProfileUsage(
+  ctx: Pick<MutationCtx, "db">,
+  actorId: Id<"actors">,
+  field: "createdWorkItemCount" | "closedWorkItemCount",
+  now: number,
+): Promise<void> {
+  const profileId = await accountableProfileId(ctx, actorId);
+  if (!profileId) return;
+  const profile = await ctx.db.get(profileId);
+  if (!profile) return;
+  await ctx.db.patch(profile._id, {
+    [field]: (profile[field] ?? 0) + 1,
+    usageTrackingStartedAt: profile.usageTrackingStartedAt ?? now,
+    updatedAt: now,
+  });
+}
+
+export async function recordClosedWorkItem(
+  ctx: Pick<MutationCtx, "db">,
+  organizationId: Id<"organizations">,
+  actorId: Id<"actors">,
+  now: number,
+): Promise<void> {
+  const organization = await ctx.db.get(organizationId);
+  if (!organization) fail("not_found", "Organization not found");
+  await ctx.db.patch(organization._id, {
+    closedWorkItemCount: (organization.closedWorkItemCount ?? 0) + 1,
+    usageTrackingStartedAt: organization.usageTrackingStartedAt ?? now,
+    updatedAt: now,
+  });
+  await incrementProfileUsage(ctx, actorId, "closedWorkItemCount", now);
+}
 
 const MAX_WORK_LINKS = 100;
 const MAX_WORK_LINK_LENGTH = 2_048;
@@ -61,6 +113,39 @@ export async function createWorkItem(
   const project = await ctx.db.get(options.projectId);
   if (!project || project.archivedAt !== undefined) {
     fail("not_found", "Project not found");
+  }
+  const organization = await ctx.db.get(project.organizationId);
+  if (!organization) fail("not_found", "Organization not found");
+  const workLimit = totalWorkItemLimit(
+    organization.plan,
+    organization.totalWorkItemLimitOverride,
+  );
+  let existingWorkItemCount = organization.workItemCountState
+    ? organization.createdWorkItemCount
+    : undefined;
+  let workItemCountState = organization.workItemCountState;
+  if (workLimit !== undefined) {
+    if (existingWorkItemCount === undefined) {
+      const measurement = await measureOrganizationWorkItems(ctx, organization._id);
+      existingWorkItemCount = measurement.count;
+      workItemCountState = measurement.state;
+    }
+    if (existingWorkItemCount >= workLimit) {
+      fail(
+        "plan_limit",
+        `This organization has reached its ${workLimit}-Work-item allowance. Review plan options or ask a dongo operator to adjust the limit.`,
+        {
+          resource: "total_work_items",
+          plan: organization.plan,
+          source: workCapacitySource(organization.totalWorkItemLimitOverride),
+          totalWorkItemCount: existingWorkItemCount,
+          limit: workLimit,
+          remaining: 0,
+          retryable: false,
+          actions: ["upgrade", "contact_operator"],
+        },
+      );
+    }
   }
   if (options.input.parentId) {
     const parent = await ctx.db.get(options.input.parentId);
@@ -135,6 +220,24 @@ export async function createWorkItem(
     nextWorkNumber: number + 1,
     updatedAt: options.now,
   });
+  await ctx.db.patch(organization._id, {
+    ...(workItemCountState
+      ? {
+          createdWorkItemCount: workItemCountState === "exact"
+            ? (existingWorkItemCount ?? 0) + 1
+            : existingWorkItemCount,
+          workItemCountState,
+        }
+      : {}),
+    usageTrackingStartedAt: organization.usageTrackingStartedAt ?? options.now,
+    updatedAt: options.now,
+  });
+  await incrementProfileUsage(
+    ctx,
+    options.actorId,
+    "createdWorkItemCount",
+    options.now,
+  );
   const workItemId = await ctx.db.insert("workItems", {
     organizationId: project.organizationId,
     projectId: project._id,

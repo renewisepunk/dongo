@@ -45,6 +45,7 @@ import type {
 } from "../../lib/project-data";
 import { searchHighlightSegments } from "../../lib/search-highlight";
 import { projectCapacityLabel, projectCreationAction } from "../../lib/plans";
+import { loadPlatformAdminAccess } from "../../lib/platform-data";
 import type { AttachmentSummary, Intake, WorkItem } from "./model";
 import { CommentComposer } from "./CommentComposer";
 import { IntakeEditor } from "./IntakeEditor";
@@ -92,6 +93,7 @@ type OverviewProps = {
   projectSlug: string;
   connect?: (orgSlug: string, projectSlug: string) => Promise<OverviewConnection>;
   loadSession?: () => Promise<OverviewSession>;
+  loadPlatformAccess?: () => Promise<boolean>;
 };
 
 type DraftAttachment = {
@@ -279,6 +281,7 @@ export function Overview(props: OverviewProps) {
   const [availableProjects, setAvailableProjects] = createSignal<readonly ProjectInfo[]>([]);
   const [viewer, setViewer] = createSignal<{ name: string; email: string }>();
   const [viewerInitials, setViewerInitials] = createSignal("ME");
+  const [platformAdmin, setPlatformAdmin] = createSignal(false);
   const [projectMenuOpen, setProjectMenuOpen] = createSignal(false);
   const [profileMenuOpen, setProfileMenuOpen] = createSignal(false);
   const [commandMenuOpen, setCommandMenuOpen] = createSignal(false);
@@ -1569,11 +1572,14 @@ export function Overview(props: OverviewProps) {
     window.addEventListener("drop", onFileDrop, true);
     void (async () => {
       try {
-        const [connected, session] = await Promise.all([
+        const [connected, session, hasPlatformAccess] = await Promise.all([
           props.connect
             ? props.connect(props.orgSlug, props.projectSlug)
             : ProjectDataConnection.connect(props.orgSlug, props.projectSlug),
           props.loadSession ? props.loadSession() : humanSession(),
+          props.loadPlatformAccess
+            ? props.loadPlatformAccess()
+            : loadPlatformAdminAccess(),
         ]);
         if (disposed) {
           await connected.close();
@@ -1595,6 +1601,7 @@ export function Overview(props: OverviewProps) {
           .map((part) => part[0]!.toUpperCase())
           .join("");
         setViewerInitials(initials || "ME");
+        setPlatformAdmin(hasPlatformAccess);
         unsubscribeOverview = connected.subscribeOverview(
           (overview) => {
             setProjectName(overview.projectName);
@@ -1827,6 +1834,9 @@ export function Overview(props: OverviewProps) {
               <div class="menu-divider" />
               <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("Members")}>Organization settings</button>
               <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("General")}>Project settings</button>
+              <Show when={platformAdmin()}>
+                <button class="menu-action" type="button" role="menuitem" onClick={() => navigate("/admin")}>Platform administration</button>
+              </Show>
               <button
                 class="menu-action"
                 type="button"

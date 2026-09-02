@@ -28,6 +28,12 @@ crons.interval(
   { limit: 500 },
 );
 crons.interval(
+  "backfill organization Work usage",
+  { minutes: 1 },
+  internal.maintenance.backfillNextOrganizationWorkItemCount,
+  {},
+);
+crons.interval(
   "remove expired gateway nonces",
   { minutes: 5 },
   internal.gateway.security.removeExpiredNonces,

@@ -66,6 +66,12 @@
 - MIME, size, checksum, malicious filename, path traversal, symlink escape, Markdown/XSS, terminal escape, and unsafe URL tests pass.
 - Intake and attachment content is treated as untrusted prompt input by every CLI/MCP host integration.
 - Automated secret scanning finds nothing in repository, logs, snapshots, CI artifacts, or support bundles.
+- Development signup tests prove invalid or unlisted email creation fails closed
+  only at `https://dev.dongo.so`, while existing-account sign-in and production
+  signup behavior remain unchanged.
+- Super-admin access is derived server-side; ordinary and cross-tenant users
+  cannot read usage or mutate allowances, and returned/audited data excludes
+  product content, credentials, emails in event payloads, and provider data.
 
 ## Concurrency and reliability gate
 
@@ -77,6 +83,11 @@
 - Notification retry produces one logical delivery per channel/escalation.
 - R2 upload finalization cannot attach missing, partial, oversized, or cross-project objects.
 - Backend outage and reconnect never falsely claim or start work.
+- Browser and deployment-operator project allowance writes share one revision
+  domain; interleaved stale writers conflict. Work allowance writes use an
+  independent revision, 24-hour idempotency expires, and cleanup remains bounded.
+- The historical Work-count migration completes before allowance acceptance;
+  exact and saturated counters make repeated at-cap creation checks constant-read.
 
 ## Native gate
 

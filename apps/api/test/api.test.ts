@@ -458,6 +458,55 @@ function allowedRateLimiter(): ApiRateLimiter {
 }
 
 describe("CLI REST gateway", () => {
+  it("maps the non-retryable Work plan limit to a conflict response", async () => {
+    const worker = createDongoApiGateway({
+      resource: RESOURCE,
+      allowedHostnames: ["dev.dongo.so"],
+      tokenVerifier: new FakeVerifier(principal()),
+      operationExecutor: {
+        async execute() {
+          return {
+            ok: false as const,
+            error: {
+              code: "plan_limit",
+              message: "Work allowance reached",
+              retryable: false,
+              details: {
+                resource: "total_work_items",
+                totalWorkItemCount: 250,
+                limit: 250,
+                actions: ["upgrade", "contact_operator"],
+              },
+            },
+            requestId: "executor-plan-limit",
+          };
+        },
+      },
+      rateLimiter: allowedRateLimiter(),
+    });
+    const response = await worker.fetch(new Request(
+      "https://dev.dongo.so/api/agent/v1/create_work",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer opaque-access-token",
+          "content-type": "application/json",
+          "idempotency-key": "plan-limit-api",
+        },
+        body: JSON.stringify({
+          idempotencyKey: "plan-limit-api",
+          title: "One too many",
+          goal: "Prove the allowance boundary.",
+        }),
+      },
+    ));
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "plan_limit", retryable: false },
+    });
+  });
+
   it("parses GET query input and emits the packages/client result envelope", async () => {
     const verifier = new FakeVerifier(principal());
     const executor = new FakeExecutor();

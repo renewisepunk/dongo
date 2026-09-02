@@ -98,6 +98,7 @@ function operationStatus(result: OperationExecutionResult): number {
     case "idempotency_conflict":
     case "identifier_conflict":
     case "identifier_exhausted":
+    case "plan_limit":
       return 409;
     case "lease_expired":
       return 410;

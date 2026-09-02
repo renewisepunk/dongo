@@ -113,6 +113,9 @@ lifecycle transitions remain independent.
 Freeze typed aggregates for:
 
 - current viewer, organization, project, role, and entitlement;
+- private platform administration with a server-derived super-admin role,
+  bounded privacy-safe account/organization usage, separate project and Work
+  allowance revisions, and billing placeholders that carry no provider state;
 - human Ideas backlog with explicit title, optional text/context/links,
   finalized attachments, state, rank, attribution, revision, archive/promotion
   metadata, and linked Intake provenance;

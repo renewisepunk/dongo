@@ -1,9 +1,11 @@
 import { v } from "convex/values";
+import type { Id } from "../../_generated/dataModel";
 import {
   internalMutation,
   internalQuery,
   mutation,
   query,
+  type QueryCtx,
 } from "../../_generated/server";
 import {
   requireCurrentProfile,
@@ -23,12 +25,15 @@ import {
   MAX_ATTACHMENT_BYTES,
   organizationStorageLimit,
   projectCapacitySource,
+  totalWorkItemLimit,
+  workCapacitySource,
 } from "../../lib/plans";
 import {
   DEFAULT_MAX_CONCURRENT_RUNS,
   normalizeParallelExecutionSettings,
   parallelExecutionPolicy,
 } from "../work/concurrency";
+import { measureOrganizationWorkItems } from "../../lib/workUsage";
 
 function activeProjectAllowance(
   organization: {
@@ -57,6 +62,47 @@ function activeProjectAllowance(
     canCreate: remaining === undefined || remaining > 0,
     actions: organization.plan === "free"
       ? ["use_existing", "archive_existing", "upgrade"] as const
+      : [] as const,
+  };
+}
+
+async function workItemAllowance(
+  ctx: QueryCtx,
+  organization: {
+    _id: Id<"organizations">;
+    plan: "free" | "paid";
+    totalWorkItemLimitOverride?: number;
+    createdWorkItemCount?: number;
+    workItemCountState?: "exact" | "at_least_limit";
+    usageTrackingStartedAt?: number;
+  },
+) {
+  const limit = totalWorkItemLimit(
+    organization.plan,
+    organization.totalWorkItemLimitOverride,
+  );
+  let count = organization.createdWorkItemCount;
+  let totalIsExact = organization.workItemCountState === "exact";
+  if (count === undefined && limit !== undefined) {
+    const measurement = await measureOrganizationWorkItems(ctx, organization._id);
+    count = measurement.count;
+    totalIsExact = measurement.state === "exact";
+  }
+  const knownCount = count ?? 0;
+  return {
+    resource: "total_work_items" as const,
+    plan: organization.plan,
+    source: workCapacitySource(organization.totalWorkItemLimitOverride),
+    totalWorkItemCount: count,
+    totalIsExact,
+    limit,
+    remaining: limit === undefined || (!totalIsExact && knownCount < limit)
+      ? undefined
+      : Math.max(0, limit - knownCount),
+    canCreate: limit === undefined || knownCount < limit,
+    trackedFrom: organization.usageTrackingStartedAt,
+    actions: limit !== undefined && knownCount >= limit
+      ? ["upgrade", "contact_operator"] as const
       : [] as const,
   };
 }
@@ -144,6 +190,10 @@ export const createPersonalOrganization = mutation({
       slug,
       createdByProfileId: profile._id,
       plan: "free",
+      createdWorkItemCount: 0,
+      workItemCountState: "exact",
+      closedWorkItemCount: 0,
+      usageTrackingStartedAt: now,
       createdAt: now,
       updatedAt: now,
     });
@@ -449,6 +499,7 @@ export const administration = query({
         organization,
         projects.filter((candidate) => candidate.archivedAt === undefined).length,
       ),
+      workItemAllowance: await workItemAllowance(ctx, organization),
       storage: {
         activeBytes: ledger?.activeBytes ?? 0,
         reservedBytes: ledger?.reservedBytes ?? 0,

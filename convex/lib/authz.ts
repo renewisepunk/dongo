@@ -66,6 +66,16 @@ export async function requireCurrentProfile(
   return profile;
 }
 
+export async function requireSuperAdmin(
+  ctx: ReadCtx,
+): Promise<Doc<"humanProfiles">> {
+  const profile = await requireCurrentProfile(ctx);
+  if (profile.platformRole !== "super_admin") {
+    fail("not_found", "Administration is not available");
+  }
+  return profile;
+}
+
 export async function requireMembership(
   ctx: DbCtx,
   organizationId: Id<"organizations">,

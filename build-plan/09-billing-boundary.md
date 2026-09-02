@@ -37,4 +37,8 @@ Billing work must preserve the existing organization and project-capacity model 
 - Development acceptance verifies the exact candidate against provider test mode, including downgrade and recovery.
 - Production promotion follows the production runbook with webhook health, smoke checks, reconciliation, and rollback ready.
 
-The adjacent administration and limits work may add usage analytics, super-admin controls, task limits, or internal billing visibility. Those capabilities must consume the same authoritative plan and allowance state, but they do not authorize checkout or plan activation by themselves.
+The administration and limits slice exposes privacy-safe usage, server-authorized
+super-admin controls, total Work allowances, and an explicit `not_configured`
+billing placeholder. Those capabilities consume the same authoritative plan and
+allowance state, but they do not authorize checkout, provider calls, subscription
+claims, or plan activation by themselves.

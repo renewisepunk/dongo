@@ -6,6 +6,17 @@ import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
 import { sendOtpEmail } from "./gateway/outbound";
+import {
+  developmentSignupAllowed,
+  developmentSignupAllowlist,
+  INITIAL_SUPER_ADMIN_EMAIL,
+} from "./lib/platform";
+
+export {
+  developmentSignupAllowed,
+  developmentSignupAllowlist,
+  INITIAL_SUPER_ADMIN_EMAIL,
+};
 
 const siteUrl = process.env.SITE_URL!;
 
@@ -45,6 +56,17 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       enabled: true,
       window: 60,
       max: 100,
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          async before(user) {
+            if (!developmentSignupAllowed(user.email, siteUrl)) {
+              throw new Error("Sign-up is not available for this email");
+            }
+          },
+        },
+      },
     },
     plugins: [
       emailOTP({

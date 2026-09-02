@@ -14,6 +14,7 @@ export const domainErrorCodes = [
   "already_resolved",
   "identifier_conflict",
   "identifier_exhausted",
+  "plan_limit",
   "quota_exceeded",
   "upload_incomplete",
   "rate_limited",

@@ -248,6 +248,71 @@ test("identifier exhaustion is specific, non-retryable, and actionable", async (
   assert.equal(calls, 1);
 });
 
+test("plan limits preserve safe project and Work recovery details", async () => {
+  const cases = [
+    {
+      details: {
+        resource: "active_projects",
+        plan: "free",
+        source: "operator_override",
+        activeProjectCount: 4,
+        limit: 4,
+        remaining: 0,
+        retryable: false,
+        actions: ["use_existing", "archive_existing", "upgrade"],
+      },
+    },
+    {
+      details: {
+        resource: "total_work_items",
+        plan: "free",
+        source: "plan",
+        totalWorkItemCount: 250,
+        limit: 250,
+        remaining: 0,
+        retryable: false,
+        actions: ["upgrade", "contact_operator"],
+      },
+    },
+  ] as const;
+
+  for (const [index, candidate] of cases.entries()) {
+    const client = new DongoClient({
+      baseUrl: "https://dev.dongo.so/api/agent/v1",
+      tokenProvider,
+      fetch: async () => Response.json({
+        ok: false,
+        error: {
+          code: "plan_limit",
+          message: "private server detail",
+          retryable: false,
+          details: candidate.details,
+        },
+        requestId: `req_plan_${index}`,
+      }, { status: 409 }),
+    });
+
+    await assert.rejects(
+      client.createWork({
+        idempotencyKey: `plan-limit-${index}`,
+        title: "Capacity test",
+        goal: "Prove safe plan-limit transport.",
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof DongoClientError);
+        assert.equal(error.code, "plan_limit");
+        assert.equal(error.retryable, false);
+        assert.equal(
+          error.message,
+          "This organization has reached its dongo plan allowance. Review the available recovery actions before retrying.",
+        );
+        assert.deepEqual(error.details, candidate.details);
+        return true;
+      },
+    );
+  }
+});
+
 test("Retry-After replaces jitter rather than adding a second delay", async () => {
   const sleeps: number[] = [];
   let calls = 0;

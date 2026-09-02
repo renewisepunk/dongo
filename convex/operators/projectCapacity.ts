@@ -9,6 +9,7 @@ import type { Doc } from "../_generated/dataModel";
 import { requireSystemActor } from "../lib/authz";
 import { appendEvent } from "../lib/events";
 import { fail, optionalString, requireString } from "../lib/errors";
+import { updateOrganizationAllowanceOverrides } from "../lib/organizationAllowances";
 import {
   activeProjectLimit,
   MAX_ACTIVE_PROJECT_LIMIT_OVERRIDE,
@@ -182,12 +183,19 @@ export const setOverride = internalMutation({
         currentRevision,
       });
     }
+    const { organization: updated } = await updateOrganizationAllowanceOverrides(
+      ctx,
+      organization,
+      {
+        activeProjectLimitOverride: requestedOverride,
+        expectedProjectCapacityRevision: currentRevision,
+        reason,
+        requestId,
+        targetProfileId: profile._id,
+        activeProjectCount,
+      },
+    );
     const now = Date.now();
-    await ctx.db.patch(organization._id, {
-      activeProjectLimitOverride: requestedOverride,
-      projectCapacityRevision: currentRevision + 1,
-      updatedAt: now,
-    });
     const systemActor = await requireSystemActor(ctx, organization._id);
     await appendEvent(ctx, {
       organizationId: organization._id,
@@ -206,7 +214,6 @@ export const setOverride = internalMutation({
       requestId,
       createdAt: now,
     });
-    const updated = (await ctx.db.get(organization._id))!;
     return {
       changed: true as const,
       ...capacityResult(profile, updated, activeProjectCount),

@@ -165,6 +165,18 @@ export type ProjectAdministration = {
     canCreate: boolean;
     actions: Array<"use_existing" | "archive_existing" | "upgrade">;
   };
+  workItemAllowance: {
+    resource: "total_work_items";
+    plan: "free" | "paid";
+    source: "plan" | "operator_override";
+    totalWorkItemCount?: number;
+    totalIsExact: boolean;
+    limit?: number;
+    remaining?: number;
+    canCreate: boolean;
+    trackedFrom?: number;
+    actions: Array<"upgrade" | "contact_operator">;
+  };
   storage: {
     activeBytes: number;
     reservedBytes: number;

@@ -789,6 +789,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
               <div class="settings-title-group"><div class="eyebrow">Organization</div><h1 class="settings-title">Plan & storage</h1><p class="auth-lede">Current limits for {admin().organization.name}.</p></div>
               <div class="plan-card">
                 <div class="plan-stat"><span class="plan-stat__value">{admin().activeProjectCount} / {admin().projectAllowance.limit ?? "∞"}</span><span class="plan-stat__label">active projects</span></div>
+                <div class="plan-stat"><span class="plan-stat__value">{admin().workItemAllowance.totalWorkItemCount === undefined ? "Counting…" : `${admin().workItemAllowance.totalWorkItemCount}${admin().workItemAllowance.totalIsExact ? "" : "+"}`} / {admin().workItemAllowance.limit ?? "∞"}</span><span class="plan-stat__label">total Work</span></div>
                 <div class="plan-stat"><span class="plan-stat__value">{formatBytes(admin().storage.activeBytes + admin().storage.reservedBytes)} / {formatBytes(admin().storage.limitBytes)}</span><span class="plan-stat__label">media storage</span></div>
               </div>
               <section class="settings-section">
@@ -796,7 +797,10 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 <Show when={admin().organization.plan === "free"} fallback={<p class="note">This organization can create multiple active projects.</p>}>
                   <p class="note">This organization is using {admin().activeProjectCount} of {admin().projectAllowance.limit ?? 1} active projects.{admin().projectAllowance.source === "operator_override" ? " Additional capacity has been granted to this organization." : " The standard Free allowance is 1."} Archive an active project when the allowance is full, or review plan availability.</p>
                 </Show>
-                <p class="note">Individual uploads are limited to {formatBytes(admin().storage.maximumAttachmentBytes)}. dongo does not meter people, agents, or WorkItems.</p>
+                <p class="note">Individual uploads are limited to {formatBytes(admin().storage.maximumAttachmentBytes)}. dongo does not meter people or agents. {admin().organization.plan === "free" && admin().workItemAllowance.source === "plan" ? "The standard Free allowance is 250 total Work items." : `This organization can create ${admin().workItemAllowance.limit ?? "unlimited"} total Work items.`}</p>
+                <Show when={!admin().workItemAllowance.totalIsExact}>
+                  <p class="security-note">The complete Work count is being established by a bounded server migration. Finite creation checks remain authoritative.</p>
+                </Show>
                 <Show when={owner()}>
                   <A class="button" href={planAction()!.href} style={{ "align-self": "flex-start" }}>
                     {planAction()!.label}

@@ -278,6 +278,27 @@ defaults a missing child list to empty for one compatibility cycle. This release
 adds no reparenting, dependency blocking, automatic parent completion, bulk
 lifecycle operation, or cross-project link.
 
+### D-26 — Private platform administration and total Work allowance
+
+Decided: development account creation is restricted to an exact email allowlist
+only when the configured public origin is `https://dev.dongo.so`; invalid
+configuration fails closed and production signup behavior is unchanged.
+`rene@wisepunk.com` is the initial stored `super_admin`. Every administration
+query and mutation derives that role from the authenticated Convex profile, and
+unauthorized callers receive no private dashboard data.
+
+The private administration view exposes bounded, privacy-safe account and
+organization aggregates plus an explicit `not_configured` billing placeholder.
+It never returns Work, Intake, comment, attachment, credential, or raw provider
+content. Free organizations may create 250 total Work items over their lifetime.
+Closing Work does not restore capacity. Operators may set finite 1–1,000 Work
+overrides and the existing 1–100 active-project overrides. Convex owns usage,
+effective allowances, revision checks, and enforcement across human and agent
+creation. Project-capacity writers share one revision domain; allowance changes
+are idempotent, audited without account email or content, and never delete data.
+Historical Work counts are migrated in bounded 1,001-row steps and stored as an
+exact value or a safe 1,000-item lower bound before release acceptance.
+
 ### D-21 — Human Ideas backlog
 
 Decided: Ideas are a dedicated human-only project backlog, not Intake, Work, or

@@ -7,8 +7,10 @@ existing owner account's normalized email address, stored on that organization,
 revision checked, and recorded as an immutable system event without storing the
 email in event data.
 
-This is a deployment-admin operation. There is intentionally no public web,
-CLI, MCP, or agent mutation for changing capacity.
+This remains a deployment-admin operation for command-line operators. The
+private, server-authorized super-admin web route uses the same write helper and
+`projectCapacityRevision`; there is no organization-owner, CLI, MCP, or agent
+mutation for changing capacity.
 
 ## Inspect before changing
 

@@ -998,6 +998,7 @@ function normalizeError(error: unknown): GatewayError {
                     "already_resolved",
                     "identifier_conflict",
                     "identifier_exhausted",
+                    "plan_limit",
                   ].includes(code)
                 ? 409
                 : code === "quota_exceeded"
