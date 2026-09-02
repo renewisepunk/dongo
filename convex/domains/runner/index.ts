@@ -42,6 +42,26 @@ const JOB_TTL_MS = 24 * 60 * 60 * 1_000;
 const DELIVERY_RESERVATION_MS = 60_000;
 const DEFAULT_LEASE_MS = 90_000;
 const MAX_LEASE_SECONDS = 3_600;
+const RUNNER_SAFE_CODES = new Set([
+  "approval_expired",
+  "attention_required",
+  "cancelled",
+  "cancelled_before_start",
+  "claude_failed",
+  "codex_failed",
+  "delivery_expired",
+  "dirty_repository",
+  "harness_failed",
+  "harness_changed",
+  "harness_unavailable",
+  "queue_expired",
+  "runner_lease_expired",
+  "runner_restarted",
+  "runner_revoked",
+  "user_cancelled",
+  "work_completed",
+  "work_not_completed",
+]);
 const TERMINAL_STATES = new Set<RunnerState>([
   "cancelled",
   "failed",
@@ -82,6 +102,26 @@ const TRANSITIONS: Record<RunnerState, ReadonlySet<RunnerState>> = {
   completed: new Set(),
   expired: new Set(),
 };
+
+function runnerSafeCode(value: string | undefined): string | undefined {
+  const code = optionalString(value, "safeCode", 80);
+  if (code !== undefined && !RUNNER_SAFE_CODES.has(code)) {
+    fail("validation", "safeCode is not a supported runner status code");
+  }
+  return code;
+}
+
+function runnerSafeText(
+  value: string | undefined,
+  field: "safeMessage" | "safeSummary",
+  maxLength: number,
+): string | undefined {
+  const text = optionalString(value, field, maxLength);
+  if (text !== undefined && /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(text)) {
+    fail("validation", `${field} must be plain single-line text`);
+  }
+  return text;
+}
 
 function normalizedHarnesses(values: Array<"codex" | "claude">) {
   return [...new Set(values)].sort() as Array<"claude" | "codex">;
@@ -513,9 +553,9 @@ export const updateJob = internalMutation({
     if (!job || job.projectId !== registration.projectId || job.registrationId !== registration._id) {
       fail("not_found", "Runner job not found");
     }
-    const safeCode = optionalString(args.safeCode, "safeCode", 80);
-    const safeMessage = optionalString(args.safeMessage, "safeMessage", 500);
-    const safeSummary = optionalString(args.safeSummary, "safeSummary", 2_000);
+    const safeCode = runnerSafeCode(args.safeCode);
+    const safeMessage = runnerSafeText(args.safeMessage, "safeMessage", 500);
+    const safeSummary = runnerSafeText(args.safeSummary, "safeSummary", 2_000);
     const leaseSeconds = args.leaseSeconds ?? DEFAULT_LEASE_MS / 1_000;
     if (!Number.isInteger(leaseSeconds) || leaseSeconds < 30 || leaseSeconds > MAX_LEASE_SECONDS) {
       fail("validation", `leaseSeconds must be between 30 and ${MAX_LEASE_SECONDS}`);

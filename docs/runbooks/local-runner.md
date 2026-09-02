@@ -29,11 +29,12 @@ user-service and Linux-filesystem security boundary.
 
 ### Codex execution
 
-The Codex adapter resolves a locally executable `codex`, verifies it with
-`codex --version`, and starts non-interactive work in the exact approved
-repository with JSONL output and the `workspace-write` sandbox. It never uses
-approval or sandbox bypass flags. The only hosted value added to its fixed
-local prompt is the validated dongo Work identifier.
+The Codex adapter resolves and records the exact local `codex` executable,
+verifies its version and required non-interactive features, and starts work in
+the exact approved repository with JSONL output and the `workspace-write`
+sandbox. The fixed instruction is sent over standard input, not exposed in the
+process list. It never uses approval or sandbox bypass flags. The only hosted
+value added to the local instruction is the validated dongo Work identifier.
 
 The adapter records the stable `thread.started` identifier in owner-only local
 storage. After a runner restart it resumes only when that identifier matches
@@ -44,17 +45,26 @@ dongo status or logs.
 
 ### Claude Code execution
 
-The Claude Code adapter resolves a locally executable `claude`, verifies it
-with `claude --version`, and runs print mode with streaming JSON in the exact
-approved repository. It uses Claude Code's `acceptEdits` permission mode so
-repository edits can proceed while side-effecting commands retain Claude's
-configured permission policy. It never uses `--dangerously-skip-permissions`.
+The Claude Code adapter resolves and records the exact local `claude`
+executable, verifies its version and required non-interactive features, and
+runs print mode with streaming JSON in the exact approved repository. The
+fixed instruction is sent over standard input. It uses Claude Code's
+`acceptEdits` permission mode so repository edits can proceed while
+side-effecting commands retain Claude's configured permission policy. It never
+uses `--dangerously-skip-permissions`.
 
 The adapter persists a validated `session_id` only from Claude's documented
 initialization or result events. Restart recovery uses `--resume` only for the
 same registration, job, and canonical repository. Raw stream events and model
 output remain in the bounded owner-only local log; hosted status contains only
 fixed safe outcome text.
+
+For both harnesses, dongo verifies the authoritative WorkItem after the local
+process exits. A zero exit code cannot complete the runner job unless the Work
+itself is Done. An open Attention request moves the runner job to Blocked and
+the exact local harness session resumes only after the response is available.
+Lease loss, cancellation, runner shutdown, or an API failure stops and joins
+the local process before the manager may retry.
 
 ## Approve, disable, and remove
 
@@ -67,9 +77,15 @@ dongo runner approve --job-id JOB_ID
 The approval file is owner-only, bound to the current registration and exact
 job, and consumed once. A web action cannot substitute for local approval.
 
+Automatic mode refuses to launch from a dirty repository. Ask-before-run mode
+can be used when a person has reviewed and deliberately approved the exact
+local checkout state.
+
 Use `dongo runner disable` to stop login startup while retaining the revocable
 registration. Use `dongo runner remove` to stop the service, revoke the runner
-credential, remove the service definition, and delete the local configuration.
+credential, remove the service definition, and delete the local configuration,
+session references, pending approvals/results, and rotating logs for that
+project.
 If remote revocation fails, dongo retains the local credential so removal can be
 retried safely.
 

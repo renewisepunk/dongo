@@ -528,8 +528,8 @@ export class CoreService {
       projectId: context.marker.projectId ?? context.marker.publicProjectRef,
       installationId: context.marker.installationId,
       runtime: {
-        nodePath: this.#runnerRuntime?.nodePath ?? process.execPath,
-        cliPath: path.resolve(cliPath),
+        nodePath: await realpath(this.#runnerRuntime?.nodePath ?? process.execPath),
+        cliPath: await realpath(path.resolve(cliPath)),
       },
       configDirectory: this.#configDirectory,
       now: this.#now,

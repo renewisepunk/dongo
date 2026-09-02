@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { access, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
+import { promisify } from "node:util";
 
-import type { RunnerJob, RunnerRegistration, RunnerWait } from "@dongo/contracts";
+import type { RunnerJob, RunnerRegistration, RunnerWait, WorkItem } from "@dongo/contracts";
 import { DongoClientError } from "@dongo/client";
 import { MemorySecretStore } from "../src/secret-store.ts";
 import {
@@ -17,6 +20,8 @@ import type {
   RunnerServiceController,
   RunnerServiceSpec,
 } from "../src/runner-service.ts";
+
+const execFileAsync = promisify(execFile);
 
 test("runner installation stores a one-time credential locally and exposes only redacted status", async (context) => {
   const fixture = await runnerFixture(context);
@@ -51,6 +56,7 @@ test("ask mode requires exact local approval before executing a command-free job
   let received: { repositoryRoot: string; workIdentifier: string } | undefined;
   const adapter: RunnerHarnessAdapter = {
     harness: "codex",
+    validate: async () => "/bin/sh",
     execute: async ({ repositoryRoot, workIdentifier, log }) => {
       received = { repositoryRoot, workIdentifier };
       await log("local output only\n");
@@ -72,7 +78,8 @@ test("ask mode requires exact local approval before executing a command-free job
   api.job = runnerJob("delivered", 2);
   api.onTerminal = () => controller.abort();
   await manager.run(controller.signal);
-  assert.deepEqual(api.transitions.map(({ state }) => state), [
+  const states = api.transitions.map(({ state }) => state);
+  assert.deepEqual(states.filter((state, index) => state !== "running" || states[index - 1] !== "running"), [
     "awaiting_local_approval",
     "starting",
     "running",
@@ -93,12 +100,20 @@ test("runner removal disables startup, revokes remotely, and deletes local mater
   const service = new FakeService();
   const manager = fixture.manager(api, service);
   await manager.install({ label: "Removal Mac", harnesses: ["codex"] });
+  const logDirectory = path.join(
+    fixture.root,
+    "runner-logs",
+    createHash("sha256").update("project-ref").digest("hex"),
+  );
+  await mkdir(logDirectory, { recursive: true });
+  await writeFile(path.join(logDirectory, "local.log"), "private local output");
   const removed = await manager.remove();
   assert.equal(removed.removed, true);
   assert.equal(api.revocations, 1);
   assert.equal(service.disables, 2);
   assert.equal(service.removes, 1);
   assert.equal((await manager.status()).installed, false);
+  await assert.rejects(access(logDirectory), (error: NodeJS.ErrnoException) => error.code === "ENOENT");
 });
 
 test("runner removal cleans local material after the parent grant is inactive", async (context) => {
@@ -132,6 +147,18 @@ test("a failed service install retains a disabled credential when rollback is un
   assert.equal(api.revocations, 1);
 });
 
+test("runner refuses a repository that was replaced at the approved path", async (context) => {
+  const fixture = await runnerFixture(context);
+  const manager = fixture.manager(new FakeRunnerApi(), new FakeService());
+  await manager.install({ label: "Bound Mac", harnesses: ["codex"] });
+  await rm(path.join(fixture.repository, ".git"), { recursive: true });
+  await mkdir(path.join(fixture.repository, ".git"));
+  await assert.rejects(manager.run(), (error: Error & { code?: string }) => {
+    assert.equal(error.code, "runner_binding_mismatch");
+    return true;
+  });
+});
+
 test("a lost terminal response is replayed from owner-only local state", async (context) => {
   const fixture = await runnerFixture(context);
   const controller = new AbortController();
@@ -141,6 +168,7 @@ test("a lost terminal response is replayed from owner-only local state", async (
   api.onTerminal = () => controller.abort();
   const adapter: RunnerHarnessAdapter = {
     harness: "codex",
+    validate: async () => "/bin/sh",
     execute: async () => ({
       outcome: "completed",
       safeCode: "verified",
@@ -170,6 +198,7 @@ test("a restarted runner resumes only when its adapter has the exact local sessi
   let executions = 0;
   const adapter: RunnerHarnessAdapter = {
     harness: "codex",
+    validate: async () => "/bin/sh",
     canResume: async ({ jobId, registrationId, repositoryRoot }) =>
       jobId === "job-1" && registrationId === "registration-1" && repositoryRoot === fixture.repository,
     execute: async () => {
@@ -187,12 +216,195 @@ test("a restarted runner resumes only when its adapter has the exact local sessi
   assert.deepEqual(api.transitions.map(({ state }) => state), ["running", "running", "completed"]);
 });
 
+test("a successful harness exit cannot complete a job until dongo Work is done", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  api.workState = "working";
+  api.job = runnerJob("delivered", 2);
+  api.onTerminal = () => controller.abort();
+  const manager = fixture.manager(api, new FakeService(), {
+    adapter: () => ({
+      harness: "codex",
+      validate: async () => "/bin/sh",
+      execute: async () => ({ outcome: "completed", sessionReferencePresent: true }),
+    }),
+    sleep: async () => undefined,
+  });
+  await manager.install({ label: "Outcome Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  await manager.run(controller.signal);
+  assert.equal(api.job.state, "failed");
+  assert.equal(api.transitions.at(-1)?.safeCode, "work_not_completed");
+});
+
+test("automatic mode refuses a dirty repository before launching a harness", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  api.job = runnerJob("delivered", 2);
+  api.onTerminal = () => controller.abort();
+  await writeFile(path.join(fixture.repository, "uncommitted.txt"), "local change");
+  let executions = 0;
+  const manager = fixture.manager(api, new FakeService(), {
+    adapter: () => ({
+      harness: "codex",
+      validate: async () => "/bin/sh",
+      execute: async () => {
+        executions += 1;
+        return { outcome: "completed" };
+      },
+    }),
+    sleep: async () => undefined,
+  });
+  await manager.install({ label: "Clean Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  await manager.run(controller.signal);
+  assert.equal(executions, 0);
+  assert.equal(api.job.state, "failed");
+  assert.equal(api.transitions.at(-1)?.safeCode, "dirty_repository");
+});
+
+test("losing the runner lease stops the harness before the manager retries", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  api.job = runnerJob("delivered", 2);
+  api.dropJobOnWait = 2;
+  let sleepCalls = 0;
+  let harnessStopped = false;
+  const manager = fixture.manager(api, new FakeService(), {
+    adapter: () => ({
+      harness: "codex",
+      validate: async () => "/bin/sh",
+      execute: async ({ signal }) => await new Promise((resolve) => {
+        signal.addEventListener("abort", () => {
+          harnessStopped = true;
+          resolve({ outcome: "failed", safeCode: "cancelled" });
+        }, { once: true });
+      }),
+    }),
+    sleep: async () => {
+      sleepCalls += 1;
+      if (sleepCalls > 1) controller.abort();
+    },
+  });
+  await manager.install({ label: "Lease Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  await manager.run(controller.signal);
+  assert.equal(harnessStopped, true);
+  assert.equal(api.job.state, "running");
+  assert.equal(api.transitions.filter(({ state }) => state === "running").length, 1);
+});
+
+test("an Attention pause blocks the job and resumes only the exact local session after response", async (context) => {
+  const fixture = await runnerFixture(context);
+  const firstController = new AbortController();
+  const api = new FakeRunnerApi();
+  api.workState = "working";
+  api.openAttention = true;
+  api.job = runnerJob("delivered", 2);
+  api.onTransition = (state) => {
+    if (state === "blocked") firstController.abort();
+  };
+  let executions = 0;
+  let discarded = 0;
+  const adapter: RunnerHarnessAdapter = {
+    harness: "codex",
+    validate: async () => "/bin/sh",
+    canResume: async () => true,
+    execute: async () => {
+      executions += 1;
+      return { outcome: "completed", sessionReferencePresent: true };
+    },
+    discardSession: async () => { discarded += 1; },
+  };
+  const firstManager = fixture.manager(api, new FakeService(), {
+    adapter: () => adapter,
+    sleep: async () => undefined,
+  });
+  await firstManager.install({ label: "Attention Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  await firstManager.run(firstController.signal);
+  assert.equal(api.job.state, "blocked");
+  assert.equal(executions, 1);
+  assert.equal(discarded, 0);
+
+  const secondController = new AbortController();
+  api.openAttention = false;
+  api.onTransition = undefined;
+  api.onTerminal = () => secondController.abort();
+  const resumedAdapter: RunnerHarnessAdapter = {
+    ...adapter,
+    execute: async () => {
+      executions += 1;
+      api.workState = "done";
+      return { outcome: "completed", sessionReferencePresent: true };
+    },
+  };
+  const secondManager = fixture.manager(api, new FakeService(), {
+    adapter: () => resumedAdapter,
+    sleep: async () => undefined,
+  });
+  await secondManager.run(secondController.signal);
+  assert.equal(api.job.state, "completed");
+  assert.equal(executions, 2);
+  assert.equal(discarded, 1);
+});
+
 test("runner token format is fixed and contains full local entropy", () => {
   const values = new Set(Array.from({ length: 20 }, generateRunnerToken));
   assert.equal(values.size, 20);
   for (const value of values) {
     assert.match(value, /^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$/u);
   }
+});
+
+test("the daemon reuses the exact executable approved during installation", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  api.job = runnerJob("delivered", 2);
+  api.onTerminal = () => controller.abort();
+  const resolvedPaths: Array<string | undefined> = [];
+  const adapter: RunnerHarnessAdapter = {
+    harness: "codex",
+    validate: async () => "/bin/sh",
+    execute: async () => ({ outcome: "completed" }),
+  };
+  const manager = fixture.manager(api, new FakeService(), {
+    adapter: (_harness, executablePath) => {
+      resolvedPaths.push(executablePath);
+      return adapter;
+    },
+    sleep: async () => undefined,
+  });
+  await manager.install({ label: "Pinned CLI Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  await manager.run(controller.signal);
+  assert.equal(resolvedPaths[0], undefined);
+  assert.equal(resolvedPaths.at(-1), await realpath("/bin/sh"));
+});
+
+test("the runner refuses an executable changed after local approval", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  api.job = runnerJob("delivered", 2);
+  api.onTerminal = () => controller.abort();
+  let executions = 0;
+  const manager = fixture.manager(api, new FakeService(), {
+    adapter: () => ({
+      harness: "codex",
+      validate: async () => fixture.nodePath,
+      execute: async () => {
+        executions += 1;
+        return { outcome: "completed" };
+      },
+    }),
+    sleep: async () => undefined,
+  });
+  await manager.install({ label: "Pinned binary Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  await writeFile(fixture.nodePath, "changed local executable contents");
+  await manager.run(controller.signal);
+  assert.equal(executions, 0);
+  assert.equal(api.job.state, "failed");
+  assert.equal(api.transitions.at(-1)?.safeCode, "harness_changed");
 });
 
 class FakeService implements RunnerServiceController {
@@ -224,11 +436,45 @@ class FakeRunnerApi {
   registrationToken?: string;
   revocations = 0;
   job?: RunnerJob;
-  transitions: Array<{ state: RunnerJob["state"]; safeSummary?: string }> = [];
+  transitions: Array<{ state: RunnerJob["state"]; safeCode?: string; safeSummary?: string }> = [];
   onTerminal?: () => void;
+  onTransition?: (state: RunnerJob["state"]) => void;
   failTerminalOnce = false;
   terminalAttempts = 0;
   revokeError?: Error;
+  workState: WorkItem["state"] = "done";
+  openAttention = false;
+  waitCalls = 0;
+  dropJobOnWait?: number;
+
+  async getWork(input: { workItemId?: string }): Promise<WorkItem> {
+    return {
+      id: input.workItemId ?? "work-1",
+      projectId: "project-1",
+      identifier: "dong026",
+      sequence: 26,
+      title: "Runner work",
+      goal: "Complete runner work",
+      state: this.workState,
+      orderKey: "a",
+      revision: 1,
+      sourceIntakeIds: [],
+      artifacts: [],
+      conversation: [],
+      openAttention: this.openAttention ? {
+        id: "attention-1",
+        workItemId: input.workItemId ?? "work-1",
+        kind: "question",
+        title: "Decision needed",
+        body: "Choose a safe path.",
+        important: false,
+        requestedBy: { id: "actor-1", kind: "installation", displayName: "Codex" },
+        requestedAt: 1,
+      } : undefined,
+      createdAt: 1,
+      updatedAt: 1,
+    } as unknown as WorkItem;
+  }
 
   async runnerRegister(input: { token: string; label: string; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic" }) {
     this.registrationToken = input.token;
@@ -246,6 +492,14 @@ class FakeRunnerApi {
   }
 
   async runnerWait(): Promise<RunnerWait> {
+    this.waitCalls += 1;
+    if (this.waitCalls === this.dropJobOnWait) {
+      return {
+        registration: registration({ label: "Fake", platform: "darwin", version: "0.1.0", harnesses: ["codex"], approvalMode: "ask" }),
+        wait: { status: "timed_out", requestedSeconds: 0, elapsedMilliseconds: 0 },
+        serverTime: Date.now(),
+      };
+    }
     return {
       registration: registration({ label: "Fake", platform: "darwin", version: "0.1.0", harnesses: ["codex"], approvalMode: "ask" }),
       job: this.job,
@@ -254,7 +508,7 @@ class FakeRunnerApi {
     };
   }
 
-  async runnerUpdateJob(input: { state: RunnerJob["state"]; safeSummary?: string }): Promise<RunnerJob> {
+  async runnerUpdateJob(input: { state: RunnerJob["state"]; safeCode?: string; safeSummary?: string }): Promise<RunnerJob> {
     if (!this.job) throw new Error("missing job");
     if (["completed", "failed", "cancelled"].includes(input.state)) {
       this.terminalAttempts += 1;
@@ -263,8 +517,9 @@ class FakeRunnerApi {
         throw new Error("response lost before status confirmation");
       }
     }
-    this.transitions.push({ state: input.state, safeSummary: input.safeSummary });
+    this.transitions.push({ state: input.state, safeCode: input.safeCode, safeSummary: input.safeSummary });
     this.job = { ...this.job, state: input.state, revision: this.job.revision + 1 };
+    this.onTransition?.(input.state);
     if (["completed", "failed", "cancelled"].includes(input.state)) this.onTerminal?.();
     return this.job;
   }
@@ -309,14 +564,17 @@ async function runnerFixture(context: TestContext) {
   context.after(() => rm(root, { recursive: true, force: true }));
   const repository = path.join(root, "repository");
   const bin = path.join(root, "bin");
-  await Promise.all([mkdir(repository), mkdir(bin)]);
+  await Promise.all([mkdir(path.join(repository, ".git"), { recursive: true }), mkdir(bin)]);
+  await execFileAsync("git", ["-C", repository, "init", "--quiet"]);
   const nodePath = path.join(bin, "node");
   const cliPath = path.join(bin, "dongo.js");
   await Promise.all([writeFile(nodePath, "node"), writeFile(cliPath, "cli")]);
   const store = new MemorySecretStore();
   const canonicalRepository = await realpath(repository);
   return {
+    root,
     repository: canonicalRepository,
+    nodePath,
     manager(
       api: FakeRunnerApi,
       service: FakeService,
@@ -335,6 +593,7 @@ async function runnerFixture(context: TestContext) {
         random: () => 0.5,
         adapter: options.adapter ?? ((harness) => ({
           harness,
+          validate: async () => "/bin/sh",
           execute: async () => ({ outcome: "completed" as const }),
         })),
         sleep: options.sleep,

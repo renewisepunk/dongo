@@ -1,7 +1,9 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { chmod, lstat, mkdir, open, realpath, rename, rm } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 
 import type { DongoClient } from "@dongo/client";
 import { DongoClientError } from "@dongo/client";
@@ -10,8 +12,10 @@ import type {
   RunnerHarness,
   RunnerJob,
   RunnerPlatform,
+  WorkItem,
 } from "@dongo/contracts";
 import { CliCoreError } from "./errors.ts";
+import { sanitizedChildEnvironment } from "./process-environment.ts";
 import type { SecretStore } from "./secret-store.ts";
 import { FileSecretStore } from "./secret-store.ts";
 import type { RunnerServiceController, RunnerServiceSpec } from "./runner-service.ts";
@@ -20,6 +24,7 @@ const RUNNER_SCHEMA_VERSION = 1;
 const RUNNER_VERSION = "0.1.0";
 const MAX_LOG_BYTES = 5 * 1_024 * 1_024;
 const MAX_LOG_FILES = 3;
+const execFileAsync = promisify(execFile);
 
 export interface RunnerConfig {
   schemaVersion: 1;
@@ -27,6 +32,10 @@ export interface RunnerConfig {
   projectId: string;
   installationId: string;
   repositoryRoot: string;
+  repositoryIdentity: string;
+  executablePaths: Record<RunnerHarness, string>;
+  executableIdentities: Record<RunnerHarness, string>;
+  environmentPath: string;
   registrationId: string;
   token: string;
   label: string;
@@ -47,6 +56,7 @@ export interface RunnerLocalState {
     | "waiting"
     | "awaiting_local_approval"
     | "running"
+    | "blocked"
     | "error"
     | "stopped";
   projectRef: string;
@@ -73,12 +83,18 @@ export interface RunnerHarnessResult {
 
 export interface RunnerHarnessAdapter {
   readonly harness: RunnerHarness;
-  validate?(): Promise<void>;
+  validate(): Promise<string>;
   canResume?(input: {
     repositoryRoot: string;
     registrationId: string;
     jobId: string;
   }): Promise<boolean>;
+  discardSession?(input: {
+    repositoryRoot: string;
+    registrationId: string;
+    jobId: string;
+  }): Promise<void>;
+  discardRegistration?(registrationId: string): Promise<void>;
   execute(input: {
     repositoryRoot: string;
     registrationId: string;
@@ -91,11 +107,13 @@ export interface RunnerHarnessAdapter {
 
 export type RunnerAdapterResolver = (
   harness: RunnerHarness,
+  executablePath?: string,
+  environmentPath?: string,
 ) => RunnerHarnessAdapter | undefined;
 
 type RunnerApi = Pick<
   DongoClient,
-  "runnerRegister" | "runnerRotate" | "runnerRevoke" | "runnerWait" | "runnerUpdateJob"
+  "getWork" | "runnerRegister" | "runnerRotate" | "runnerRevoke" | "runnerWait" | "runnerUpdateJob"
 >;
 
 export interface RunnerManagerOptions {
@@ -167,6 +185,8 @@ export class LocalRunnerManager {
       });
     }
     const repositoryRoot = await realpath(this.#repositoryRoot);
+    const repositoryIdentity = await captureRepositoryIdentity(repositoryRoot);
+    const environmentPath = normalizedEnvironmentPath(process.env.PATH);
     const harnesses = normalizedHarnesses(input.harnesses);
     if (harnesses.length === 0) {
       throw new CliCoreError({ code: "validation", message: "Select at least one supported runner harness.", exitCode: 2 });
@@ -175,6 +195,8 @@ export class LocalRunnerManager {
     if (!label || label.length > 120) {
       throw new CliCoreError({ code: "validation", message: "Runner label must be between 1 and 120 characters.", exitCode: 2 });
     }
+    const executablePaths = {} as Record<RunnerHarness, string>;
+    const executableIdentities = {} as Record<RunnerHarness, string>;
     for (const harness of harnesses) {
       const adapter = this.#adapter?.(harness);
       if (!adapter || adapter.harness !== harness) {
@@ -184,7 +206,12 @@ export class LocalRunnerManager {
           exitCode: 4,
         });
       }
-      await adapter.validate?.();
+      const executablePath = await adapter.validate();
+      if (!path.isAbsolute(executablePath)) {
+        throw new CliCoreError({ code: "harness_unavailable", message: `${harness} did not resolve to a safe executable path.`, exitCode: 4 });
+      }
+      executablePaths[harness] = await realpath(executablePath);
+      executableIdentities[harness] = await captureExecutableIdentity(executablePaths[harness]);
     }
     const token = generateRunnerToken();
     const idempotencyKey = randomUUID();
@@ -204,6 +231,10 @@ export class LocalRunnerManager {
       projectId: this.#projectId,
       installationId: this.#installationId,
       repositoryRoot,
+      repositoryIdentity,
+      executablePaths,
+      executableIdentities,
+      environmentPath,
       registrationId: registration.id,
       token,
       label,
@@ -316,6 +347,7 @@ export class LocalRunnerManager {
 
   async remove() {
     const config = await this.#readConfig(true);
+    const state = await this.#readState();
     await this.#service.disable(this.#projectRef);
     try {
       await this.#api.runnerRevoke({
@@ -327,6 +359,29 @@ export class LocalRunnerManager {
       if (!(error instanceof DongoClientError) || error.code !== "unauthorized") throw error;
     }
     const service = await this.#service.remove(this.#projectRef);
+    for (const harness of config.harnesses) {
+      await this.#adapter?.(
+        harness,
+        config.executablePaths[harness],
+        config.environmentPath,
+      )?.discardRegistration?.(config.registrationId);
+    }
+    if (state?.currentJob) {
+      await this.#adapter?.(
+        state.currentJob.harness,
+        config.executablePaths[state.currentJob.harness],
+        config.environmentPath,
+      )?.discardSession?.({
+        repositoryRoot: config.repositoryRoot,
+        registrationId: config.registrationId,
+        jobId: state.currentJob.id,
+      });
+      await Promise.all([
+        this.#store.delete(approvalKey(config.projectRef, state.currentJob.id)),
+        this.#store.delete(resultKey(config.projectRef, state.currentJob.id)),
+      ]);
+    }
+    await this.#removeLogs(config.projectRef);
     await Promise.all([
       this.#store.delete(configKey(this.#projectRef)),
       this.#store.delete(stateKey(this.#projectRef)),
@@ -341,7 +396,12 @@ export class LocalRunnerManager {
     }
     const configuredRoot = await realpath(config.repositoryRoot);
     const currentRoot = await realpath(this.#repositoryRoot);
-    if (configuredRoot !== currentRoot || config.projectRef !== this.#projectRef) {
+    const currentIdentity = await captureRepositoryIdentity(currentRoot);
+    if (
+      configuredRoot !== currentRoot ||
+      currentIdentity !== config.repositoryIdentity ||
+      config.projectRef !== this.#projectRef
+    ) {
       throw new CliCoreError({
         code: "runner_binding_mismatch",
         message: "Runner repository binding does not match this project.",
@@ -397,6 +457,41 @@ export class LocalRunnerManager {
       if (pending) {
         await this.#updateJob(config, job, pending.outcome, pending, signal);
         await this.#store.delete(resultKey(config.projectRef, job.id));
+        await this.#adapter?.(
+          job.harness,
+          config.executablePaths[job.harness],
+          config.environmentPath,
+        )?.discardSession?.({
+          repositoryRoot: config.repositoryRoot,
+          registrationId: config.registrationId,
+          jobId: job.id,
+        });
+        return;
+      }
+    }
+    if (job.state === "blocked") {
+      const work = await this.#api.getWork({ workItemId: job.workItemId }, { signal });
+      if (work.state === "done") {
+        const running = await this.#updateJob(config, job, "running", {}, signal);
+        await this.#updateJob(config, running, "completed", {
+          safeCode: "work_completed",
+          safeSummary: "The queued dongo work is complete.",
+          sessionReferencePresent: true,
+        }, signal);
+        await this.#adapter?.(
+          job.harness,
+          config.executablePaths[job.harness],
+          config.environmentPath,
+        )?.discardSession?.({
+          repositoryRoot: config.repositoryRoot,
+          registrationId: config.registrationId,
+          jobId: job.id,
+        });
+        return;
+      }
+      if (work.openAttention) {
+        await this.#writeState(this.#state(config, "blocked", job));
+        await this.#sleep(15_000, signal);
         return;
       }
     }
@@ -407,11 +502,36 @@ export class LocalRunnerManager {
       job = await this.#awaitApproval(config, job, signal);
       if (job.state === "cancelled" || job.state === "expired") return;
     }
+    if (
+      job.state === "delivered" &&
+      config.approvalMode === "automatic" &&
+      !(await repositoryIsClean(config.repositoryRoot, config.environmentPath))
+    ) {
+      await this.#updateJob(config, job, "failed", {
+        safeCode: "dirty_repository",
+        safeSummary: "Automatic execution requires a clean repository. Review local changes or use ask-before-run mode.",
+      }, signal);
+      return;
+    }
     if (job.state === "delivered") {
       job = await this.#updateJob(config, job, "starting", {}, signal);
     }
     if (job.state !== "starting" && !recovering) return;
-    const adapter = this.#adapter?.(job.harness);
+    if (
+      await captureExecutableIdentity(config.executablePaths[job.harness]).catch(() => undefined) !==
+      config.executableIdentities[job.harness]
+    ) {
+      await this.#updateJob(config, job, "failed", {
+        safeCode: "harness_changed",
+        safeSummary: "The approved local harness executable changed or is unavailable. Reinstall the runner to approve it again.",
+      }, signal);
+      return;
+    }
+    const adapter = this.#adapter?.(
+      job.harness,
+      config.executablePaths[job.harness],
+      config.environmentPath,
+    );
     if (!adapter || adapter.harness !== job.harness) {
       await this.#updateJob(config, job, "failed", {
         safeCode: "harness_unavailable",
@@ -436,6 +556,7 @@ export class LocalRunnerManager {
     signal?.addEventListener("abort", relayAbort, { once: true });
     let current = await this.#updateJob(config, job, "running", {}, signal);
     await this.#writeState(this.#state(config, "running", current));
+    let executionFinished = false;
     const execution = adapter.execute({
       repositoryRoot: config.repositoryRoot,
       registrationId: config.registrationId,
@@ -443,13 +564,22 @@ export class LocalRunnerManager {
       workIdentifier: current.workIdentifier,
       signal: controller.signal,
       log: (chunk) => log.append(chunk),
-    }).catch((): RunnerHarnessResult => ({
-      outcome: "failed",
-      safeCode: controller.signal.aborted ? "cancelled" : "harness_failed",
-      safeSummary: controller.signal.aborted
-        ? "Local execution was cancelled."
-        : "The local harness stopped before completing the job.",
-    }));
+    }).then(
+      (result) => {
+        executionFinished = true;
+        return result;
+      },
+      (): RunnerHarnessResult => {
+        executionFinished = true;
+        return {
+          outcome: "failed",
+          safeCode: controller.signal.aborted ? "cancelled" : "harness_failed",
+          safeSummary: controller.signal.aborted
+            ? "Local execution was cancelled."
+            : "The local harness stopped before completing the job.",
+        };
+      },
+    );
     try {
       while (true) {
         const settled = await Promise.race([
@@ -457,11 +587,30 @@ export class LocalRunnerManager {
           this.#sleep(15_000, signal).then(() => ({ kind: "tick" as const })),
         ]);
         if (settled.kind === "result") {
-          const state = settled.value.outcome === "completed" ? "completed" : "failed";
+          const work = await this.#api.getWork({ workItemId: current.workItemId }, { signal });
+          if (work.state !== "done" && work.openAttention) {
+            current = await this.#updateJob(config, current, "blocked", {
+              safeCode: "attention_required",
+              safeSummary: "The agent is waiting for a response in dongo.",
+              sessionReferencePresent: settled.value.sessionReferencePresent,
+            }, signal);
+            await this.#writeState(this.#state(config, "blocked", current));
+            return;
+          }
+          const workCompleted = work.state === "done";
+          const state = workCompleted ? "completed" : "failed";
           const pending = {
             outcome: state,
-            safeCode: settled.value.safeCode,
-            safeSummary: settled.value.safeSummary,
+            safeCode: workCompleted
+              ? "work_completed"
+              : settled.value.outcome === "failed"
+                ? settled.value.safeCode
+                : "work_not_completed",
+            safeSummary: workCompleted
+              ? "The queued dongo work is complete."
+              : settled.value.outcome === "failed"
+                ? settled.value.safeSummary
+                : "The agent stopped before completing the queued dongo work.",
             sessionReferencePresent: settled.value.sessionReferencePresent,
           } as const;
           await this.#store.set(resultKey(config.projectRef, current.id), JSON.stringify({
@@ -472,6 +621,11 @@ export class LocalRunnerManager {
           }));
           await this.#updateJob(config, current, state, pending, signal);
           await this.#store.delete(resultKey(config.projectRef, current.id));
+          await adapter.discardSession?.({
+            repositoryRoot: config.repositoryRoot,
+            registrationId: config.registrationId,
+            jobId: current.id,
+          });
           return;
         }
         const polled = await this.#api.runnerWait({
@@ -500,6 +654,10 @@ export class LocalRunnerManager {
       }
     } finally {
       signal?.removeEventListener("abort", relayAbort);
+      if (!executionFinished) {
+        controller.abort(new Error("runner execution lease ended"));
+        await execution;
+      }
     }
   }
 
@@ -617,6 +775,23 @@ export class LocalRunnerManager {
 
   async #writeState(state: RunnerLocalState) {
     await this.#store.set(stateKey(this.#projectRef), JSON.stringify(state));
+  }
+
+  async #removeLogs(projectRef: string) {
+    const directory = path.join(this.#configDirectory, "runner-logs", createSafeHash(projectRef));
+    try {
+      const info = await lstat(directory);
+      if (
+        !info.isDirectory() ||
+        info.isSymbolicLink() ||
+        (typeof process.getuid === "function" && info.uid !== process.getuid())
+      ) {
+        throw new CliCoreError({ code: "unsafe_path", message: "Runner log directory is not safe to remove." });
+      }
+      await rm(directory, { recursive: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
   }
 
   async #readPendingResult(
@@ -759,6 +934,11 @@ function parseConfig(
       value.projectId !== projectId ||
       value.installationId !== installationId ||
       typeof value.repositoryRoot !== "string" ||
+      typeof value.repositoryIdentity !== "string" ||
+      !/^[0-9a-f]{64}$/u.test(value.repositoryIdentity) ||
+      !validExecutablePaths(value.executablePaths, value.harnesses) ||
+      !validExecutableIdentities(value.executableIdentities, value.harnesses) ||
+      !validEnvironmentPath(value.environmentPath) ||
       typeof value.registrationId !== "string" ||
       typeof value.token !== "string" ||
       !/^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$/u.test(value.token) ||
@@ -777,6 +957,106 @@ function parseConfig(
     throw new CliCoreError({
       code: "runner_config_invalid",
       message: "The local dongo runner configuration is invalid. Remove and reinstall it.",
+      exitCode: 4,
+    });
+  }
+}
+
+function validExecutablePaths(
+  value: unknown,
+  harnesses: unknown,
+): value is Record<RunnerHarness, string> {
+  if (!value || typeof value !== "object" || !Array.isArray(harnesses)) return false;
+  const entries = Object.entries(value as Record<string, unknown>);
+  return entries.length === harnesses.length && harnesses.every((harness) =>
+    (harness === "codex" || harness === "claude") &&
+    typeof (value as Record<string, unknown>)[harness] === "string" &&
+    path.isAbsolute((value as Record<string, string>)[harness]!));
+}
+
+function validExecutableIdentities(
+  value: unknown,
+  harnesses: unknown,
+): value is Record<RunnerHarness, string> {
+  if (!value || typeof value !== "object" || !Array.isArray(harnesses)) return false;
+  const entries = Object.entries(value as Record<string, unknown>);
+  return entries.length === harnesses.length && harnesses.every((harness) =>
+    (harness === "codex" || harness === "claude") &&
+    typeof (value as Record<string, unknown>)[harness] === "string" &&
+    /^[0-9a-f]{64}$/u.test((value as Record<string, string>)[harness]!));
+}
+
+function normalizedEnvironmentPath(value: string | undefined): string {
+  const entries = (value ?? "")
+    .split(path.delimiter)
+    .filter((entry) => path.isAbsolute(entry) && !/[\r\n\0]/u.test(entry));
+  const normalized = [...new Set(entries)].join(path.delimiter);
+  if (!normalized || normalized.length > 8_192) {
+    throw new CliCoreError({ code: "unsafe_path", message: "The local executable search path is not safe.", exitCode: 4 });
+  }
+  return normalized;
+}
+
+function validEnvironmentPath(value: unknown): value is string {
+  if (typeof value !== "string" || value.length < 1 || value.length > 8_192) return false;
+  const entries = value.split(path.delimiter);
+  return entries.every((entry) => path.isAbsolute(entry) && !/[\r\n\0]/u.test(entry));
+}
+
+async function captureExecutableIdentity(executablePath: string): Promise<string> {
+  const canonicalPath = await realpath(executablePath);
+  const info = await lstat(canonicalPath);
+  if (!info.isFile() || info.isSymbolicLink()) {
+    throw new CliCoreError({ code: "harness_unavailable", message: "The approved harness path is not a safe executable.", exitCode: 4 });
+  }
+  return createHash("sha256")
+    .update(canonicalPath)
+    .update("\0")
+    .update(`${info.dev}:${info.ino}:${info.size}:${info.mtimeMs}`)
+    .digest("hex");
+}
+
+async function captureRepositoryIdentity(repositoryRoot: string): Promise<string> {
+  const canonicalRoot = await realpath(repositoryRoot);
+  const [rootInfo, gitInfo] = await Promise.all([
+    lstat(canonicalRoot),
+    lstat(path.join(canonicalRoot, ".git")),
+  ]);
+  if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) {
+    throw new CliCoreError({ code: "unsafe_path", message: "Runner repository root is not a safe directory.", exitCode: 4 });
+  }
+  if (
+    gitInfo.isSymbolicLink() ||
+    (!gitInfo.isDirectory() && !gitInfo.isFile())
+  ) {
+    throw new CliCoreError({ code: "unsafe_path", message: "Runner repository Git metadata is not safe.", exitCode: 4 });
+  }
+  return createHash("sha256")
+    .update(canonicalRoot)
+    .update("\0")
+    .update(`${rootInfo.dev}:${rootInfo.ino}`)
+    .update("\0")
+    .update(`${gitInfo.dev}:${gitInfo.ino}:${gitInfo.isDirectory() ? "directory" : "file"}`)
+    .digest("hex");
+}
+
+async function repositoryIsClean(repositoryRoot: string, environmentPath: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["-C", repositoryRoot, "status", "--porcelain=v1", "-z", "--untracked-files=normal"],
+      {
+        encoding: "buffer",
+        env: sanitizedChildEnvironment({ PATH: environmentPath }),
+        maxBuffer: 1 * 1_024 * 1_024,
+        timeout: 10_000,
+      },
+    );
+    return stdout.byteLength === 0;
+  } catch {
+    throw new CliCoreError({
+      code: "unsafe_repository",
+      message: "The approved repository could not be checked safely.",
       exitCode: 4,
     });
   }

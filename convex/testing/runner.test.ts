@@ -104,6 +104,28 @@ describe("local runner delivery", () => {
       idempotencyKey: "runner-running-1",
       sessionReferencePresent: true,
     });
+    await expect(fixture.root.mutation(internal.domains.runner.index.updateJob, {
+      authorization: fixture.authorization,
+      registrationId: registration.id,
+      token,
+      jobId: queued.id,
+      expectedRevision: running.revision,
+      state: "running",
+      idempotencyKey: "runner-unsafe-status",
+      safeCode: "raw_secret_output",
+      safeSummary: "\u001b[31mprivate output",
+    })).rejects.toThrow(/safeCode|plain single-line/u);
+    await expect(fixture.root.mutation(internal.domains.runner.index.updateJob, {
+      authorization: fixture.authorization,
+      registrationId: registration.id,
+      token,
+      jobId: queued.id,
+      expectedRevision: running.revision,
+      state: "running",
+      idempotencyKey: "runner-unsafe-summary",
+      safeCode: "work_completed",
+      safeSummary: "\u001b[31mprivate output",
+    })).rejects.toThrow(/plain single-line/u);
     const cancellation = await fixture.human.mutation(api.domains.runner.index.cancel, {
       projectId: fixture.projectId,
       jobId: queued.id,

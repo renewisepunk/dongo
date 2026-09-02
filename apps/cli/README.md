@@ -139,7 +139,10 @@ The local runner is optional. `dongo runner install` registers this computer for
 the connected repository and starts an unprivileged login-scoped user service.
 It opens no inbound port and accepts only durable dongo jobs for the exact local
 project binding. Ask-before-run is the default; `--approval automatic` is an
-explicit opt-in for this repository only. Use `dongo runner status` to inspect
+explicit opt-in for this repository only and starts only from a clean checkout.
+Installation records the exact supported Codex and/or Claude Code executable;
+a queued job cannot replace its path, flags, environment, or instruction. Use
+`dongo runner status` to inspect
 redacted local health, `dongo runner approve --job-id ID` to approve one waiting
 job on this computer, and `dongo runner remove` to stop the service, revoke its
 subordinate credential, and remove local configuration. macOS launchd and Linux

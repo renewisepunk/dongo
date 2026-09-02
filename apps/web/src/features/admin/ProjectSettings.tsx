@@ -392,7 +392,9 @@ export function ProjectSettings(props: ProjectSettingsProps) {
       (runner.waitingUntil !== undefined && runner.waitingUntil > runners().serverTime) ||
       (runner.lastSeenAt !== undefined && runner.lastSeenAt >= runners().serverTime - 45_000)
     ) return "online · waiting for work";
-    return runner.lastSeenAt ? `offline · ${relativeTime(runner.lastSeenAt)}` : "offline · never connected";
+    return runner.lastSeenAt
+      ? `offline · ${relativeTime(runner.lastSeenAt).replace(/^used /u, "last seen ")}`
+      : "offline · never connected";
   };
 
   const toggleServiceScope = (scope: string) => {
@@ -691,7 +693,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                     <li>Run <code>dongo runner install --harness codex</code>, <code>dongo runner install --harness claude</code>, or include both <code>--harness</code> options.</li>
                     <li>Confirm <code>dongo runner status</code> shows the service waiting.</li>
                   </ol>
-                  <p class="security-note">Local approval is required for every job by default. Add <code>--approval automatic</code> only when this exact repository and computer are deliberately trusted. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects.</p>
+                  <p class="security-note">Local approval is required for every job by default. Add <code>--approval automatic</code> only when this exact repository and computer are deliberately trusted; automatic starts refuse a repository with uncommitted files. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects.</p>
                 </section>
                 <section class="settings-section">
                   <div class="settings-section__title">Registered computers</div>

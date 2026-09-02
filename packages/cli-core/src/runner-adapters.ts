@@ -1,8 +1,7 @@
-import { spawn, type ChildProcessByStdio } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { constants } from "node:fs";
 import { access, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import type { Readable } from "node:stream";
 
 import type { RunnerHarness } from "@dongo/contracts";
 import { CliCoreError } from "./errors.ts";
@@ -16,17 +15,19 @@ import type {
 
 const PROCESS_STOP_GRACE_MS = 5_000;
 const VERSION_CHECK_TIMEOUT_MS = 5_000;
+const MAX_PROBE_OUTPUT_BYTES = 64 * 1_024;
 const MAX_EVENT_LINE_BYTES = 128 * 1_024;
+const MAX_EVENT_STREAM_BYTES = 8 * 1_024 * 1_024;
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const CLAUDE_SESSION_ID = /^[A-Za-z0-9_-]{8,128}$/u;
 
-type HarnessChild = ChildProcessByStdio<null, Readable, Readable>;
+type HarnessChild = ChildProcessWithoutNullStreams;
 interface HarnessSpawnOptions {
   cwd: string;
   env: NodeJS.ProcessEnv;
   shell: false;
   windowsHide: boolean;
-  stdio: ["ignore", "pipe", "pipe"];
+  stdio: ["pipe", "pipe", "pipe"];
   detached: boolean;
 }
 
@@ -79,27 +80,30 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
       spawn(executable, args, spawnOptions));
   }
 
-  async validate(): Promise<void> {
+  async validate(): Promise<string> {
     const executable = await resolveExecutable("codex", this.#executablePath, this.#environmentPath);
-    const result = await runHarnessProcess({
+    await validateHarness({
       executable,
-      args: ["--version"],
+      environmentPath: this.#environmentPath,
       repositoryRoot: process.cwd(),
-      signal: AbortSignal.timeout(VERSION_CHECK_TIMEOUT_MS),
-      log: async () => undefined,
       spawnProcess: this.#spawn,
+      label: "Codex",
+      helpArgs: ["exec", "--help"],
+      requiredHelp: ["--json", "--sandbox", "--cd", "resume"],
     });
-    if (result.exitCode !== 0) {
-      throw new CliCoreError({
-        code: "harness_unavailable",
-        message: "The local Codex CLI could not be started. Install or repair Codex, then retry.",
-        exitCode: 4,
-      });
-    }
+    return executable;
   }
 
   async canResume(input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">): Promise<boolean> {
     return Boolean(await readSession(this.#store, this.harness, input, SESSION_ID));
+  }
+
+  async discardSession(input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">): Promise<void> {
+    await discardSession(this.#store, this.harness, input.registrationId, input.jobId);
+  }
+
+  async discardRegistration(registrationId: string): Promise<void> {
+    await discardRegistrationSessions(this.#store, this.harness, registrationId);
   }
 
   async execute(input: AdapterInput): Promise<RunnerHarnessResult> {
@@ -108,12 +112,14 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
     const existing = await readSession(this.#store, this.harness, input, SESSION_ID);
     const prompt = runnerPrompt(input.workIdentifier);
     const args = existing
-      ? ["exec", "resume", "--json", existing.sessionId, prompt]
-      : ["exec", "--json", "--sandbox", "workspace-write", prompt];
+      ? ["exec", "resume", "--json", existing.sessionId, "-"]
+      : ["exec", "--json", "--sandbox", "workspace-write", "--cd", input.repositoryRoot, "-"];
     let sessionReferencePresent = Boolean(existing);
     const result = await runHarnessProcess({
       executable,
       args,
+      input: prompt,
+      environmentPath: this.#environmentPath,
       repositoryRoot: input.repositoryRoot,
       signal: input.signal,
       log: input.log,
@@ -165,34 +171,36 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
       spawn(executable, args, spawnOptions));
   }
 
-  async validate(): Promise<void> {
+  async validate(): Promise<string> {
     const executable = await resolveExecutable("claude", this.#executablePath, this.#environmentPath);
-    const result = await runHarnessProcess({
+    await validateHarness({
       executable,
-      args: ["--version"],
+      environmentPath: this.#environmentPath,
       repositoryRoot: process.cwd(),
-      signal: AbortSignal.timeout(VERSION_CHECK_TIMEOUT_MS),
-      log: async () => undefined,
       spawnProcess: this.#spawn,
+      label: "Claude Code",
+      helpArgs: ["--help"],
+      requiredHelp: ["--output-format", "stream-json", "--permission-mode", "acceptEdits", "--resume"],
     });
-    if (result.exitCode !== 0) {
-      throw new CliCoreError({
-        code: "harness_unavailable",
-        message: "The local Claude Code CLI could not be started. Install or repair Claude Code, then retry.",
-        exitCode: 4,
-      });
-    }
+    return executable;
   }
 
   async canResume(input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">): Promise<boolean> {
     return Boolean(await readSession(this.#store, this.harness, input, CLAUDE_SESSION_ID));
   }
 
+  async discardSession(input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">): Promise<void> {
+    await discardSession(this.#store, this.harness, input.registrationId, input.jobId);
+  }
+
+  async discardRegistration(registrationId: string): Promise<void> {
+    await discardRegistrationSessions(this.#store, this.harness, registrationId);
+  }
+
   async execute(input: AdapterInput): Promise<RunnerHarnessResult> {
     assertWorkIdentifier(input.workIdentifier);
     const executable = await resolveExecutable("claude", this.#executablePath, this.#environmentPath);
     const existing = await readSession(this.#store, this.harness, input, CLAUDE_SESSION_ID);
-    const prompt = runnerPrompt(input.workIdentifier);
     const args = [
       "-p",
       "--output-format",
@@ -200,12 +208,13 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
       "--permission-mode",
       "acceptEdits",
       ...(existing ? ["--resume", existing.sessionId] : []),
-      prompt,
     ];
     let sessionReferencePresent = Boolean(existing);
     const result = await runHarnessProcess({
       executable,
       args,
+      input: runnerPrompt(input.workIdentifier),
+      environmentPath: this.#environmentPath,
       repositoryRoot: input.repositoryRoot,
       signal: input.signal,
       log: input.log,
@@ -248,17 +257,19 @@ export function createRunnerAdapterResolver(options: {
   store: SecretStore;
   executablePaths?: Partial<Record<RunnerHarness, string>>;
 }): RunnerAdapterResolver {
-  const adapters = new Map<RunnerHarness, RunnerHarnessAdapter>([
-    ["codex", new CodexRunnerAdapter({
+  return (harness, executablePath, environmentPath) => harness === "codex"
+    ? new CodexRunnerAdapter({
       store: options.store,
-      executablePath: options.executablePaths?.codex,
-    })],
-    ["claude", new ClaudeRunnerAdapter({
+      executablePath: executablePath ?? options.executablePaths?.codex,
+      environmentPath,
+    })
+    : harness === "claude"
+      ? new ClaudeRunnerAdapter({
       store: options.store,
-      executablePath: options.executablePaths?.claude,
-    })],
-  ]);
-  return (harness) => adapters.get(harness);
+      executablePath: executablePath ?? options.executablePaths?.claude,
+      environmentPath,
+    })
+      : undefined;
 }
 
 async function resolveExecutable(name: string, explicitPath?: string, environmentPath?: string): Promise<string> {
@@ -283,6 +294,54 @@ async function resolveExecutable(name: string, explicitPath?: string, environmen
     message: `The local ${name} executable was not found on an absolute PATH entry.`,
     exitCode: 4,
   });
+}
+
+async function validateHarness(options: {
+  executable: string;
+  environmentPath?: string;
+  repositoryRoot: string;
+  spawnProcess: SpawnHarness;
+  label: "Codex" | "Claude Code";
+  helpArgs: string[];
+  requiredHelp: string[];
+}): Promise<void> {
+  const version = await runHarnessProcess({
+    executable: options.executable,
+    args: ["--version"],
+    environmentPath: options.environmentPath,
+    repositoryRoot: options.repositoryRoot,
+    signal: AbortSignal.timeout(VERSION_CHECK_TIMEOUT_MS),
+    log: async () => undefined,
+    spawnProcess: options.spawnProcess,
+  });
+  if (version.exitCode !== 0) {
+    throw new CliCoreError({
+      code: "harness_unavailable",
+      message: `The local ${options.label} CLI could not be started. Install or repair ${options.label}, then retry.`,
+      exitCode: 4,
+    });
+  }
+  let help = "";
+  const featureProbe = await runHarnessProcess({
+    executable: options.executable,
+    args: options.helpArgs,
+    environmentPath: options.environmentPath,
+    repositoryRoot: options.repositoryRoot,
+    signal: AbortSignal.timeout(VERSION_CHECK_TIMEOUT_MS),
+    log: async (chunk) => {
+      if (Buffer.byteLength(help) < MAX_PROBE_OUTPUT_BYTES) {
+        help += chunk.slice(0, MAX_PROBE_OUTPUT_BYTES - Buffer.byteLength(help));
+      }
+    },
+    spawnProcess: options.spawnProcess,
+  });
+  if (featureProbe.exitCode !== 0 || options.requiredHelp.some((feature) => !help.includes(feature))) {
+    throw new CliCoreError({
+      code: "harness_unsupported",
+      message: `The installed ${options.label} CLI does not support the safe non-interactive runner contract. Update ${options.label}, then retry.`,
+      exitCode: 4,
+    });
+  }
 }
 
 function assertWorkIdentifier(value: string): void {
@@ -310,6 +369,10 @@ async function writeSession(
   input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">,
   sessionId: string,
 ): Promise<void> {
+  const index = await readSessionIndex(store, harness, input.registrationId);
+  if (!index.includes(input.jobId)) {
+    await store.set(sessionIndexKey(harness, input.registrationId), JSON.stringify([...index, input.jobId]));
+  }
   await store.set(sessionKey(harness, input.registrationId, input.jobId), JSON.stringify({
     schemaVersion: 1,
     harness,
@@ -319,6 +382,56 @@ async function writeSession(
     sessionId,
     updatedAt: new Date().toISOString(),
   } satisfies SessionRecord));
+}
+
+function sessionIndexKey(harness: RunnerHarness, registrationId: string): string {
+  return `runner-session-index:${harness}:${registrationId}`;
+}
+
+async function readSessionIndex(
+  store: SecretStore,
+  harness: RunnerHarness,
+  registrationId: string,
+): Promise<string[]> {
+  const raw = await store.get(sessionIndexKey(harness, registrationId));
+  if (!raw) return [];
+  try {
+    const value = JSON.parse(raw) as unknown;
+    if (
+      !Array.isArray(value) ||
+      value.length > 1_000 ||
+      value.some((jobId) => typeof jobId !== "string" || jobId.length < 1 || jobId.length > 128)
+    ) return [];
+    return [...new Set(value)];
+  } catch {
+    return [];
+  }
+}
+
+async function discardSession(
+  store: SecretStore,
+  harness: RunnerHarness,
+  registrationId: string,
+  jobId: string,
+): Promise<void> {
+  await store.delete(sessionKey(harness, registrationId, jobId));
+  const index = await readSessionIndex(store, harness, registrationId);
+  const remaining = index.filter((candidate) => candidate !== jobId);
+  if (remaining.length > 0) {
+    await store.set(sessionIndexKey(harness, registrationId), JSON.stringify(remaining));
+  } else {
+    await store.delete(sessionIndexKey(harness, registrationId));
+  }
+}
+
+async function discardRegistrationSessions(
+  store: SecretStore,
+  harness: RunnerHarness,
+  registrationId: string,
+): Promise<void> {
+  const index = await readSessionIndex(store, harness, registrationId);
+  await Promise.all(index.map((jobId) => store.delete(sessionKey(harness, registrationId, jobId))));
+  await store.delete(sessionIndexKey(harness, registrationId));
 }
 
 async function readSession(
@@ -350,6 +463,8 @@ async function readSession(
 async function runHarnessProcess(options: {
   executable: string;
   args: string[];
+  input?: string;
+  environmentPath?: string;
   repositoryRoot: string;
   signal: AbortSignal;
   log: (chunk: string) => Promise<void>;
@@ -361,17 +476,22 @@ async function runHarnessProcess(options: {
   try {
     child = options.spawnProcess(options.executable, options.args, {
       cwd: options.repositoryRoot,
-      env: sanitizedChildEnvironment(),
+      env: sanitizedChildEnvironment(options.environmentPath ? { PATH: options.environmentPath } : {}),
       shell: false,
       windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
       detached: process.platform !== "win32",
     });
   } catch {
     return { exitCode: null, cancelled: false };
   }
+  child.stdin.on("error", () => {
+    // A harness may exit before consuming all input. Its exit status remains authoritative.
+  });
+  child.stdin.end(options.input);
   let writeChain = Promise.resolve();
   let stdoutBuffer = "";
+  let parsedEventBytes = 0;
   const queueLog = (chunk: string) => {
     writeChain = writeChain.then(() => options.log(chunk));
   };
@@ -383,7 +503,13 @@ async function runHarnessProcess(options: {
     const lines = stdoutBuffer.split("\n");
     stdoutBuffer = lines.pop() ?? "";
     for (const line of lines) {
-      if (!options.onJsonEvent || Buffer.byteLength(line) > MAX_EVENT_LINE_BYTES) continue;
+      const lineBytes = Buffer.byteLength(line);
+      parsedEventBytes += lineBytes;
+      if (
+        !options.onJsonEvent ||
+        lineBytes > MAX_EVENT_LINE_BYTES ||
+        parsedEventBytes > MAX_EVENT_STREAM_BYTES
+      ) continue;
       try {
         const event = JSON.parse(line) as Record<string, unknown>;
         writeChain = writeChain.then(() => options.onJsonEvent!(event));
