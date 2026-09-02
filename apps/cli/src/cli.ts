@@ -33,6 +33,12 @@ export interface CliDependencies {
     | "attachmentInfo"
     | "fetchAttachment"
     | "integration"
+    | "runnerInstall"
+    | "runnerStatus"
+    | "runnerApprove"
+    | "runnerDisable"
+    | "runnerRemove"
+    | "runnerRun"
   >;
 }
 
@@ -626,6 +632,43 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         command = `integrate ${host}`;
         data = await service.integration(host as "codex" | "claude" | "generic", parsed.apply);
         humanOutput = renderIntegrationOutput(data as Awaited<ReturnType<CoreService["integration"]>>);
+        break;
+      }
+      case "runner": {
+        const action = requireSubcommand(
+          parsed,
+          ["install", "status", "approve", "disable", "remove", "run"],
+          "Usage: dongo runner install|status|approve|disable|remove|run [options]",
+        );
+        command = `runner ${action}`;
+        if (action === "install") {
+          const harnesses = values(parsed, "harness");
+          if (harnesses.length === 0 || harnesses.some((value) => value !== "codex" && value !== "claude")) {
+            throw new CliCoreError({ code: "validation", message: "Provide --harness codex and/or --harness claude.", exitCode: 2 });
+          }
+          const approval = option(parsed, "approval");
+          if (approval !== undefined && approval !== "ask" && approval !== "automatic") {
+            throw new CliCoreError({ code: "validation", message: "--approval must be ask or automatic.", exitCode: 2 });
+          }
+          data = await service.runnerInstall({
+            label: option(parsed, "label") ?? "This computer",
+            harnesses: [...new Set(harnesses)] as Array<"codex" | "claude">,
+            approvalMode: approval as "ask" | "automatic" | undefined,
+          });
+        } else if (action === "status") {
+          data = await service.runnerStatus();
+        } else if (action === "approve") {
+          data = await service.runnerApprove(requiredOption(parsed, "job-id"));
+        } else if (action === "disable") {
+          data = await service.runnerDisable();
+        } else if (action === "remove") {
+          data = await service.runnerRemove();
+        } else {
+          data = await service.runnerRun(
+            requiredOption(parsed, "project-ref"),
+            dependencies.signal,
+          );
+        }
         break;
       }
       default:

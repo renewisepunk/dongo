@@ -1,0 +1,84 @@
+# dongo local runner
+
+The local runner is an optional, unprivileged user service for launching Codex
+or Claude Code in one explicitly connected repository. It maintains outbound
+HTTPS requests to dongo and opens no inbound port. Hosted dongo sends only a
+project-scoped job identity, Work identifier, harness choice, lifecycle state,
+revision, and expiry metadata. It cannot send a command, arguments, environment
+variables, repository path, model credential, or arbitrary prompt.
+
+## Install and inspect
+
+From the connected repository, install one or both supported harnesses:
+
+```sh
+dongo runner install --harness codex
+dongo runner install --harness codex --harness claude
+dongo runner status
+```
+
+Ask-before-run is the default. A user may explicitly opt one local repository
+into automatic starts with `--approval automatic`. The selection is kept in the
+owner-only local configuration and reported to the server for truthful status;
+the server cannot elevate an ask-mode runner to automatic execution.
+
+On macOS, dongo installs a user LaunchAgent. On Linux, it installs a user-level
+systemd service. It does not use `sudo`, a system daemon, or a privileged path.
+Native Windows is out of scope for the first release; WSL follows the Linux
+user-service and Linux-filesystem security boundary.
+
+## Approve, disable, and remove
+
+When status shows `awaiting_local_approval`, approve the exact local job:
+
+```sh
+dongo runner approve --job-id JOB_ID
+```
+
+The approval file is owner-only, bound to the current registration and exact
+job, and consumed once. A web action cannot substitute for local approval.
+
+Use `dongo runner disable` to stop login startup while retaining the revocable
+registration. Use `dongo runner remove` to stop the service, revoke the runner
+credential, remove the service definition, and delete the local configuration.
+If remote revocation fails, dongo retains the local credential so removal can be
+retried safely.
+
+## Diagnosis
+
+1. Run `dongo runner status`. Record only the registration ID, safe state,
+   version, harness list, and last safe error code. Never record the local token.
+2. Confirm `dongo doctor` succeeds in the same repository.
+3. Confirm the configured harness executable is installed and authenticated as
+   the local OS user. Model-provider credentials remain local to that harness.
+4. Check the user service, not a system service:
+
+   ```sh
+   launchctl print gui/$(id -u) | grep so.dongo.runner
+   systemctl --user status 'dongo-runner-*.service'
+   ```
+
+5. Raw harness output is retained only in owner-only rotating local logs under
+   the dongo configuration directory. It is capped at 5 MiB per file with three
+   retained rotations and is never uploaded as job status.
+
+The runner waits for jobs for at most 20 seconds per request. Network failures
+back off through approximately 1, 2, 5, 10, and 30 seconds with jitter. A job
+delivery is reserved for 60 seconds until acknowledged; running jobs renew a
+90-second lease. Cancellation, registration revocation, and parent installation
+revocation outrank execution. A lost or expired lease requires the local process
+to stop and refetch; it must never continue by guessing.
+
+## Recovery and rollback
+
+- For a stuck pre-start job, cancel it in the web app and inspect local runner
+  status. Do not edit Convex state manually.
+- For a compromised computer or token, revoke the runner or its parent
+  installation in dongo. The next authenticated contact fails closed and local
+  execution stops.
+- For a bad release, disable the local runner queue creation kill switch first,
+  then revoke affected registrations. Roll back the CLI and backend together
+  only to a revision that preserves the additive runner tables and operation
+  schemas.
+- A disabled or removed runner does not affect ordinary MCP, CLI, Intake, Work,
+  or Attention workflows.

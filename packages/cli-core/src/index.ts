@@ -14,6 +14,17 @@ export type * from "./marker.ts";
 export { credentialProfile, findRepositoryRoot, repositoryName } from "./repository.ts";
 export { sanitizedChildEnvironment } from "./process-environment.ts";
 export {
+  createRunnerStore,
+  generateRunnerToken,
+  LocalRunnerManager,
+} from "./runner.ts";
+export type * from "./runner.ts";
+export {
+  LocalRunnerServiceController,
+  readRunnerServiceFile,
+} from "./runner-service.ts";
+export type * from "./runner-service.ts";
+export {
   createDefaultSecretStore,
   defaultConfigDirectory,
   FileSecretStore,

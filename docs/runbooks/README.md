@@ -33,6 +33,7 @@ Use [production release and rollback](production-release.md) for live changes. D
 | MCP discovery, OAuth login, scopes, project binding, or host configuration | [Agent authentication](agent-auth.md) |
 | New Intake update delivery, expired claims, export conflicts, uploads, attachments, or notifications | [Data delivery](data-delivery.md) |
 | Grant, inspect, lower, or clear an organization's finite active-project allowance | [Project capacity overrides](project-capacity.md) |
+| Local runner install, presence, approval, revocation, lease, or harness launch | [Local runner](local-runner.md) |
 | Production release, cutover, or live rollback | [Production release and rollback](production-release.md) |
 | Development deployment, Worker/Convex outage, migration, or package rollback | [Development deployment and rollback](deploy-rollback.md) |
 | Failure-spike detection, alert routing, or observability coverage | [Availability alerting](alerting.md) |

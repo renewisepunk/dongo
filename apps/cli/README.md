@@ -76,6 +76,11 @@ dongo updates get|wait [--cursor N] [--timeout-seconds N]
 dongo attachment get|fetch --attachment-id ID [--output PATH]
 dongo sync
 dongo integrate codex|claude|generic [--apply]
+dongo runner install --harness codex|claude [--harness ...] [--approval ask|automatic]
+dongo runner status
+dongo runner approve --job-id ID
+dongo runner disable
+dongo runner remove
 ```
 
 Add `--json` to receive one JSON object on stdout. Progress and the one complete browser approval link are written to stderr. The normal flow opens that link, waits for browser approval, stores the resulting credential, writes a non-secret project marker, and returns control to the terminal. `--no-browser` supports SSH/headless sessions by printing the same complete link while polling continues; no code or token needs to be copied into the CLI.
@@ -129,6 +134,16 @@ delivery to an agent harness. A stopped CLI receives nothing until its process
 is started again and explicitly pulls current dongo state.
 
 Every installed CLI connection targets the live service at `https://dongo.so`. There is no environment picker or custom-origin flag. Development infrastructure is available only to dongo's source-level internal harnesses, and a released CLI refuses a repository marker from any non-production origin before sending credentials.
+
+The local runner is optional. `dongo runner install` registers this computer for
+the connected repository and starts an unprivileged login-scoped user service.
+It opens no inbound port and accepts only durable dongo jobs for the exact local
+project binding. Ask-before-run is the default; `--approval automatic` is an
+explicit opt-in for this repository only. Use `dongo runner status` to inspect
+redacted local health, `dongo runner approve --job-id ID` to approve one waiting
+job on this computer, and `dongo runner remove` to stop the service, revoke its
+subordinate credential, and remove local configuration. macOS launchd and Linux
+user systemd are supported; native Windows is not part of the initial release.
 
 `dongo --version` (or `dongo -V`) prints the installed package version. Combining it with `--json` returns the same version in the stable command envelope without accessing repository or credential state.
 

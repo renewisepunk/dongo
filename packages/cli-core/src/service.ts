@@ -5,7 +5,13 @@ import path from "node:path";
 import { DongoClient, DongoClientError } from "@dongo/client";
 import type { OverviewData, SessionStartData, SyncSnapshotData } from "@dongo/client";
 import { agentScopes } from "@dongo/contracts";
-import type { OperationInput, OperationName, OperationOutput } from "@dongo/contracts";
+import type {
+  OperationInput,
+  OperationName,
+  OperationOutput,
+  RunnerApprovalMode,
+  RunnerHarness,
+} from "@dongo/contracts";
 import { exportSnapshot } from "@dongo/repo-export";
 import type { ExportResult } from "@dongo/repo-export";
 import { fetchAttachmentFile } from "./attachments.ts";
@@ -21,6 +27,15 @@ import { configureIntegration } from "./integrations.ts";
 import type { IntegrationHost, IntegrationResult } from "./integrations.ts";
 import type { ProjectMarker } from "./marker.ts";
 import { readProjectMarker, writeProjectMarker } from "./marker.ts";
+import {
+  createRunnerStore,
+  LocalRunnerManager,
+  type RunnerAdapterResolver,
+} from "./runner.ts";
+import {
+  LocalRunnerServiceController,
+  type RunnerServiceController,
+} from "./runner-service.ts";
 import {
   credentialProfile,
   findRepositoryRoot,
@@ -43,6 +58,9 @@ export interface CoreServiceOptions {
   configDirectory?: string;
   /** Source-only escape hatch for dongo's own isolated development harnesses. */
   allowNonProduction?: boolean;
+  runnerServiceController?: RunnerServiceController;
+  runnerAdapter?: RunnerAdapterResolver;
+  runnerRuntime?: { nodePath: string; cliPath: string };
 }
 
 export interface ConnectOptions {
@@ -114,6 +132,9 @@ export class CoreService {
   readonly #providedStore?: SecretStore;
   readonly #configDirectory: string;
   readonly #allowNonProduction: boolean;
+  readonly #runnerServiceController?: RunnerServiceController;
+  readonly #runnerAdapter?: RunnerAdapterResolver;
+  readonly #runnerRuntime?: { nodePath: string; cliPath: string };
 
   constructor(options: CoreServiceOptions = {}) {
     this.#cwd = options.cwd ?? process.cwd();
@@ -124,6 +145,9 @@ export class CoreService {
     this.#providedStore = options.secretStore;
     this.#configDirectory = options.configDirectory ?? defaultConfigDirectory();
     this.#allowNonProduction = options.allowNonProduction ?? false;
+    this.#runnerServiceController = options.runnerServiceController;
+    this.#runnerAdapter = options.runnerAdapter;
+    this.#runnerRuntime = options.runnerRuntime;
   }
 
   async connect(options: ConnectOptions = {}): Promise<ConnectResult> {
@@ -442,6 +466,73 @@ export class CoreService {
     }
     if (signal?.aborted) throw this.#cancellationError();
     return { snapshot, export: await exportSnapshot(context.repositoryRoot, snapshot) };
+  }
+
+  async runnerInstall(
+    options: {
+      label: string;
+      harnesses: RunnerHarness[];
+      approvalMode?: RunnerApprovalMode;
+    },
+  ) {
+    return await (await this.#runnerManager()).install(options);
+  }
+
+  async runnerStatus() {
+    return await (await this.#runnerManager()).status();
+  }
+
+  async runnerApprove(jobId: string) {
+    return await (await this.#runnerManager()).approve(jobId);
+  }
+
+  async runnerDisable() {
+    return await (await this.#runnerManager()).disable();
+  }
+
+  async runnerRemove() {
+    return await (await this.#runnerManager()).remove();
+  }
+
+  async runnerRun(projectRef: string, signal?: AbortSignal) {
+    const manager = await this.#runnerManager();
+    const status = await manager.status();
+    if (status.projectRef !== projectRef) {
+      throw new CliCoreError({
+        code: "runner_binding_mismatch",
+        message: "Runner service project reference does not match this repository.",
+        exitCode: 4,
+      });
+    }
+    return await manager.run(signal);
+  }
+
+  async #runnerManager(): Promise<LocalRunnerManager> {
+    const context = await this.#context(true);
+    const cliPath = this.#runnerRuntime?.cliPath ?? process.argv[1];
+    if (!cliPath) {
+      throw new CliCoreError({
+        code: "runner_service_failed",
+        message: "The dongo CLI entrypoint could not be resolved for the runner service.",
+        exitCode: 4,
+      });
+    }
+    return new LocalRunnerManager({
+      api: this.#client(context.environment.apiBaseUrl, context.manager),
+      store: this.#providedStore ?? createRunnerStore(this.#configDirectory),
+      service: this.#runnerServiceController ?? new LocalRunnerServiceController(),
+      repositoryRoot: context.repositoryRoot,
+      projectRef: context.marker.publicProjectRef,
+      projectId: context.marker.projectId ?? context.marker.publicProjectRef,
+      installationId: context.marker.installationId,
+      runtime: {
+        nodePath: this.#runnerRuntime?.nodePath ?? process.execPath,
+        cliPath: path.resolve(cliPath),
+      },
+      configDirectory: this.#configDirectory,
+      now: this.#now,
+      adapter: this.#runnerAdapter,
+    });
   }
 
   async #context(required: true): Promise<{

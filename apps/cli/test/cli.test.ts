@@ -74,6 +74,12 @@ const fakeService = {
   attachmentInfo: async (attachmentId: string) => ({ attachmentId, filename: "report.txt", byteSize: 5, downloadAvailable: true }),
   fetchAttachment: async (attachmentId: string, output?: string) => ({ attachmentId, path: output ?? ".agent-work/attachments/report.txt" }),
   integration: async (host: IntegrationResult["host"], apply: boolean) => integrationFixture(host, apply),
+  runnerInstall: async (options: unknown) => ({ installed: true, options }),
+  runnerStatus: async () => ({ installed: true, enabled: true }),
+  runnerApprove: async (jobId: string) => ({ approved: true, jobId }),
+  runnerDisable: async () => ({ disabled: true }),
+  runnerRemove: async () => ({ removed: true }),
+  runnerRun: async (projectRef: string) => ({ stopped: true, projectRef }),
 };
 
 test("ci setup is production-only and accepts no environment selection", async () => {
@@ -674,6 +680,54 @@ test("integration commands preview by default and apply only with the explicit f
     assert.deepEqual(JSON.parse(stream.values().stdout).data, integrationFixture("codex", apply));
     assert.equal(stream.values().stderr, "");
   }
+});
+
+test("runner commands expose explicit local policy and stable JSON", async () => {
+  const calls: Array<{ method: string; input?: unknown }> = [];
+  const service = {
+    ...fakeService,
+    runnerInstall: async (input: unknown) => {
+      calls.push({ method: "install", input });
+      return { installed: true };
+    },
+    runnerApprove: async (jobId: string) => {
+      calls.push({ method: "approve", input: jobId });
+      return { approved: true, jobId };
+    },
+  };
+  const install = capture();
+  assert.equal(await runCli([
+    "runner",
+    "install",
+    "--harness",
+    "codex",
+    "--harness",
+    "claude",
+    "--approval",
+    "automatic",
+    "--label",
+    "Studio Mac",
+    "--json",
+  ], { output: install.output, serviceFactory: () => service as never }), 0);
+  assert.deepEqual(calls[0], {
+    method: "install",
+    input: {
+      label: "Studio Mac",
+      harnesses: ["codex", "claude"],
+      approvalMode: "automatic",
+    },
+  });
+  assert.equal(JSON.parse(install.values().stdout).command, "runner install");
+
+  const approval = capture();
+  assert.equal(await runCli([
+    "runner",
+    "approve",
+    "--job-id",
+    "job-1",
+    "--json",
+  ], { output: approval.output, serviceFactory: () => service as never }), 0);
+  assert.deepEqual(calls[1], { method: "approve", input: "job-1" });
 });
 
 test("integration human output gives the ordered setup sequence without raw configuration details", async () => {
