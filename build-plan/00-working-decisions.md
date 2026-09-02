@@ -269,11 +269,14 @@ claim and execution behavior is unchanged. Agents use the existing additive
 `parentWorkItem` and `childWorkItems` summaries without recursively embedding
 Work records.
 
-The stored `parentId` was already optional before this decision, so existing
-records require no data rewrite and remain root Work. The response fields are
-additive, and contract parsing defaults a missing child list to empty for one
-compatibility cycle. This release adds no reparenting, dependency blocking,
-automatic parent completion, bulk lifecycle operation, or cross-project link.
+The stored `parentId` and create input existed before this decision, so existing
+records require no data rewrite: records without a parent remain root Work and
+any prior same-project link is preserved. New creation enforces the direct-only
+and 100-child bounds; bounded read summaries make prior links visible without
+recursive expansion. The response fields are additive, and contract parsing
+defaults a missing child list to empty for one compatibility cycle. This release
+adds no reparenting, dependency blocking, automatic parent completion, bulk
+lifecycle operation, or cross-project link.
 
 ### D-21 — Human Ideas backlog
 
