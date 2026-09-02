@@ -48,7 +48,9 @@ test("is responsive and has no detectable WCAG A/AA violations", async ({ page }
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/app/fixture-studio/dongo/upgrade?scenario=free-limit-owner");
-  await expect(page.getByRole("heading", { name: "Make room for every project." })).toBeVisible();
+  const heading = page.getByRole("heading", { name: "Make room for every project." });
+  await expect(heading).toBeVisible();
+  await expect(heading).toHaveCSS("color", "rgb(244, 244, 245)");
   await expect.poll(async () => page.evaluate(() =>
     document.documentElement.scrollWidth <= document.documentElement.clientWidth,
   )).toBe(true);

@@ -222,7 +222,7 @@
 }
 
 .upgrade-hero { display: flex; max-width: 760px; flex-direction: column; gap: 12px; }
-.upgrade-title { max-width: 720px; font-size: clamp(40px, 7vw, 72px); font-weight: 500; letter-spacing: -0.055em; line-height: 0.98; }
+.upgrade-title { max-width: 720px; color: var(--text); font-size: clamp(40px, 7vw, 72px); font-weight: 500; letter-spacing: -0.055em; line-height: 0.98; }
 .upgrade-lede { max-width: 680px; color: var(--text-muted); font-size: 18px; line-height: 1.55; }
 
 .upgrade-grid {
