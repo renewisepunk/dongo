@@ -137,9 +137,9 @@ test("explains a free-plan project limit without sending the account back to log
     "href",
     "/app/fixture-studio/dongo/settings?tab=General",
   );
-  await expect(page.getByRole("link", { name: "Plan and upgrade options" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Upgrade to add projects" })).toHaveAttribute(
     "href",
-    "/app/fixture-studio/dongo/settings?tab=Plan%20%26%20storage",
+    "/app/fixture-studio/dongo/upgrade",
   );
   await expect(page).toHaveURL(/\/onboarding\?scenario=free-limit/);
 });

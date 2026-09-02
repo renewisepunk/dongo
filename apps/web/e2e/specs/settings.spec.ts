@@ -177,7 +177,7 @@ test("enforces member read-only administration and shows plan limits", async ({ 
   await expect(page.getByText("2.0 MB / 10 GB", { exact: true })).toBeVisible();
   await expect(page.getByText(/Individual uploads are limited to 250 MB/)).toBeVisible();
   await expect(page.getByText(/using 1 of 1 active projects.*standard Free allowance is 1/)).toBeVisible();
-  await expect(page.getByText(/Plan upgrades are not available yet/)).toBeVisible();
+  await expect(page.getByText(/planned \$19 Unlimited plan is available to review/)).toBeVisible();
 });
 
 test("shows finite additional project capacity without claiming a paid plan", async ({ page }) => {
@@ -188,6 +188,14 @@ test("shows finite additional project capacity without claiming a paid plan", as
   await expect(page.getByText(/Additional capacity has been granted to this organization/)).toBeVisible();
   await expect(page.getByText(/Paid plan/)).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Create another project" })).toBeVisible();
+});
+
+test("routes a Free owner at the project limit to the upgrade page", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo/settings?tab=Plan%20%26%20storage&scenario=free-limit-owner");
+
+  const upgrade = page.getByRole("link", { name: "Upgrade to add projects" });
+  await expect(upgrade).toHaveAttribute("href", "/app/fixture-studio/dongo/upgrade");
+  await expect(page.getByRole("link", { name: "Create another project" })).toHaveCount(0);
 });
 
 test("archives and restores a project only after explicit confirmation", async ({ page }) => {

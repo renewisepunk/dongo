@@ -212,6 +212,53 @@
 .plan-stat__value { font-size: 22px; font-weight: 500; }
 .plan-stat__label { color: var(--text-quiet); font-family: var(--mono); font-size: 12px; }
 
+.upgrade-layout {
+  display: flex;
+  width: min(1040px, 100%);
+  flex-direction: column;
+  gap: 32px;
+  margin: 0 auto;
+  padding: 64px 22px 80px;
+}
+
+.upgrade-hero { display: flex; max-width: 760px; flex-direction: column; gap: 12px; }
+.upgrade-title { max-width: 720px; font-size: clamp(40px, 7vw, 72px); font-weight: 500; letter-spacing: -0.055em; line-height: 0.98; }
+.upgrade-lede { max-width: 680px; color: var(--text-muted); font-size: 18px; line-height: 1.55; }
+
+.upgrade-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr);
+  gap: 18px;
+}
+
+.upgrade-offer,
+.upgrade-current { border: 1px solid var(--line); background: var(--surface-0); padding: 28px; }
+.upgrade-offer { border-top-color: var(--amber); }
+.upgrade-offer__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.upgrade-offer h2,
+.upgrade-current h2 { margin-top: 6px; color: var(--text); font-size: 26px; font-weight: 500; }
+.upgrade-offer__kicker { color: var(--text-quiet); font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+.upgrade-price { display: flex; align-items: flex-end; flex-direction: column; }
+.upgrade-price > span { color: var(--amber); font-family: var(--mono); font-size: 42px; letter-spacing: -0.06em; line-height: 1; }
+.upgrade-price small { color: var(--text-quiet); font-family: var(--mono); font-size: 10px; }
+
+.upgrade-features { display: grid; gap: 12px; margin: 28px 0; padding: 0; list-style: none; }
+.upgrade-features li { display: flex; gap: 10px; color: var(--text-body); line-height: 1.45; }
+.upgrade-features li::before { color: var(--green); content: "✓"; }
+
+.upgrade-unavailable { border: 1px solid oklch(0.84 0.19 78 / 0.28); background: oklch(0.84 0.19 78 / 0.06); padding: 16px; }
+.upgrade-unavailable strong { color: var(--amber); }
+.upgrade-unavailable p { margin-top: 6px; color: var(--text-muted); line-height: 1.5; }
+.upgrade-current { display: flex; flex-direction: column; gap: 16px; }
+.upgrade-facts { display: grid; margin: 0; }
+.upgrade-facts > div { display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid var(--line-soft); padding: 12px 0; }
+.upgrade-facts dt { color: var(--text-quiet); }
+.upgrade-facts dd { margin: 0; color: var(--text-soft); text-align: right; }
+.upgrade-actions { display: flex; align-items: flex-start; flex-direction: column; gap: 10px; margin-top: auto; }
+.upgrade-actions .button { width: 100%; }
+.upgrade-actions .text-link { margin-top: 4px; font-size: 13px; }
+.upgrade-footnote { max-width: 760px; color: var(--text-quiet); font-family: var(--mono); font-size: 11px; line-height: 1.6; }
+
 .danger-zone { border-top-color: oklch(0.68 0.21 27 / 0.45); }
 
 .service-credential-section { margin-top: 8px; }
@@ -277,6 +324,11 @@
   .settings-nav__link { min-width: max-content; border-bottom: 2px solid transparent; border-left: 0; }
   .settings-nav__link[data-selected="true"] { border-bottom-color: var(--amber); border-left: 0; }
   .settings-grid, .plan-card { grid-template-columns: 1fr; }
+  .upgrade-layout { padding-top: 42px; }
+  .upgrade-grid { grid-template-columns: 1fr; }
+  .upgrade-offer, .upgrade-current { padding: 20px; }
+  .upgrade-offer__heading { align-items: flex-start; flex-direction: column; }
+  .upgrade-price { align-items: flex-start; }
   .plan-stat { border-right: 0; border-bottom: 1px solid var(--line-soft); }
   .plan-stat:last-child { border-bottom: 0; }
   .installation-row { grid-template-columns: 1fr auto; }

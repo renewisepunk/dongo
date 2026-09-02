@@ -157,6 +157,10 @@ test("explains the free-plan limit for an explicit CLI project creation request"
   await expect(page.getByRole("alert")).toContainText("Your account is signed in");
   await expect(page.getByRole("button", { name: "Create & approve" })).toBeDisabled();
   await expect(page.getByRole("link", { name: "Use existing project" })).toHaveAttribute("href", "/app/fixture-studio/dongo");
+  await expect(page.getByRole("link", { name: "Upgrade to add projects" })).toHaveAttribute(
+    "href",
+    "/app/fixture-studio/dongo/upgrade",
+  );
   await expect(page).toHaveURL(/\/device\?user_code=LIMI-T001/);
 });
 

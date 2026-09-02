@@ -17,6 +17,7 @@ import {
   parallelExecutionPolicy,
 } from "../lib/parallel-execution";
 import { slugify } from "../lib/slug";
+import { upgradePath } from "../lib/plans";
 
 type ExecutionMode = "manual" | "autonomous";
 
@@ -88,6 +89,12 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
     const project = existingProject();
     return project
       ? `/app/${encodeURIComponent(project.organizationSlug)}/${encodeURIComponent(project.slug)}/settings`
+      : "/open";
+  });
+  const projectUpgradeHref = createMemo(() => {
+    const project = existingProject();
+    return project
+      ? upgradePath(project.organizationSlug, project.slug)
       : "/open";
   });
 
@@ -225,7 +232,7 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
           <div class="button-stack">
             <A class="button button--primary button--full" href={existingProjectHref()}>Use existing project</A>
             <A class="button button--full" href={`${projectSettingsHref()}?tab=General`}>Archive an active project</A>
-            <A class="button button--quiet button--full" href={`${projectSettingsHref()}?tab=Plan%20%26%20storage`}>Plan and upgrade options</A>
+            <A class="button button--quiet button--full" href={projectUpgradeHref()}>Upgrade to add projects</A>
           </div>
         </Show>
 

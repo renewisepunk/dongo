@@ -7,6 +7,7 @@ import { GetStartedGuide } from "../../src/features/public-guides/GetStartedGuid
 import { PublicHelpGuide } from "../../src/features/public-guides/PublicHelpGuide";
 import { SecurityOverview } from "../../src/features/security/SecurityOverview";
 import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
+import { UpgradePlan } from "../../src/features/admin/UpgradePlan";
 import { Ideas } from "../../src/features/ideas/Ideas";
 import type { WorkItem } from "../../src/features/overview/model";
 import { CompletedWork } from "../../src/routes/app/[orgSlug]/[projectSlug]/done";
@@ -456,6 +457,8 @@ const connectDependencies = {
 function fixtureAdministration() {
   const memberRole = oauthScenario() === "member";
   const archived = oauthScenario() === "archived";
+  const freeLimitOwner = oauthScenario() === "free-limit-owner";
+  const freePlan = memberRole || freeLimitOwner || oauthScenario() === "capacity-override";
   return {
     project: {
       name: "dongo",
@@ -474,7 +477,7 @@ function fixtureAdministration() {
     organization: {
       name: "Fixture Studio",
       slug: "fixture-studio",
-      plan: memberRole || oauthScenario() === "capacity-override" ? "free" as const : "paid" as const,
+      plan: freePlan ? "free" as const : "paid" as const,
     },
     membershipRole: memberRole ? "member" as const : "owner" as const,
     members: [
@@ -500,12 +503,12 @@ function fixtureAdministration() {
     activeProjectCount: oauthScenario() === "capacity-override" ? 2 : 1,
     projectAllowance: {
       resource: "active_projects" as const,
-      plan: memberRole || oauthScenario() === "capacity-override" ? "free" as const : "paid" as const,
+      plan: freePlan ? "free" as const : "paid" as const,
       source: oauthScenario() === "capacity-override" ? "operator_override" as const : "plan" as const,
       activeProjectCount: oauthScenario() === "capacity-override" ? 2 : 1,
-      ...(memberRole ? { limit: 1, remaining: 0 } : oauthScenario() === "capacity-override" ? { limit: 5, remaining: 3 } : {}),
-      canCreate: !memberRole,
-      actions: memberRole || oauthScenario() === "capacity-override"
+      ...(memberRole || freeLimitOwner ? { limit: 1, remaining: 0 } : oauthScenario() === "capacity-override" ? { limit: 5, remaining: 3 } : {}),
+      canCreate: !memberRole && !freeLimitOwner,
+      actions: freePlan
         ? ["use_existing" as const, "archive_existing" as const, "upgrade" as const]
         : [],
     },
@@ -787,6 +790,19 @@ function FixtureOverview() {
           throw new Error("fixture overview connection detail must stay hidden");
         }
         const connected = await connectFixtureProject(orgSlug, projectSlug);
+        if (oauthScenario() === "overview-free-limit") {
+          return {
+            ...connected,
+            availableProjects: connected.availableProjects.map((project) => ({
+              ...project,
+              organizationPlan: "free" as const,
+              activeProjectCount: 2,
+              activeProjectLimit: 2,
+              projectCapacitySource: "plan" as const,
+              canCreateProject: false,
+            })),
+          };
+        }
         if (oauthScenario() !== "overview-subscription-error") return connected;
         return {
           ...connected,
@@ -877,6 +893,16 @@ render(
           path="/app/:orgSlug/:projectSlug/settings"
           component={() => (
             <ProjectSettings
+              orgSlug="fixture-studio"
+              projectSlug="dongo"
+              dependencies={settingsDependencies}
+            />
+          )}
+        />
+        <Route
+          path="/app/:orgSlug/:projectSlug/upgrade"
+          component={() => (
+            <UpgradePlan
               orgSlug="fixture-studio"
               projectSlug="dongo"
               dependencies={settingsDependencies}

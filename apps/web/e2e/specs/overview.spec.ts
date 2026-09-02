@@ -151,6 +151,17 @@ test("shows the current plan allowance and keeps project creation discoverable",
   await expect(page).toHaveURL(/\/onboarding\?organization=fixture-studio$/);
 });
 
+test("replaces project creation with upgrade when the Free allowance is full", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=overview-free-limit");
+  await page.getByRole("button", { name: "Select organization or project" }).click();
+  const menu = page.getByRole("menu", { name: "Organizations and projects" });
+
+  await expect(menu.getByText("Free plan · 2 of 2 active projects", { exact: true })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "+ Create project" })).toHaveCount(0);
+  await menu.getByRole("menuitem", { name: "Upgrade to add projects" }).click();
+  await expect(page).toHaveURL(/\/app\/fixture-studio\/dongo\/upgrade$/);
+});
+
 test("restores focus when project navigation is dismissed", async ({ page }) => {
   const trigger = page.getByRole("button", { name: "Select organization or project" });
   await trigger.click();

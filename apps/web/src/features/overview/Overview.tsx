@@ -44,6 +44,7 @@ import type {
   RunnerSnapshot,
 } from "../../lib/project-data";
 import { searchHighlightSegments } from "../../lib/search-highlight";
+import { projectCapacityLabel, projectCreationAction } from "../../lib/plans";
 import type { AttachmentSummary, Intake, WorkItem } from "./model";
 import { CommentComposer } from "./CommentComposer";
 import { IntakeEditor } from "./IntakeEditor";
@@ -385,9 +386,24 @@ export function Overview(props: OverviewProps) {
   const projectAllowance = createMemo(() => {
     const project = currentProject();
     if (!project) return "";
-    return project.activeProjectLimit !== null
-      ? `${project.organizationPlan === "free" ? "Free" : "Current"} plan · ${project.activeProjectCount} of ${project.activeProjectLimit} active projects`
-      : `Paid plan · ${project.activeProjectCount} active projects`;
+    return projectCapacityLabel({
+      plan: project.organizationPlan,
+      activeProjectCount: project.activeProjectCount,
+      activeProjectLimit: project.activeProjectLimit,
+      projectCapacitySource: project.projectCapacitySource,
+      canCreateProject: project.canCreateProject,
+    });
+  });
+  const projectAction = createMemo(() => {
+    const project = currentProject();
+    if (!project) return undefined;
+    return projectCreationAction({
+      plan: project.organizationPlan,
+      activeProjectCount: project.activeProjectCount,
+      activeProjectLimit: project.activeProjectLimit,
+      projectCapacitySource: project.projectCapacitySource,
+      canCreateProject: project.canCreateProject,
+    }, project.organizationSlug, project.slug);
   });
   const selectedWork = createMemo(() => {
     const detail = selectedWorkDetail();
@@ -1754,8 +1770,8 @@ export function Overview(props: OverviewProps) {
                   class="menu-action"
                   type="button"
                   role="menuitem"
-                  onClick={() => navigate(`/onboarding?organization=${encodeURIComponent(currentProject()!.organizationSlug)}`)}
-                >+ Create project</button>
+                  onClick={() => navigate(projectAction()!.href)}
+                >{projectAction()!.intent === "create" ? "+ Create project" : projectAction()!.label}</button>
               </Show>
               <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("Members")}>Organization settings</button>
               <button class="menu-action" type="button" role="menuitem" onClick={() => openSettings("General")}>Project settings</button>

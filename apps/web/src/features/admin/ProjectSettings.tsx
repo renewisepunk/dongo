@@ -14,6 +14,7 @@ import {
   type RunnerSnapshot,
 } from "../../lib/project-data";
 import { lowercaseDongoBrand } from "../../lib/brand-case";
+import { projectCreationAction } from "../../lib/plans";
 import {
   DEFAULT_PARALLEL_RUN_LIMIT,
   parallelExecutionPolicy,
@@ -201,6 +202,17 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   );
 
   const owner = createMemo(() => administration()?.membershipRole === "owner");
+  const planAction = createMemo(() => {
+    const admin = administration();
+    if (!admin) return undefined;
+    return projectCreationAction({
+      plan: admin.organization.plan,
+      activeProjectCount: admin.activeProjectCount,
+      activeProjectLimit: admin.projectAllowance.limit ?? null,
+      projectCapacitySource: admin.projectAllowance.source,
+      canCreateProject: admin.projectAllowance.canCreate,
+    }, admin.organization.slug, admin.project.slug);
+  });
 
   createEffect(() => setTab(settingsTab(searchParams.tab)));
 
@@ -786,11 +798,11 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 </Show>
                 <p class="note">Individual uploads are limited to {formatBytes(admin().storage.maximumAttachmentBytes)}. dongo does not meter people, agents, or WorkItems.</p>
                 <Show when={owner()}>
-                  <A class="button" href={`/onboarding?organization=${encodeURIComponent(admin().organization.slug)}`} style={{ "align-self": "flex-start" }}>
-                    {!admin().projectAllowance.canCreate ? "Review project creation options" : "Create another project"}
+                  <A class="button" href={planAction()!.href} style={{ "align-self": "flex-start" }}>
+                    {planAction()!.label}
                   </A>
                 </Show>
-                <Show when={admin().organization.plan === "free"}><p class="security-note">Plan upgrades are not available yet; dongo shows that state instead of sending you to sign in or presenting a dead checkout control.</p></Show>
+                <Show when={admin().organization.plan === "free"}><p class="security-note">The planned $19 Unlimited plan is available to review. Checkout and paid activation are not connected yet.</p></Show>
               </section>
             </>
           )}</Show>

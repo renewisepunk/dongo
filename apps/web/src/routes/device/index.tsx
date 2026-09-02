@@ -22,6 +22,7 @@ import {
   parallelExecutionPolicy,
 } from "../../lib/parallel-execution";
 import { slugify } from "../../lib/slug";
+import { upgradePath } from "../../lib/plans";
 
 type ApprovalState = "entry" | "loading" | "review" | "approved" | "denied" | "error";
 
@@ -218,6 +219,12 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
     const project = creationTargetProject();
     return project
       ? `/app/${encodeURIComponent(project.organizationSlug)}/${encodeURIComponent(project.slug)}${suffix}`
+      : "/open";
+  };
+  const upgradeTargetHref = () => {
+    const project = creationTargetProject();
+    return project
+      ? upgradePath(project.organizationSlug, project.slug)
       : "/open";
   };
 
@@ -457,7 +464,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
             <div class="button-stack">
               <A class="button button--full" href={creationTargetHref()}>Use existing project</A>
               <A class="button button--full" href={creationTargetHref("/settings?tab=General")}>Archive an active project</A>
-              <A class="button button--quiet button--full" href={creationTargetHref("/settings?tab=Plan%20%26%20storage")}>Plan and upgrade options</A>
+              <A class="button button--quiet button--full" href={upgradeTargetHref()}>Upgrade to add projects</A>
             </div>
           </Show>
           <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
