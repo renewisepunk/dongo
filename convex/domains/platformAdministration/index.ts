@@ -117,7 +117,7 @@ async function organizationUsage(
       total: organization.createdWorkItemCount,
       totalIsExact: organization.workItemCountState === "exact",
       closed: organization.closedWorkItemCount ?? 0,
-      truncated: false,
+      truncated: organization.workItemCountState === "at_least_limit",
       trackedFrom: organization.usageTrackingStartedAt,
       limit: workLimit,
       source: workCapacitySource(organization.totalWorkItemLimitOverride),

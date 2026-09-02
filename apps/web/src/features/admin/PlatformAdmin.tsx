@@ -337,7 +337,7 @@ export function PlatformAdmin(props: PlatformAdminProps) {
                         <div><dt>Billing</dt><dd>Not configured</dd></div>
                       </dl>
                       <Show when={organization.workItems.trackedFrom}>
-                        <p class="security-note">Created and closed Work tracking started {dateTime(organization.workItems.trackedFrom!)}.</p>
+                        <p class="security-note">Closed Work tracking started {dateTime(organization.workItems.trackedFrom!)}.</p>
                       </Show>
                       <p class="security-note">Lower limits never delete projects or Work. New creation stays blocked until the organization is within its effective allowance.</p>
                       <AllowanceEditor organization={organization} onSave={(input) => saveAllowances(organization, input)} />
