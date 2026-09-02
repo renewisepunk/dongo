@@ -11,6 +11,7 @@ import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import {
   agentContextValidator,
   artifactTypeValidator,
+  closureReasonValidator,
   MAX_BODY_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_TITLE_LENGTH,
@@ -461,9 +462,11 @@ export const listCompletedForHuman = query({
     });
     const page = await ctx.db
       .query("workItems")
-      .withIndex("by_project_state_updated", (q) =>
-        q.eq("projectId", args.projectId).eq("state", "done"),
-      )
+      .withIndex("by_project_updated", (q) => q.eq("projectId", args.projectId))
+      .filter((q) => q.or(
+        q.eq(q.field("state"), "done"),
+        q.eq(q.field("state"), "cancelled"),
+      ))
       .order("desc")
       .paginate(args.paginationOpts);
     return {
@@ -1424,6 +1427,122 @@ export const cancelForHuman = mutation({
         };
       },
     );
+  },
+});
+
+export const closeForHuman = mutation({
+  args: {
+    workItemId: v.id("workItems"),
+    expectedRevision: v.number(),
+    outcome: v.union(v.literal("completed"), v.literal("cancelled")),
+    reason: closureReasonValidator,
+    note: v.optional(v.string()),
+    idempotencyKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const work = await ctx.db.get(args.workItemId);
+    if (!work) fail("not_found", "Work item not found");
+    const principal = await requireHumanProject(ctx, work.projectId);
+    const note = optionalString(args.note, "note", 2_000);
+    if ((args.outcome === "completed") !== (args.reason === "completed")) {
+      fail("validation", "Completed work must use the completed reason");
+    }
+    const now = Date.now();
+    return await runIdempotent(ctx, {
+      organizationId: work.organizationId,
+      projectId: work.projectId,
+      principalKey: principal.principalKey,
+      operation: "work.close_for_human",
+      key: args.idempotencyKey,
+      payload: { workItemId: work._id, expectedRevision: args.expectedRevision, outcome: args.outcome, reason: args.reason, note },
+      now,
+    }, async () => {
+      assertExpectedRevision(work.revision, args.expectedRevision);
+      if (work.state === "done" || work.state === "cancelled") {
+        fail("invalid_transition", "Work item is already closed");
+      }
+      if (args.outcome === "completed" && work.state !== "ready") {
+        fail("invalid_transition", "Active work must be cancelled or completed by its agent");
+      }
+      if (work.claimedRunId) {
+        const run = await ctx.db.get(work.claimedRunId);
+        if (run && (run.status === "running" || run.status === "waiting")) {
+          await ctx.db.patch(run._id, {
+            status: "cancelled",
+            summary: note,
+            failureCode: "cancelled_by_human",
+            lastHeartbeatAt: now,
+            finishedAt: now,
+          });
+        }
+      }
+      const openAttention = (await Promise.all(
+        (["open", "seen"] as const).map((status) => ctx.db
+          .query("attentionRequests")
+          .withIndex("by_work_status", (q) => q.eq("workItemId", work._id).eq("status", status))
+          .collect()),
+      )).flat();
+      for (const request of openAttention) {
+        await ctx.db.patch(request._id, {
+          status: "resolved",
+          resolvedAt: now,
+          resolvedByActorId: principal.actor._id,
+          resolutionKind: args.outcome === "cancelled" ? "cancelled" : "resolved",
+        });
+      }
+      const runnerJobs = await ctx.db.query("runnerJobs")
+        .withIndex("by_project_work_requested", (q) => q.eq("projectId", work.projectId).eq("workItemId", work._id))
+        .take(100);
+      for (const job of runnerJobs) {
+        if (["cancelled", "failed", "completed", "expired", "cancel_requested"].includes(job.state)) continue;
+        const state = job.state === "queued" ? "cancelled" as const : "cancel_requested" as const;
+        await ctx.db.patch(job._id, {
+          state,
+          revision: job.revision + 1,
+          cancellationRequestedAt: now,
+          terminalAt: state === "cancelled" ? now : undefined,
+          updatedAt: now,
+        });
+        await ctx.db.insert("runnerJobEvents", {
+          organizationId: job.organizationId,
+          projectId: job.projectId,
+          jobId: job._id,
+          registrationId: job.registrationId,
+          actorId: principal.actor._id,
+          sequence: job.revision + 1,
+          state,
+          safeCode: "user_cancelled",
+          createdAt: now,
+        });
+      }
+      const state = args.outcome === "completed" ? "done" as const : "cancelled" as const;
+      await ctx.db.patch(work._id, {
+        state,
+        claimedByActorId: undefined,
+        claimedByInstallationId: undefined,
+        claimedRunId: undefined,
+        claimedAt: undefined,
+        claimExpiresAt: undefined,
+        completedAt: state === "done" ? now : undefined,
+        closureReason: args.reason,
+        closureNote: note,
+        closedByActorId: principal.actor._id,
+        closedAt: now,
+        revision: work.revision + 1,
+        updatedAt: now,
+      });
+      await recordClosedWorkItem(ctx, work.organizationId, principal.actor._id, now);
+      await appendEvent(ctx, {
+        organizationId: work.organizationId,
+        projectId: work.projectId,
+        workItemId: work._id,
+        actorId: principal.actor._id,
+        type: state === "done" ? "work.completed" : "work.cancelled",
+        data: { reason: args.reason, note: note ?? null, source: "human" },
+        createdAt: now,
+      });
+      return { workItemId: work._id, state, revision: work.revision + 1 };
+    });
   },
 });
 

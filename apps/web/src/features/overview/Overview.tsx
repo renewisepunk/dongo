@@ -34,6 +34,7 @@ import {
 import type {
   IntakeUpdateInput,
   IntakeUpdateResult,
+  IssueClosureInput,
   ProjectInfo,
   ProjectSearchCursor,
   ProjectSearchResult,
@@ -62,6 +63,7 @@ import type { AttachmentSummary, Intake, OwnerAttention, WorkItem } from "./mode
 import { CommentComposer } from "./CommentComposer";
 import { IntakeEditor } from "./IntakeEditor";
 import { ConcurrentActivity } from "./ConcurrentActivity";
+import { closureReasonLabel, IssueCloseForm } from "./IssueCloseForm";
 import "./overview.css";
 
 export type OverviewConnection = Pick<
@@ -79,6 +81,8 @@ export type OverviewConnection = Pick<
   | "createIntake"
   | "createChildWork"
   | "updateIntake"
+  | "dismissIntake"
+  | "closeWork"
   | "uploadAttachment"
   | "discardAttachment"
   | "downloadAttachment"
@@ -2407,7 +2411,7 @@ export function Overview(props: OverviewProps) {
           <Show when={done().length}>
             <section class="work-section" aria-labelledby="done-heading">
               <div class="section-heading" id="done-heading">
-                <span>recently done</span><span class="section-heading__aside"><button class="view-all" type="button" onClick={() => navigate(`/app/${props.orgSlug}/${props.projectSlug}/done`)}>view all →</button></span>
+                <span>recently closed</span><span class="section-heading__aside"><button class="view-all" type="button" onClick={() => navigate(`/app/${props.orgSlug}/${props.projectSlug}/done`)}>view all →</button></span>
               </div>
               <For each={done()}>{(item) => (
                 <a
@@ -2423,10 +2427,10 @@ export function Overview(props: OverviewProps) {
                   onFocus={() => trackNavigationItemFocus("work", item.id)}
                   onClick={(event) => handleWorkLink(event, item.identifier)}
                 >
-                  <span style={{ color: "var(--green)" }} class="mono">✓</span>
+                  <span style={{ color: item.state === "done" ? "var(--green)" : "var(--text-faint)" }} class="mono">{item.state === "done" ? "✓" : "×"}</span>
                   <span class="work-row__title work-row__title--done">{item.title}</span>
                   <span class="work-row__identifier mono">
-                    {[item.identifier, item.completedAt].filter(Boolean).join(" · ")}
+                    {[item.identifier, item.state === "cancelled" ? "cancelled" : undefined, item.closedAt ?? item.completedAt].filter(Boolean).join(" · ")}
                   </span>
                 </a>
               )}</For>
@@ -2508,6 +2512,11 @@ export function Overview(props: OverviewProps) {
             announce("Subtask added");
             return created;
           }}
+          onCloseIssue={async (input) => {
+            if (!connection) throw new Error("close_work_unavailable");
+            await connection.closeWork(item().id, item().revision, input);
+            announce(input.reason === "completed" ? "Issue marked done" : "Issue closed");
+          }}
           runnerJob={runnerSnapshot().jobs.find((job) => job.kind === "work" && job.workItemId === item().id)}
           runnerHarnesses={[...new Set(
             runnerSnapshot().registrations
@@ -2551,6 +2560,11 @@ export function Overview(props: OverviewProps) {
           onSave={async (input) => {
             if (!connection) throw new Error("intake_update_unavailable");
             return await connection.updateIntake(input);
+          }}
+          onCloseIssue={async (input) => {
+            if (!connection) throw new Error("close_intake_unavailable");
+            await connection.dismissIntake(intake().id, intake().revision ?? 0, input);
+            announce("Inbox issue closed");
           }}
         />
       )}</Show>
@@ -2818,6 +2832,7 @@ type WorkDetailProps = {
     title: string,
     goal: string | undefined,
   ) => Promise<{ workItemId: string }>;
+  onCloseIssue: (input: IssueClosureInput) => Promise<void>;
   runnerJob?: RunnerJob;
   runnerHarnesses: RunnerHarness[];
   runnerOnline: boolean;
@@ -2917,6 +2932,7 @@ function WorkDetail(props: WorkDetailProps) {
     if (props.item.state === "needs") return `Working · waiting for your ${props.item.attention?.kind.toLowerCase()}`;
     if (props.item.state === "working") return `Working · ${props.item.agent}`;
     if (props.item.state === "done") return `Done · ${props.item.completedAt}`;
+    if (props.item.state === "cancelled") return `Closed · ${props.item.closedAt ?? props.item.age}`;
     return "Ready";
   };
 
@@ -3164,6 +3180,24 @@ function WorkDetail(props: WorkDetailProps) {
           <MarkdownContent source={props.item.goal} class="detail-section__body" />
         </section>
 
+        <Show when={props.item.canonicalState === "done" || props.item.canonicalState === "cancelled"}>
+          <section class="detail-section">
+            <div class="detail-section__label">closed outcome</div>
+            <div class="detail-card">
+              <strong>{closureReasonLabel(props.item.closureReason) ?? (props.item.canonicalState === "done" ? "Completed" : "Closed")}</strong>
+              <Show when={props.item.closureNote}><p class="note">{props.item.closureNote}</p></Show>
+            </div>
+          </section>
+        </Show>
+
+        <Show when={props.item.canonicalState !== "done" && props.item.canonicalState !== "cancelled"}>
+          <IssueCloseForm
+            allowCompleted={props.item.canonicalState === "ready"}
+            active={props.item.canonicalState === "working"}
+            onConfirm={props.onCloseIssue}
+          />
+        </Show>
+
         <Show when={props.item.parentWork}>{(parent) => (
           <section class="detail-section" aria-labelledby="parent-work-heading">
             <div class="detail-section__label" id="parent-work-heading">parent issue</div>
@@ -3184,7 +3218,7 @@ function WorkDetail(props: WorkDetailProps) {
         <Show
           when={
             !props.item.parentWork &&
-            (props.item.state !== "done" || (props.item.childWork?.length ?? 0) > 0)
+            ((props.item.canonicalState !== "done" && props.item.canonicalState !== "cancelled") || (props.item.childWork?.length ?? 0) > 0)
           }
         >
           <section class="detail-section" aria-labelledby="child-work-heading">
@@ -3215,7 +3249,7 @@ function WorkDetail(props: WorkDetailProps) {
                 )}</For>
               </div>
             </Show>
-            <Show when={props.item.state !== "done"}>
+            <Show when={props.item.canonicalState !== "done" && props.item.canonicalState !== "cancelled"}>
               <Show
                 when={childComposerOpen()}
                 fallback={
@@ -3279,7 +3313,7 @@ function WorkDetail(props: WorkDetailProps) {
           </section>
         </Show>
 
-        <section class="detail-section runner-work-card" aria-labelledby="runner-work-heading">
+        <Show when={props.item.canonicalState !== "done" && props.item.canonicalState !== "cancelled"}><section class="detail-section runner-work-card" aria-labelledby="runner-work-heading">
           <div class="detail-section__label" id="runner-work-heading">local runner</div>
           <Show when={props.runnerJob} fallback={
             <Show when={props.item.state === "ready"} fallback={<p class="note">Local execution can be queued only while work is Ready.</p>}>
@@ -3325,7 +3359,7 @@ function WorkDetail(props: WorkDetailProps) {
             </div>
           )}</Show>
           <Show when={runnerError()}><div class="security-note" role="alert">{runnerError()}</div></Show>
-        </section>
+        </section></Show>
 
         <Show when={props.item.sources?.length}>
           <section class="detail-section">
@@ -3361,7 +3395,7 @@ function WorkDetail(props: WorkDetailProps) {
           <section class="detail-section">
             <div class="detail-section__label">latest from {actorDisplayIdentity({ type: "agent", name: props.item.agent ?? "Agent" })}</div>
             <div class="detail-card"><MarkdownContent source={props.item.latest ?? ""} /></div>
-            <div class="security-note">{props.item.state === "done" ? "run finished" : props.item.elapsed ?? "waiting to start"}</div>
+            <div class="security-note">{props.item.state === "done" || props.item.state === "cancelled" ? "run finished" : props.item.elapsed ?? "waiting to start"}</div>
           </section>
         </Show>
 
@@ -3432,6 +3466,7 @@ type IntakeDetailProps = {
   discardAttachment?: OverviewConnection["discardAttachment"];
   announce: (message: string) => void;
   onSave: (input: IntakeUpdateInput) => Promise<IntakeUpdateResult>;
+  onCloseIssue: (input: IssueClosureInput) => Promise<void>;
 };
 
 function IntakeDetail(props: IntakeDetailProps) {
@@ -3482,7 +3517,14 @@ function IntakeDetail(props: IntakeDetailProps) {
       <div class="detail__scroll">
         <div class="detail__title-group">
           <h2 class="detail__title" id="intake-detail-title">{props.intake.text}</h2>
-          <div class="detail__state"><span class="detail__state-dot" data-state={props.intake.status === "processed" ? "done" : "working"} /><span>{props.intake.status === "processed" ? `Processed · ${linked().length} work items created` : "Waiting for local agent"}</span></div>
+          <div class="detail__state">
+            <span class="detail__state-dot" data-state={props.intake.status === "processed" ? "done" : props.intake.status === "dismissed" ? "cancelled" : "working"} />
+            <span>{props.intake.status === "processed"
+              ? `Processed · ${linked().length} work items created`
+              : props.intake.status === "dismissed"
+                ? `Closed · ${props.intake.closedAt ?? props.intake.age}`
+                : props.intake.status === "triaging" ? "Agent triaging" : "Waiting for local agent"}</span>
+          </div>
           <Show when={props.intake.sourceIdeaId}>{(ideaId) => (
             <a class="detail__provenance" href={`${props.ideasHref}?filter=promoted&idea=${encodeURIComponent(ideaId())}`}>Promoted from Ideas</a>
           )}</Show>
@@ -3508,6 +3550,18 @@ function IntakeDetail(props: IntakeDetailProps) {
             discardAttachment={props.discardAttachment!}
             announce={props.announce}
           />
+        </Show>
+        <Show when={props.intake.status === "dismissed"}>
+          <section class="detail-section">
+            <div class="detail-section__label">closed outcome</div>
+            <div class="detail-card">
+              <strong>{closureReasonLabel(props.intake.closureReason) ?? "Closed"}</strong>
+              <Show when={props.intake.closureNote}><p class="note">{props.intake.closureNote}</p></Show>
+            </div>
+          </section>
+        </Show>
+        <Show when={props.intake.status === "waiting" || props.intake.status === "triaging"}>
+          <IssueCloseForm allowCompleted={false} active={props.intake.status === "triaging"} onConfirm={props.onCloseIssue} />
         </Show>
         <Show when={linked().length}>
           <section class="detail-section">

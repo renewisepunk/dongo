@@ -49,7 +49,7 @@ export function CompletedWork(props: CompletedWorkProps) {
       });
       setNextCursor(page.nextCursor);
     } catch {
-      if (!disposed) setError("Completed work is temporarily unavailable.");
+      if (!disposed) setError("Closed work is temporarily unavailable.");
     } finally {
       if (!disposed) {
         setLoading(false);
@@ -90,7 +90,7 @@ export function CompletedWork(props: CompletedWorkProps) {
       </header>
       <div class="overview-scroll">
         <div class="overview-content" style={{ gap: "26px" }}>
-          <div class="settings-title-group"><div class="eyebrow">History</div><h1 class="settings-title">Completed</h1><p class="auth-lede">Finished work and its durable artifacts.</p></div>
+          <div class="settings-title-group"><div class="eyebrow">History</div><h1 class="settings-title">Closed</h1><p class="auth-lede">Completed and cancelled work with its durable history.</p></div>
           <Show when={loading()}><div class="empty-state" role="status">Loading completed work…</div></Show>
           <Show when={error()}>
             <div class="empty-state" role="alert">
@@ -101,13 +101,13 @@ export function CompletedWork(props: CompletedWorkProps) {
           <section class="work-section" style={{ "margin-top": "0" }}>
             <For each={completed()}>{(item) => (
               <A class="work-row work-row--done" href={`/app/${props.orgSlug}/${props.projectSlug}?work=${encodeURIComponent(item.identifier)}`}>
-                <span class="mono" style={{ color: "var(--green)" }}>✓</span>
+                <span class="mono" style={{ color: item.state === "done" ? "var(--green)" : "var(--text-faint)" }}>{item.state === "done" ? "✓" : "×"}</span>
                 <span class="work-row__title work-row__title--done">{item.title}</span>
-                <span class="work-row__identifier mono">{[item.identifier, item.agent, item.completedAt].filter(Boolean).join(" · ")}</span>
+                <span class="work-row__identifier mono">{[item.identifier, item.state === "cancelled" ? "cancelled" : item.agent, item.closedAt ?? item.completedAt].filter(Boolean).join(" · ")}</span>
               </A>
             )}</For>
             <Show when={!loading() && !error() && completed().length === 0}>
-              <div class="empty-state">No work has been completed yet.</div>
+              <div class="empty-state">No work has been closed yet.</div>
             </Show>
             <Show when={nextCursor() && !error()}>
               <button class="button" type="button" disabled={loadingMore()} onClick={() => void loadPage(nextCursor()!, true)}>

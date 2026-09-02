@@ -1160,6 +1160,14 @@
 .detail__state-dot[data-state="needs"],
 .detail__state-dot[data-state="working"] { background: var(--amber); }
 .detail__state-dot[data-state="done"] { background: var(--green); }
+.detail__state-dot[data-state="cancelled"] { background: var(--text-faint); }
+
+.issue-close__form { display: grid; gap: 12px; }
+.issue-close__reasons { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.issue-close__reasons legend { margin-bottom: 8px; color: var(--text-muted); font: 12px ui-monospace, Menlo, monospace; text-transform: lowercase; }
+.issue-close__reason { display: flex; min-height: 36px; align-items: center; gap: 9px; cursor: pointer; }
+.issue-close__reason input { accent-color: var(--amber); }
+.issue-close__note { display: grid; gap: 7px; color: var(--text-muted); font-size: 12px; }
 
 .detail__provenance {
   align-self: flex-start;

@@ -35,7 +35,7 @@ test("renders every live work lane without browser errors", async ({ page }) => 
   await expect(page.getByText("working", { exact: true })).toBeVisible();
   await expect(page.getByText("ready", { exact: true })).toBeVisible();
   await expect(page.getByText("inbox", { exact: true })).toBeVisible();
-  await expect(page.getByText("recently done", { exact: true })).toBeVisible();
+  await expect(page.getByText("recently closed", { exact: true })).toBeVisible();
   await expect.poll(async () => await page.evaluate(() =>
     document.documentElement.scrollWidth <= document.documentElement.clientWidth,
   )).toBe(true);
@@ -255,6 +255,31 @@ test("queues and cancels Ready work through a truthful live runner state", async
   await expect(detail.getByText(/asks for approval on its computer/)).toBeHidden();
   await detail.getByRole("button", { name: "Cancel local run" }).click();
   await expect(detail.getByText("Cancelled", { exact: true })).toBeVisible();
+});
+
+test("closes Ready work as completed while preserving its outcome", async ({ page }) => {
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  const detail = workDetail(page, "Verify fixture search");
+  await detail.getByRole("button", { name: "Set issue outcome", exact: true }).click();
+  await detail.getByLabel("Completed").check();
+  await detail.getByLabel("Note optional").fill("Verified manually.");
+  await detail.getByRole("button", { name: "Mark done" }).click();
+  await expect(detail.getByText("Completed", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Verified manually.", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.fixtureClosedWork)).toContain('"reason":"completed"');
+});
+
+test("dismisses Inbox Intake without deleting its durable detail", async ({ page }) => {
+  const row = page.locator('[data-nav-kind="intake"][data-nav-id="intake-waiting"]');
+  await row.click();
+  const detail = workDetail(page, "Investigate the fixture login screen");
+  await detail.getByRole("button", { name: "Set issue outcome", exact: true }).click();
+  await detail.getByLabel("Incorrect or added by mistake").check();
+  await detail.getByLabel("Note optional").fill("Filed against the wrong project.");
+  await detail.getByRole("button", { name: "Close issue", exact: true }).click();
+  await expect(detail.getByText("Incorrect or added by mistake", { exact: true })).toBeVisible();
+  await expect(row).toBeHidden();
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.fixtureClosedIntake)).toContain('"reason":"incorrect"');
 });
 
 test("switches projects through an accessible keyboard menu", async ({ page }) => {

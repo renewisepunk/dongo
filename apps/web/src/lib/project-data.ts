@@ -6,6 +6,7 @@ import type {
   AttachmentSummary,
   Attention,
   ConversationEntry,
+  ClosureReason,
   Intake,
   OwnerAttention,
   WorkItem,
@@ -282,6 +283,7 @@ export type IntakeUpdateResult = {
   updatedAt: number;
   addedAttachmentIds: string[];
 };
+export type IssueClosureInput = { reason: ClosureReason; note?: string };
 
 export type IdeaState = "open" | "archived" | "promoted";
 
@@ -365,6 +367,9 @@ type WorkDoc = {
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
+  closureReason?: ClosureReason;
+  closureNote?: string;
+  closedAt?: number;
   claimExpiresAt?: number;
   parentId?: string;
 };
@@ -418,6 +423,9 @@ type IntakeDoc = {
   updatedAt: number;
   createdAt: number;
   claimExpiresAt?: number;
+  closureReason?: ClosureReason;
+  closureNote?: string;
+  closedAt?: number;
 };
 
 type AttachmentDoc = {
@@ -700,6 +708,12 @@ const updateIntakeReference = makeFunctionReference<
   },
   { intakeId: string; revision: number; updatedAt: number; addedAttachmentIds: string[] }
 >("domains/intake/index:updateForHuman");
+const dismissIntakeReference = makeFunctionReference<"mutation", {
+  intakeId: string; expectedRevision: number; reason: ClosureReason; note?: string; idempotencyKey: string;
+}, { intakeId: string; state: "dismissed"; revision: number }>("domains/intake/index:dismissForHuman");
+const closeWorkReference = makeFunctionReference<"mutation", {
+  workItemId: string; expectedRevision: number; outcome: "completed" | "cancelled"; reason: ClosureReason; note?: string; idempotencyKey: string;
+}, { workItemId: string; state: "done" | "cancelled"; revision: number }>("domains/work/index:closeForHuman");
 const reorderWorkReference = makeFunctionReference<
   "mutation",
   { workItemId: string; expectedRevision: number; rank: number; idempotencyKey: string },
@@ -920,6 +934,10 @@ function baseWork(work: WorkDoc, state: WorkItem["state"], now: number): WorkIte
     rank: work.rank,
     revision: work.revision,
     completedAt: relativeTime(work.completedAt, now),
+    canonicalState: work.state,
+    closureReason: work.closureReason,
+    closureNote: work.closureNote,
+    closedAt: relativeTime(work.closedAt ?? work.completedAt, now),
     artifacts: [],
     conversation: [],
   };
@@ -979,7 +997,7 @@ export function mapOverviewSnapshot(snapshot: OverviewSnapshot): ProjectOverview
     latest: run?.summary,
   }));
   const ready = snapshot.ready.map(({ work }) => baseWork(work, "ready", now));
-  const done = snapshot.recentlyDone.map((work) => baseWork(work, "done", now));
+  const done = snapshot.recentlyDone.map((work) => baseWork(work, work.state, now));
   const intakes = snapshot.inbox.map(({ intake, attachments, staleClaim }) => {
     const mappedAttachments = attachments.map(mapAttachment);
     return {
@@ -1199,14 +1217,18 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
     state:
       latestAttention?.status === "open" || latestAttention?.status === "seen"
         ? "needs"
-        : detail.work.state === "done"
-          ? "done"
+        : detail.work.state === "done" || detail.work.state === "cancelled"
+          ? detail.work.state
           : detail.work.state === "working" &&
               detail.work.claimExpiresAt !== undefined &&
               detail.work.claimExpiresAt > now
             ? "working"
             : "ready",
     unseen: latestAttention?.status === "open",
+    canonicalState: detail.work.state,
+    closureReason: detail.work.closureReason,
+    closureNote: detail.work.closureNote,
+    closedAt: relativeTime(detail.work.closedAt ?? detail.work.completedAt, now),
     attention: mappedAttention,
     goal: detail.work.description || detail.work.title,
     latest: latestRun?.summary || base.latest,
@@ -1256,11 +1278,14 @@ export function mapIntakeDetail(detail: IntakeDetailSnapshot): Intake {
       detail.intake.claimExpiresAt > Date.now()
         ? "triaging"
         : detail.intake.status === "processed" || detail.intake.status === "dismissed"
-          ? "processed"
+          ? detail.intake.status
           : "waiting",
     age: relativeTime(detail.intake.createdAt, Date.now()) || "now",
     createdAt: detail.intake.createdAt,
     linkedWorkIds: detail.links.map((link) => link.workItemId),
+    closureReason: detail.intake.closureReason,
+    closureNote: detail.intake.closureNote,
+    closedAt: relativeTime(detail.intake.closedAt, Date.now()),
   };
 }
 
@@ -1402,7 +1427,7 @@ export class ProjectDataConnection {
       (detail) => {
         const state =
           detail.work.state === "done" || detail.work.state === "cancelled"
-            ? "done"
+            ? detail.work.state
             : detail.work.state === "working"
               ? "working"
               : "ready";
@@ -1423,7 +1448,7 @@ export class ProjectDataConnection {
       (detail) => {
         const state =
           detail.work.state === "done" || detail.work.state === "cancelled"
-            ? "done"
+            ? detail.work.state
             : detail.work.state === "working"
               ? "working"
               : "ready";
@@ -1482,7 +1507,7 @@ export class ProjectDataConnection {
     });
     const now = Date.now();
     return {
-      items: page.page.map((work) => baseWork(work, "done", now)),
+      items: page.page.map((work) => baseWork(work, work.state, now)),
       ...(page.isDone ? {} : { nextCursor: page.continueCursor }),
     };
   }
@@ -1614,6 +1639,22 @@ export class ProjectDataConnection {
 
   async updateIntake(input: IntakeUpdateInput): Promise<IntakeUpdateResult> {
     return await this.#client.mutation(updateIntakeReference, input);
+  }
+
+  async dismissIntake(intakeId: string, expectedRevision: number, input: IssueClosureInput) {
+    return await this.#client.mutation(dismissIntakeReference, {
+      intakeId, expectedRevision, ...input, idempotencyKey: crypto.randomUUID(),
+    });
+  }
+
+  async closeWork(workItemId: string, expectedRevision: number, input: IssueClosureInput) {
+    return await this.#client.mutation(closeWorkReference, {
+      workItemId,
+      expectedRevision,
+      outcome: input.reason === "completed" ? "completed" : "cancelled",
+      ...input,
+      idempotencyKey: crypto.randomUUID(),
+    });
   }
 
   async createIdea(input: IdeaCreateInput): Promise<IdeaMutationResult & { created: boolean }> {

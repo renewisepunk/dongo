@@ -405,6 +405,23 @@ policy as Work Attention: enabled-device push is immediate, and unresolved
 Important requests receive the one-hour email escalation. Delivery identifies
 the durable project or optional Intake target without fabricating Work.
 
+### D-29 — Human issue closure preserves history
+
+Decided: authorized project members may close issue-like records without
+deleting them. Open Intake closes as `dismissed` with an explicit
+no-longer-relevant, incorrect, or other reason. Ready Work may be marked `done`
+only when the person confirms it was completed, or `cancelled` with one of the
+same non-completion reasons. Active Work may be cancelled, which atomically
+releases its Run claim and requests cancellation of any live local-runner job;
+an active Run remains the authority for declaring its own work completed.
+
+Every close is idempotent and revision-aware, records the human Actor, time,
+reason, optional note, and immutable Event, and resolves open Attention on that
+record. Closed records remain readable and searchable. Completed and cancelled
+Work share the Closed history surface but retain distinct states and labels;
+dismissed Intake becomes read-only and leaves Inbox. No self-service close
+operation hard-deletes content or restores Free-plan Work capacity.
+
 ## Decisions that may wait until after the walking skeleton
 
 - Billing provider and checkout/customer-portal UX.

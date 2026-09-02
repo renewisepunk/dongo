@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("paginates completed work without duplicates and opens route-backed detail", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo/done");
-  await expect(page.getByRole("heading", { name: "Completed" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Closed" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute(
     "data-fixture-completed-target",
     "fixture-studio/dongo",
@@ -34,7 +34,7 @@ test("paginates completed work without duplicates and opens route-backed detail"
 test("shows an honest empty completed-work state on mobile", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 720 });
   await page.goto("/app/fixture-studio/dongo/done?scenario=completed-empty");
-  await expect(page.getByText("No work has been completed yet.", { exact: true })).toBeVisible();
+  await expect(page.getByText("No work has been closed yet.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Load more" })).toBeHidden();
   await expect.poll(async () => page.evaluate(() =>
     document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -44,7 +44,7 @@ test("shows an honest empty completed-work state on mobile", async ({ page }) =>
 test("retries an unavailable first completed-work page without exposing details", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo/done?scenario=completed-retry");
   await expect(page.getByRole("alert")).toHaveText(
-    "Completed work is temporarily unavailable.Retry",
+    "Closed work is temporarily unavailable.Retry",
   );
   await expect(page.getByText("fixture completed retry detail must stay hidden")).toBeHidden();
   await page.getByRole("button", { name: "Retry" }).click();
@@ -57,7 +57,7 @@ test("preserves loaded history when pagination fails", async ({ page }) => {
   await expect(page.getByText("Complete the agent golden journey", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Load more" }).click();
   await expect(page.getByRole("alert")).toContainText(
-    "Completed work is temporarily unavailable.",
+    "Closed work is temporarily unavailable.",
   );
   await expect(page.getByText("Complete the agent golden journey", { exact: true })).toBeVisible();
   await expect(page.getByText("fixture completed pagination detail must stay hidden")).toBeHidden();

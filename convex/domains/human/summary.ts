@@ -98,6 +98,9 @@ export function workSummaryForHuman(
     createdAt: work.createdAt,
     updatedAt: work.updatedAt,
     completedAt: work.completedAt,
+    closureReason: work.closureReason,
+    closureNote: work.closureNote,
+    closedAt: work.closedAt,
     claimExpiresAt: work.claimExpiresAt,
   };
 }
@@ -166,6 +169,9 @@ export function intakeSummaryForHuman(
     revision: intake.revision,
     claimExpiresAt: intake.claimExpiresAt,
     processedAt: intake.processedAt,
+    closureReason: intake.closureReason,
+    closureNote: intake.closureNote,
+    closedAt: intake.closedAt,
     createdAt: intake.createdAt,
     updatedAt: intake.updatedAt,
   };

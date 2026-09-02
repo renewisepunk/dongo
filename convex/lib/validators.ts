@@ -14,6 +14,12 @@ export const workStateValidator = v.union(
   v.literal("done"),
   v.literal("cancelled"),
 );
+export const closureReasonValidator = v.union(
+  v.literal("completed"),
+  v.literal("no_longer_relevant"),
+  v.literal("incorrect"),
+  v.literal("other"),
+);
 export const attentionKindValidator = v.union(
   v.literal("review"),
   v.literal("decision"),

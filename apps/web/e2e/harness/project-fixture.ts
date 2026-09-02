@@ -59,6 +59,7 @@ let work: WorkItem[] = [
     legacyIdentifiers: ["DONGO-7"],
     title: "Approve the release candidate",
     state: "needs",
+    canonicalState: "working",
     agent: "Codex",
     age: "now",
     elapsed: "6m",
@@ -90,6 +91,7 @@ let work: WorkItem[] = [
     legacyIdentifiers: ["DONGO-8"],
     title: "Harden attachment delivery",
     state: "working",
+    canonicalState: "working",
     agent: "Claude",
     elapsed: "2m",
     age: "2m",
@@ -104,6 +106,7 @@ let work: WorkItem[] = [
     legacyIdentifiers: ["DONGO-9"],
     title: "Verify fixture search",
     state: "ready",
+    canonicalState: "ready",
     age: "8m",
     goal: "Exercise fixture search and keyboard navigation.",
     rank: 300,
@@ -115,6 +118,7 @@ let work: WorkItem[] = [
     legacyIdentifiers: ["DONGO-10"],
     title: "Audit mobile controls",
     state: "ready",
+    canonicalState: "ready",
     age: "7m",
     goal: "Check mobile target sizes and overflow.",
     rank: 400,
@@ -126,6 +130,7 @@ let work: WorkItem[] = [
     legacyIdentifiers: ["DONGO-6"],
     title: "Complete the agent golden journey",
     state: "done",
+    canonicalState: "done",
     agent: "Codex",
     age: "1h",
     completedAt: "1h",
@@ -331,7 +336,7 @@ function overview(): ProjectOverview {
     projectId: currentProject.id,
     projectName: currentProject.name,
     work: [...work],
-    intakes: [...intakes],
+    intakes: intakes.filter((intake) => intake.status !== "dismissed"),
     ownerAttention: ownerAttention(),
   };
 }
@@ -716,6 +721,42 @@ const connection: OverviewConnection = {
       updatedAt: Date.now(),
       addedAttachmentIds: added.map((attachment) => attachment.id),
     };
+  },
+  async dismissIntake(intakeId, expectedRevision, input) {
+    const item = intakes.find((candidate) => candidate.id === intakeId);
+    if (!item || expectedRevision !== (item.revision ?? 1)) throw Object.assign(new Error("revision_conflict"), { data: { code: "revision_conflict" } });
+    intakes = intakes.map((candidate) => candidate.id === intakeId ? {
+      ...candidate,
+      status: "dismissed",
+      editable: false,
+      closureReason: input.reason,
+      closureNote: input.note,
+      closedAt: "now",
+      revision: expectedRevision + 1,
+    } : candidate);
+    emitIntake(intakeId);
+    emitOverview();
+    document.documentElement.dataset.fixtureClosedIntake = JSON.stringify(input);
+    return { intakeId, state: "dismissed" as const, revision: expectedRevision + 1 };
+  },
+  async closeWork(workItemId, expectedRevision, input) {
+    const item = work.find((candidate) => candidate.id === workItemId);
+    if (!item || expectedRevision !== item.revision) throw Object.assign(new Error("revision_conflict"), { data: { code: "revision_conflict" } });
+    const state = input.reason === "completed" ? "done" as const : "cancelled" as const;
+    work = work.map((candidate) => candidate.id === workItemId ? {
+      ...candidate,
+      state,
+      canonicalState: state,
+      closureReason: input.reason,
+      closureNote: input.note,
+      closedAt: "now",
+      completedAt: state === "done" ? "now" : undefined,
+      revision: expectedRevision + 1,
+    } : candidate);
+    emitWork(workItemId);
+    emitOverview();
+    document.documentElement.dataset.fixtureClosedWork = JSON.stringify(input);
+    return { workItemId, state, revision: expectedRevision + 1 };
   },
   async uploadAttachment(file, onProgress, signal) {
     if (signal.aborted) throw new DOMException("Upload cancelled", "AbortError");

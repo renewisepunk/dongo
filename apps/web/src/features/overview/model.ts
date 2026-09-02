@@ -1,4 +1,5 @@
-export type WorkState = "needs" | "working" | "ready" | "done";
+export type ClosureReason = "completed" | "no_longer_relevant" | "incorrect" | "other";
+export type WorkState = "needs" | "working" | "ready" | "done" | "cancelled";
 
 export type Attention = {
   id: string;
@@ -76,6 +77,10 @@ export type WorkItem = {
   parentWork?: WorkRelationshipSummary;
   childWork?: WorkRelationshipSummary[];
   completedAt?: string;
+  canonicalState?: "ready" | "working" | "done" | "cancelled";
+  closureReason?: ClosureReason;
+  closureNote?: string;
+  closedAt?: string;
   unseen?: boolean;
   rank: number;
   revision: number;
@@ -94,7 +99,10 @@ export type Intake = {
   optimistic?: boolean;
   attachment?: string;
   attachments?: AttachmentSummary[];
-  status: "waiting" | "triaging" | "processed";
+  status: "waiting" | "triaging" | "processed" | "dismissed";
+  closureReason?: ClosureReason;
+  closureNote?: string;
+  closedAt?: string;
   age: string;
   attachmentCount?: number;
   createdAt: number;

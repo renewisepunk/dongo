@@ -59,6 +59,11 @@ Implement the prototype's hierarchy and states for:
   explicit Edit/Save states for text, context, links, and additive attachments,
   preserves drafts through live revision conflicts, and becomes read-only after
   processing or dismissal;
+- human Close issue actions use an explicit outcome form rather than deletion:
+  Ready Work offers Completed plus non-completion reasons, active Work offers
+  only cancellation reasons, and Intake offers dismissal reasons. The form
+  states that durable history remains, preserves an optional note, and shows
+  revision conflicts without silently retrying;
 - live parallel-Run visualization sourced from authoritative subscriptions,
   with one card per active Run showing agent, canonical Work, Running/Waiting,
   latest progress, elapsed/lease health, and a bounded workspace label;

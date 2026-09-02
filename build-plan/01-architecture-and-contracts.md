@@ -206,6 +206,14 @@ added. It emits `intake.updated`; an already attached file on that Intake is an
 idempotent no-op, while files attached elsewhere, owned by another editor, not
 available, outside the project, or beyond the 20-file total are rejected.
 
+Human closure is also product-authenticated rather than part of the agent
+operation registry. `intake.dismissForHuman` and `work.closeForHuman` require
+membership, an expected revision, an idempotency key, a bounded reason, and an
+optional note. They preserve the record and emit immutable closure Events.
+Closing claimed Intake invalidates the triage claim. Cancelling Work closes any
+owned Run, resolves open Attention, and cancels or requests cancellation of a
+non-terminal local-runner job in the same atomic mutation.
+
 ### MCP tool contract
 
 Agent 10 maps each operation to a namespaced tool such as `dongo_session_start`, `dongo_claim_intake`, and `dongo_finish_work`. The mapping must preserve the same input/output schema, authorization, idempotency requirement, and error meaning.

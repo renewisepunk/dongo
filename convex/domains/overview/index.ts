@@ -67,7 +67,7 @@ export async function buildOverview(
     attention.flatMap((item) => item.workItemId ? [item.workItemId] : []),
   );
 
-  const [workingCandidates, readyItems, newIntakes, claimedIntakes, doneItems] =
+  const [workingCandidates, readyItems, newIntakes, claimedIntakes, cancelledItems, doneItems] =
     await Promise.all([
       ctx.db
         .query("workItems")
@@ -94,6 +94,13 @@ export async function buildOverview(
         .query("intakes")
         .withIndex("by_project_status_created", (q) =>
           q.eq("projectId", project._id).eq("status", "claimed"),
+        )
+        .order("desc")
+        .take(OVERVIEW_SECTION_LIMIT),
+      ctx.db
+        .query("workItems")
+        .withIndex("by_project_state_updated", (q) =>
+          q.eq("projectId", project._id).eq("state", "cancelled"),
         )
         .order("desc")
         .take(OVERVIEW_SECTION_LIMIT),
@@ -167,7 +174,9 @@ export async function buildOverview(
     working,
     ready,
     inbox,
-    recentlyDone: doneItems,
+    recentlyDone: [...doneItems, ...cancelledItems]
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, OVERVIEW_SECTION_LIMIT),
   };
 }
 

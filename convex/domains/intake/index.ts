@@ -7,6 +7,7 @@ import {
 } from "../../_generated/server";
 import {
   agentContextValidator,
+  closureReasonValidator,
   MAX_BODY_LENGTH,
   workKindValidator,
 } from "../../lib/validators";
@@ -17,7 +18,7 @@ import {
   resolveAgentPrincipal,
 } from "../../lib/authz";
 import { appendEvent } from "../../lib/events";
-import { fail, optionalString, requireString } from "../../lib/errors";
+import { assertExpectedRevision, fail, optionalString, requireString } from "../../lib/errors";
 import { runIdempotent } from "../../lib/idempotency";
 import { isLeaseActive, newLease } from "../../lib/leases";
 import { createWorkItem, linkIntakeToWork } from "../work/service";
@@ -321,6 +322,79 @@ export const updateForHuman = mutation({
         };
       },
     );
+  },
+});
+
+export const dismissForHuman = mutation({
+  args: {
+    intakeId: v.id("intakes"),
+    expectedRevision: v.number(),
+    reason: closureReasonValidator,
+    note: v.optional(v.string()),
+    idempotencyKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const intake = await ctx.db.get(args.intakeId);
+    if (!intake) fail("not_found", "Intake not found");
+    const principal = await requireHumanProject(ctx, intake.projectId);
+    if (args.reason === "completed") {
+      fail("validation", "Inbox Intake cannot be marked completed");
+    }
+    const note = optionalString(args.note, "note", 2_000);
+    const now = Date.now();
+    return await runIdempotent(ctx, {
+      organizationId: intake.organizationId,
+      projectId: intake.projectId,
+      principalKey: principal.principalKey,
+      operation: "intake.dismiss_for_human",
+      key: args.idempotencyKey,
+      payload: { intakeId: intake._id, expectedRevision: args.expectedRevision, reason: args.reason, note },
+      now,
+    }, async () => {
+      assertExpectedRevision(intake.revision, args.expectedRevision);
+      if (intake.status !== "new" && intake.status !== "claimed") {
+        fail("invalid_transition", "Intake is already closed");
+      }
+      await ctx.db.patch(intake._id, {
+        status: "dismissed",
+        claimedByActorId: undefined,
+        claimedByInstallationId: undefined,
+        claimedAt: undefined,
+        claimExpiresAt: undefined,
+        processedAt: now,
+        closureReason: args.reason,
+        closureNote: note,
+        closedByActorId: principal.actor._id,
+        closedAt: now,
+        revision: intake.revision + 1,
+        updatedAt: now,
+      });
+      const attention = (await Promise.all(
+        (["open", "seen"] as const).map((status) => ctx.db
+          .query("attentionRequests")
+          .withIndex("by_project_status_created", (q) => q.eq("projectId", intake.projectId).eq("status", status))
+          .filter((q) => q.eq(q.field("intakeId"), intake._id))
+          .take(100)),
+      )).flat();
+      for (const request of attention) {
+        await ctx.db.patch(request._id, {
+          status: "resolved",
+          resolvedAt: now,
+          resolvedByActorId: principal.actor._id,
+          resolutionKind: "cancelled",
+        });
+      }
+      await appendEvent(ctx, {
+        organizationId: intake.organizationId,
+        projectId: intake.projectId,
+        intakeId: intake._id,
+        actorId: principal.actor._id,
+        type: "intake.dismissed",
+        data: { reason: args.reason, note: note ?? null },
+        createdAt: now,
+      });
+      return { intakeId: intake._id, state: "dismissed" as const, revision: intake.revision + 1 };
+    });
   },
 });
 

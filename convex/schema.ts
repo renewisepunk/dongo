@@ -38,6 +38,12 @@ const workState = v.union(
   v.literal("done"),
   v.literal("cancelled"),
 );
+const closureReason = v.union(
+  v.literal("completed"),
+  v.literal("no_longer_relevant"),
+  v.literal("incorrect"),
+  v.literal("other"),
+);
 const runStatus = v.union(
   v.literal("running"),
   v.literal("waiting"),
@@ -402,6 +408,10 @@ export default defineSchema({
     claimedAt: v.optional(v.number()),
     claimExpiresAt: v.optional(v.number()),
     processedAt: v.optional(v.number()),
+    closureReason: v.optional(closureReason),
+    closureNote: v.optional(v.string()),
+    closedByActorId: v.optional(v.id("actors")),
+    closedAt: v.optional(v.number()),
     revision: v.number(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -472,12 +482,17 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
     completedAt: v.optional(v.number()),
+    closureReason: v.optional(closureReason),
+    closureNote: v.optional(v.string()),
+    closedByActorId: v.optional(v.id("actors")),
+    closedAt: v.optional(v.number()),
   })
     .index("by_organization", ["organizationId"])
     .index("by_project_identifier", ["projectId", "identifier"])
     .index("by_project_number", ["projectId", "number"])
     .index("by_project_state_rank", ["projectId", "state", "rank"])
     .index("by_project_state_updated", ["projectId", "state", "updatedAt"])
+    .index("by_project_updated", ["projectId", "updatedAt"])
     .index("by_project_claim_expiry", ["projectId", "claimExpiresAt"])
     .index("by_claim_expiry", ["claimExpiresAt"])
     .index("by_parent", ["parentId"])
