@@ -746,12 +746,12 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 <form class="settings-section" onSubmit={addMember}>
                   <div class="settings-section__title">Add member</div>
                   <p class="note">Add someone who has already signed in to dongo. New members receive the standard member role.</p>
-                  <div class="settings-actions">
-                    <div class="field-group" style={{ flex: 1 }}>
+                  <div class="settings-actions member-add-actions">
+                    <div class="field-group member-add-actions__field">
                       <label class="field-label" for="member-email">Account email</label>
                       <input class="input" id="member-email" type="email" autocomplete="email" value={memberEmail()} onInput={(event) => setMemberEmail(event.currentTarget.value)} placeholder="teammate@example.com" />
                     </div>
-                    <button class="button" type="submit" disabled={addingMember()}>{addingMember() ? "Adding…" : "Add member"}</button>
+                    <button class="button member-add-actions__submit" type="submit" disabled={addingMember()}>{addingMember() ? "Adding…" : "Add member"}</button>
                   </div>
                 </form>
               </Show>

@@ -136,6 +136,32 @@ test("updates organization membership and confirms removal", async ({ page }) =>
   await expect(page.locator("html")).toHaveAttribute("data-fixture-removed-member", "membership-member");
 });
 
+test("aligns the member action with its field and stacks both controls on small screens", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 760 });
+  await page.goto("/app/fixture-studio/dongo/settings?tab=Members");
+
+  const email = page.getByLabel("Account email");
+  const addMember = page.getByRole("button", { name: "Add member" });
+  const desktopEmail = await email.boundingBox();
+  const desktopButton = await addMember.boundingBox();
+  if (!desktopEmail || !desktopButton) throw new Error("Member controls are not visible");
+  expect(desktopButton.height).toBe(desktopEmail.height);
+  expect(Math.abs(
+    (desktopButton.y + desktopButton.height) - (desktopEmail.y + desktopEmail.height),
+  )).toBeLessThanOrEqual(1);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileEmail = await email.boundingBox();
+  const mobileButton = await addMember.boundingBox();
+  if (!mobileEmail || !mobileButton) throw new Error("Mobile member controls are not visible");
+  expect(mobileButton.height).toBe(mobileEmail.height);
+  expect(Math.abs(mobileButton.width - mobileEmail.width)).toBeLessThanOrEqual(1);
+  expect(mobileButton.y).toBeGreaterThan(mobileEmail.y + mobileEmail.height);
+  await expect.poll(async () => page.evaluate(() =>
+    document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+  )).toBe(true);
+});
+
 test("enforces member read-only administration and shows plan limits", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo/settings?scenario=member");
   await expect(page.getByLabel("Project name")).toBeDisabled();

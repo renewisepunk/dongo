@@ -1690,7 +1690,7 @@ export function Overview(props: OverviewProps) {
           </div>
         </div>
       </Show>
-      <header class="app-header">
+      <header class="app-header app-header--overview">
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
         <div class="header-menu">
           <button
@@ -1762,14 +1762,16 @@ export function Overview(props: OverviewProps) {
           </Show>
         </div>
         <div class="header-spacer" />
-        <button
-          class="button button--quiet"
-          type="button"
-          onClick={() => navigate(`/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/ideas`)}
-        >Ideas</button>
-        <button ref={searchButton} class="search-button" type="button" disabled={loading() || Boolean(loadError())} onClick={() => openSearch()} aria-label="Search this project" aria-keyshortcuts="/">
-          <span>search</span><span class="shortcut">/</span>
-        </button>
+        <nav class="overview-header__nav" aria-label="Project navigation">
+          <button
+            class="button button--quiet"
+            type="button"
+            onClick={() => navigate(`/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/ideas`)}
+          >Ideas</button>
+          <button ref={searchButton} class="search-button" type="button" disabled={loading() || Boolean(loadError())} onClick={() => openSearch()} aria-label="Search this project" aria-keyshortcuts="/">
+            <span>search</span><span class="shortcut">/</span>
+          </button>
+        </nav>
         <div class="header-menu header-menu--right">
           <button
             ref={profileMenuButton}

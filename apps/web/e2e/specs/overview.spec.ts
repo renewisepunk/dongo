@@ -1092,6 +1092,39 @@ test("keeps mobile controls reachable without horizontal overflow", async ({ pag
   await expect.poll(async () => await page.evaluate(() =>
     document.documentElement.scrollWidth <= document.documentElement.clientWidth,
   )).toBe(true);
+
+  const brand = page.getByRole("link", { name: "dongo home" });
+  const projectMenu = page.getByRole("button", { name: "Select organization or project" });
+  const ideas = page.getByRole("button", { name: "Ideas", exact: true });
+  const search = page.getByRole("button", { name: "Search this project" });
+  const profile = page.getByRole("button", { name: "Profile and settings" });
+  const [brandBounds, projectBounds, ideasBounds, searchBounds, profileBounds] = await Promise.all([
+    brand.boundingBox(),
+    projectMenu.boundingBox(),
+    ideas.boundingBox(),
+    search.boundingBox(),
+    profile.boundingBox(),
+  ]);
+  if (!brandBounds || !projectBounds || !ideasBounds || !searchBounds || !profileBounds) {
+    throw new Error("Mobile header controls are not visible");
+  }
+  expect(Math.abs(brandBounds.y - profileBounds.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(projectBounds.y - ideasBounds.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(projectBounds.y - searchBounds.y)).toBeLessThanOrEqual(1);
+  expect(projectBounds.y).toBeGreaterThanOrEqual(brandBounds.y + brandBounds.height + 4);
+
+  await projectMenu.click();
+  const menu = page.getByRole("menu", { name: "Organizations and projects" });
+  await expect(menu).toBeVisible();
+  const [headerBounds, menuBounds] = await Promise.all([
+    page.locator(".app-header--overview").boundingBox(),
+    menu.boundingBox(),
+  ]);
+  if (!headerBounds || !menuBounds) throw new Error("Mobile project menu is not visible");
+  expect(menuBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height - 1);
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+
   const undersized = await page.locator("button:visible, a:visible").evaluateAll((elements) =>
     elements.flatMap((element) => {
       const rect = element.getBoundingClientRect();

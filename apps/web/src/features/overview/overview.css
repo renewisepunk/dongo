@@ -90,6 +90,12 @@
 
 .header-spacer { flex: 1; }
 
+.overview-header__nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .search-button {
   gap: 9px;
   height: 36px;
@@ -2266,7 +2272,46 @@
     padding: 10px 14px;
   }
 
+  .app-header--overview {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 36px 36px;
+    gap: 8px 12px;
+  }
+
+  .app-header--overview > .brand {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
+
+  .app-header--overview > .header-menu:not(.header-menu--right) {
+    width: 100%;
+    min-width: 0;
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .app-header--overview > .header-spacer { display: none; }
+
+  .app-header--overview > .overview-header__nav {
+    grid-column: 2;
+    grid-row: 2;
+    gap: 10px;
+  }
+
+  .app-header--overview > .header-menu--right {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
   .project-button { min-width: 0; max-width: 112px; }
+  .app-header--overview .project-button {
+    width: 100%;
+    max-width: none;
+    justify-content: space-between;
+  }
   .project-button span:first-child { overflow: hidden; text-overflow: ellipsis; }
   .menu-popover,
   .header-menu--right .menu-popover {
@@ -2276,6 +2321,11 @@
     left: 14px;
     width: auto;
     max-height: calc(100dvh - 70px);
+  }
+
+  .app-header--overview .menu-popover {
+    top: 100px;
+    max-height: calc(100dvh - 114px);
   }
 
   .keyboard-overlay {

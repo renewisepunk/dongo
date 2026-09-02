@@ -99,6 +99,21 @@
   flex-wrap: wrap;
 }
 
+.member-add-actions {
+  align-items: flex-end;
+  flex-wrap: nowrap;
+}
+
+.member-add-actions__field {
+  min-width: 0;
+  flex: 1;
+}
+
+.member-add-actions__submit {
+  height: 48px;
+  flex: none;
+}
+
 .archived-banner {
   display: flex;
   align-items: center;
@@ -267,4 +282,9 @@
   .installation-row { grid-template-columns: 1fr auto; }
   .installation-row > .installation-row__meta { grid-column: 1 / -1; grid-row: 2; }
   .archived-banner { align-items: flex-start; flex-direction: column; }
+}
+
+@media (max-width: 520px) {
+  .member-add-actions { align-items: stretch; flex-direction: column; }
+  .member-add-actions__submit { width: 100%; }
 }
