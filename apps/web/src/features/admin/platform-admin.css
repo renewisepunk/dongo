@@ -73,8 +73,16 @@
   color: var(--amber);
 }
 
-.platform-admin__search { display: block; margin-bottom: 24px; }
-.platform-admin__search input { width: min(440px, 100%); min-height: 44px; }
+.platform-admin__search {
+  display: grid;
+  width: min(440px, 100%);
+  gap: 7px;
+  margin-bottom: 24px;
+}
+
+.platform-admin__search .input {
+  height: 44px;
+}
 
 .platform-admin__section-heading {
   display: flex;

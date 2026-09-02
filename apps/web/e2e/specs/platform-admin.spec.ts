@@ -4,10 +4,24 @@ test("super admins can review privacy-safe usage and update bounded allowances",
   await page.goto("/admin");
 
   await expect(page.getByRole("heading", { name: "platform administration" })).toBeVisible();
+  const filter = page.getByRole("searchbox", { name: "Filter administration rows" });
+  await expect(filter).toHaveClass(/\binput\b/);
+  await expect(filter).toHaveCSS("background-color", "rgb(22, 22, 27)");
+  await expect(filter).toHaveCSS("border-top-width", "1px");
+  await expect(filter).toHaveCSS("height", "44px");
+  await filter.focus();
+  await expect(filter).toHaveCSS("outline-style", "solid");
+  await expect(filter).toHaveCSS("outline-width", "1px");
   await expect(page.getByText("owner@example.test")).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Created" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Closed" })).toBeVisible();
   await expect(page.getByText("Work titles, comments, attachments, and raw billing data are not included.")).toBeVisible();
+
+  await filter.fill("owner@example.test");
+  await expect(page.getByText("owner@example.test")).toBeVisible();
+  await filter.fill("not-an-account");
+  await expect(page.getByText("owner@example.test")).toHaveCount(0);
+  await filter.fill("");
 
   await page.getByRole("tab", { name: "Organization limits" }).click();
   await expect(page.getByRole("heading", { name: "Fixture Studio" })).toBeVisible();
