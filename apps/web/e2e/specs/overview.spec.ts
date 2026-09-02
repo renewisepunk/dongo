@@ -1069,12 +1069,52 @@ test("keeps the dongo logo cursor animation slow and subtle", async ({ page }) =
   expect(motion.opacityFloor).toBeLessThan(1);
 });
 
-test("reflows at 320 CSS pixels and honors reduced motion", async ({ page }) => {
+test("reflows at 320 CSS pixels and honors reduced motion", async ({ page, browserName }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 320, height: 720 });
+  const brand = page.getByRole("link", { name: "dongo home" });
+  const project = page.getByRole("button", { name: "Select organization or project" });
+  const ideas = page.getByRole("button", { name: "Ideas", exact: true });
+  const search = page.getByRole("button", { name: "Search this project" });
+  const profile = page.getByRole("button", { name: "Profile and settings" });
+  const projectName = project.locator("span").first();
+  await projectName.evaluate((element) => {
+    element.textContent = "A very long mobile project name that must truncate";
+  });
   await expect.poll(async () => page.evaluate(() =>
     document.documentElement.scrollWidth <= document.documentElement.clientWidth,
   )).toBe(true);
+  const projectNameMetrics = await projectName.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+    text: element.textContent,
+  }));
+  expect(projectNameMetrics.scrollWidth, JSON.stringify(projectNameMetrics))
+    .toBeGreaterThan(projectNameMetrics.clientWidth);
+
+  await brand.focus();
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+  await expect(project).toBeFocused();
+  await project.click();
+  const projectMenu = page.getByRole("menu", { name: "Organizations and projects" });
+  await expect(projectMenu).toBeVisible();
+  expect(Number.parseFloat(await projectMenu.evaluate((element) => getComputedStyle(element).animationDuration)))
+    .toBeLessThanOrEqual(0.001);
+  await page.keyboard.press("Escape");
+  await expect(project).toBeFocused();
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+  await expect(ideas).toBeFocused();
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+  await expect(search).toBeFocused();
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+  await expect(profile).toBeFocused();
+  await profile.click();
+  const profileMenu = page.getByRole("menu", { name: "Profile and settings" });
+  await expect(profileMenu).toBeVisible();
+  expect(Number.parseFloat(await profileMenu.evaluate((element) => getComputedStyle(element).animationDuration)))
+    .toBeLessThanOrEqual(0.001);
+  await page.keyboard.press("Escape");
+  await expect(profile).toBeFocused();
 
   const motion = await page.locator(".brand__cursor").evaluate((element) => {
     const style = getComputedStyle(element);
@@ -1087,17 +1127,28 @@ test("reflows at 320 CSS pixels and honors reduced motion", async ({ page }) => 
   expect(motion.iterations).toBe("1");
 });
 
-test("keeps mobile controls reachable without horizontal overflow", async ({ page }) => {
+test("keeps mobile controls reachable without horizontal overflow", async ({ page, browserName }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect.poll(async () => await page.evaluate(() =>
-    document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-  )).toBe(true);
-
   const brand = page.getByRole("link", { name: "dongo home" });
   const projectMenu = page.getByRole("button", { name: "Select organization or project" });
   const ideas = page.getByRole("button", { name: "Ideas", exact: true });
   const search = page.getByRole("button", { name: "Search this project" });
   const profile = page.getByRole("button", { name: "Profile and settings" });
+  const projectName = projectMenu.locator("span").first();
+  await projectName.evaluate((element) => {
+    element.textContent = "An unusually long project name for a narrow viewport";
+  });
+  await expect.poll(async () => await page.evaluate(() =>
+    document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+  )).toBe(true);
+  const projectNameMetrics = await projectName.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+    text: element.textContent,
+  }));
+  expect(projectNameMetrics.scrollWidth, JSON.stringify(projectNameMetrics))
+    .toBeGreaterThan(projectNameMetrics.clientWidth);
+
   const [brandBounds, projectBounds, ideasBounds, searchBounds, profileBounds] = await Promise.all([
     brand.boundingBox(),
     projectMenu.boundingBox(),
@@ -1108,10 +1159,20 @@ test("keeps mobile controls reachable without horizontal overflow", async ({ pag
   if (!brandBounds || !projectBounds || !ideasBounds || !searchBounds || !profileBounds) {
     throw new Error("Mobile header controls are not visible");
   }
-  expect(Math.abs(brandBounds.y - profileBounds.y)).toBeLessThanOrEqual(1);
-  expect(Math.abs(projectBounds.y - ideasBounds.y)).toBeLessThanOrEqual(1);
-  expect(Math.abs(projectBounds.y - searchBounds.y)).toBeLessThanOrEqual(1);
-  expect(projectBounds.y).toBeGreaterThanOrEqual(brandBounds.y + brandBounds.height + 4);
+  expect(Math.abs(brandBounds.y - projectBounds.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(ideasBounds.y - searchBounds.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(ideasBounds.y - profileBounds.y)).toBeLessThanOrEqual(1);
+  expect(ideasBounds.y).toBeGreaterThanOrEqual(brandBounds.y + brandBounds.height + 4);
+
+  await brand.focus();
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+  await expect(projectMenu).toBeFocused();
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+  await expect(ideas).toBeFocused();
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+  await expect(search).toBeFocused();
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+  await expect(profile).toBeFocused();
 
   await projectMenu.click();
   const menu = page.getByRole("menu", { name: "Organizations and projects" });
@@ -1124,6 +1185,17 @@ test("keeps mobile controls reachable without horizontal overflow", async ({ pag
   expect(menuBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height - 1);
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();
+  await expect(projectMenu).toBeFocused();
+
+  await profile.click();
+  const profileMenu = page.getByRole("menu", { name: "Profile and settings" });
+  await expect(profileMenu).toBeVisible();
+  await expect.poll(async () => await page.evaluate(() =>
+    document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+  )).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(profileMenu).toBeHidden();
+  await expect(profile).toBeFocused();
 
   const undersized = await page.locator("button:visible, a:visible").evaluateAll((elements) =>
     elements.flatMap((element) => {
