@@ -2,7 +2,12 @@ import type {
   OverviewConnection,
   OverviewSession,
 } from "../../src/features/overview/Overview";
-import type { AttachmentSummary, Intake, WorkItem } from "../../src/features/overview/model";
+import type {
+  AttachmentSummary,
+  Intake,
+  OwnerAttention,
+  WorkItem,
+} from "../../src/features/overview/model";
 import type {
   ProjectInfo,
   ProjectConcurrencySnapshot,
@@ -269,6 +274,9 @@ const overviewListeners = new Set<(overview: ProjectOverview) => void>();
 const workListeners = new Map<string, Set<WorkListener>>();
 const intakeListeners = new Map<string, Set<IntakeListener>>();
 let fixtureIntakeConflictRaised = false;
+let fixtureOwnerAttentionResolved = false;
+let fixtureOwnerAttentionSeen = false;
+let fixtureOwnerAttentionResponseAttempts = 0;
 const uploadAttempts = new Map<string, number>();
 const uploadedAttachments = new Map<string, {
   id: string;
@@ -289,12 +297,36 @@ function attachmentSummary(attachmentId: string): AttachmentSummary | undefined 
   return summary;
 }
 
+function ownerAttention(): OwnerAttention[] {
+  const scenario = fixtureScenario();
+  if (!scenario?.startsWith("owner-attention") || fixtureOwnerAttentionResolved) {
+    return [];
+  }
+  return [{
+    id: "owner-attention-release",
+    ...(scenario === "owner-attention-intake" ? { intakeId: "intake-waiting" } : {}),
+    agent: "Codex",
+    age: "now",
+    unseen: !fixtureOwnerAttentionSeen,
+    attention: {
+      id: "owner-attention-release",
+      kind: "Decision",
+      title: "Choose the project release order",
+      body: "Should the CLI publish before or after the hosted services?",
+      important: true,
+      options: ["Hosted services first", "CLI first"],
+      status: fixtureOwnerAttentionSeen ? "seen" : "open",
+    },
+  }];
+}
+
 function overview(): ProjectOverview {
   return {
     projectId: currentProject.id,
     projectName: currentProject.name,
     work: [...work],
     intakes: [...intakes],
+    ownerAttention: ownerAttention(),
   };
 }
 
@@ -714,10 +746,39 @@ const connection: OverviewConnection = {
     emitOverview();
   },
   async markAttentionSeen(attentionRequestId) {
+    const ownerRequest = ownerAttention().find(
+      (candidate) => candidate.attention.id === attentionRequestId,
+    );
+    if (ownerRequest) {
+      fixtureOwnerAttentionSeen = true;
+      document.documentElement.dataset.fixtureOwnerAttentionSeen = attentionRequestId;
+      emitOverview();
+      return;
+    }
     const item = work.find((candidate) => candidate.attention?.id === attentionRequestId);
     if (item) updateWork(item.id, (current) => ({ ...current, unseen: false }));
   },
   async respondToAttention(attentionRequestId, selectedOption, body) {
+    const ownerRequest = ownerAttention().find(
+      (candidate) => candidate.attention.id === attentionRequestId,
+    );
+    if (ownerRequest) {
+      fixtureOwnerAttentionResponseAttempts += 1;
+      document.documentElement.dataset.fixtureOwnerAttentionResponse = JSON.stringify({
+        attentionRequestId,
+        selectedOption,
+        body,
+      });
+      if (
+        fixtureScenario() === "owner-attention-error" &&
+        fixtureOwnerAttentionResponseAttempts === 1
+      ) {
+        throw new Error("fixture owner Attention response failed");
+      }
+      fixtureOwnerAttentionResolved = true;
+      emitOverview();
+      return;
+    }
     const item = work.find((candidate) => candidate.attention?.id === attentionRequestId);
     if (!item) throw new Error("fixture attention not found");
     if (fixtureScenario() === "attention-conflict") {
@@ -752,6 +813,15 @@ const connection: OverviewConnection = {
     }));
   },
   async resolveAttention(attentionRequestId) {
+    const ownerRequest = ownerAttention().find(
+      (candidate) => candidate.attention.id === attentionRequestId,
+    );
+    if (ownerRequest) {
+      document.documentElement.dataset.fixtureOwnerAttentionResolution = attentionRequestId;
+      fixtureOwnerAttentionResolved = true;
+      emitOverview();
+      return;
+    }
     await this.respondToAttention(attentionRequestId, undefined, "Resolved without response");
   },
   async addComment(workItemId, body, attachmentIds = []) {

@@ -848,6 +848,75 @@ test("keeps a human draft when an agent wins a simultaneous Attention edit", asy
   );
 });
 
+test("renders Intake-related owner Attention directly in Needs You", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=owner-attention-intake");
+  const card = page.getByRole("article", {
+    name: "Choose the project release order",
+  });
+
+  await expect(card).toBeVisible();
+  await expect(card.getByText("important", { exact: true })).toBeVisible();
+  await expect(card.getByText("Codex is asking about Intake.", { exact: false })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Hosted services first" })).toBeVisible();
+  await expect(page.locator(".work-section--attention .section-heading__count")).toHaveText("2");
+  await expect(card.locator("[data-work-id]")).toHaveCount(0);
+  await expect(card.getByRole("link")).toHaveCount(0);
+
+  await card.getByRole("textbox", { name: "Response to agent" }).focus();
+  await expect.poll(async () => await page.evaluate(() =>
+    document.documentElement.dataset.fixtureOwnerAttentionSeen,
+  )).toBe("owner-attention-release");
+});
+
+test("responds to owner Attention and removes only its Needs You card", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=owner-attention");
+  const card = page.getByRole("article", {
+    name: "Choose the project release order",
+  });
+  await card.getByRole("button", { name: "Hosted services first" }).click();
+  const response = card.getByRole("textbox", { name: "Response to agent" });
+  await response.fill("Publish the hosted services, then the exact CLI archive.");
+  await response.press("Control+Enter");
+
+  await expect(card).toBeHidden();
+  await expect(page.getByRole("status")).toContainText("Response sent to your agent");
+  await expect(page.locator('[data-work-id="work-needs"]')).toBeVisible();
+  await expect.poll(async () => await page.evaluate(() =>
+    JSON.parse(document.documentElement.dataset.fixtureOwnerAttentionResponse ?? "{}"),
+  )).toEqual({
+    attentionRequestId: "owner-attention-release",
+    selectedOption: "Hosted services first",
+    body: "Publish the hosted services, then the exact CLI archive.",
+  });
+});
+
+test("keeps a failed owner Attention draft, clears it after retry, and resolves without response", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo?scenario=owner-attention-error");
+  let card = page.getByRole("article", {
+    name: "Choose the project release order",
+  });
+  const response = card.getByRole("textbox", { name: "Response to agent" });
+  await response.focus();
+  await expect.poll(async () => await page.evaluate(() =>
+    document.documentElement.dataset.fixtureOwnerAttentionSeen,
+  )).toBe("owner-attention-release");
+  await response.fill("Keep this response through a transient failure.");
+  await card.getByRole("button", { name: "Respond", exact: true }).click();
+  await expect(card.getByRole("alert")).toContainText("your draft was kept");
+  await expect(response).toHaveValue("Keep this response through a transient failure.");
+  await card.getByRole("button", { name: "Respond", exact: true }).click();
+  await expect(card).toBeHidden();
+
+  await page.goto("/app/fixture-studio/dongo?scenario=owner-attention");
+  card = page.getByRole("article", { name: "Choose the project release order" });
+  await expect(card.getByRole("textbox", { name: "Response to agent" })).toHaveValue("");
+  await card.getByRole("button", { name: "Resolve without response" }).click();
+  await expect(card).toBeHidden();
+  await expect.poll(async () => await page.evaluate(() =>
+    document.documentElement.dataset.fixtureOwnerAttentionResolution,
+  )).toBe("owner-attention-release");
+});
+
 test("keeps wide detail synchronized while arrows move through the sidebar", async ({ page }) => {
   await openWideOverview(page);
   const first = page.locator('[data-work-id="work-ready-a"]');

@@ -453,6 +453,11 @@ describe("agent lifecycle reliability", () => {
       email: `${seedKey}@development.invalid`,
       name: "dongo developer",
     });
+    await human.mutation(api.domains.notifications.index.registerDevice, {
+      platform: "android",
+      appInstallationId: "owner-attention-device",
+      pushToken: "owner-attention-push-token",
+    });
     const intake = await human.mutation(api.domains.intake.index.create, {
       projectId: context.projectId,
       text: "Clarify the requested release boundary.",
@@ -465,6 +470,7 @@ describe("agent lifecycle reliability", () => {
       title: "Choose the release boundary",
       body: "Should this include the adjacent service?",
       options: ["Current project", "Include adjacent service"],
+      important: true,
       idempotencyKey: "request-owner-attention-once",
     };
 
@@ -488,6 +494,20 @@ describe("agent lifecycle reliability", () => {
     });
     expect(attention.workItemId).toBeUndefined();
 
+    const scheduled = await t.run(async (ctx) =>
+      await ctx.db
+        .query("notificationOutbox")
+        .withIndex("by_attention", (query) =>
+          query.eq("attentionRequestId", attention.id as Id<"attentionRequests">),
+        )
+        .collect(),
+    );
+    expect(scheduled).toHaveLength(2);
+    expect(scheduled.map((delivery) => delivery.channel).sort()).toEqual([
+      "email",
+      "push",
+    ]);
+
     const overview = await human.query(api.domains.overview.index.getForHuman, {
       projectId: context.projectId,
     });
@@ -508,6 +528,15 @@ describe("agent lifecycle reliability", () => {
     expect(response).toMatchObject({ status: "resolved" });
     expect(response.commentId).toBeUndefined();
     expect(await t.run((ctx) => ctx.db.query("comments").collect())).toEqual([]);
+    const cancelled = await t.run(async (ctx) =>
+      await ctx.db
+        .query("notificationOutbox")
+        .withIndex("by_attention", (query) =>
+          query.eq("attentionRequestId", attention.id as Id<"attentionRequests">),
+        )
+        .collect(),
+    );
+    expect(cancelled.every((delivery) => delivery.status === "cancelled")).toBe(true);
 
     const resolved = await successfulData(t, context, "get_attention", {
       attentionId: attention.id,

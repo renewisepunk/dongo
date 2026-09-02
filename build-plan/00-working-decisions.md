@@ -384,7 +384,10 @@ Human responses to general Attention are stored on the request itself rather
 than fabricating a Work comment. Requests appear in the owner's Needs You view,
 remain durable after the requesting session ends, and are returned to the
 requesting installation on a later explicit pull. They do not pause unrelated
-work or wake a stopped agent.
+work or wake a stopped agent. General Attention uses the same notification
+policy as Work Attention: enabled-device push is immediate, and unresolved
+Important requests receive the one-hour email escalation. Delivery identifies
+the durable project or optional Intake target without fabricating Work.
 
 ## Decisions that may wait until after the walking skeleton
 

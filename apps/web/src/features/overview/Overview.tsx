@@ -2592,7 +2592,7 @@ function OwnerAttentionCard(props: OwnerAttentionCardProps) {
     <article
       class="attention-card owner-attention-card"
       aria-labelledby={`owner-attention-${props.item.id}`}
-      onFocus={markSeen}
+      onFocusIn={markSeen}
       onPointerEnter={markSeen}
     >
       <div class="attention-card__head">

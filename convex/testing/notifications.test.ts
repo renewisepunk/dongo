@@ -168,6 +168,93 @@ describe("notification scheduling", () => {
     });
   });
 
+  it("claims target-aware Intake push and email deliveries without exposing Intake text", async () => {
+    const human = convexTest(schema, modules).withIdentity(identity);
+    await human.mutation(api.domains.identity.index.bootstrapCurrentUser, {});
+    await human.mutation(api.domains.notifications.index.registerDevice, {
+      platform: "android",
+      appInstallationId: "android-general-attention",
+      pushToken: "fcm-general-attention-token",
+    });
+    const seeded = await seedAttention(human, "important", "intake");
+    const createdAt = Date.now();
+    await expect(
+      human.mutation(internal.domains.notifications.index.enqueueForAttention, {
+        attentionRequestId: seeded.attentionRequestId,
+      }),
+    ).resolves.toEqual({ push: 1, email: 1 });
+
+    const push = await human.mutation(
+      internal.domains.notifications.dispatcher.claimDue,
+      { limit: 1, now: createdAt + 1_000 },
+    );
+    expect(push).toHaveLength(1);
+    expect(push[0]?.request).toMatchObject({
+      channel: "push",
+      attentionRequestId: seeded.attentionRequestId,
+      workItemId: seeded.targetId,
+      target: { kind: "intake", id: seeded.targetId },
+    });
+    expect(push[0]?.request.deepLinkPath).not.toContain("?");
+    expect(JSON.stringify(push[0]?.request)).not.toContain(
+      "Private Intake content must not enter notification payloads",
+    );
+
+    const email = await human.mutation(
+      internal.domains.notifications.dispatcher.claimDue,
+      { limit: 1, now: createdAt + IMPORTANT_EMAIL_DELAY_MS + 5_000 },
+    );
+    expect(email).toHaveLength(1);
+    expect(email[0]?.request).toMatchObject({
+      channel: "email",
+      workIdentifier: "Inbox item",
+      workTitle: "Linked Inbox item",
+      target: { kind: "intake", id: seeded.targetId },
+    });
+    expect(JSON.stringify(email[0]?.request)).not.toContain(
+      "Private Intake content must not enter notification payloads",
+    );
+
+    await human.mutation(api.domains.attention.index.respond, {
+      attentionRequestId: seeded.attentionRequestId,
+      body: "Proceed with the bounded target.",
+      idempotencyKey: crypto.randomUUID(),
+    });
+    const cancelled = await human.run(async (ctx) =>
+      await ctx.db
+        .query("notificationOutbox")
+        .withIndex("by_attention", (query) =>
+          query.eq("attentionRequestId", seeded.attentionRequestId),
+        )
+        .collect(),
+    );
+    expect(cancelled).toHaveLength(2);
+    expect(cancelled.every((delivery) => delivery.status === "cancelled")).toBe(true);
+  });
+
+  it("claims project-level Important email against the Needs You route", async () => {
+    const human = convexTest(schema, modules).withIdentity(identity);
+    await human.mutation(api.domains.identity.index.bootstrapCurrentUser, {});
+    const seeded = await seedAttention(human, "important", "project");
+    await human.mutation(
+      internal.domains.notifications.index.enqueueForAttention,
+      { attentionRequestId: seeded.attentionRequestId },
+    );
+    const email = await human.mutation(
+      internal.domains.notifications.dispatcher.claimDue,
+      { limit: 1, now: Date.now() + IMPORTANT_EMAIL_DELAY_MS + 5_000 },
+    );
+    expect(email).toHaveLength(1);
+    expect(email[0]?.request).toMatchObject({
+      channel: "email",
+      workItemId: seeded.projectId,
+      workIdentifier: "Project request",
+      workTitle: "Project-wide attention",
+      target: { kind: "project", id: seeded.projectId },
+    });
+    expect(email[0]?.request.deepLinkPath).not.toContain("?");
+  });
+
   it("claims due deliveries atomically and ignores stale completion attempts", async () => {
     const human = convexTest(schema, modules).withIdentity(identity);
     await human.mutation(api.domains.identity.index.bootstrapCurrentUser, {});
@@ -191,6 +278,8 @@ describe("notification scheduling", () => {
       platform: "android",
       attentionRequestId: seeded.attentionRequestId,
     });
+    expect(claimed[0]?.request).not.toHaveProperty("target");
+    expect(claimed[0]?.request.deepLinkPath).toContain("?work=");
     expect(JSON.stringify(claimed[0]?.request)).not.toContain(
       "Choose a release path",
     );
@@ -355,7 +444,12 @@ describe("notification scheduling", () => {
 async function seedAttention(
   t: ReturnType<typeof convexTest>,
   urgency: "normal" | "important",
-): Promise<{ attentionRequestId: Id<"attentionRequests"> }> {
+  target: "work" | "intake" | "project" = "work",
+): Promise<{
+  attentionRequestId: Id<"attentionRequests">;
+  projectId: Id<"projects">;
+  targetId: string;
+}> {
   return await t.run(async (ctx) => {
     const profile = await ctx.db
       .query("humanProfiles")
@@ -397,31 +491,47 @@ async function seedAttention(
       agentType: "test",
       createdAt: now,
     });
-    await ctx.db.insert("actors", {
+    const humanActorId = await ctx.db.insert("actors", {
       organizationId,
       type: "human",
       name: profile.name,
       profileId: profile._id,
       createdAt: now,
     });
-    const workItemId = await ctx.db.insert("workItems", {
-      organizationId,
-      projectId,
-      number: 1,
-      identifier: "NOT-1",
-      title: "Choose a release path",
-      kind: "decision",
-      state: "ready",
-      rank: 1_024,
-      createdByActorId: actorId,
-      revision: 1,
-      createdAt: now,
-      updatedAt: now,
-    });
+    const workItemId = target === "work"
+      ? await ctx.db.insert("workItems", {
+          organizationId,
+          projectId,
+          number: 1,
+          identifier: "NOT-1",
+          title: "Choose a release path",
+          kind: "decision",
+          state: "ready",
+          rank: 1_024,
+          createdByActorId: actorId,
+          revision: 1,
+          createdAt: now,
+          updatedAt: now,
+        })
+      : undefined;
+    const intakeId = target === "intake"
+      ? await ctx.db.insert("intakes", {
+          organizationId,
+          projectId,
+          createdByProfileId: profile._id,
+          createdByActorId: humanActorId,
+          text: "Private Intake content must not enter notification payloads",
+          status: "new",
+          revision: 1,
+          createdAt: now,
+          updatedAt: now,
+        })
+      : undefined;
     const attentionRequestId = await ctx.db.insert("attentionRequests", {
       organizationId,
       projectId,
       workItemId,
+      intakeId,
       requestedByActorId: actorId,
       requestedFromProfileId: profile._id,
       kind: "decision",
@@ -430,6 +540,10 @@ async function seedAttention(
       status: "open",
       createdAt: now,
     });
-    return { attentionRequestId };
+    return {
+      attentionRequestId,
+      projectId,
+      targetId: workItemId ?? intakeId ?? projectId,
+    };
   });
 }

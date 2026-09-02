@@ -235,6 +235,10 @@ export const requestForOwner = internalMutation({
           requestId: principal.requestId,
           createdAt: now,
         });
+        await enqueueAttentionNotifications(ctx, {
+          attentionRequestId,
+          now,
+        });
         return { attentionRequestId };
       },
     );
