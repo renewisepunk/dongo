@@ -257,6 +257,132 @@ describe("local runner delivery", () => {
     )).rejects.toThrow(/not active/u);
   });
 
+  it("opts an exact automatic runner into new Inbox Intake and queues autonomous Work separately", async () => {
+    const fixture = await runnerFixture();
+    const selectedToken = runnerToken("u", "v");
+    const otherToken = runnerToken("w", "x");
+    const selected = await register(fixture, selectedToken, "Selected Mac", "automatic");
+    const other = await register(fixture, otherToken, "Other Mac", "automatic");
+
+    const beforeOptIn = await fixture.human.mutation(api.domains.intake.index.create, {
+      projectId: fixture.projectId,
+      text: "This Intake predates the opt-in.",
+      attachmentIds: [],
+      idempotencyKey: "runner-intake-before-opt-in",
+    });
+    const configured = await fixture.human.mutation(
+      api.domains.runner.index.configureAutomaticIntake,
+      {
+        projectId: fixture.projectId,
+        expectedRevision: 0,
+        registrationId: selected.id,
+        harness: "codex",
+        idempotencyKey: "runner-auto-intake-enable",
+      },
+    );
+    expect(configured).toMatchObject({
+      enabled: true,
+      revision: 1,
+      registrationId: selected.id,
+      harness: "codex",
+    });
+
+    const created = await fixture.human.mutation(api.domains.intake.index.create, {
+      projectId: fixture.projectId,
+      text: "Triage and create focused Work.",
+      attachmentIds: [],
+      idempotencyKey: "runner-intake-after-opt-in",
+    });
+    const snapshot = await fixture.human.query(api.domains.runner.index.listForHuman, {
+      projectId: fixture.projectId,
+    });
+    expect(snapshot.automaticIntake).toMatchObject({ enabled: true, revision: 1 });
+    expect(snapshot.jobs).toHaveLength(1);
+    expect(snapshot.jobs[0]).toMatchObject({
+      kind: "intake",
+      intakeId: created.intakeId,
+      targetRegistrationId: selected.id,
+      harness: "codex",
+      state: "queued",
+    });
+    expect(snapshot.jobs[0]).not.toHaveProperty("workItemId");
+    expect(snapshot.jobs[0]).not.toHaveProperty("workIdentifier");
+    expect(snapshot.jobs[0]?.intakeId).not.toBe(beforeOptIn.intakeId);
+
+    const unavailableElsewhere = await fixture.root.mutation(
+      internal.domains.runner.index.reserve,
+      waitArgs(fixture.authorization, other.id, otherToken, "automatic"),
+    );
+    expect(unavailableElsewhere.job).toBeUndefined();
+    const delivery = await fixture.root.mutation(
+      internal.domains.runner.index.reserve,
+      waitArgs(fixture.authorization, selected.id, selectedToken, "automatic"),
+    );
+    expect(delivery.job).toMatchObject({
+      kind: "intake",
+      intakeId: created.intakeId,
+      registrationId: selected.id,
+      state: "delivered",
+    });
+
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(fixture.projectId, { executionMode: "autonomous" });
+    });
+    const claimed = await fixture.root.mutation(internal.domains.intake.index.claim, {
+      authorization: fixture.authorization,
+      intakeId: created.intakeId,
+      expectedRevision: created.revision,
+      idempotencyKey: "runner-intake-claim",
+    });
+    const triaged = await fixture.root.mutation(internal.domains.intake.index.completeTriage, {
+      authorization: fixture.authorization,
+      intakeId: created.intakeId,
+      expectedRevision: claimed.revision,
+      create: [{ title: "Implement the focused request", kind: "task" }],
+      link: [],
+      dismiss: false,
+      idempotencyKey: "runner-intake-triage",
+    });
+    const afterTriage = await fixture.human.query(api.domains.runner.index.listForHuman, {
+      projectId: fixture.projectId,
+    });
+    expect(afterTriage.jobs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "work",
+        workItemId: triaged.workItemIds[0],
+        targetRegistrationId: selected.id,
+        harness: "codex",
+        state: "queued",
+      }),
+    ]));
+
+    await fixture.human.mutation(api.domains.runner.index.revokeForHuman, {
+      projectId: fixture.projectId,
+      registrationId: selected.id,
+    });
+    const disabled = await fixture.human.query(api.domains.runner.index.listForHuman, {
+      projectId: fixture.projectId,
+    });
+    expect(disabled.automaticIntake).toEqual({ enabled: false, revision: 2 });
+    expect(disabled.jobs.find((job) => job.kind === "work")).toMatchObject({ state: "cancelled" });
+    expect(disabled.jobs.find((job) => job.kind === "intake")).toMatchObject({ state: "cancel_requested" });
+  });
+
+  it("requires local automatic approval before an owner can enable automatic Inbox processing", async () => {
+    const fixture = await runnerFixture();
+    const registration = await register(fixture, runnerToken("y", "z"), "Approval Mac");
+    await expect(fixture.human.mutation(
+      api.domains.runner.index.configureAutomaticIntake,
+      {
+        projectId: fixture.projectId,
+        expectedRevision: 0,
+        registrationId: registration.id,
+        harness: "codex",
+        idempotencyKey: "runner-auto-intake-reject-ask",
+      },
+    )).rejects.toThrow(/automatic approval/u);
+  });
+
   it("rejects a stale execution lease and records a bounded failure", async () => {
     const fixture = await runnerFixture();
     const token = runnerToken("n", "p");
@@ -312,7 +438,12 @@ function runnerToken(prefix: string, secret: string) {
   return `dng_run_${prefix.repeat(11)}_${secret.repeat(43)}`;
 }
 
-function waitArgs(authorization: Authorization, registrationId: string, token: string) {
+function waitArgs(
+  authorization: Authorization,
+  registrationId: string,
+  token: string,
+  approvalMode: "ask" | "automatic" = "ask",
+) {
   return {
     authorization,
     registrationId: registrationId as Id<"runnerRegistrations">,
@@ -321,7 +452,7 @@ function waitArgs(authorization: Authorization, registrationId: string, token: s
     platform: "darwin" as const,
     version: "0.1.0",
     harnesses: ["codex" as const],
-    approvalMode: "ask" as const,
+    approvalMode,
   };
 }
 
@@ -329,6 +460,7 @@ async function register(
   fixture: Awaited<ReturnType<typeof runnerFixture>>,
   token: string,
   label: string,
+  approvalMode: "ask" | "automatic" = "ask",
 ) {
   return await fixture.root.mutation(internal.domains.runner.index.register, {
     authorization: fixture.authorization,
@@ -337,7 +469,7 @@ async function register(
     platform: "darwin",
     version: "0.1.0",
     harnesses: ["codex"],
-    approvalMode: "ask",
+    approvalMode,
   });
 }
 

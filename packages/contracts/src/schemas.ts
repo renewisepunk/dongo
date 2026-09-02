@@ -68,6 +68,7 @@ export const intakeSchema = z
     createdBy: actorSummarySchema,
     claimedBy: actorSummarySchema.optional(),
     claimExpiresAt: timestamp.optional(),
+    hasOpenAttention: z.boolean().optional(),
     attachmentIds: z.array(identifier).max(20),
     linkedWorkItemIds: z.array(identifier).max(500),
     createdAt: timestamp,
@@ -293,6 +294,7 @@ export const attachmentAccessSchema = z
 export const runnerHarnessSchema = z.enum(["codex", "claude"]);
 export const runnerPlatformSchema = z.enum(["darwin", "linux"]);
 export const runnerApprovalModeSchema = z.enum(["ask", "automatic"]);
+export const runnerJobKindSchema = z.enum(["work", "intake"]);
 export const runnerJobStateSchema = z.enum([
   "queued",
   "delivered",
@@ -327,8 +329,11 @@ export const runnerRegistrationSchema = z.object({
 export const runnerJobSchema = z.object({
   id: identifier,
   projectId: identifier,
-  workItemId: identifier,
-  workIdentifier: z.string().min(1).max(64),
+  kind: runnerJobKindSchema,
+  workItemId: identifier.optional(),
+  workIdentifier: z.string().min(1).max(64).optional(),
+  intakeId: identifier.optional(),
+  targetRegistrationId: identifier.optional(),
   harness: runnerHarnessSchema,
   state: runnerJobStateSchema,
   revision: z.number().int().positive(),
@@ -345,7 +350,21 @@ export const runnerJobSchema = z.object({
   cancellationRequestedAt: timestamp.optional(),
   terminalAt: timestamp.optional(),
   updatedAt: timestamp,
-}).strict();
+}).strict().superRefine((job, context) => {
+  const workTarget = job.workItemId !== undefined && job.workIdentifier !== undefined;
+  const anyWorkTarget = job.workItemId !== undefined || job.workIdentifier !== undefined;
+  const intakeTarget = job.intakeId !== undefined;
+  if (
+    (job.kind === "work" && (!workTarget || intakeTarget)) ||
+    (job.kind === "intake" && (!intakeTarget || anyWorkTarget))
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Runner job target does not match its kind",
+      path: ["kind"],
+    });
+  }
+});
 
 export const runnerWaitSchema = z.object({
   registration: runnerRegistrationSchema,

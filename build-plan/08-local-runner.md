@@ -26,6 +26,8 @@ Included:
 - macOS user LaunchAgent and Linux user-level systemd service installation;
 - one project-scoped runner registration per local repository connection;
 - local ask-before-run and explicit per-repository automatic modes;
+- a separate project-owner opt-in that targets new Inbox Intake to one exact
+  automatic-mode registration and harness;
 - durable queueing, status, cancellation, revocation, and bounded diagnostics.
 
 Excluded:
@@ -43,6 +45,8 @@ Excluded:
 ### Hosted dongo may
 
 - identify the authorized project and WorkItem from server state;
+- identify one newly created Intake when the project owner has enabled the
+  exact automatic Intake policy;
 - accept a human request to queue that Ready WorkItem for `codex` or `claude`;
 - select an eligible online registration or leave the job durably unassigned;
 - grant one revision-aware execution lease;
@@ -98,6 +102,7 @@ The transport-neutral v1 job is deliberately command-free:
 ```ts
 type RunnerHarness = "codex" | "claude";
 type RunnerApprovalMode = "ask" | "automatic";
+type RunnerJobKind = "work" | "intake";
 type RunnerJobState =
   | "queued"
   | "delivered"
@@ -114,8 +119,11 @@ type RunnerJobState =
 type RunnerJob = {
   id: string;
   projectRef: string;
-  workItemId: string;
-  workIdentifier: string;
+  kind: RunnerJobKind;
+  workItemId?: string;
+  workIdentifier?: string;
+  intakeId?: string;
+  targetRegistrationId?: string;
   harness: RunnerHarness;
   state: RunnerJobState;
   revision: number;
@@ -131,12 +139,14 @@ type RunnerJob = {
 };
 ```
 
-`projectRef`, `workItemId`, and `workIdentifier` are returned for local
-validation and display but are derived from the authorized server context. The
-job does not copy the Work goal or comments into a remote command. The local
-instruction tells the selected harness to start a dongo session in the approved
-repository and fetch the canonical item by identifier through its existing
-project-scoped dongo integration.
+`projectRef` and the Work or Intake target are returned for local validation and
+display but are derived from the authorized server context. The job does not
+copy Intake text, attachments, Work goals, or comments into a remote command.
+The local instruction tells the selected harness to start a dongo session in
+the approved repository and fetch the canonical target through its existing
+project-scoped dongo integration. An Intake instruction is triage-only: create,
+link, dismiss, or request Attention, then stop. It must not implement resulting
+Work in that job. Eligible Ready Work is queued separately in autonomous mode.
 
 ## State machine
 
@@ -152,15 +162,15 @@ starting|running|blocked                 -> cancel_requested -> cancelled|failed
 queued|delivered|awaiting_local_approval -> expired
 ```
 
-- Enqueue is idempotent for one WorkItem while a non-terminal job exists.
+- Enqueue is idempotent for one WorkItem or Intake while a non-terminal job exists.
 - Delivery is a reservation, not execution. The runner acknowledges before it
   asks locally or starts a process.
 - Only the selected registration may advance the job after delivery.
 - `starting` atomically acquires the execution lease. Lease loss stops local
   mutation and the harness process before any reclaim attempt.
 - `blocked` retains the lease only for a short, explicit local condition. Human
-  Attention inside the Work lifecycle uses normal dongo Attention and releases
-  the Work claim according to the existing contract.
+  Attention inside the Work or Intake lifecycle uses normal dongo Attention;
+  the exact local harness session resumes only after that Attention is resolved.
 - Cancellation is cooperative first and forceful after a bounded grace period.
 - Terminal states are immutable. Exact idempotency replay returns the original
   result; a changed payload fails.
@@ -180,6 +190,13 @@ and backs off after transport failure through 1, 2, 5, 10, and at most 30
 seconds with jitter. Successful empty waits do not invoke a model and reopen
 without an artificial delay. This reuses the deployed API boundary, survives
 edge restarts, and keeps Convex authoritative without adding socket-local state.
+
+An automatic Intake job is created transactionally only for Intake created
+after the owner opt-in. It is pinned to the selected registration, so another
+runner cannot reserve it. Offline delivery remains durable and never implies
+that dongo can wake a sleeping or powered-off computer. Revocation, a reported
+approval-mode downgrade, or loss of the selected harness disables the policy
+and cancels or requests cancellation of that registration's outstanding jobs.
 
 Each wait updates bounded presence: registration ID, runner version, operating
 system, supported harnesses, approval modes, and safe health codes. It never

@@ -40,6 +40,7 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
     repositoryRoot: process.cwd(),
     registrationId: "registration-1",
     jobId: "job-1",
+    kind: "work" as const,
     workIdentifier: "dong027",
     signal: new AbortController().signal,
     log: async () => undefined,
@@ -91,6 +92,7 @@ test("Codex adapter refuses an invalid server identifier before launch", async (
     repositoryRoot: process.cwd(),
     registrationId: "registration-1",
     jobId: "job-1",
+    kind: "work",
     workIdentifier: "dong027; rm -rf /",
     signal: new AbortController().signal,
     log: async () => undefined,
@@ -133,6 +135,7 @@ test("Claude Code adapter uses print mode and stdin, then resumes only its exact
     repositoryRoot: process.cwd(),
     registrationId: "registration-2",
     jobId: "job-2",
+    kind: "work" as const,
     workIdentifier: "dong028",
     signal: new AbortController().signal,
     log: async () => undefined,
@@ -184,6 +187,7 @@ test("harness sessions cannot be resumed from a different repository", async () 
     repositoryRoot: process.cwd(),
     registrationId: "registration-3",
     jobId: "job-3",
+    kind: "work" as const,
     workIdentifier: "dong028",
     signal: new AbortController().signal,
     log: async () => undefined,
@@ -235,6 +239,7 @@ test("adapter cancellation terminates the local harness and reports no remote ou
     repositoryRoot: process.cwd(),
     registrationId: "registration-cancel",
     jobId: "job-cancel",
+    kind: "work",
     workIdentifier: "dong028",
     signal: controller.signal,
     log: async () => undefined,
@@ -246,6 +251,41 @@ test("adapter cancellation terminates the local harness and reports no remote ou
     safeSummary: "Claude Code was stopped after the dongo job was cancelled.",
     sessionReferencePresent: false,
   });
+});
+
+test("runner adapters use a fixed triage-only prompt for an Intake job", async () => {
+  const calls: Array<{ args: string[]; input: string }> = [];
+  const spawnProcess = (_executable: string, args: string[]) => {
+    const child = fakeChild();
+    const call = { args, input: "" };
+    child.stdin.on("data", (value) => { call.input += value.toString(); });
+    calls.push(call);
+    queueMicrotask(() => {
+      child.stdout.end(`${JSON.stringify({ type: "thread.started", thread_id: "0199a213-81c0-7800-8aa1-bbab2a035a53" })}\n`);
+      child.stderr.end();
+      child.emit("exit", 0);
+    });
+    return child;
+  };
+  const adapter = new CodexRunnerAdapter({
+    store: new MemorySecretStore(),
+    executablePath: "/bin/sh",
+    spawnProcess: spawnProcess as never,
+  });
+  await adapter.execute({
+    repositoryRoot: process.cwd(),
+    registrationId: "registration-intake",
+    jobId: "job-intake",
+    kind: "intake",
+    intakeId: "ks705f6sdbjpvgqhn812x0s7a18dnw1d",
+    signal: new AbortController().signal,
+    log: async () => undefined,
+  });
+  const execution = calls.find(({ args }) => args.at(-1) === "-");
+  assert.match(execution?.input ?? "", /exact dongo Intake ks705f6sdbjpvgqhn812x0s7a18dnw1d/u);
+  assert.match(execution?.input ?? "", /only this Intake triage/u);
+  assert.match(execution?.input ?? "", /do not start or implement/u);
+  assert.doesNotMatch(execution?.args.join(" ") ?? "", /ks705f6/u);
 });
 
 function fakeChild() {

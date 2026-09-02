@@ -10,6 +10,7 @@ import {
   type ProjectInfo,
   type ProjectInstallation,
   type RunnerRegistration,
+  type RunnerHarness,
   type RunnerJobState,
   type RunnerSnapshot,
 } from "../../lib/project-data";
@@ -46,6 +47,11 @@ type ProjectSettingsConnection = {
   updateOrganization: (name: string) => Promise<{ name: string; slug: string }>;
   revokeInstallation: (installationId: string) => Promise<void>;
   revokeRunner: (registrationId: string) => Promise<RunnerRegistration>;
+  configureAutomaticIntake: (input: {
+    expectedRevision: number;
+    registrationId?: string;
+    harness?: RunnerHarness;
+  }) => Promise<RunnerSnapshot["automaticIntake"]>;
   createServiceCredential: (input: {
     label: string;
     scopes: string[];
@@ -161,7 +167,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   const [project, setProject] = createSignal<ProjectInfo>();
   const [administration, setAdministration] = createSignal<ProjectAdministration>();
   const [installations, setInstallations] = createSignal<ProjectInstallation[]>([]);
-  const [runners, setRunners] = createSignal<RunnerSnapshot>({ registrations: [], jobs: [], serverTime: Date.now() });
+  const [runners, setRunners] = createSignal<RunnerSnapshot>({ registrations: [], jobs: [], automaticIntake: { enabled: false, revision: 0 }, serverTime: Date.now() });
   const [projectName, setProjectName] = createSignal("");
   const [repositoryUrl, setRepositoryUrl] = createSignal("");
   const [executionMode, setExecutionMode] = createSignal<"manual" | "autonomous">("manual");
@@ -178,6 +184,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   const [revoking, setRevoking] = createSignal<string>();
   const [confirmRunnerRevoke, setConfirmRunnerRevoke] = createSignal<string>();
   const [revokingRunner, setRevokingRunner] = createSignal<string>();
+  const [configuringAutomaticIntake, setConfiguringAutomaticIntake] = createSignal(false);
   const [confirmRemove, setConfirmRemove] = createSignal<string>();
   const [removing, setRemoving] = createSignal<string>();
   const [addingMember, setAddingMember] = createSignal(false);
@@ -410,6 +417,25 @@ export function ProjectSettings(props: ProjectSettingsProps) {
       setError("The local runner could not be revoked. Try again.");
     } finally {
       setRevokingRunner(undefined);
+    }
+  };
+
+  const configureAutomaticIntake = async (registrationId?: string, harness?: RunnerHarness) => {
+    if (!connection || configuringAutomaticIntake()) return;
+    setConfiguringAutomaticIntake(true);
+    setError("");
+    try {
+      await connection.configureAutomaticIntake({
+        expectedRevision: runners().automaticIntake.revision,
+        ...(registrationId && harness ? { registrationId, harness } : {}),
+      });
+      setStatus(registrationId && harness
+        ? `New Inbox Intake will be processed automatically with ${harness === "claude" ? "Claude Code" : "Codex"} on the selected computer.`
+        : "Automatic Inbox processing is off.");
+    } catch {
+      setError("Automatic Inbox processing could not be changed. Refresh and try again.");
+    } finally {
+      setConfiguringAutomaticIntake(false);
     }
   };
 
@@ -709,7 +735,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
               <div class="settings-title-group">
                 <div class="eyebrow">Project settings</div>
                 <h1 class="settings-title">Local runner</h1>
-                <p class="auth-lede">Optionally queue Ready work for Codex or Claude Code on a computer you control.</p>
+                <p class="auth-lede">Queue Ready work, or opt in to automatically triage new Inbox Intake, on a computer you control.</p>
               </div>
               <Show when={owner()} fallback={<div class="security-note">Only an organization owner can view, install, or revoke local runners.</div>}>
                 <section class="settings-section runner-setup">
@@ -720,7 +746,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                     <li>Run <code>dongo runner install --harness codex</code>, <code>dongo runner install --harness claude</code>, or include both <code>--harness</code> options.</li>
                     <li>Confirm <code>dongo runner status</code> shows the service waiting.</li>
                   </ol>
-                  <p class="security-note">Local approval is required for every job by default. Add <code>--approval automatic</code> only when this exact repository and computer are deliberately trusted; automatic starts refuse a repository with uncommitted files. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects.</p>
+                  <p class="security-note">Local approval is required for every job by default. Add <code>--approval automatic</code> only when this exact repository and computer are deliberately trusted. Automatic Inbox processing remains off until an owner enables it below. Automatic starts refuse a repository with uncommitted files. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects.</p>
                 </section>
                 <section class="settings-section">
                   <div class="settings-section__title">Registered computers</div>
@@ -734,9 +760,25 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                         </div>
                         <div class="installation-row__meta" data-runner-presence={runnerPresence(runner).startsWith("online") ? "online" : "offline"}>{runnerPresence(runner)}</div>
                         <Show when={runner.status !== "revoked"} fallback={<span class="installation-row__meta">revoked</span>}>
-                          <Show when={confirmRunnerRevoke() === runner.id} fallback={<button class="button button--quiet button--danger" type="button" onClick={() => setConfirmRunnerRevoke(runner.id)}>Revoke</button>}>
-                            <div class="installation-row__actions"><button class="button button--danger" type="button" disabled={Boolean(revokingRunner())} onClick={() => void revokeLocalRunner(runner.id)}>{revokingRunner() === runner.id ? "Revoking…" : "Confirm"}</button><button class="button button--quiet" type="button" disabled={Boolean(revokingRunner())} onClick={() => setConfirmRunnerRevoke(undefined)}>Cancel</button></div>
-                          </Show>
+                          <div class="installation-row__actions">
+                            <Show when={runner.approvalMode === "automatic"} fallback={<span class="installation-row__meta">Reinstall with <code>--approval automatic</code> to enable automatic Inbox processing.</span>}>
+                              <Show
+                                when={runners().automaticIntake.enabled && runners().automaticIntake.registrationId === runner.id}
+                                fallback={<For each={runner.harnesses}>{(harness) => (
+                                  <button class="button button--quiet" type="button" disabled={configuringAutomaticIntake()} onClick={() => void configureAutomaticIntake(runner.id, harness)}>
+                                    Automatically process Inbox with {harness === "claude" ? "Claude Code" : "Codex"}
+                                  </button>
+                                )}</For>}
+                              >
+                                <button class="button button--quiet button--danger" type="button" disabled={configuringAutomaticIntake()} onClick={() => void configureAutomaticIntake()}>
+                                  {configuringAutomaticIntake() ? "Turning off…" : "Turn off automatic Inbox"}
+                                </button>
+                              </Show>
+                            </Show>
+                            <Show when={confirmRunnerRevoke() === runner.id} fallback={<button class="button button--quiet button--danger" type="button" onClick={() => setConfirmRunnerRevoke(runner.id)}>Revoke</button>}>
+                              <button class="button button--danger" type="button" disabled={Boolean(revokingRunner())} onClick={() => void revokeLocalRunner(runner.id)}>{revokingRunner() === runner.id ? "Revoking…" : "Confirm revoke"}</button><button class="button button--quiet" type="button" disabled={Boolean(revokingRunner())} onClick={() => setConfirmRunnerRevoke(undefined)}>Cancel</button>
+                            </Show>
+                          </div>
                         </Show>
                       </div>
                     )}</For>
@@ -744,15 +786,15 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                   </div>
                 </section>
                 <section class="settings-section">
-                  <div class="settings-section__title">Recent queued work</div>
+                  <div class="settings-section__title">Recent runner jobs</div>
                   <div class="installation-list">
                     <For each={runners().jobs.slice(0, 20)}>{(job) => (
                       <div class="installation-row">
-                        <div class="installation-row__name"><A href={`/app/${props.orgSlug}/${props.projectSlug}?work=${encodeURIComponent(job.workIdentifier)}`}>{job.workIdentifier}</A><span class="installation-row__meta">{job.harness === "claude" ? "Claude Code" : "Codex"} · {job.safeSummary ?? job.safeMessage ?? runnerJobLabel(job.state)}</span></div>
+                        <div class="installation-row__name"><A href={job.kind === "intake" ? `/app/${props.orgSlug}/${props.projectSlug}?intake=${encodeURIComponent(job.intakeId!)}` : `/app/${props.orgSlug}/${props.projectSlug}?work=${encodeURIComponent(job.workIdentifier!)}`}>{job.kind === "intake" ? "Inbox Intake" : job.workIdentifier}</A><span class="installation-row__meta">{job.harness === "claude" ? "Claude Code" : "Codex"} · {job.safeSummary ?? job.safeMessage ?? runnerJobLabel(job.state)}</span></div>
                         <span class="runner-state" data-state={job.state}>{runnerJobLabel(job.state)}</span>
                       </div>
                     )}</For>
-                    <Show when={runners().jobs.length === 0}><div class="note" style={{ padding: "16px" }}>No work has been queued for a local runner yet.</div></Show>
+                    <Show when={runners().jobs.length === 0}><div class="note" style={{ padding: "16px" }}>No jobs have been queued for a local runner yet.</div></Show>
                   </div>
                 </section>
               </Show>

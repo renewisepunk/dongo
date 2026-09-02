@@ -377,6 +377,55 @@ describe("operation registry", () => {
       harnesses: ["codex"],
       approvalMode: "ask",
     }).success).toBe(true);
+    const runnerJob = {
+      id: "job-1",
+      projectId: "project-1",
+      kind: "intake" as const,
+      intakeId: "intake-1",
+      targetRegistrationId: "registration-1",
+      harness: "codex" as const,
+      state: "queued" as const,
+      revision: 1,
+      requestedAt: 1,
+      expiresAt: 2,
+      updatedAt: 1,
+    };
+    expect(operationRegistry.runner_wait.outputSchema.safeParse({
+      registration: {
+        id: "registration-1",
+        projectId: "project-1",
+        installationId: "installation-1",
+        label: "Studio Mac",
+        platform: "darwin",
+        version: "0.1.0",
+        harnesses: ["codex"],
+        approvalMode: "automatic",
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      job: runnerJob,
+      wait: { status: "job_available", requestedSeconds: 20, elapsedMilliseconds: 1 },
+      serverTime: 2,
+    }).success).toBe(true);
+    expect(operationRegistry.runner_wait.outputSchema.safeParse({
+      registration: {
+        id: "registration-1",
+        projectId: "project-1",
+        installationId: "installation-1",
+        label: "Studio Mac",
+        platform: "darwin",
+        version: "0.1.0",
+        harnesses: ["codex"],
+        approvalMode: "automatic",
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      job: { ...runnerJob, workItemId: "work-1" },
+      wait: { status: "job_available", requestedSeconds: 20, elapsedMilliseconds: 1 },
+      serverTime: 2,
+    }).success).toBe(false);
     expect(operationRegistry.runner_update_job.inputSchema.safeParse({
       idempotencyKey: "runner-update-1",
       registrationId: "registration-1",

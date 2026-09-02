@@ -237,7 +237,13 @@ The local runner resolves its executable and absolute repository path from
 owner-only local configuration, constructs a bounded product-owned instruction,
 and starts the harness under that harness's own authentication and permission
 model. Ask-before-run is the default. Automatic execution is an explicit local
-opt-in for one approved repository and harness.
+opt-in for one approved repository and harness. Automatic processing of new
+Inbox Intake is a second, off-by-default owner opt-in bound to one active
+automatic-mode registration and one installed harness. Enabling it does not
+retroactively queue the Inbox. Each newly created Intake receives a targeted
+triage-only job; autonomous Work created by that triage is queued as a separate
+job. Downgrading, changing, or revoking the chosen runner disables the project
+opt-in rather than silently moving it to another computer.
 
 Runner jobs are durable, idempotent, revision-aware, leased, cancellable, and
 audited. One job can have one live execution; reconnect and response loss return

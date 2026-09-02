@@ -192,6 +192,7 @@ function runnerSnapshot(): RunnerSnapshot {
       updatedAt: now,
     }],
     jobs: runnerJobs,
+    automaticIntake: { enabled: false, revision: 0 },
     serverTime: now,
   };
 }
@@ -849,6 +850,7 @@ const connection: OverviewConnection = {
     const job: RunnerJob = {
       id: `runner-job-${runnerJobs.length + 1}`,
       projectId: currentProject.id,
+      kind: "work",
       workItemId,
       workIdentifier: item.identifier,
       harness,

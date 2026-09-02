@@ -32,7 +32,8 @@ gate has passed.
 | Threat | Required control |
 |---|---|
 | Remote command execution | The job schema has no command, flags, executable, environment, system prompt, or arbitrary instruction. Local code constructs a fixed instruction and argument vector. |
-| Cross-tenant or cross-project execution | Derive every identity from OAuth and the runner credential; verify project, registration, WorkItem, and lease on every transition. |
+| Cross-tenant or cross-project execution | Derive every identity from OAuth and the runner credential; verify project, registration, WorkItem or Intake, and lease on every transition. |
+| Automatic Intake sent to the wrong computer | Keep automatic Intake off by default; require an owner to select one active locally automatic registration and harness; target every job to that registration; disable the policy on revoke, approval downgrade, or harness removal. |
 | Credential theft | Store owner-only, atomically, outside repositories; reject unsafe ownership, mode, type, symlink, or corruption; never print or upload secrets. |
 | Executable or repository substitution | Persist and revalidate locally approved canonical identities; fail closed when the path, repository, or executable changes. |
 | Duplicate execution | Idempotent enqueue, atomic delivery reservation, one execution lease, exact replay, and reconciliation after uncertain responses. |
@@ -48,8 +49,9 @@ gate has passed.
 
 1. No server-controlled value reaches `spawn` as an executable or argument.
 2. No runner starts until the local repository and harness policy both validate.
-3. Automatic mode is enabled only by a local owner action and cannot be raised
-   remotely.
+3. Runner automatic mode is enabled only by a local owner action and cannot be
+   raised remotely. The separate project owner opt-in may only select a runner
+   already reporting that local mode and never falls over to another runner.
 4. One job owns at most one local process and one active dongo Run.
 5. Revocation, cancellation, and lease loss prevent further state mutation.
 6. Raw stdout, stderr, session IDs, paths, repository text, and environment never

@@ -12,7 +12,6 @@ import type {
   RunnerHarness,
   RunnerJob,
   RunnerPlatform,
-  WorkItem,
 } from "@dongo/contracts";
 import { CliCoreError } from "./errors.ts";
 import { sanitizedChildEnvironment } from "./process-environment.ts";
@@ -65,7 +64,9 @@ export interface RunnerLocalState {
   version: string;
   currentJob?: {
     id: string;
-    workIdentifier: string;
+    kind: RunnerJob["kind"];
+    workIdentifier?: string;
+    intakeId?: string;
     harness: RunnerHarness;
     state: RunnerJob["state"];
     revision: number;
@@ -100,7 +101,9 @@ export interface RunnerHarnessAdapter {
     repositoryRoot: string;
     registrationId: string;
     jobId: string;
-    workIdentifier: string;
+    kind: RunnerJob["kind"];
+    workIdentifier?: string;
+    intakeId?: string;
     signal: AbortSignal;
     log: (chunk: string) => Promise<void>;
   }): Promise<RunnerHarnessResult>;
@@ -114,7 +117,7 @@ export type RunnerAdapterResolver = (
 
 type RunnerApi = Pick<
   DongoClient,
-  "getWork" | "runnerRegister" | "runnerRotate" | "runnerRevoke" | "runnerWait" | "runnerUpdateJob"
+  "getIntake" | "getWork" | "runnerRegister" | "runnerRotate" | "runnerRevoke" | "runnerWait" | "runnerUpdateJob"
 >;
 
 export interface RunnerManagerOptions {
@@ -329,7 +332,13 @@ export class LocalRunnerManager {
       approvedAt: new Date(this.#now()).toISOString(),
     };
     await this.#store.set(approvalKey(this.#projectRef, jobId), JSON.stringify(approval));
-    return { approved: true, jobId, workIdentifier: state.currentJob.workIdentifier };
+    return {
+      approved: true,
+      jobId,
+      kind: state.currentJob.kind,
+      workIdentifier: state.currentJob.workIdentifier,
+      intakeId: state.currentJob.intakeId,
+    };
   }
 
   async disable() {
@@ -482,12 +491,19 @@ export class LocalRunnerManager {
       }
     }
     if (job.state === "blocked") {
-      const work = await this.#api.getWork({ workItemId: job.workItemId }, { signal });
-      if (work.state === "done") {
+      const target = job.kind === "work"
+        ? await this.#api.getWork({ workItemId: job.workItemId! }, { signal })
+        : await this.#api.getIntake({ intakeId: job.intakeId! }, { signal });
+      const complete = job.kind === "work"
+        ? target.state === "done"
+        : target.state === "processed" || target.state === "dismissed";
+      if (complete) {
         const running = await this.#updateJob(config, job, "running", {}, signal);
         await this.#updateJob(config, running, "completed", {
-          safeCode: "work_completed",
-          safeSummary: "The queued dongo work is complete.",
+          safeCode: job.kind === "work" ? "work_completed" : "intake_completed",
+          safeSummary: job.kind === "work"
+            ? "The queued dongo work is complete."
+            : "The queued dongo Intake was triaged.",
           sessionReferencePresent: true,
         }, signal);
         await this.#adapter?.(
@@ -501,11 +517,15 @@ export class LocalRunnerManager {
         });
         return;
       }
-      if (work.openAttention) {
+      const waitingForAttention = job.kind === "work"
+        ? "openAttention" in target && Boolean(target.openAttention)
+        : "hasOpenAttention" in target && Boolean(target.hasOpenAttention);
+      if (waitingForAttention) {
         await this.#writeState(this.#state(config, "blocked", job));
         await this.#sleep(15_000, signal);
         return;
       }
+      job = await this.#updateJob(config, job, "running", {}, signal);
     }
     if (job.state === "delivered" && config.approvalMode === "ask") {
       job = await this.#updateJob(config, job, "awaiting_local_approval", {}, signal);
@@ -573,7 +593,9 @@ export class LocalRunnerManager {
       repositoryRoot: config.repositoryRoot,
       registrationId: config.registrationId,
       jobId: current.id,
+      kind: current.kind,
       workIdentifier: current.workIdentifier,
+      intakeId: current.intakeId,
       signal: controller.signal,
       log: (chunk) => log.append(chunk),
     }).then(
@@ -599,8 +621,14 @@ export class LocalRunnerManager {
           this.#sleep(15_000, signal).then(() => ({ kind: "tick" as const })),
         ]);
         if (settled.kind === "result") {
-          const work = await this.#api.getWork({ workItemId: current.workItemId }, { signal });
-          if (work.state !== "done" && work.openAttention) {
+          const target = current.kind === "work"
+            ? await this.#api.getWork({ workItemId: current.workItemId }, { signal })
+            : await this.#api.getIntake({ intakeId: current.intakeId! }, { signal });
+          const waitingForAttention = current.kind === "work"
+            ? target.state !== "done" && "openAttention" in target && Boolean(target.openAttention)
+            : target.state !== "processed" && target.state !== "dismissed" &&
+              "hasOpenAttention" in target && Boolean(target.hasOpenAttention);
+          if (waitingForAttention) {
             current = await this.#updateJob(config, current, "blocked", {
               safeCode: "attention_required",
               safeSummary: "The agent is waiting for a response in dongo.",
@@ -609,20 +637,26 @@ export class LocalRunnerManager {
             await this.#writeState(this.#state(config, "blocked", current));
             return;
           }
-          const workCompleted = work.state === "done";
-          const state = workCompleted ? "completed" : "failed";
+          const targetCompleted = current.kind === "work"
+            ? target.state === "done"
+            : target.state === "processed" || target.state === "dismissed";
+          const state = targetCompleted ? "completed" : "failed";
           const pending = {
             outcome: state,
-            safeCode: workCompleted
-              ? "work_completed"
+            safeCode: targetCompleted
+              ? current.kind === "work" ? "work_completed" : "intake_completed"
               : settled.value.outcome === "failed"
                 ? settled.value.safeCode
-                : "work_not_completed",
-            safeSummary: workCompleted
-              ? "The queued dongo work is complete."
+                : current.kind === "work" ? "work_not_completed" : "intake_not_completed",
+            safeSummary: targetCompleted
+              ? current.kind === "work"
+                ? "The queued dongo work is complete."
+                : "The queued dongo Intake was triaged."
               : settled.value.outcome === "failed"
                 ? settled.value.safeSummary
-                : "The agent stopped before completing the queued dongo work.",
+                : current.kind === "work"
+                  ? "The agent stopped before completing the queued dongo work."
+                  : "The agent stopped before triaging the queued dongo Intake.",
             sessionReferencePresent: settled.value.sessionReferencePresent,
           } as const;
           await this.#store.set(resultKey(config.projectRef, current.id), JSON.stringify({
@@ -745,7 +779,9 @@ export class LocalRunnerManager {
       version: config.version,
       currentJob: job ? {
         id: job.id,
+        kind: job.kind,
         workIdentifier: job.workIdentifier,
+        intakeId: job.intakeId,
         harness: job.harness,
         state: job.state,
         revision: job.revision,

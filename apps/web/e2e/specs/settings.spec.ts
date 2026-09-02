@@ -99,7 +99,7 @@ test("revokes installations and creates a one-time scoped CI credential", async 
   await expect(page.getByLabel("One-time DONGO_TOKEN value")).toBeHidden();
 });
 
-test("shows truthful local runner presence, setup, and revocation", async ({ page }) => {
+test("opts into automatic Inbox processing on one trusted runner and supports revocation", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo/settings?tab=Local%20runner");
   await expect(page.getByRole("heading", { name: "Local runner" })).toBeVisible();
   await expect(page.getByText("Fixture Mac", { exact: true })).toBeVisible();
@@ -107,6 +107,15 @@ test("shows truthful local runner presence, setup, and revocation", async ({ pag
   await expect(page.getByText(/dongo does not wake a sleeping or powered-off computer/)).toBeVisible();
   await expect(page.getByText("dongo runner install --harness codex", { exact: true })).toBeVisible();
   await expect(page.getByText("dongo runner install --harness claude", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Automatically process Inbox with Codex" }).click();
+  await expect(page.getByRole("status")).toContainText("New Inbox Intake will be processed automatically with Codex");
+  expect(JSON.parse(
+    await page.locator("html").getAttribute("data-fixture-automatic-intake") ?? "null",
+  )).toEqual({
+    expectedRevision: 0,
+    registrationId: "runner-settings-fixture",
+    harness: "codex",
+  });
   await page.getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByRole("status")).toContainText("Local runner access revoked");

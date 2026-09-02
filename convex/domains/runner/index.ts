@@ -54,6 +54,8 @@ const RUNNER_SAFE_CODES = new Set([
   "harness_failed",
   "harness_changed",
   "harness_unavailable",
+  "intake_completed",
+  "intake_not_completed",
   "queue_expired",
   "runner_lease_expired",
   "runner_restarted",
@@ -134,6 +136,235 @@ function requireRunnerQueueEnabled() {
   }
 }
 
+function runnerQueueEnabled() {
+  const configured = process.env.DONGO_RUNNER_QUEUE_ENABLED;
+  return configured === undefined || configured.trim().toLowerCase() === "true";
+}
+
+function automaticIntakePolicyDto(project: Doc<"projects">) {
+  const enabled = Boolean(
+    project.automaticIntakeRunnerRegistrationId &&
+    project.automaticIntakeHarness,
+  );
+  return {
+    enabled,
+    revision: project.automaticIntakeRevision ?? 0,
+    registrationId: enabled
+      ? project.automaticIntakeRunnerRegistrationId
+      : undefined,
+    harness: enabled ? project.automaticIntakeHarness : undefined,
+    configuredAt: enabled ? project.automaticIntakeConfiguredAt : undefined,
+  };
+}
+
+async function cancelTargetedRegistrationJobs(
+  ctx: MutationCtx,
+  registrationId: Id<"runnerRegistrations">,
+  actorId: Id<"actors">,
+  now: number,
+  safeCode: "runner_changed" | "runner_revoked",
+) {
+  const jobs = await ctx.db.query("runnerJobs")
+    .withIndex("by_target_registration_state_updated", (q) =>
+      q.eq("targetRegistrationId", registrationId))
+    .take(200);
+  for (const job of jobs) {
+    if (TERMINAL_STATES.has(job.state) || job.state === "cancel_requested") continue;
+    const state: RunnerState = job.state === "queued"
+      ? "cancelled"
+      : "cancel_requested";
+    await ctx.db.patch(job._id, {
+      state,
+      revision: job.revision + 1,
+      cancellationRequestedAt: now,
+      terminalAt: state === "cancelled" ? now : undefined,
+      updatedAt: now,
+    });
+    await appendJobEvent(ctx, job, actorId, state, now, safeCode);
+  }
+}
+
+async function disableAutomaticIntakeForRegistration(
+  ctx: MutationCtx,
+  project: Doc<"projects">,
+  registrationId: Id<"runnerRegistrations">,
+  actorId: Id<"actors">,
+  now: number,
+  reason: "runner_changed" | "runner_revoked",
+) {
+  if (project.automaticIntakeRunnerRegistrationId !== registrationId) return;
+  await cancelTargetedRegistrationJobs(ctx, registrationId, actorId, now, reason);
+  await ctx.db.patch(project._id, {
+    automaticIntakeRunnerRegistrationId: undefined,
+    automaticIntakeHarness: undefined,
+    automaticIntakeConfiguredByActorId: undefined,
+    automaticIntakeConfiguredAt: now,
+    automaticIntakeRevision: (project.automaticIntakeRevision ?? 0) + 1,
+    updatedAt: now,
+  });
+  await appendEvent(ctx, {
+    organizationId: project.organizationId,
+    projectId: project._id,
+    actorId,
+    type: "runner.automatic_intake_disabled",
+    data: { registrationId, reason },
+    createdAt: now,
+  });
+}
+
+async function automaticIntakeTarget(
+  ctx: Pick<MutationCtx, "db">,
+  projectId: Id<"projects">,
+) {
+  const project = await ctx.db.get(projectId);
+  if (
+    !project ||
+    project.archivedAt !== undefined ||
+    !project.automaticIntakeRunnerRegistrationId ||
+    !project.automaticIntakeHarness
+  ) return undefined;
+  const registration = await ctx.db.get(
+    project.automaticIntakeRunnerRegistrationId,
+  );
+  if (
+    !registration ||
+    registration.projectId !== project._id ||
+    registration.status !== "active" ||
+    registration.approvalMode !== "automatic" ||
+    !registration.harnesses.includes(project.automaticIntakeHarness)
+  ) return undefined;
+  return { project, registration, harness: project.automaticIntakeHarness };
+}
+
+export async function enqueueAutomaticIntake(
+  ctx: MutationCtx,
+  args: {
+    projectId: Id<"projects">;
+    intakeId: Id<"intakes">;
+    requestedByActorId: Id<"actors">;
+    now: number;
+  },
+) {
+  if (!runnerQueueEnabled()) return undefined;
+  const target = await automaticIntakeTarget(ctx, args.projectId);
+  if (!target) return undefined;
+  const existing = await ctx.db.query("runnerJobs")
+    .withIndex("by_project_intake_requested", (q) =>
+      q.eq("projectId", args.projectId).eq("intakeId", args.intakeId))
+    .take(100);
+  if (existing.some((job) => !TERMINAL_STATES.has(job.state))) return undefined;
+  const jobId = await ctx.db.insert("runnerJobs", {
+    organizationId: target.project.organizationId,
+    projectId: args.projectId,
+    kind: "intake",
+    intakeId: args.intakeId,
+    targetRegistrationId: target.registration._id,
+    requestedByActorId: args.requestedByActorId,
+    harness: target.harness,
+    state: "queued",
+    revision: 1,
+    requestedAt: args.now,
+    expiresAt: args.now + JOB_TTL_MS,
+    updatedAt: args.now,
+  });
+  const job = await ctx.db.get(jobId);
+  if (!job) fail("internal", "Automatic Intake runner job was not created");
+  await ctx.db.insert("runnerJobEvents", {
+    organizationId: job.organizationId,
+    projectId: job.projectId,
+    jobId,
+    registrationId: target.registration._id,
+    actorId: args.requestedByActorId,
+    sequence: 1,
+    state: "queued",
+    createdAt: args.now,
+  });
+  await appendEvent(ctx, {
+    organizationId: job.organizationId,
+    projectId: job.projectId,
+    intakeId: args.intakeId,
+    actorId: args.requestedByActorId,
+    type: "runner.intake_job_queued",
+    data: {
+      jobId,
+      registrationId: target.registration._id,
+      harness: target.harness,
+    },
+    createdAt: args.now,
+  });
+  return jobId;
+}
+
+export async function enqueueAutomaticWorkFromIntake(
+  ctx: MutationCtx,
+  args: {
+    projectId: Id<"projects">;
+    intakeId: Id<"intakes">;
+    workItemIds: Id<"workItems">[];
+    now: number;
+  },
+) {
+  if (!runnerQueueEnabled()) return [];
+  const target = await automaticIntakeTarget(ctx, args.projectId);
+  if (!target || target.project.executionMode !== "autonomous") return [];
+  const requestedByActorId = target.project.automaticIntakeConfiguredByActorId;
+  if (!requestedByActorId) return [];
+  const queued: Id<"runnerJobs">[] = [];
+  for (const workItemId of [...new Set(args.workItemIds)]) {
+    const work = await ctx.db.get(workItemId);
+    if (!work || work.projectId !== args.projectId || work.state !== "ready") {
+      continue;
+    }
+    const existing = await ctx.db.query("runnerJobs")
+      .withIndex("by_project_work_requested", (q) =>
+        q.eq("projectId", args.projectId).eq("workItemId", workItemId))
+      .take(100);
+    if (existing.some((job) => !TERMINAL_STATES.has(job.state))) continue;
+    const jobId = await ctx.db.insert("runnerJobs", {
+      organizationId: target.project.organizationId,
+      projectId: args.projectId,
+      kind: "work",
+      workItemId,
+      targetRegistrationId: target.registration._id,
+      requestedByActorId,
+      harness: target.harness,
+      state: "queued",
+      revision: 1,
+      requestedAt: args.now,
+      expiresAt: args.now + JOB_TTL_MS,
+      updatedAt: args.now,
+    });
+    const job = await ctx.db.get(jobId);
+    if (!job) fail("internal", "Automatic Work runner job was not created");
+    await ctx.db.insert("runnerJobEvents", {
+      organizationId: job.organizationId,
+      projectId: job.projectId,
+      jobId,
+      registrationId: target.registration._id,
+      actorId: requestedByActorId,
+      sequence: 1,
+      state: "queued",
+      createdAt: args.now,
+    });
+    await appendEvent(ctx, {
+      organizationId: job.organizationId,
+      projectId: job.projectId,
+      intakeId: args.intakeId,
+      workItemId,
+      actorId: requestedByActorId,
+      type: "runner.work_auto_queued",
+      data: {
+        jobId,
+        registrationId: target.registration._id,
+        harness: target.harness,
+      },
+      createdAt: args.now,
+    });
+    queued.push(jobId);
+  }
+  return queued;
+}
+
 function registrationDto(registration: Doc<"runnerRegistrations">) {
   return {
     id: registration._id,
@@ -157,15 +388,23 @@ async function jobDto(
   ctx: Pick<QueryCtx, "db">,
   job: Doc<"runnerJobs">,
 ) {
-  const work = await ctx.db.get(job.workItemId);
-  if (!work || work.projectId !== job.projectId) {
+  const kind = job.kind ?? "work";
+  const work = job.workItemId ? await ctx.db.get(job.workItemId) : null;
+  const intake = job.intakeId ? await ctx.db.get(job.intakeId) : null;
+  if (kind === "work" && (!work || work.projectId !== job.projectId)) {
     fail("not_found", "Runner job Work item not found");
+  }
+  if (kind === "intake" && (!intake || intake.projectId !== job.projectId)) {
+    fail("not_found", "Runner job Intake not found");
   }
   return {
     id: job._id,
     projectId: job.projectId,
-    workItemId: job.workItemId,
-    workIdentifier: work.identifier,
+    kind,
+    workItemId: kind === "work" ? job.workItemId : undefined,
+    workIdentifier: kind === "work" ? work!.identifier : undefined,
+    intakeId: kind === "intake" ? job.intakeId : undefined,
+    targetRegistrationId: job.targetRegistrationId,
     harness: job.harness,
     state: job.state,
     revision: job.revision,
@@ -242,19 +481,32 @@ async function cancelRegistrationJobs(
   actorId: Id<"actors">,
   now: number,
 ) {
-  const jobs = await ctx.db.query("runnerJobs")
-    .withIndex("by_registration_state_updated", (q) =>
-      q.eq("registrationId", registration._id))
-    .take(100);
+  const [assigned, targeted] = await Promise.all([
+    ctx.db.query("runnerJobs")
+      .withIndex("by_registration_state_updated", (q) =>
+        q.eq("registrationId", registration._id))
+      .take(100),
+    ctx.db.query("runnerJobs")
+      .withIndex("by_target_registration_state_updated", (q) =>
+        q.eq("targetRegistrationId", registration._id))
+      .take(100),
+  ]);
+  const jobs = [...new Map(
+    [...assigned, ...targeted].map((job) => [job._id, job]),
+  ).values()];
   for (const job of jobs) {
-    if (!ACTIVE_STATES.has(job.state) || job.state === "cancel_requested") continue;
+    if (TERMINAL_STATES.has(job.state) || job.state === "cancel_requested") continue;
+    const nextState: RunnerState = job.state === "queued"
+      ? "cancelled"
+      : "cancel_requested";
     await ctx.db.patch(job._id, {
-      state: "cancel_requested",
+      state: nextState,
       revision: job.revision + 1,
       cancellationRequestedAt: now,
+      terminalAt: nextState === "cancelled" ? now : undefined,
       updatedAt: now,
     });
-    await appendJobEvent(ctx, job, actorId, "cancel_requested", now, "runner_revoked");
+    await appendJobEvent(ctx, job, actorId, nextState, now, "runner_revoked");
   }
 }
 
@@ -401,6 +653,14 @@ export const revoke = internalMutation({
       updatedAt: now,
     });
     await cancelRegistrationJobs(ctx, registration, principal.actor._id, now);
+    await disableAutomaticIntakeForRegistration(
+      ctx,
+      principal.project,
+      registration._id,
+      principal.actor._id,
+      now,
+      "runner_revoked",
+    );
     await appendEvent(ctx, {
       organizationId: registration.organizationId,
       projectId: registration.projectId,
@@ -442,6 +702,23 @@ export const reserve = internalMutation({
       waitingUntil: args.waitSeconds > 0 ? now + args.waitSeconds * 1_000 : undefined,
       updatedAt: now,
     });
+    if (
+      principal.project.automaticIntakeRunnerRegistrationId === registration._id &&
+      (
+        args.approvalMode !== "automatic" ||
+        !principal.project.automaticIntakeHarness ||
+        !harnesses.includes(principal.project.automaticIntakeHarness)
+      )
+    ) {
+      await disableAutomaticIntakeForRegistration(
+        ctx,
+        principal.project,
+        registration._id,
+        principal.actor._id,
+        now,
+        "runner_changed",
+      );
+    }
 
     const expiredDeliveries = await ctx.db.query("runnerJobs")
       .withIndex("by_project_state_requested", (q) =>
@@ -497,17 +774,32 @@ export const reserve = internalMutation({
     const active = refreshedAssigned.find((job) => ACTIVE_STATES.has(job.state));
     if (active) return { registration: registrationDto({ ...registration, platform: args.platform, version: args.version.trim(), harnesses, approvalMode: args.approvalMode, lastSeenAt: now, waitingUntil: args.waitSeconds > 0 ? now + args.waitSeconds * 1_000 : undefined, updatedAt: now }), job: await jobDto(ctx, active) };
 
-    const queued = await ctx.db.query("runnerJobs")
-      .withIndex("by_project_state_requested", (q) =>
-        q.eq("projectId", principal.project._id).eq("state", "queued"),
-      )
-      .take(100);
+    const [targetedQueued, sharedQueued] = await Promise.all([
+      ctx.db.query("runnerJobs")
+        .withIndex("by_project_target_registration_state_updated", (q) =>
+          q.eq("projectId", principal.project._id)
+            .eq("targetRegistrationId", registration._id)
+            .eq("state", "queued"))
+        .take(100),
+      ctx.db.query("runnerJobs")
+        .withIndex("by_project_target_registration_state_updated", (q) =>
+          q.eq("projectId", principal.project._id)
+            .eq("targetRegistrationId", undefined)
+            .eq("state", "queued"))
+        .take(100),
+    ]);
+    const queued = [...targetedQueued, ...sharedQueued]
+      .sort((left, right) => left.requestedAt - right.requestedAt);
     for (const candidate of queued) {
       if (candidate.expiresAt <= now) {
         await ctx.db.patch(candidate._id, { state: "expired", revision: candidate.revision + 1, terminalAt: now, updatedAt: now });
         await appendJobEvent(ctx, candidate, principal.actor._id, "expired", now, "queue_expired");
         continue;
       }
+      if (
+        candidate.targetRegistrationId &&
+        candidate.targetRegistrationId !== registration._id
+      ) continue;
       if (!harnesses.includes(candidate.harness)) continue;
       await ctx.db.patch(candidate._id, {
         state: "delivered",
@@ -613,9 +905,16 @@ export const updateJob = internalMutation({
         organizationId: job.organizationId,
         projectId: job.projectId,
         workItemId: job.workItemId,
+        intakeId: job.intakeId,
         actorId: principal.actor._id,
         type: `runner.job_${args.state}`,
-        data: { jobId: job._id, registrationId: registration._id, revision, safeCode },
+        data: {
+          jobId: job._id,
+          kind: job.kind ?? "work",
+          registrationId: registration._id,
+          revision,
+          safeCode,
+        },
         requestId: principal.requestId,
         createdAt: now,
       });
@@ -646,7 +945,7 @@ export const getJob = internalQuery({
 export const listForHuman = query({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    await requireHumanProject(ctx, args.projectId, { allowArchived: true });
+    const principal = await requireHumanProject(ctx, args.projectId, { allowArchived: true });
     const [registrations, jobs] = await Promise.all([
       ctx.db.query("runnerRegistrations").withIndex("by_project_status", (q) => q.eq("projectId", args.projectId)).take(100),
       ctx.db.query("runnerJobs").withIndex("by_project_requested", (q) => q.eq("projectId", args.projectId)).order("desc").take(200),
@@ -654,8 +953,98 @@ export const listForHuman = query({
     return {
       registrations: registrations.map(registrationDto),
       jobs: await Promise.all(jobs.map((job) => jobDto(ctx, job))),
+      automaticIntake: automaticIntakePolicyDto(principal.project!),
       serverTime: Date.now(),
     };
+  },
+});
+
+export const configureAutomaticIntake = mutation({
+  args: {
+    projectId: v.id("projects"),
+    expectedRevision: v.number(),
+    registrationId: v.optional(v.id("runnerRegistrations")),
+    harness: v.optional(harnessValidator),
+    idempotencyKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const principal = await requireHumanProject(ctx, args.projectId, { owner: true });
+    const project = principal.project!;
+    const enabling = args.registrationId !== undefined || args.harness !== undefined;
+    if ((args.registrationId === undefined) !== (args.harness === undefined)) {
+      fail("validation", "Automatic Intake requires both a runner and a harness");
+    }
+    if (!Number.isInteger(args.expectedRevision) || args.expectedRevision < 0) {
+      fail("validation", "expectedRevision must be a non-negative integer");
+    }
+    const now = Date.now();
+    return await runIdempotent(ctx, {
+      organizationId: project.organizationId,
+      projectId: project._id,
+      principalKey: principal.principalKey,
+      operation: "runner.configure_automatic_intake",
+      key: args.idempotencyKey,
+      payload: {
+        expectedRevision: args.expectedRevision,
+        registrationId: args.registrationId,
+        harness: args.harness,
+      },
+      now,
+    }, async () => {
+      const currentRevision = project.automaticIntakeRevision ?? 0;
+      if (currentRevision !== args.expectedRevision) {
+        fail("revision_conflict", "Automatic Intake settings changed since they were read", {
+          expectedRevision: args.expectedRevision,
+          currentRevision,
+        });
+      }
+      if (enabling) {
+        const registration = await ctx.db.get(args.registrationId!);
+        if (
+          !registration ||
+          registration.projectId !== project._id ||
+          registration.status !== "active"
+        ) fail("not_found", "Runner registration not found");
+        if (registration.approvalMode !== "automatic") {
+          fail("invalid_transition", "Automatic Inbox processing requires local automatic approval");
+        }
+        if (!registration.harnesses.includes(args.harness!)) {
+          fail("invalid_transition", "The selected harness is not available on this runner");
+        }
+      }
+      const revision = currentRevision + 1;
+      const patch = enabling
+        ? {
+            automaticIntakeRunnerRegistrationId: args.registrationId,
+            automaticIntakeHarness: args.harness,
+            automaticIntakeConfiguredByActorId: principal.actor._id,
+            automaticIntakeConfiguredAt: now,
+            automaticIntakeRevision: revision,
+            updatedAt: now,
+          }
+        : {
+            automaticIntakeRunnerRegistrationId: undefined,
+            automaticIntakeHarness: undefined,
+            automaticIntakeConfiguredByActorId: undefined,
+            automaticIntakeConfiguredAt: now,
+            automaticIntakeRevision: revision,
+            updatedAt: now,
+          };
+      await ctx.db.patch(project._id, patch);
+      await appendEvent(ctx, {
+        organizationId: project.organizationId,
+        projectId: project._id,
+        actorId: principal.actor._id,
+        type: enabling
+          ? "runner.automatic_intake_enabled"
+          : "runner.automatic_intake_disabled",
+        data: enabling
+          ? { registrationId: args.registrationId, harness: args.harness }
+          : {},
+        createdAt: now,
+      });
+      return automaticIntakePolicyDto({ ...project, ...patch });
+    });
   },
 });
 
@@ -697,6 +1086,7 @@ export const enqueue = mutation({
       const jobId = await ctx.db.insert("runnerJobs", {
         organizationId: principal.project!.organizationId,
         projectId: args.projectId,
+        kind: "work",
         workItemId: args.workItemId,
         requestedByActorId: principal.actor._id,
         harness: args.harness,
@@ -781,6 +1171,14 @@ export const revokeForHuman = mutation({
     const now = Date.now();
     await ctx.db.patch(registration._id, { status: "revoked", waitingUntil: undefined, revokedAt: now, updatedAt: now });
     await cancelRegistrationJobs(ctx, registration, principal.actor._id, now);
+    await disableAutomaticIntakeForRegistration(
+      ctx,
+      principal.project!,
+      registration._id,
+      principal.actor._id,
+      now,
+      "runner_revoked",
+    );
     await appendEvent(ctx, {
       organizationId: registration.organizationId,
       projectId: registration.projectId,

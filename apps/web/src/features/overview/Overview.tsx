@@ -265,7 +265,7 @@ export function Overview(props: OverviewProps) {
   const [selectedIntakeDetail, setSelectedIntakeDetail] = createSignal<Intake>();
   const [concurrency, setConcurrency] = createSignal<ProjectConcurrencySnapshot>();
   const [concurrencyStatus, setConcurrencyStatus] = createSignal<"loading" | "ready" | "error">("loading");
-  const [runnerSnapshot, setRunnerSnapshot] = createSignal<RunnerSnapshot>({ registrations: [], jobs: [], serverTime: Date.now() });
+  const [runnerSnapshot, setRunnerSnapshot] = createSignal<RunnerSnapshot>({ registrations: [], jobs: [], automaticIntake: { enabled: false, revision: 0 }, serverTime: Date.now() });
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [query, setQuery] = createSignal("");
   const [searchResults, setSearchResults] = createSignal<ProjectSearchResult[]>([]);
@@ -2364,7 +2364,7 @@ export function Overview(props: OverviewProps) {
             announce("Subtask added");
             return created;
           }}
-          runnerJob={runnerSnapshot().jobs.find((job) => job.workItemId === item().id)}
+          runnerJob={runnerSnapshot().jobs.find((job) => job.kind === "work" && job.workItemId === item().id)}
           runnerHarnesses={[...new Set(
             runnerSnapshot().registrations
               .filter((runner) => runner.status === "active")

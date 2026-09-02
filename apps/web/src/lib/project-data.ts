@@ -232,8 +232,11 @@ export type RunnerRegistration = {
 export type RunnerJob = {
   id: string;
   projectId: string;
-  workItemId: string;
-  workIdentifier: string;
+  kind: "work" | "intake";
+  workItemId?: string;
+  workIdentifier?: string;
+  intakeId?: string;
+  targetRegistrationId?: string;
   harness: RunnerHarness;
   state: RunnerJobState;
   revision: number;
@@ -248,9 +251,18 @@ export type RunnerJob = {
   terminalAt?: number;
 };
 
+export type AutomaticIntakeRunnerPolicy = {
+  enabled: boolean;
+  revision: number;
+  registrationId?: string;
+  harness?: RunnerHarness;
+  configuredAt?: number;
+};
+
 export type RunnerSnapshot = {
   registrations: RunnerRegistration[];
   jobs: RunnerJob[];
+  automaticIntake: AutomaticIntakeRunnerPolicy;
   serverTime: number;
 };
 
@@ -753,6 +765,17 @@ const cancelRunnerReference = makeFunctionReference<
   { projectId: string; jobId: string; expectedRevision: number; idempotencyKey: string },
   RunnerJob
 >("domains/runner/index:cancel");
+const configureAutomaticIntakeReference = makeFunctionReference<
+  "mutation",
+  {
+    projectId: string;
+    expectedRevision: number;
+    registrationId?: string;
+    harness?: RunnerHarness;
+    idempotencyKey: string;
+  },
+  AutomaticIntakeRunnerPolicy
+>("domains/runner/index:configureAutomaticIntake");
 const revokeRunnerReference = makeFunctionReference<
   "mutation",
   { projectId: string; registrationId: string },
@@ -1792,6 +1815,18 @@ export class ProjectDataConnection {
       projectId: this.projectId,
       jobId: job.id,
       expectedRevision: job.revision,
+      idempotencyKey: crypto.randomUUID(),
+    });
+  }
+
+  async configureAutomaticIntake(input: {
+    expectedRevision: number;
+    registrationId?: string;
+    harness?: RunnerHarness;
+  }): Promise<AutomaticIntakeRunnerPolicy> {
+    return await this.#client.mutation(configureAutomaticIntakeReference, {
+      projectId: this.projectId,
+      ...input,
       idempotencyKey: crypto.randomUUID(),
     });
   }

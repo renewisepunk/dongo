@@ -9,6 +9,7 @@ import { runIdempotent } from "../../lib/idempotency";
 import { MAX_BODY_LENGTH } from "../../lib/validators";
 import { attachmentSummary } from "../attachments/summary";
 import { actorSummaryForHumanWithInstallation } from "../human/summary";
+import { enqueueAutomaticIntake } from "../runner/index";
 
 const ideaStateValidator = v.union(
   v.literal("open"),
@@ -607,6 +608,12 @@ export const promote = mutation({
         type: "idea.promoted",
         data: { intakeId },
         createdAt: now,
+      });
+      await enqueueAutomaticIntake(ctx, {
+        projectId: idea.projectId,
+        intakeId,
+        requestedByActorId: principal.actor._id,
+        now,
       });
       return { ideaId: idea._id, intakeId, revision, created: true };
     });

@@ -27,6 +27,7 @@ export type RunnerHarness = "codex" | "claude";
 export type RunnerPlatform = "darwin" | "linux";
 export type RunnerApprovalMode = "ask" | "automatic";
 export type RunnerRegistrationStatus = "active" | "revoked";
+export type RunnerJobKind = "work" | "intake";
 export type RunnerJobState =
   | "queued"
   | "delivered"
@@ -85,6 +86,7 @@ export type Intake = {
   createdBy: ActorSummary;
   claimedBy?: ActorSummary;
   claimExpiresAt?: number;
+  hasOpenAttention?: boolean;
   attachmentIds: Array<Id<"attachments">>;
   linkedWorkItemIds: Array<Id<"workItems">>;
   createdAt: number;
@@ -260,11 +262,22 @@ export type RunnerRegistration = {
   revokedAt?: number;
 };
 
+export type AutomaticIntakeRunnerPolicy = {
+  enabled: boolean;
+  revision: number;
+  registrationId?: Id<"runnerRegistrations">;
+  harness?: RunnerHarness;
+  configuredAt?: number;
+};
+
 export type RunnerJob = {
   id: Id<"runnerJobs">;
   projectId: Id<"projects">;
-  workItemId: Id<"workItems">;
-  workIdentifier: string;
+  kind: RunnerJobKind;
+  workItemId?: Id<"workItems">;
+  workIdentifier?: string;
+  intakeId?: Id<"intakes">;
+  targetRegistrationId?: Id<"runnerRegistrations">;
   harness: RunnerHarness;
   state: RunnerJobState;
   revision: number;

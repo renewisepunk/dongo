@@ -622,7 +622,7 @@ const settingsDependencies = {
             platform: "darwin",
             version: "0.1.0",
             harnesses: ["codex", "claude"],
-            approvalMode: "ask",
+            approvalMode: "automatic",
             status: "active",
             lastSeenAt: now,
             waitingUntil: now + 20_000,
@@ -630,9 +630,24 @@ const settingsDependencies = {
             updatedAt: now,
           }],
           jobs: [],
+          automaticIntake: { enabled: false, revision: 0 },
           serverTime: now,
         });
         return () => undefined;
+      },
+      async configureAutomaticIntake(input: {
+        expectedRevision: number;
+        registrationId?: string;
+        harness?: import("../../src/lib/project-data").RunnerHarness;
+      }) {
+        document.documentElement.dataset.fixtureAutomaticIntake = JSON.stringify(input);
+        return {
+          enabled: Boolean(input.registrationId && input.harness),
+          revision: input.expectedRevision + 1,
+          registrationId: input.registrationId,
+          harness: input.harness,
+          configuredAt: Date.now(),
+        };
       },
       async updateProject(input: {
         name: string;

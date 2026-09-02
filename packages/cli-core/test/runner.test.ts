@@ -7,7 +7,7 @@ import path from "node:path";
 import test, { type TestContext } from "node:test";
 import { promisify } from "node:util";
 
-import type { RunnerJob, RunnerRegistration, RunnerWait, WorkItem } from "@dongo/contracts";
+import type { Intake, RunnerJob, RunnerRegistration, RunnerWait, WorkItem } from "@dongo/contracts";
 import { DongoClientError } from "@dongo/client";
 import { MemorySecretStore } from "../src/secret-store.ts";
 import {
@@ -58,7 +58,7 @@ test("ask mode requires exact local approval before executing a command-free job
     harness: "codex",
     validate: async () => "/bin/sh",
     execute: async ({ repositoryRoot, workIdentifier, log }) => {
-      received = { repositoryRoot, workIdentifier };
+      received = { repositoryRoot, workIdentifier: workIdentifier! };
       await log("local output only\n");
       return { outcome: "completed", safeCode: "verified", safeSummary: "Implementation and checks completed." };
     },
@@ -370,6 +370,56 @@ test("an Attention pause blocks the job and resumes only the exact local session
   assert.equal(discarded, 1);
 });
 
+test("an Intake Attention pause blocks triage and resumes its exact local session", async (context) => {
+  const fixture = await runnerFixture(context);
+  const firstController = new AbortController();
+  const api = new FakeRunnerApi();
+  api.intakeState = "claimed";
+  api.intakeOpenAttention = true;
+  api.job = intakeRunnerJob("delivered", 2);
+  api.onTransition = (state) => {
+    if (state === "blocked") firstController.abort();
+  };
+  let executions = 0;
+  const adapter: RunnerHarnessAdapter = {
+    harness: "codex",
+    validate: async () => "/bin/sh",
+    canResume: async () => true,
+    execute: async () => {
+      executions += 1;
+      return { outcome: "completed", sessionReferencePresent: true };
+    },
+  };
+  const firstManager = fixture.manager(api, new FakeService(), {
+    adapter: () => adapter,
+    sleep: async () => undefined,
+  });
+  await firstManager.install({ label: "Intake Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  await firstManager.run(firstController.signal);
+  assert.equal(api.job.state, "blocked");
+  assert.equal(executions, 1);
+
+  const secondController = new AbortController();
+  api.intakeOpenAttention = false;
+  api.onTransition = undefined;
+  api.onTerminal = () => secondController.abort();
+  const resumedManager = fixture.manager(api, new FakeService(), {
+    adapter: () => ({
+      ...adapter,
+      execute: async () => {
+        executions += 1;
+        api.intakeState = "processed";
+        return { outcome: "completed", sessionReferencePresent: true };
+      },
+    }),
+    sleep: async () => undefined,
+  });
+  await resumedManager.run(secondController.signal);
+  assert.equal(api.job.state, "completed");
+  assert.equal(api.transitions.at(-1)?.safeCode, "intake_completed");
+  assert.equal(executions, 2);
+});
+
 test("runner token format is fixed and contains full local entropy", () => {
   const values = new Set(Array.from({ length: 20 }, generateRunnerToken));
   assert.equal(values.size, 20);
@@ -466,6 +516,8 @@ class FakeRunnerApi {
   revokeError?: Error;
   workState: WorkItem["state"] = "done";
   openAttention = false;
+  intakeState: Intake["state"] = "processed";
+  intakeOpenAttention = false;
   waitCalls = 0;
   dropJobOnWait?: number;
 
@@ -496,6 +548,22 @@ class FakeRunnerApi {
       createdAt: 1,
       updatedAt: 1,
     } as unknown as WorkItem;
+  }
+
+  async getIntake(input: { intakeId: string }): Promise<Intake> {
+    return {
+      id: input.intakeId,
+      projectId: "project-1",
+      text: "Triage this request",
+      state: this.intakeState,
+      revision: 1,
+      createdBy: { id: "actor-1", kind: "human", displayName: "Owner" },
+      attachmentIds: [],
+      linkedWorkItemIds: [],
+      hasOpenAttention: this.intakeOpenAttention,
+      createdAt: 1,
+      updatedAt: 1,
+    } as unknown as Intake;
   }
 
   async runnerRegister(input: { token: string; label: string; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic" }) {
@@ -569,8 +637,26 @@ function runnerJob(state: RunnerJob["state"], revision: number): RunnerJob {
   return {
     id: "job-1",
     projectId: "project-1",
+    kind: "work",
     workItemId: "work-1",
     workIdentifier: "dong026",
+    harness: "codex",
+    state,
+    revision,
+    registrationId: "registration-1",
+    requestedAt: 1,
+    expiresAt: Date.now() + 60_000,
+    updatedAt: 1,
+  } as RunnerJob;
+}
+
+function intakeRunnerJob(state: RunnerJob["state"], revision: number): RunnerJob {
+  return {
+    id: "job-intake",
+    projectId: "project-1",
+    kind: "intake",
+    intakeId: "intake-1",
+    targetRegistrationId: "registration-1",
     harness: "codex",
     state,
     revision,

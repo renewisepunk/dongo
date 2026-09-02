@@ -24,6 +24,10 @@ import { createWorkItem, linkIntakeToWork } from "../work/service";
 import { attachmentSummary } from "../attachments/summary";
 import { intakeSummaryForHuman } from "../human/summary";
 import { attachmentForAgent, intakeForAgent } from "../agent/privacy";
+import {
+  enqueueAutomaticIntake,
+  enqueueAutomaticWorkFromIntake,
+} from "../runner/index";
 
 const newWorkValidator = v.object({
   title: v.string(),
@@ -153,6 +157,12 @@ export const create = mutation({
             linkCount: links?.length ?? 0,
           },
           createdAt: now,
+        });
+        await enqueueAutomaticIntake(ctx, {
+          projectId: args.projectId,
+          intakeId,
+          requestedByActorId: principal.actor._id,
+          now,
         });
         return { intakeId, revision: 1 };
       },
@@ -642,6 +652,14 @@ export const completeTriage = internalMutation({
           requestId: principal.requestId,
           createdAt: now,
         });
+        if (!args.dismiss) {
+          await enqueueAutomaticWorkFromIntake(ctx, {
+            projectId: intake.projectId,
+            intakeId: intake._id,
+            workItemIds,
+            now,
+          });
+        }
         return { intakeId: intake._id, status, workItemIds, revision: intake.revision + 1 };
       },
     );

@@ -1692,6 +1692,9 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "hasOpenAttention": {
+            "type": "boolean"
+          },
           "attachmentIds": {
             "maxItems": 20,
             "type": "array",
@@ -2744,6 +2747,13 @@
             "minLength": 1,
             "maxLength": 256
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "work",
+              "intake"
+            ]
+          },
           "workItemId": {
             "type": "string",
             "minLength": 1,
@@ -2753,6 +2763,16 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64
+          },
+          "intakeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "targetRegistrationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "harness": {
             "type": "string",
@@ -2847,8 +2867,7 @@
         "required": [
           "id",
           "projectId",
-          "workItemId",
-          "workIdentifier",
+          "kind",
           "harness",
           "state",
           "revision",

@@ -149,7 +149,7 @@ async function intakeDto(
     intake.status === "claimed" &&
     intake.claimExpiresAt !== undefined &&
     intake.claimExpiresAt > Date.now();
-  const [attachments, links, claimedBy] = await Promise.all([
+  const [attachments, links, claimedBy, openAttention, seenAttention] = await Promise.all([
     ctx.db
       .query("attachments")
       .withIndex("by_intake", (q) => q.eq("intakeId", intake._id))
@@ -161,6 +161,18 @@ async function intakeDto(
     intake.claimedByActorId
       ? actorSummaryById(ctx, intake.claimedByActorId)
       : undefined,
+    ctx.db
+      .query("attentionRequests")
+      .withIndex("by_intake_status", (q) =>
+        q.eq("intakeId", intake._id).eq("status", "open"),
+      )
+      .first(),
+    ctx.db
+      .query("attentionRequests")
+      .withIndex("by_intake_status", (q) =>
+        q.eq("intakeId", intake._id).eq("status", "seen"),
+      )
+      .first(),
   ]);
   return {
     id: id<"intakes">(intake._id),
@@ -176,6 +188,7 @@ async function intakeDto(
     createdBy: await actorSummaryById(ctx, intake.createdByActorId),
     claimedBy: claimActive ? claimedBy : undefined,
     claimExpiresAt: claimActive ? intake.claimExpiresAt : undefined,
+    hasOpenAttention: Boolean(openAttention || seenAttention),
     attachmentIds: attachments
       .filter((attachment) => attachment.status === "available")
       .map((attachment) => id<"attachments">(attachment._id)),

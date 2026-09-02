@@ -22,6 +22,14 @@ into automatic starts with `--approval automatic`. The selection is kept in the
 owner-only local configuration and reported to the server for truthful status;
 the server cannot elevate an ask-mode runner to automatic execution.
 
+Automatic Inbox processing is a second, project-level opt-in and remains off
+after installation. An organization owner enables it from **Project settings →
+Local runner** by selecting one active automatic-mode computer and one installed
+harness. Only Intake created after that selection is queued. Existing Inbox
+items remain untouched. Each job is targeted to that exact registration and
+uses a fixed triage-only instruction; resulting Ready Work is a separate job
+and is automatically queued only when the project is in autonomous mode.
+
 On macOS, dongo installs a user LaunchAgent. On Linux, it installs a user-level
 systemd service. It does not use `sudo`, a system daemon, or a privileged path.
 Native Windows is out of scope for the first release; WSL follows the Linux
@@ -34,7 +42,8 @@ verifies its version and required non-interactive features, and starts work in
 the exact approved repository with JSONL output and the `workspace-write`
 sandbox. The fixed instruction is sent over standard input, not exposed in the
 process list. It never uses approval or sandbox bypass flags. The only hosted
-value added to the local instruction is the validated dongo Work identifier.
+value added to the local instruction is the validated dongo Work or Intake
+identifier.
 
 The adapter records the stable `thread.started` identifier in owner-only local
 storage. After a runner restart it resumes only when that identifier matches
@@ -59,10 +68,11 @@ same registration, job, and canonical repository. Raw stream events and model
 output remain in the bounded owner-only local log; hosted status contains only
 fixed safe outcome text.
 
-For both harnesses, dongo verifies the authoritative WorkItem after the local
-process exits. A zero exit code cannot complete the runner job unless the Work
-itself is Done. An open Attention request moves the runner job to Blocked and
-the exact local harness session resumes only after the response is available.
+For both harnesses, dongo verifies the authoritative WorkItem or Intake after
+the local process exits. A zero exit code cannot complete the runner job unless
+the Work is Done or the Intake is processed or dismissed. An open Attention
+request moves the runner job to Blocked and the exact local harness session
+resumes only after the response is available.
 Lease loss, cancellation, runner shutdown, or an API failure stops and joins
 the local process before the manager may retry.
 
@@ -88,6 +98,12 @@ session references, pending approvals/results, and rotating logs for that
 project.
 If remote revocation fails, dongo retains the local credential so removal can be
 retried safely.
+
+Disabling automatic Inbox processing in project settings stops future Intake
+jobs but does not alter existing Inbox items. Revoking the selected runner,
+changing it away from automatic approval, or removing the selected harness
+also disables the opt-in. dongo never silently transfers this trust to another
+computer.
 
 ## Diagnosis
 

@@ -114,6 +114,11 @@ export default defineSchema({
     executionMode,
     parallelExecutionEnabled: v.optional(v.boolean()),
     maxConcurrentRuns: v.optional(v.number()),
+    automaticIntakeRunnerRegistrationId: v.optional(v.id("runnerRegistrations")),
+    automaticIntakeHarness: v.optional(v.union(v.literal("codex"), v.literal("claude"))),
+    automaticIntakeRevision: v.optional(v.number()),
+    automaticIntakeConfiguredByActorId: v.optional(v.id("actors")),
+    automaticIntakeConfiguredAt: v.optional(v.number()),
     agentUpdateVersion: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -281,7 +286,10 @@ export default defineSchema({
   runnerJobs: defineTable({
     organizationId: v.id("organizations"),
     projectId: v.id("projects"),
-    workItemId: v.id("workItems"),
+    kind: v.optional(v.union(v.literal("work"), v.literal("intake"))),
+    workItemId: v.optional(v.id("workItems")),
+    intakeId: v.optional(v.id("intakes")),
+    targetRegistrationId: v.optional(v.id("runnerRegistrations")),
     requestedByActorId: v.id("actors"),
     harness: v.union(v.literal("codex"), v.literal("claude")),
     state: v.union(
@@ -315,6 +323,9 @@ export default defineSchema({
     .index("by_project_requested", ["projectId", "requestedAt"])
     .index("by_project_state_requested", ["projectId", "state", "requestedAt"])
     .index("by_project_work_requested", ["projectId", "workItemId", "requestedAt"])
+    .index("by_project_intake_requested", ["projectId", "intakeId", "requestedAt"])
+    .index("by_project_target_registration_state_updated", ["projectId", "targetRegistrationId", "state", "updatedAt"])
+    .index("by_target_registration_state_updated", ["targetRegistrationId", "state", "updatedAt"])
     .index("by_registration_state_updated", ["registrationId", "state", "updatedAt"]),
 
   runnerJobEvents: defineTable({
@@ -559,6 +570,7 @@ export default defineSchema({
     ])
     .index("by_requester_resolved", ["requestedByActorId", "resolvedAt"])
     .index("by_work_status", ["workItemId", "status"])
+    .index("by_intake_status", ["intakeId", "status"])
     .index("by_project_status_created", ["projectId", "status", "createdAt"]),
 
   devices: defineTable({
