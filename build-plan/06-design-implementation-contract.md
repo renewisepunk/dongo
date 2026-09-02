@@ -27,6 +27,7 @@ The HTML is a behavioral and visual reference, not an application dependency. Re
 
 - The desktop reference canvas is 1180 × 760, with content centered at a 780 px maximum and a 470 px route-backed detail panel over Overview.
 - At mobile width, the product fills the viewport; detail and search become full-screen sheets. The prototype's 402 × 812 frame is a test viewport, not a fixed product size.
+- The mobile Overview header uses two rows: the dongo logo and profile control share the first row; the project selector starts the second row, with Ideas and a textual Search action aligned opposite it. The desktop shortcut remains functional but its `/` badge is not displayed on mobile.
 - The prototype-only desktop/mobile toggle, restart button, frame border, outer caption, and fixed canvas dimensions are not product UI.
 - Route state, browser Back, restored Overview scroll/focus, safe-area insets, high zoom, and real viewport resizing replace the prototype's in-memory mode switch.
 

@@ -1156,6 +1156,9 @@ test("reflows at 320 CSS pixels and honors reduced motion", async ({ page, brows
   const ideas = page.getByRole("button", { name: "Ideas", exact: true });
   const search = page.getByRole("button", { name: "Search this project" });
   const profile = page.getByRole("button", { name: "Profile and settings" });
+  await expect(search.locator("span").first()).toHaveText("search");
+  await expect(search.locator("span").first()).toBeVisible();
+  expect(await search.evaluate((element) => getComputedStyle(element, "::before").content)).toBe("none");
   const projectName = project.locator("span").first();
   await projectName.evaluate((element) => {
     element.textContent = "A very long mobile project name that must truncate";
@@ -1238,10 +1241,13 @@ test("keeps mobile controls reachable without horizontal overflow", async ({ pag
   if (!brandBounds || !projectBounds || !ideasBounds || !searchBounds || !profileBounds) {
     throw new Error("Mobile header controls are not visible");
   }
-  expect(Math.abs(brandBounds.y - projectBounds.y)).toBeLessThanOrEqual(1);
-  expect(Math.abs(ideasBounds.y - searchBounds.y)).toBeLessThanOrEqual(1);
-  expect(Math.abs(ideasBounds.y - profileBounds.y)).toBeLessThanOrEqual(1);
-  expect(ideasBounds.y).toBeGreaterThanOrEqual(brandBounds.y + brandBounds.height + 4);
+  expect(Math.abs(brandBounds.y - profileBounds.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(projectBounds.y - ideasBounds.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(projectBounds.y - searchBounds.y)).toBeLessThanOrEqual(1);
+  expect(projectBounds.y).toBeGreaterThanOrEqual(brandBounds.y + brandBounds.height + 4);
+  expect(Math.abs(projectBounds.x - brandBounds.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs((searchBounds.x + searchBounds.width) - (profileBounds.x + profileBounds.width)))
+    .toBeLessThanOrEqual(1);
 
   await brand.focus();
   await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
