@@ -2,6 +2,11 @@ import { z } from "zod";
 
 const id = z.string().min(1).max(200);
 const safeLabel = z.string().min(1).max(300);
+const deliveryTargetSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("work"), id }),
+  z.object({ kind: z.literal("intake"), id }),
+  z.object({ kind: z.literal("project"), id }),
+]);
 
 const common = {
   version: z.literal(1),
@@ -11,6 +16,7 @@ const common = {
   workItemId: id,
   projectId: id,
   deepLink: z.url().max(2_048),
+  target: deliveryTargetSchema.optional(),
 };
 
 export const deliveryRequestSchema = z.discriminatedUnion("channel", [

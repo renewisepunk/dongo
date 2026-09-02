@@ -21,6 +21,7 @@ type PushRequest = {
   workItemId: string;
   projectId: string;
   deepLinkPath: string;
+  target?: NotificationTarget;
 };
 
 type EmailRequest = {
@@ -38,7 +39,13 @@ type EmailRequest = {
   workTitle: string;
   attentionKind: "review" | "decision" | "question" | "blocked";
   attentionTitle: string;
+  target?: NotificationTarget;
 };
+
+type NotificationTarget =
+  | { kind: "work"; id: string }
+  | { kind: "intake"; id: string }
+  | { kind: "project"; id: string };
 
 type ClaimedDelivery = {
   outboxId: Id<"notificationOutbox">;
@@ -127,26 +134,24 @@ export const claimDue = internalMutation({
         });
         continue;
       }
-      if (!attention.workItemId) {
-        await ctx.db.patch(delivery._id, {
-          status: "failed",
-          failedAt: now,
-          deliveryAttemptId: undefined,
-          lastErrorCode: "delivery_context_invalid",
-        });
-        continue;
-      }
       const project = await ctx.db.get(delivery.projectId);
-      const work = await ctx.db.get(attention.workItemId);
+      const work = attention.workItemId
+        ? await ctx.db.get(attention.workItemId)
+        : null;
+      const intake = attention.intakeId
+        ? await ctx.db.get(attention.intakeId)
+        : null;
       const profile = await ctx.db.get(delivery.recipientProfileId);
       if (
         !project ||
-        !work ||
         !profile ||
         project.organizationId !== delivery.organizationId ||
-        work.projectId !== project._id ||
         attention.projectId !== project._id ||
-        attention.requestedFromProfileId !== profile._id
+        attention.requestedFromProfileId !== profile._id ||
+        (attention.workItemId !== undefined &&
+          (!work || work.projectId !== project._id)) ||
+        (attention.intakeId !== undefined &&
+          (!intake || intake.projectId !== project._id))
       ) {
         await ctx.db.patch(delivery._id, {
           status: "failed",
@@ -168,7 +173,29 @@ export const claimDue = internalMutation({
       }
       const attemptId = crypto.randomUUID();
       let request: PushRequest | EmailRequest;
-      const deepLinkPath = `/app/${encodeURIComponent(organization.slug)}/${encodeURIComponent(project.slug)}?work=${encodeURIComponent(work._id)}`;
+      const projectPath = `/app/${encodeURIComponent(organization.slug)}/${encodeURIComponent(project.slug)}`;
+      const deepLinkPath = work
+        ? `${projectPath}?work=${encodeURIComponent(work._id)}`
+        : projectPath;
+      const target: NotificationTarget | undefined = work
+        ? undefined
+        : intake
+          ? { kind: "intake", id: intake._id }
+          : { kind: "project", id: project._id };
+      // The production runner deploys Convex before the Worker. Preserve the
+      // original version-1 fields with neutral labels so the older Worker can
+      // safely accept a general delivery until the additive target is live.
+      const compatibilityWorkItemId = work?._id ?? intake?._id ?? project._id;
+      const compatibilityWorkIdentifier = work
+        ? displayWorkIdentifier(project, work)
+        : intake
+          ? "Inbox item"
+          : "Project request";
+      const compatibilityWorkTitle = work
+        ? work.title
+        : intake
+          ? "Linked Inbox item"
+          : "Project-wide attention";
       if (delivery.channel === "push") {
         const device = delivery.deviceId
           ? await ctx.db.get(delivery.deviceId)
@@ -195,9 +222,10 @@ export const claimDue = internalMutation({
           platform: device.platform,
           pushToken: device.pushToken,
           attentionRequestId: attention._id,
-          workItemId: work._id,
+          workItemId: compatibilityWorkItemId,
           projectId: project._id,
           deepLinkPath,
+          ...(target ? { target } : {}),
         };
       } else {
         if (!profile.email) {
@@ -216,14 +244,15 @@ export const claimDue = internalMutation({
           channel: "email",
           email: profile.email,
           attentionRequestId: attention._id,
-          workItemId: work._id,
+          workItemId: compatibilityWorkItemId,
           projectId: project._id,
           deepLinkPath,
           projectName: project.name,
-          workIdentifier: displayWorkIdentifier(project, work),
-          workTitle: work.title,
+          workIdentifier: compatibilityWorkIdentifier,
+          workTitle: compatibilityWorkTitle,
           attentionKind: attention.kind,
           attentionTitle: attention.title,
+          ...(target ? { target } : {}),
         };
       }
       await ctx.db.patch(delivery._id, {

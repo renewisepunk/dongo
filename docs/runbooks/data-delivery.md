@@ -193,6 +193,13 @@ Do not proxy large bytes through Convex or the app Worker, attach an unfinalized
 
 Notifications are scheduled from durable Attention events. The dispatcher claims due deliveries, signs a bounded private request to the notification Worker, records the provider result, and retries without creating a second logical delivery.
 
+The signed delivery contract distinguishes Work, project, and optional Intake
+targets. General owner Attention opens the project's Needs You surface so the
+response card stays visible; an Intake association remains an opaque target
+identifier and never adds raw Intake text to push payloads. Version-1 legacy
+Work fields remain present as a bounded compatibility projection while Convex
+and the notification Worker roll forward in dependency order.
+
 1. Check `/api/notifications/healthz` and `/api/notifications/readyz`. The readiness response lists every provider's configuration state and the explicit `required` set. A live-but-not-ready response means dispatch or a required provider is absent or invalid. Development Web Beta requires dispatch plus Resend; before the native gate, change the required set to include APNs and FCM and supply their real credentials.
 2. Inspect Convex delivery state and Worker logs using safe delivery/request IDs only. Notification payload text is private and must not enter logs.
 3. Resolve configuration or provider availability before retrying. Do not mark a delivery sent manually.

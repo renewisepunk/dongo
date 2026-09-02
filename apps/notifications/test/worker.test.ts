@@ -1,6 +1,8 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import type { EmailDeliveryRequest, PushDeliveryRequest } from "../src/contracts";
+import { deliveryRequestSchema } from "../src/contracts";
 import {
   deliverApns,
   deliverEmail,
@@ -113,6 +115,42 @@ describe("notifications Worker", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("renders general Attention without fabricated Work copy", () => {
+    const request = generalEmailPayload("intake");
+    const rendered = renderAttentionEmail(request);
+
+    expect(rendered.subject).toBe("Attention still needed in dongo <release>");
+    expect(rendered.text).toContain("Scope: Linked Inbox item");
+    expect(rendered.text).not.toContain("Work:");
+    expect(rendered.html).toContain("Linked Inbox item");
+    expect(rendered.html).not.toContain("<release>");
+  });
+
+  it("keeps the version-1 delivery envelope acceptable to the older Worker", () => {
+    const request = generalEmailPayload("project");
+    const legacyEmailSchema = z.object({
+      version: z.literal(1),
+      deliveryId: z.string().min(1).max(200),
+      idempotencyKey: z.string().min(1).max(256),
+      channel: z.literal("email"),
+      email: z.email().max(320),
+      attentionRequestId: z.string().min(1).max(200),
+      workItemId: z.string().min(1).max(200),
+      projectId: z.string().min(1).max(200),
+      deepLink: z.url().max(2_048),
+      projectName: z.string().min(1).max(300),
+      workIdentifier: z.string().min(1).max(300),
+      workTitle: z.string().min(1).max(300),
+      attentionKind: z.enum(["review", "decision", "question", "blocked"]),
+      attentionTitle: z.string().min(1).max(300),
+    });
+
+    expect(deliveryRequestSchema.safeParse(request).success).toBe(true);
+    const legacy = legacyEmailSchema.safeParse(request);
+    expect(legacy.success).toBe(true);
+    expect(legacy.success && "target" in legacy.data).toBe(false);
+  });
+
   it("signs APNs requests and sends only neutral deep-link identifiers", async () => {
     const privateKeyPkcs8 = await es256PrivateKey();
     const request = pushPayload();
@@ -155,6 +193,38 @@ describe("notifications Worker", () => {
       messageId: "apns-message-1",
     });
     expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("sends target-aware general push without a fabricated Work identifier", async () => {
+    const privateKeyPkcs8 = await es256PrivateKey();
+    const request = generalPushPayload();
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const payload = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      expect(payload).toMatchObject({
+        attentionRequestId: request.attentionRequestId,
+        projectId: request.projectId,
+        targetKind: "intake",
+        targetId: "intake-1",
+      });
+      expect(payload).not.toHaveProperty("workItemId");
+      return new Response(null, {
+        status: 200,
+        headers: { "apns-id": "apns-general-message-1" },
+      });
+    });
+
+    await expect(deliverApns({
+      request,
+      config: {
+        teamId: "TEAMID1234",
+        keyId: "KEYID12345",
+        bundleId: "so.dongo.dev",
+        environment: "sandbox",
+        privateKeyPkcs8,
+      },
+      fetcher,
+      now: 1_787_000_000_000,
+    })).resolves.toMatchObject({ ok: true, provider: "apns" });
   });
 
   it("exchanges a signed service assertion and sends a neutral FCM payload", async () => {
@@ -281,6 +351,28 @@ function emailPayload(): EmailDeliveryRequest {
     workTitle: "Ship safely",
     attentionKind: "decision",
     attentionTitle: "Choose the release path",
+  };
+}
+
+function generalEmailPayload(
+  kind: "intake" | "project",
+): EmailDeliveryRequest {
+  return {
+    ...emailPayload(),
+    workItemId: kind === "intake" ? "intake-1" : "project-1",
+    deepLink: "https://dev.dongo.so/app/org/project",
+    workIdentifier: kind === "intake" ? "Inbox item" : "Project request",
+    workTitle: kind === "intake" ? "Linked Inbox item" : "Project-wide attention",
+    target: { kind, id: kind === "intake" ? "intake-1" : "project-1" },
+  };
+}
+
+function generalPushPayload(): PushDeliveryRequest {
+  return {
+    ...pushPayload(),
+    workItemId: "intake-1",
+    deepLink: "https://dev.dongo.so/app/org/project",
+    target: { kind: "intake", id: "intake-1" },
   };
 }
 

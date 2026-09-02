@@ -49,6 +49,24 @@ export function renderAttentionEmail(input: EmailDeliveryRequest): {
   text: string;
   html: string;
 } {
+  if (input.target && input.target.kind !== "work") {
+    const subject = `Attention still needed in ${input.projectName}`;
+    const kind = input.attentionKind[0]!.toUpperCase() + input.attentionKind.slice(1);
+    const scope = input.target.kind === "intake"
+      ? "Linked Inbox item"
+      : "Project-wide request";
+    const plain = [
+      "dongo still needs your attention.",
+      "",
+      `Project: ${input.projectName}`,
+      `Scope: ${scope}`,
+      `${kind}: ${input.attentionTitle}`,
+      "",
+      `Open in dongo: ${input.deepLink}`,
+    ].join("\n");
+    const html = `<!doctype html><html><body style="margin:0;background:#08080a;color:#ececee;font-family:Arial,sans-serif"><div style="max-width:600px;margin:0 auto;padding:40px 24px"><p style="font-family:monospace;color:#93939c;letter-spacing:.12em;text-transform:uppercase">dongo</p><h1 style="font-size:24px;font-weight:600">Attention still needed</h1><p style="color:#93939c;line-height:1.6">${escapeHtml(input.projectName)} · ${escapeHtml(scope)}</p><h2 style="font-size:18px">${escapeHtml(input.attentionTitle)}</h2><p style="line-height:1.6"><strong>${escapeHtml(kind)}</strong></p><p style="margin-top:32px"><a href="${escapeHtml(input.deepLink)}" style="display:inline-block;background:#f0b429;color:#08080a;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Open in dongo</a></p></div></body></html>`;
+    return { subject, text: plain, html };
+  }
   const subject = `Attention still needed for ${input.workIdentifier}`;
   const kind = input.attentionKind[0]!.toUpperCase() + input.attentionKind.slice(1);
   const plain = [
@@ -160,8 +178,13 @@ export async function deliverApns(input: {
             sound: "default",
           },
           attentionRequestId: input.request.attentionRequestId,
-          workItemId: input.request.workItemId,
           projectId: input.request.projectId,
+          ...(input.request.target && input.request.target.kind !== "work"
+            ? {
+                targetKind: input.request.target.kind,
+                targetId: input.request.target.id,
+              }
+            : { workItemId: input.request.workItemId }),
         }),
         signal: requestSignal(),
       },
@@ -282,8 +305,13 @@ export async function deliverFcm(input: {
             },
             data: {
               attentionRequestId: input.request.attentionRequestId,
-              workItemId: input.request.workItemId,
               projectId: input.request.projectId,
+              ...(input.request.target && input.request.target.kind !== "work"
+                ? {
+                    targetKind: input.request.target.kind,
+                    targetId: input.request.target.id,
+                  }
+                : { workItemId: input.request.workItemId }),
             },
             android: { collapseKey: input.request.attentionRequestId },
             apns: {
