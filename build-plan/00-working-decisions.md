@@ -251,6 +251,30 @@ references start a new session and are presented truthfully.
 The complete contract, state machine, security boundary, retention, and rollout
 requirements are recorded in [`08-local-runner.md`](08-local-runner.md).
 
+### D-25 — Direct Work breakdown
+
+Decided: one WorkItem may contain at most 100 direct child WorkItems. This is a
+single-level planning relationship, not an arbitrary tree: a child cannot have
+children, the parent and child must belong to the same project, and a completed
+or cancelled parent cannot receive new children. Each child receives its own
+canonical identifier, rank, revision, lifecycle, Run, Attention, comments, and
+artifacts. A parent's lifecycle does not automatically start, block, complete,
+cancel, or reorder its children, and child state does not implicitly change the
+parent.
+
+Humans add children from the parent Work detail and can navigate in both
+directions. Children remain visible in the normal Overview lanes so existing
+claim and execution behavior is unchanged. Agents use the existing additive
+`parentWorkItemId` input on `create_work`; Work read models expose bounded
+`parentWorkItem` and `childWorkItems` summaries without recursively embedding
+Work records.
+
+The stored `parentId` was already optional before this decision, so existing
+records require no data rewrite and remain root Work. The response fields are
+additive, and contract parsing defaults a missing child list to empty for one
+compatibility cycle. This release adds no reparenting, dependency blocking,
+automatic parent completion, bulk lifecycle operation, or cross-project link.
+
 ### D-21 — Human Ideas backlog
 
 Decided: Ideas are a dedicated human-only project backlog, not Intake, Work, or

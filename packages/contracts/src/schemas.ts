@@ -159,6 +159,15 @@ export const runSchema = z
   })
   .strict();
 
+export const workRelationshipSchema = z
+  .object({
+    id: identifier,
+    identifier: z.string().min(1).max(64),
+    title: z.string().min(1).max(500),
+    state: z.enum(["ready", "working", "done", "cancelled"]),
+  })
+  .strict();
+
 export const workItemSchema = z
   .object({
     id: identifier,
@@ -175,6 +184,8 @@ export const workItemSchema = z
     orderKey: z.string().min(1).max(128),
     revision: z.number().int().positive(),
     sourceIntakeIds: z.array(identifier).max(500),
+    parentWorkItem: workRelationshipSchema.optional(),
+    childWorkItems: z.array(workRelationshipSchema).max(100).default([]),
     activeRun: runSchema.optional(),
     openAttention: attentionSchema.optional(),
     artifacts: z.array(artifactSchema).max(500),

@@ -25,6 +25,7 @@ export type NewWorkInput = {
 
 const MAX_WORK_LINKS = 100;
 const MAX_WORK_LINK_LENGTH = 2_048;
+export const MAX_CHILD_WORK_ITEMS = 100;
 
 function normalizedWorkLinks(values: string[] | undefined): string[] | undefined {
   if (values === undefined) return undefined;
@@ -65,6 +66,23 @@ export async function createWorkItem(
     const parent = await ctx.db.get(options.input.parentId);
     if (!parent) fail("not_found", "Parent work item not found");
     assertSameProject(parent, project);
+    if (parent.parentId) {
+      fail("validation", "A child WorkItem cannot have children");
+    }
+    if (parent.state === "done" || parent.state === "cancelled") {
+      fail("validation", "Closed Work cannot receive new children");
+    }
+    const children = await ctx.db
+      .query("workItems")
+      .withIndex("by_parent", (query) => query.eq("parentId", parent._id))
+      .take(MAX_CHILD_WORK_ITEMS);
+    if (children.length >= MAX_CHILD_WORK_ITEMS) {
+      fail(
+        "quota_exceeded",
+        `A WorkItem may have at most ${MAX_CHILD_WORK_ITEMS} children`,
+        { maxChildren: MAX_CHILD_WORK_ITEMS },
+      );
+    }
   }
   const actor = await ctx.db.get(options.actorId);
   if (!actor || actor.organizationId !== project.organizationId) {
@@ -149,7 +167,12 @@ export async function createWorkItem(
     workItemId,
     actorId: options.actorId,
     type: "work.created",
-    data: { identifier, legacyIdentifiers, kind: options.input.kind },
+    data: {
+      identifier,
+      legacyIdentifiers,
+      kind: options.input.kind,
+      parentId: options.input.parentId ?? null,
+    },
     requestId: options.requestId,
     createdAt: options.now,
   });

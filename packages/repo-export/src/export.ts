@@ -16,6 +16,10 @@ function normalizeText(value: string | undefined): string | undefined {
   return value.replace(/\r\n?/g, "\n").replace(/[ \t]+$/gm, "").trim();
 }
 
+function singleLine(value: string): string {
+  return normalizeText(value)?.replace(/\s+/gu, " ") ?? "";
+}
+
 function yamlString(value: string): string {
   return JSON.stringify(normalizeText(value) ?? "");
 }
@@ -87,6 +91,19 @@ export function renderWorkItem(item: ExportWorkItem): string {
 
   lines.push(...section("Goal", item.goal ?? item.description));
   lines.push(...section("Outcome", item.outcome));
+  lines.push(...section(
+    "Parent work",
+    item.parentWorkItem
+      ? `${singleLine(item.parentWorkItem.identifier)} · ${singleLine(item.parentWorkItem.title)}`
+      : undefined,
+  ));
+  if ((item.childWorkItems?.length ?? 0) > 0) {
+    lines.push("# Child work", "");
+    for (const child of item.childWorkItems ?? []) {
+      lines.push(`- ${singleLine(child.identifier)} · ${singleLine(child.title)} (${singleLine(child.state)})`);
+    }
+    lines.push("");
+  }
   lines.push(...section("Source intake", item.sourceIntake ?? item.sourceIntakeIds?.join("\n")));
 
   const artifacts = (item.artifacts ?? []).map(safeArtifact).filter((value): value is ExportArtifact => Boolean(value));

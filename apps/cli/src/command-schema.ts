@@ -117,7 +117,10 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
       { name: "link", description: "Related HTTP(S) link.", repeatable: true },
       { name: "initial-comment", description: "Initial conversation comment." },
       { name: "source-intake-id", description: "Source Intake ID.", repeatable: true },
-      { name: "parent-work-id", description: "Parent WorkItem ID." },
+      {
+        name: "parent-work-id",
+        description: "Direct parent WorkItem ID; children cannot have their own children.",
+      },
       idempotency,
     ],
   },

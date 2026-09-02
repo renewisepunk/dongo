@@ -63,6 +63,7 @@ export type OverviewConnection = Pick<
   | "subscribeIntakeDetail"
   | "searchProject"
   | "createIntake"
+  | "createChildWork"
   | "updateIntake"
   | "uploadAttachment"
   | "discardAttachment"
@@ -2253,6 +2254,7 @@ export function Overview(props: OverviewProps) {
           mobileCloseLabel="←  back"
           onClose={closeDetail}
           onOpenIntake={openIntake}
+          onOpenWork={(id) => openWork(id, false)}
           onDownload={downloadAttachment}
           loadAttachmentPreview={loadAttachmentPreview}
           uploadAttachment={async (file, onProgress, signal) => {
@@ -2307,6 +2309,12 @@ export function Overview(props: OverviewProps) {
               announce("Comment could not be added; your draft was kept");
               throw error;
             }
+          }}
+          onCreateChild={async (title, goal) => {
+            if (!connection) throw new Error("create_child_unavailable");
+            const created = await connection.createChildWork(item().id, title, goal);
+            announce("Subtask added");
+            return created;
           }}
           runnerJob={runnerSnapshot().jobs.find((job) => job.workItemId === item().id)}
           runnerHarnesses={[...new Set(
@@ -2459,6 +2467,7 @@ type WorkDetailProps = {
   mobileCloseLabel: string;
   onClose: () => void;
   onOpenIntake: (id: string) => void;
+  onOpenWork: (id: string) => void;
   onDownload: (attachmentId: string) => Promise<void>;
   loadAttachmentPreview: OverviewConnection["loadAttachmentPreview"];
   uploadAttachment: OverviewConnection["uploadAttachment"];
@@ -2467,6 +2476,10 @@ type WorkDetailProps = {
   onRespond: (selectedOption?: string, body?: string) => Promise<void>;
   onResolve: () => Promise<void>;
   onComment: (body: string | undefined, attachmentIds: string[]) => Promise<void>;
+  onCreateChild: (
+    title: string,
+    goal: string | undefined,
+  ) => Promise<{ workItemId: string }>;
   runnerJob?: RunnerJob;
   runnerHarnesses: RunnerHarness[];
   runnerOnline: boolean;
@@ -2500,8 +2513,15 @@ function WorkDetail(props: WorkDetailProps) {
   const [identifierCopied, setIdentifierCopied] = createSignal(false);
   const [runnerPending, setRunnerPending] = createSignal(false);
   const [runnerError, setRunnerError] = createSignal("");
+  const [childComposerOpen, setChildComposerOpen] = createSignal(false);
+  const [childTitle, setChildTitle] = createSignal("");
+  const [childGoal, setChildGoal] = createSignal("");
+  const [childPending, setChildPending] = createSignal(false);
+  const [childError, setChildError] = createSignal("");
   let detailPanel: HTMLElement | undefined;
   let closeButton: HTMLButtonElement | undefined;
+  let addChildButton: HTMLButtonElement | undefined;
+  let childTitleInput: HTMLInputElement | undefined;
   let identifierCopyTimer: number | undefined;
   let activeResponseDraftKey = responseDraftKey();
 
@@ -2645,6 +2665,40 @@ function WorkDetail(props: WorkDetailProps) {
     }
   };
 
+  const createChild = async (event: SubmitEvent) => {
+    event.preventDefault();
+    const title = childTitle().trim();
+    const goal = childGoal().trim();
+    if (!title || childPending()) return;
+    setChildPending(true);
+    setChildError("");
+    try {
+      await props.onCreateChild(title, goal || undefined);
+      setChildTitle("");
+      setChildGoal("");
+      setChildComposerOpen(false);
+      queueMicrotask(() => addChildButton?.focus());
+    } catch {
+      setChildError(
+        "This subtask could not be added. The parent may have changed or reached its child limit.",
+      );
+    } finally {
+      setChildPending(false);
+    }
+  };
+
+  const openChildComposer = () => {
+    setChildError("");
+    setChildComposerOpen(true);
+    queueMicrotask(() => childTitleInput?.focus());
+  };
+
+  const closeChildComposer = () => {
+    setChildComposerOpen(false);
+    setChildError("");
+    queueMicrotask(() => addChildButton?.focus());
+  };
+
   return (
     <article
       ref={detailPanel}
@@ -2771,6 +2825,121 @@ function WorkDetail(props: WorkDetailProps) {
           <div class="detail-section__label">goal</div>
           <MarkdownContent source={props.item.goal} class="detail-section__body" />
         </section>
+
+        <Show when={props.item.parentWork}>{(parent) => (
+          <section class="detail-section" aria-labelledby="parent-work-heading">
+            <div class="detail-section__label" id="parent-work-heading">parent issue</div>
+            <button
+              class="related-work-row"
+              type="button"
+              onClick={() => props.onOpenWork(parent().id)}
+            >
+              <span class="related-work-row__identifier mono">{parent().identifier}</span>
+              <span class="related-work-row__title">{parent().title}</span>
+              <span class="related-work-row__state" data-state={parent().state}>
+                {parent().state}
+              </span>
+            </button>
+          </section>
+        )}</Show>
+
+        <Show
+          when={
+            !props.item.parentWork &&
+            (props.item.state !== "done" || (props.item.childWork?.length ?? 0) > 0)
+          }
+        >
+          <section class="detail-section" aria-labelledby="child-work-heading">
+            <div class="subtask-section__head">
+              <div class="detail-section__label" id="child-work-heading">subtasks</div>
+              <Show when={(props.item.childWork?.length ?? 0) > 0}>
+                <span class="subtask-progress mono">
+                  {(props.item.childWork ?? []).filter((child) => child.state === "done").length}
+                  /{props.item.childWork?.length ?? 0} done
+                </span>
+              </Show>
+            </div>
+            <Show when={(props.item.childWork?.length ?? 0) > 0}>
+              <div class="related-work-list">
+                <For each={props.item.childWork}>{(child) => (
+                  <button
+                    class="related-work-row"
+                    data-child-work-id={child.id}
+                    type="button"
+                    onClick={() => props.onOpenWork(child.id)}
+                  >
+                    <span class="related-work-row__identifier mono">{child.identifier}</span>
+                    <span class="related-work-row__title">{child.title}</span>
+                    <span class="related-work-row__state" data-state={child.state}>
+                      {child.state}
+                    </span>
+                  </button>
+                )}</For>
+              </div>
+            </Show>
+            <Show when={props.item.state !== "done"}>
+              <Show
+                when={childComposerOpen()}
+                fallback={
+                  <button
+                    ref={addChildButton}
+                    class="button button--quiet subtask-add"
+                    type="button"
+                    onClick={openChildComposer}
+                  >
+                    + Add subtask
+                  </button>
+                }
+              >
+                <form class="subtask-form" onSubmit={(event) => void createChild(event)}>
+                  <label class="subtask-form__field">
+                    <span class="subtask-form__label">Title</span>
+                    <input
+                      ref={childTitleInput}
+                      class="input"
+                      name="subtask-title"
+                      value={childTitle()}
+                      maxlength={500}
+                      required
+                      onInput={(event) => setChildTitle(event.currentTarget.value)}
+                    />
+                  </label>
+                  <label class="subtask-form__field">
+                    <span class="subtask-form__label">Goal <span class="note">optional</span></span>
+                    <textarea
+                      class="textarea"
+                      name="subtask-goal"
+                      value={childGoal()}
+                      maxlength={100_000}
+                      rows={3}
+                      onInput={(event) => setChildGoal(event.currentTarget.value)}
+                    />
+                  </label>
+                  <Show when={childError()}>
+                    <div class="security-note" role="alert">{childError()}</div>
+                  </Show>
+                  <div class="response-actions">
+                    <button
+                      class="button button--primary"
+                      type="submit"
+                      disabled={childPending() || !childTitle().trim()}
+                    >
+                      {childPending() ? "Adding…" : "Add subtask"}
+                    </button>
+                    <button
+                      class="button button--quiet"
+                      type="button"
+                      disabled={childPending()}
+                      onClick={closeChildComposer}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </Show>
+            </Show>
+          </section>
+        </Show>
 
         <section class="detail-section runner-work-card" aria-labelledby="runner-work-heading">
           <div class="detail-section__label" id="runner-work-heading">local runner</div>

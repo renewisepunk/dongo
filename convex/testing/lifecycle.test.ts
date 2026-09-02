@@ -235,6 +235,156 @@ describe("agent lifecycle reliability", () => {
     expect(verifiedInstallation?.lastUsedAt).toEqual(expect.any(Number));
   });
 
+  it("keeps Work hierarchy direct, project-scoped, bounded, and visible", async () => {
+    const t = convexTest(schema, modules);
+    const context = await seededContext(t, `work-hierarchy-${crypto.randomUUID()}`);
+    const parent = await successfulData(t, context, "create_work", {
+      title: "Ship the larger capability",
+      goal: "Coordinate direct child Work without recursive nesting.",
+      idempotencyKey: "create-hierarchy-parent",
+    });
+    const childInput = {
+      title: "Implement the first slice",
+      goal: "Deliver one independently executable part.",
+      parentWorkItemId: parent.id,
+      idempotencyKey: "create-hierarchy-child",
+    };
+    const child = await successfulData(t, context, "create_work", childInput);
+    expect(child).toMatchObject({
+      parentWorkItem: {
+        id: parent.id,
+        identifier: parent.identifier,
+        title: parent.title,
+        state: "ready",
+      },
+      childWorkItems: [],
+    });
+    expect(await successfulData(t, context, "create_work", childInput)).toEqual(child);
+
+    const refreshedParent = await successfulData(t, context, "get_work", {
+      workItemId: parent.id,
+    });
+    expect(refreshedParent.childWorkItems).toEqual([{
+      id: child.id,
+      identifier: child.identifier,
+      title: child.title,
+      state: "ready",
+    }]);
+
+    const startedChild = await successfulData(t, context, "start_work", {
+      workItemId: child.id,
+      expectedRevision: child.revision,
+      externalSessionId: "finish-child-session",
+      idempotencyKey: "start-hierarchy-child",
+    });
+    await successfulData(t, context, "finish_work", {
+      workItemId: child.id,
+      expectedRevision: startedChild.revision,
+      outcome: "The child completed without changing the parent lifecycle.",
+      idempotencyKey: "finish-hierarchy-child",
+    });
+    const parentAfterChild = await successfulData(t, context, "get_work", {
+      workItemId: parent.id,
+    });
+    expect(parentAfterChild.state).toBe("ready");
+    expect(parentAfterChild.childWorkItems[0]?.state).toBe("done");
+
+    const nested = await callAgent(t, context, "create_work", {
+      title: "Nested child",
+      goal: "This third level must be rejected.",
+      parentWorkItemId: child.id,
+      idempotencyKey: "reject-nested-child",
+    });
+    expect(nested.payload).toMatchObject({
+      ok: false,
+      error: { code: "validation", retryable: false },
+    });
+
+    const foreignContext = await seededContext(
+      t,
+      `foreign-work-hierarchy-${crypto.randomUUID()}`,
+    );
+    const foreignParent = await successfulData(t, foreignContext, "create_work", {
+      title: "Foreign parent",
+      goal: "Remain invisible outside its project.",
+      idempotencyKey: "create-foreign-parent",
+    });
+    const crossProject = await callAgent(t, context, "create_work", {
+      title: "Cross-project child",
+      goal: "This relationship must fail closed.",
+      parentWorkItemId: foreignParent.id,
+      idempotencyKey: "reject-cross-project-child",
+    });
+    expect(crossProject.payload).toMatchObject({
+      ok: false,
+      error: { code: "not_found", retryable: false },
+    });
+
+    const closedParent = await successfulData(t, context, "create_work", {
+      title: "Closed parent",
+      goal: "Reject new children after completion.",
+      idempotencyKey: "create-closed-parent",
+    });
+    const started = await successfulData(t, context, "start_work", {
+      workItemId: closedParent.id,
+      expectedRevision: closedParent.revision,
+      externalSessionId: "close-parent-session",
+      idempotencyKey: "start-closed-parent",
+    });
+    await successfulData(t, context, "finish_work", {
+      workItemId: closedParent.id,
+      expectedRevision: started.revision,
+      outcome: "Closed before another child was added.",
+      idempotencyKey: "finish-closed-parent",
+    });
+    const closed = await callAgent(t, context, "create_work", {
+      title: "Late child",
+      goal: "This child must not be created.",
+      parentWorkItemId: closedParent.id,
+      idempotencyKey: "reject-closed-parent-child",
+    });
+    expect(closed.payload).toMatchObject({
+      ok: false,
+      error: { code: "validation", retryable: false },
+    });
+
+    await t.run(async (ctx) => {
+      const storedParent = await ctx.db.get(parent.id as Id<"workItems">);
+      if (!storedParent) throw new Error("hierarchy parent missing");
+      for (let index = 1; index < 100; index += 1) {
+        await ctx.db.insert("workItems", {
+          organizationId: storedParent.organizationId,
+          projectId: storedParent.projectId,
+          number: 100 + index,
+          identifier: `bulk${index.toString().padStart(3, "0")}`,
+          title: `Bounded child ${index}`,
+          kind: "task",
+          state: "ready",
+          rank: index,
+          createdByActorId: storedParent.createdByActorId,
+          parentId: storedParent._id,
+          revision: 1,
+          createdAt: index,
+          updatedAt: index,
+        });
+      }
+    });
+    const overLimit = await callAgent(t, context, "create_work", {
+      title: "Child 101",
+      goal: "The bounded relationship must reject this child.",
+      parentWorkItemId: parent.id,
+      idempotencyKey: "reject-child-over-limit",
+    });
+    expect(overLimit.payload).toMatchObject({
+      ok: false,
+      error: {
+        code: "quota_exceeded",
+        retryable: false,
+        details: { maxChildren: 100 },
+      },
+    });
+  });
+
   it("returns a stable already-resolved Attention conflict while replaying the original success", async () => {
     const t = convexTest(schema, modules);
     const context = await seededContext(t, `attention-resolved-${crypto.randomUUID()}`);

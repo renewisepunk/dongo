@@ -142,6 +142,13 @@ export type Run = {
   finishedAt?: number;
 };
 
+export type WorkRelationship = {
+  id: Id<"workItems">;
+  identifier: string;
+  title: string;
+  state: WorkState;
+};
+
 export type WorkItem = {
   id: Id<"workItems">;
   projectId: Id<"projects">;
@@ -157,6 +164,8 @@ export type WorkItem = {
   orderKey: string;
   revision: number;
   sourceIntakeIds: Array<Id<"intakes">>;
+  parentWorkItem?: WorkRelationship;
+  childWorkItems: WorkRelationship[];
   activeRun?: Run;
   openAttention?: Attention;
   artifacts: Artifact[];

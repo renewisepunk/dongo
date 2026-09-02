@@ -86,6 +86,28 @@ test("canonical artifacts, source IDs, and conversation notes export without tem
   assert.doesNotMatch(markdown, /signature=/);
 });
 
+test("renders direct Work relationships without recursive content", () => {
+  const markdown = renderWorkItem({
+    identifier: "dong010",
+    title: "Parent",
+    parentWorkItem: {
+      id: "work-9" as never,
+      identifier: "dong009",
+      title: "Program\n# injected heading",
+      state: "working",
+    },
+    childWorkItems: [{
+      id: "work-11" as never,
+      identifier: "dong011",
+      title: "Ship the first\nslice",
+      state: "ready",
+    }],
+  });
+  assert.match(markdown, /# Parent work\n\ndong009 · Program # injected heading/);
+  assert.match(markdown, /# Child work\n\n- dong011 · Ship the first slice \(ready\)/);
+  assert.doesNotMatch(markdown, /\n# injected heading/);
+});
+
 test("filename collision handling is deterministic across snapshot ordering", async () => {
   const left = await mkdtemp(path.join(os.tmpdir(), "dongo-export-order-a-"));
   const right = await mkdtemp(path.join(os.tmpdir(), "dongo-export-order-b-"));

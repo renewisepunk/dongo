@@ -41,7 +41,11 @@ import {
 } from "../human/summary";
 import { runIdempotent } from "../../lib/idempotency";
 import { isLeaseActive, newLease } from "../../lib/leases";
-import { createWorkItem, linkIntakeToWork } from "./service";
+import {
+  createWorkItem,
+  linkIntakeToWork,
+  MAX_CHILD_WORK_ITEMS,
+} from "./service";
 import { workByIdentifier } from "./identifiers";
 import {
   capabilityState,
@@ -307,7 +311,7 @@ export const createForAgent = internalMutation({
 });
 
 async function workDetail(ctx: QueryCtx, work: Doc<"workItems">) {
-  const [runs, comments, artifacts, attention, sources] = await Promise.all([
+  const [runs, comments, artifacts, attention, sources, parentWork, childWork] = await Promise.all([
     ctx.db
       .query("runs")
       .withIndex("by_work_started", (q) => q.eq("workItemId", work._id))
@@ -332,8 +336,13 @@ async function workDetail(ctx: QueryCtx, work: Doc<"workItems">) {
       .query("intakeWorkLinks")
       .withIndex("by_work", (q) => q.eq("workItemId", work._id))
       .take(50),
+    work.parentId ? ctx.db.get(work.parentId) : null,
+    ctx.db
+      .query("workItems")
+      .withIndex("by_parent", (q) => q.eq("parentId", work._id))
+      .take(MAX_CHILD_WORK_ITEMS),
   ]);
-  return { work, runs, comments, artifacts, attention, sources };
+  return { work, runs, comments, artifacts, attention, sources, parentWork, childWork };
 }
 
 async function workDetailForHuman(
@@ -390,6 +399,14 @@ async function workDetailForHuman(
       intake: intakeSummaryForHuman(intake, sourceAttachments[0]),
       attachments: sourceAttachments,
     })),
+    parentWork:
+      detail.parentWork?.projectId === work.projectId
+        ? workSummaryForHuman(detail.parentWork, project)
+        : undefined,
+    childWork: detail.childWork
+      .filter((child) => child.projectId === work.projectId)
+      .sort((left, right) => left.rank - right.rank)
+      .map((child) => workSummaryForHuman(child, project)),
   };
 }
 
@@ -408,6 +425,14 @@ export const getForHuman = query({
       comments: detail.comments.map(commentSummaryForHuman),
       artifacts: detail.artifacts.map(artifactSummaryForHuman),
       attention: detail.attention.map(attentionSummaryForHuman),
+      parentWork:
+        detail.parentWork?.projectId === work.projectId
+          ? workSummaryForHuman(detail.parentWork, principal.project!)
+          : undefined,
+      childWork: detail.childWork
+        .filter((child) => child.projectId === work.projectId)
+        .sort((left, right) => left.rank - right.rank)
+        .map((child) => workSummaryForHuman(child, principal.project!)),
     };
   },
 });

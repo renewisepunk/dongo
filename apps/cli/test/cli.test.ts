@@ -467,6 +467,7 @@ test("work create forwards planning context, links, and an initial comment", asy
     "--title", "Title",
     "--goal", "Goal",
     "--context", "Keep compatibility",
+    "--parent-work-id", "work_parent",
     "--link", "https://example.com/spec",
     "--link", "https://example.com/design",
     "--initial-comment", "Start with the client inventory.",
@@ -484,6 +485,7 @@ test("work create forwards planning context, links, and an initial comment", asy
 
   assert.equal(exitCode, 0);
   assert.equal(received?.context, "Keep compatibility");
+  assert.equal(received?.parentWorkItemId, "work_parent");
   assert.deepEqual(received?.links, ["https://example.com/spec", "https://example.com/design"]);
   assert.equal(received?.initialComment, "Start with the client inventory.");
   assert.equal(stream.values().stderr, "");

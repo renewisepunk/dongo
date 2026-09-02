@@ -21,6 +21,8 @@ export interface ExportWorkItem {
   outcome?: WorkItem["outcome"];
   sourceIntake?: string;
   sourceIntakeIds?: readonly string[];
+  parentWorkItem?: WorkItem["parentWorkItem"];
+  childWorkItems?: WorkItem["childWorkItems"];
   notes?: string;
   conversation?: readonly {
     actor?: { displayName?: string };

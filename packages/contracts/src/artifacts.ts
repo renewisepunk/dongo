@@ -20,6 +20,7 @@ import {
   runSchema,
   sessionStartSchema,
   syncSnapshotSchema,
+  workRelationshipSchema,
   workItemSchema,
 } from "./schemas.ts";
 
@@ -35,6 +36,7 @@ const domainSchemaEntries = [
   ["ConversationEntry", conversationEntrySchema],
   ["Attention", attentionSchema],
   ["Run", runSchema],
+  ["WorkRelationship", workRelationshipSchema],
   ["WorkItem", workItemSchema],
   ["Overview", overviewSchema],
   ["ProjectUpdate", projectUpdateSchema],

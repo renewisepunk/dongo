@@ -550,6 +550,63 @@ const connection: OverviewConnection = {
     emitIntake(id);
     return { intakeId: id, revision: 1 };
   },
+  async createChildWork(parentWorkItemId, title, goal) {
+    const parent = work.find((candidate) => candidate.id === parentWorkItemId);
+    if (!parent || parent.parentWork || parent.state === "done") {
+      throw Object.assign(new Error("invalid_transition"), {
+        data: { code: "invalid_transition" },
+      });
+    }
+    if ((parent.childWork?.length ?? 0) >= 100) {
+      throw Object.assign(new Error("quota_exceeded"), {
+        data: { code: "quota_exceeded", details: { maxChildren: 100 } },
+      });
+    }
+    const sequence = 11 + (parent.childWork?.length ?? 0);
+    const child: WorkItem = {
+      id: `work-subtask-${sequence}`,
+      identifier: `dong${sequence.toString().padStart(3, "0")}`,
+      title,
+      state: "ready",
+      age: "now",
+      goal: goal || title,
+      rank: parent.rank + sequence,
+      revision: 1,
+      parentWork: {
+        id: parent.id,
+        identifier: parent.identifier,
+        title: parent.title,
+        state: parent.state === "needs" ? "working" : parent.state,
+      },
+      childWork: [],
+    };
+    work = [
+      ...work.map((candidate) => candidate.id === parent.id
+        ? {
+            ...candidate,
+            childWork: [
+              ...(candidate.childWork ?? []),
+              {
+                id: child.id,
+                identifier: child.identifier,
+                title: child.title,
+                state: "ready" as const,
+              },
+            ],
+          }
+        : candidate),
+      child,
+    ];
+    emitWork(parent.id);
+    emitWork(child.id);
+    emitOverview();
+    document.documentElement.dataset.fixtureCreatedSubtask = JSON.stringify({
+      parentWorkItemId,
+      title,
+      goal,
+    });
+    return { workItemId: child.id };
+  },
   async updateIntake(input) {
     const item = intakes.find((candidate) => candidate.id === input.intakeId);
     if (!item) throw new Error("fixture Intake unavailable");

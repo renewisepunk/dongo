@@ -160,6 +160,44 @@ test("restores focus when project navigation is dismissed", async ({ page }) => 
   await expect(trigger).toBeFocused();
 });
 
+test("creates and navigates one level of accessible subtasks", async ({ page }) => {
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  const parent = workDetail(page, "Verify fixture search");
+  const add = parent.getByRole("button", { name: "+ Add subtask" });
+
+  await add.click();
+  const title = parent.getByLabel("Title", { exact: true });
+  const goal = parent.getByLabel("Goal optional", { exact: true });
+  await expect(title).toBeFocused();
+  await title.fill("Cover the narrow-screen search path");
+  await goal.fill("Verify the child journey independently at mobile widths.");
+  await parent.getByRole("button", { name: "Add subtask", exact: true }).click();
+
+  await expect(page.getByRole("status")).toContainText("Subtask added");
+  await expect(parent.getByText("0/1 done", { exact: true })).toBeVisible();
+  const child = parent.getByRole("button", {
+    name: /dong011 Cover the narrow-screen search path ready/i,
+  });
+  await expect(child).toBeVisible();
+  await expect(add).toBeFocused();
+  await expect.poll(async () => page.evaluate(() =>
+    document.documentElement.dataset.fixtureCreatedSubtask,
+  )).toContain('"parentWorkItemId":"work-ready-a"');
+
+  await child.click();
+  const childDetail = workDetail(page, "Cover the narrow-screen search path");
+  await expect(childDetail.getByText("parent issue", { exact: true })).toBeVisible();
+  await expect(childDetail.getByRole("button", {
+    name: /dong009 Verify fixture search ready/i,
+  })).toBeVisible();
+  await expect(childDetail.getByRole("button", { name: /Add subtask/i })).toBeHidden();
+
+  await childDetail.getByRole("button", {
+    name: /dong009 Verify fixture search ready/i,
+  }).click();
+  await expect(workDetail(page, "Verify fixture search")).toBeVisible();
+});
+
 test("shows the authenticated account and organization role", async ({ page }) => {
   await page.getByRole("button", { name: "Profile and settings" }).click();
   const menu = page.getByRole("menu", { name: "Profile and settings" });

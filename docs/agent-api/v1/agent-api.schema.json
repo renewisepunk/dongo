@@ -671,6 +671,42 @@
       ],
       "additionalProperties": false
     },
+    "WorkRelationship": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "working",
+            "done",
+            "cancelled"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "identifier",
+        "title",
+        "state"
+      ],
+      "additionalProperties": false
+    },
     "WorkItem": {
       "type": "object",
       "properties": {
@@ -756,6 +792,17 @@
             "maxLength": 256
           }
         },
+        "parentWorkItem": {
+          "$ref": "#/$defs/WorkRelationship"
+        },
+        "childWorkItems": {
+          "default": [],
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkRelationship"
+          }
+        },
         "activeRun": {
           "$ref": "#/$defs/Run"
         },
@@ -803,6 +850,7 @@
         "orderKey",
         "revision",
         "sourceIntakeIds",
+        "childWorkItems",
         "artifacts",
         "conversation",
         "createdAt",
@@ -1897,7 +1945,8 @@
         "parentWorkItemId": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "Direct parent WorkItem ID. The parent cannot itself be a child."
         }
       },
       "required": [

@@ -225,7 +225,9 @@ export const operationRegistry = {
       links: z.array(workLinkSchema).max(100).optional(),
       initialComment: z.string().trim().min(1).max(100_000).optional(),
       sourceIntakeIds: z.array(identifier).max(500).optional(),
-      parentWorkItemId: identifier.optional(),
+      parentWorkItemId: identifier
+        .describe("Direct parent WorkItem ID. The parent cannot itself be a child.")
+        .optional(),
     }).strict(),
     workItemSchema,
   ),

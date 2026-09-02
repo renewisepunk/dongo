@@ -102,6 +102,12 @@ Document allowed transitions and atomic effects for:
 
 Each transition specifies authorization, expected revision, idempotency behavior, emitted Event, claim effect, Run effect, export signal, and notification signal.
 
+Work creation may optionally set one `parentWorkItemId`. The authoritative
+mutation verifies that the parent exists in the same project, is not itself a
+child, is not closed, and has fewer than 100 children before inserting the new
+WorkItem. The relationship is immutable in this release. Parent and child
+lifecycle transitions remain independent.
+
 ### Human-facing view models
 
 Freeze typed aggregates for:
@@ -114,7 +120,7 @@ Freeze typed aggregates for:
 - Intake with text, optional context and links, finalized attachments, immutable
   creator attribution, update time/revision, attributed update Events, and a
   server-authoritative deterministic non-empty `displayLabel` for human views;
-- Work detail with source Intake, current/latest Run, comments (including finalized attachment references), artifacts, and Attention;
+- Work detail with source Intake, current/latest Run, comments (including finalized attachment references), artifacts, Attention, an optional direct-parent summary, and at most 100 direct-child summaries. Relationship summaries contain only project-scoped Work ID, canonical identifier, title, and state; they never recursively embed another WorkItem;
 - active-Run visualization with agent identity, canonical Work, Run state,
   progress, elapsed/lease health, and safe workspace label; this read model is
   subscription-backed and never equates generic CLI activity with an active

@@ -41,6 +41,13 @@ export type SourceIntakeSummary = {
   attachments: AttachmentSummary[];
 };
 
+export type WorkRelationshipSummary = {
+  id: string;
+  identifier: string;
+  title: string;
+  state: "ready" | "working" | "done" | "cancelled";
+};
+
 export type WorkItem = {
   id: string;
   identifier: string;
@@ -57,6 +64,8 @@ export type WorkItem = {
   conversation?: ConversationEntry[];
   attachments?: AttachmentSummary[];
   sources?: SourceIntakeSummary[];
+  parentWork?: WorkRelationshipSummary;
+  childWork?: WorkRelationshipSummary[];
   completedAt?: string;
   unseen?: boolean;
   rank: number;

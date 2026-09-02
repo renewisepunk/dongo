@@ -34,6 +34,7 @@ import {
   hostCapabilitiesValidator,
   parallelExecutionPolicy,
 } from "../domains/work/concurrency";
+import { MAX_CHILD_WORK_ITEMS } from "../domains/work/service";
 
 function id<T extends string>(value: string): string & { readonly __table: T } {
   return value as string & { readonly __table: T };
@@ -223,9 +224,24 @@ async function workDto(
   ctx: QueryCtx,
   work: Doc<"workItems">,
 ): Promise<WorkItem> {
-  const [project, links, artifacts, comments, openRequests, seenRequests, runs] =
+  const [
+    project,
+    parentWork,
+    childWork,
+    links,
+    artifacts,
+    comments,
+    openRequests,
+    seenRequests,
+    runs,
+  ] =
     await Promise.all([
       ctx.db.get(work.projectId),
+      work.parentId ? ctx.db.get(work.parentId) : null,
+      ctx.db
+        .query("workItems")
+        .withIndex("by_parent", (q) => q.eq("parentId", work._id))
+        .take(MAX_CHILD_WORK_ITEMS),
       ctx.db
         .query("intakeWorkLinks")
         .withIndex("by_work", (q) => q.eq("workItemId", work._id))
@@ -261,6 +277,12 @@ async function workDto(
         .take(25),
     ]);
   if (!project) fail("internal", "Work project mapping is missing");
+  const relationship = (related: Doc<"workItems">) => ({
+    id: id<"workItems">(related._id),
+    identifier: displayWorkIdentifier(project, related),
+    title: related.title,
+    state: related.state,
+  });
   const claimActive =
     work.claimedRunId !== undefined &&
     work.claimExpiresAt !== undefined &&
@@ -295,6 +317,14 @@ async function workDto(
     orderKey: String(work.rank),
     revision: work.revision,
     sourceIntakeIds: links.map((link) => id<"intakes">(link.intakeId)),
+    parentWorkItem:
+      parentWork && parentWork.projectId === work.projectId
+        ? relationship(parentWork)
+        : undefined,
+    childWorkItems: childWork
+      .filter((child) => child.projectId === work.projectId)
+      .sort((left, right) => left.rank - right.rank)
+      .map(relationship),
     activeRun: activeRunDoc
       ? await runDto(ctx, activeRunDoc, work)
       : undefined,

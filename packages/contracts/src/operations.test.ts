@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { mcpToolNames, operationRegistry } from "./operations.ts";
-import { actorSummarySchema, projectSummarySchema, runSchema } from "./schemas.ts";
+import {
+  actorSummarySchema,
+  projectSummarySchema,
+  runSchema,
+} from "./schemas.ts";
 import { domainErrorCodes } from "./errors.ts";
 
 describe("operation registry", () => {
@@ -57,6 +61,49 @@ describe("operation registry", () => {
       conversation: [],
       createdAt: 1,
       updatedAt: 1,
+    }).success).toBe(true);
+  });
+
+  it("publishes bounded direct parent and child Work relationships", () => {
+    const relationship = {
+      id: "work-2",
+      identifier: "dong002",
+      title: "Direct child",
+      state: "ready" as const,
+    };
+    const work = {
+      id: "work-1",
+      projectId: "project-1",
+      identifier: "dong001",
+      sequence: 1,
+      title: "Parent work",
+      goal: "Break the work into direct children.",
+      state: "ready" as const,
+      orderKey: "1",
+      revision: 1,
+      sourceIntakeIds: [],
+      childWorkItems: [relationship],
+      artifacts: [],
+      conversation: [],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    expect(operationRegistry.get_work.outputSchema.safeParse(work).success)
+      .toBe(true);
+    expect(operationRegistry.get_work.outputSchema.safeParse({
+      ...work,
+      parentWorkItem: relationship,
+      childWorkItems: [],
+    }).success).toBe(true);
+    expect(operationRegistry.get_work.outputSchema.safeParse({
+      ...work,
+      childWorkItems: Array.from({ length: 101 }, () => relationship),
+    }).success).toBe(false);
+    expect(operationRegistry.create_work.inputSchema.safeParse({
+      idempotencyKey: "idempotency-key",
+      title: "Child",
+      goal: "A direct child.",
+      parentWorkItemId: "work-1",
     }).success).toBe(true);
   });
 

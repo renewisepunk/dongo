@@ -8,6 +8,7 @@ import type {
   ConversationEntry,
   Intake,
   WorkItem,
+  WorkRelationshipSummary,
 } from "../features/overview/model";
 import { convexAccessToken } from "./auth-client";
 import { convexDeploymentUrl } from "./auth-config";
@@ -340,6 +341,7 @@ type WorkDoc = {
   updatedAt: number;
   completedAt?: number;
   claimExpiresAt?: number;
+  parentId?: string;
 };
 
 type ActorDoc = {
@@ -440,6 +442,8 @@ type WorkDetailSnapshot = {
     intake: IntakeDoc;
     attachments: AttachmentDoc[];
   }>;
+  parentWork?: WorkDoc;
+  childWork?: WorkDoc[];
 };
 
 type IntakeDetailSnapshot = {
@@ -642,6 +646,18 @@ const createIntakeReference = makeFunctionReference<
   { projectId: string; text?: string; attachmentIds: string[]; idempotencyKey: string },
   { intakeId: string; revision: number }
 >("domains/intake/index:create");
+const createChildWorkReference = makeFunctionReference<
+  "mutation",
+  {
+    projectId: string;
+    title: string;
+    description?: string;
+    kind: "task";
+    parentId: string;
+    idempotencyKey: string;
+  },
+  { workItemId: string }
+>("domains/work/index:createForHuman");
 const updateIntakeReference = makeFunctionReference<
   "mutation",
   {
@@ -866,6 +882,15 @@ function baseWork(work: WorkDoc, state: WorkItem["state"], now: number): WorkIte
     completedAt: relativeTime(work.completedAt, now),
     artifacts: [],
     conversation: [],
+  };
+}
+
+function relatedWork(work: WorkDoc): WorkRelationshipSummary {
+  return {
+    id: work._id,
+    identifier: work.identifier,
+    title: work.title,
+    state: work.state,
   };
 }
 
@@ -1141,6 +1166,8 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
       age: relativeTime(intake.createdAt, now) || "now",
       attachments: attachments.map(mapAttachment),
     })),
+    parentWork: detail.parentWork ? relatedWork(detail.parentWork) : undefined,
+    childWork: (detail.childWork ?? []).map(relatedWork),
   };
 }
 
@@ -1507,6 +1534,21 @@ export class ProjectDataConnection {
       ...(text ? { text } : {}),
       attachmentIds,
       idempotencyKey,
+    });
+  }
+
+  async createChildWork(
+    parentWorkItemId: string,
+    title: string,
+    goal: string | undefined,
+  ): Promise<{ workItemId: string }> {
+    return await this.#client.mutation(createChildWorkReference, {
+      projectId: this.projectId,
+      title,
+      ...(goal ? { description: goal } : {}),
+      kind: "task",
+      parentId: parentWorkItemId,
+      idempotencyKey: crypto.randomUUID(),
     });
   }
 
