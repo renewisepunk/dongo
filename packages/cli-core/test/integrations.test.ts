@@ -35,6 +35,9 @@ test("integration preview renders checked-in host assets without writing or cred
   assert.match(preview.files[1]?.managedContent ?? "", /durable system of record for repository planning and execution/u);
   assert.match(preview.files[1]?.managedContent ?? "", /attach every repository change to its active Run before editing/u);
   assert.match(preview.files[1]?.managedContent ?? "", /implementation and relevant verification are complete/u);
+  assert.match(preview.files[1]?.managedContent ?? "", /per-session safety rule, not a project-wide instruction to serialize/u);
+  assert.match(preview.files[1]?.managedContent ?? "", /host's native delegation mechanism/u);
+  assert.match(preview.files[1]?.managedContent ?? "", /Refill available capacity as sessions finish/u);
   assert.equal(preview.lifecycle.state, "preview_ready");
   assert.equal(preview.lifecycle.connectionState, "unverified");
   assert.deepEqual(preview.lifecycle.steps.map(({ id, status }) => ({ id, status })), [

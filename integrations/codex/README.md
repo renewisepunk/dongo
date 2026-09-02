@@ -30,4 +30,12 @@ New Intake becomes visible when Codex starts or resumes and calls
 does not wake or restart Codex, and the web app exposes no agent-notification
 action.
 
+When the owner asks Codex to process multiple independent Intake or Work items,
+do not apply the one-active-WorkItem rule to the whole effort. If session start
+reports parallel mode and Codex can create isolated worktree sessions, use its
+native delegation to give each session exactly one item, up to available dongo
+capacity and Codex agent slots. Each delegated session owns its own stable
+session ID, duplicate check, claim or start, workspace, Run, verification, and
+outcome; refill capacity as sessions finish until the authorized set is done.
+
 To remove local configuration, run `codex mcp logout dongo-{{shortProjectRef}}` and `codex mcp remove dongo-{{shortProjectRef}}`. Revoke the project installation separately in dongo when server-side invalidation is intended.

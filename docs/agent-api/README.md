@@ -94,6 +94,17 @@ branches.
 non-retryable responses to the attempted start; a later start is a new decision
 made only after the relevant state changes and is refetched.
 
+The one-active-item invariant is per session, not a project-wide recommendation
+to serialize. When a user authorizes processing multiple independent issues and
+`session_start.instructions.parallelExecution.mode` is `parallel`, a capable
+coordinating host should use its native agent delegation to create distinct
+sessions and isolated worktrees up to the smaller of remaining project
+capacity, eligible issues, and available host slots. Each session receives one
+Intake or WorkItem, performs its own duplicate check, and owns its own atomic
+claim or start. As sessions finish, the coordinator may fill newly available
+capacity until the authorized set is complete. Never rotate session IDs, share
+an active Run, or fabricate workspace metadata to work around a rejection.
+
 The human concurrency read model returns `policy`, `capacity`, and `runs` from
 authoritative active-Run state. Live UI must not infer concurrency from generic
 CLI activity or installation presence.

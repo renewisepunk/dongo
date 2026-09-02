@@ -188,6 +188,16 @@ worktree isolation, and the Run reports isolated-worktree metadata. Missing,
 unsupported, or undisclosed capabilities fail closed for parallel admission but
 remain fully usable for serial work.
 
+The one-active-item invariant is deliberately scoped to a single external
+session. It is not guidance for a coordinating host to serialize an explicitly
+authorized set of independent issues. When session start reports parallel mode,
+the host should use its native delegation and isolated-worktree facilities up to
+the smaller of eligible work, remaining project capacity, and available host
+slots. Every delegated session receives one item, performs its own duplicate
+check and atomic claim or start, and retains a stable external session ID. The
+coordinator may refill capacity as sessions finish, but may not rotate IDs,
+share Runs, or invent workspace metadata to evade an invariant.
+
 dongo coordinates policy, atomic claims, Runs, and live state; it does not spawn
 agents, create Git worktrees, choose branches, or inspect repository paths. The
 host owns those actions and must report capability and bounded workspace

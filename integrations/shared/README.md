@@ -54,5 +54,10 @@ Every project defaults to Single-agent. Owner-enabled parallel work admits
 separate WorkItems only, with one active item per session, atomic claims, and a
 2–8 concurrent-Run safety cap that is unrelated to the active-project plan
 allowance. dongo coordinates claims and Runs; the host creates agents,
-worktrees, and branches. A live card represents an authoritative active Run,
-not generic CLI presence.
+worktrees, and branches. The one-item limit applies to each session, not to the
+whole request: when a user authorizes multiple independent issues and session
+start reports parallel mode, a capable coordinating host should delegate one
+Intake or WorkItem to each distinct session and isolated worktree, use available
+capacity up to the smaller project and host limit, and refill capacity as
+sessions finish. A live card represents an authoritative active Run, not
+generic CLI presence.
