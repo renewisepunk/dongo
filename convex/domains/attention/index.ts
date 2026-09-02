@@ -150,6 +150,97 @@ export const request = internalMutation({
   },
 });
 
+export const requestForOwner = internalMutation({
+  args: {
+    authorization: agentContextValidator,
+    intakeId: v.optional(v.id("intakes")),
+    kind: attentionKindValidator,
+    title: v.string(),
+    body: v.optional(v.string()),
+    options: v.optional(v.array(v.string())),
+    urgency: urgencyValidator,
+    idempotencyKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const principal = await resolveAgentPrincipal(
+      ctx,
+      args.authorization,
+      "dongo:work:write",
+    );
+    const recipientProfileId = principal.authorizedByProfileId;
+    if (!recipientProfileId) {
+      fail("validation", "Installation has no human attention recipient");
+    }
+    await requireMembership(
+      ctx,
+      principal.project.organizationId,
+      recipientProfileId,
+    );
+    const intake = args.intakeId ? await ctx.db.get(args.intakeId) : null;
+    if (args.intakeId && !intake) fail("not_found", "Intake not found");
+    if (intake) assertSameProject(intake, principal.project);
+    if (
+      args.options !== undefined &&
+      (args.options.length < 2 || args.options.length > 20)
+    ) {
+      fail("validation", "Attention options must contain 2 to 20 choices");
+    }
+    const options = args.options?.map((option) =>
+      requireString(option, "option", 2_000),
+    );
+    if (options && new Set(options).size !== options.length) {
+      fail("validation", "Attention response options must be unique");
+    }
+    const now = Date.now();
+    return await runIdempotent(
+      ctx,
+      {
+        organizationId: principal.project.organizationId,
+        projectId: principal.project._id,
+        principalKey: principal.principalKey,
+        operation: "attention.request_owner",
+        key: args.idempotencyKey,
+        payload: {
+          intakeId: args.intakeId,
+          kind: args.kind,
+          title: args.title,
+          body: args.body,
+          options,
+          urgency: args.urgency,
+        },
+        now,
+      },
+      async () => {
+        const attentionRequestId = await ctx.db.insert("attentionRequests", {
+          organizationId: principal.project.organizationId,
+          projectId: principal.project._id,
+          intakeId: args.intakeId,
+          requestedByActorId: principal.actor._id,
+          requestedFromProfileId: recipientProfileId,
+          kind: args.kind,
+          title: requireString(args.title, "title", MAX_TITLE_LENGTH),
+          body: optionalString(args.body, "body", MAX_BODY_LENGTH),
+          options,
+          urgency: args.urgency,
+          status: "open",
+          createdAt: now,
+        });
+        await appendEvent(ctx, {
+          organizationId: principal.project.organizationId,
+          projectId: principal.project._id,
+          intakeId: args.intakeId,
+          actorId: principal.actor._id,
+          type: "attention.requested",
+          data: { attentionRequestId, kind: args.kind, urgency: args.urgency },
+          requestId: principal.requestId,
+          createdAt: now,
+        });
+        return { attentionRequestId };
+      },
+    );
+  },
+});
+
 export const markSeen = mutation({
   args: { attentionRequestId: v.id("attentionRequests") },
   handler: async (ctx, args) => {
@@ -225,20 +316,24 @@ export const respond = mutation({
         if (request.status === "resolved") {
           fail("already_resolved", "Attention already resolved.");
         }
-        const commentId = await ctx.db.insert("comments", {
-          organizationId: request.organizationId,
-          projectId: request.projectId,
-          workItemId: request.workItemId,
-          actorId: principal.actor._id,
-          body: body ?? `Selected: ${selectedOption}`,
-          createdAt: now,
-        });
+        const resolutionBody = body ?? `Selected: ${selectedOption}`;
+        const commentId = request.workItemId
+          ? await ctx.db.insert("comments", {
+              organizationId: request.organizationId,
+              projectId: request.projectId,
+              workItemId: request.workItemId,
+              actorId: principal.actor._id,
+              body: resolutionBody,
+              createdAt: now,
+            })
+          : undefined;
         await ctx.db.patch(request._id, {
           status: "resolved",
           seenAt: request.seenAt ?? now,
           resolvedAt: now,
           resolvedByActorId: principal.actor._id,
           resolutionCommentId: commentId,
+          resolutionBody: request.workItemId ? undefined : resolutionBody,
           selectedOption,
           resolutionKind: "responded",
         });
@@ -255,7 +350,7 @@ export const respond = mutation({
           type: "attention.responded",
           data: {
             attentionRequestId: request._id,
-            commentId,
+            commentId: commentId ?? null,
             selectedOption: selectedOption ?? null,
           },
           createdAt: now,
@@ -439,14 +534,15 @@ export const resolveForAgent = internalMutation({
         if (request.status === "resolved") {
           fail("already_resolved", "Attention already resolved.");
         }
+        const resolutionBody = body ?? (selectedOption ? `Selected: ${selectedOption}` : undefined);
         const commentId =
-          body || selectedOption
+          request.workItemId && resolutionBody
             ? await ctx.db.insert("comments", {
                 organizationId: request.organizationId,
                 projectId: request.projectId,
                 workItemId: request.workItemId,
                 actorId: principal.actor._id,
-                body: body ?? `Selected: ${selectedOption}`,
+                body: resolutionBody,
                 createdAt: now,
               })
             : undefined;
@@ -455,8 +551,9 @@ export const resolveForAgent = internalMutation({
           resolvedAt: now,
           resolvedByActorId: principal.actor._id,
           resolutionCommentId: commentId,
+          resolutionBody: request.workItemId ? undefined : resolutionBody,
           selectedOption,
-          resolutionKind: commentId ? "responded" : "resolved",
+          resolutionKind: resolutionBody ? "responded" : "resolved",
         });
         await cancelOutstandingNotifications(ctx, {
           attentionRequestId: request._id,
@@ -468,7 +565,7 @@ export const resolveForAgent = internalMutation({
           workItemId: request.workItemId,
           runId: request.runId,
           actorId: principal.actor._id,
-          type: commentId ? "attention.responded" : "attention.resolved",
+          type: resolutionBody ? "attention.responded" : "attention.resolved",
           data: {
             attentionRequestId: request._id,
             commentId: commentId ?? null,
@@ -534,7 +631,7 @@ export const getForAgent = internalQuery({
     if (!request) fail("not_found", "Attention request not found");
     assertSameProject(request, principal.project);
     const [work, response] = await Promise.all([
-      ctx.db.get(request.workItemId),
+      request.workItemId ? ctx.db.get(request.workItemId) : null,
       request.resolutionCommentId
         ? ctx.db.get(request.resolutionCommentId)
         : null,

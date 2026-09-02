@@ -63,7 +63,9 @@ export async function buildOverview(
     .flat()
     .sort((left, right) => right.createdAt - left.createdAt)
     .slice(0, OVERVIEW_SECTION_LIMIT);
-  const attentionWorkIds = new Set(attention.map((item) => item.workItemId));
+  const attentionWorkIds = new Set(
+    attention.flatMap((item) => item.workItemId ? [item.workItemId] : []),
+  );
 
   const [workingCandidates, readyItems, newIntakes, claimedIntakes, doneItems] =
     await Promise.all([
@@ -152,7 +154,7 @@ export async function buildOverview(
   const needsYou = await Promise.all(
     attention.map(async (request) => {
       const [work, actor] = await Promise.all([
-        ctx.db.get(request.workItemId),
+        request.workItemId ? ctx.db.get(request.workItemId) : null,
         ctx.db.get(request.requestedByActorId),
       ]);
       return { request, work, actor };

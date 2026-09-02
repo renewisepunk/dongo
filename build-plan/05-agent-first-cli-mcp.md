@@ -181,7 +181,7 @@ Tool names are stable, namespaced mappings of the canonical operations:
 | Startup/read | `dongo_session_start`, `dongo_get_overview`, `dongo_get_intake`, `dongo_get_work`, `dongo_get_attention`, `dongo_get_attachment`, `dongo_sync_snapshot` |
 | Intake writes | `dongo_claim_intake`, `dongo_renew_intake_claim`, `dongo_complete_triage` |
 | Work writes | `dongo_create_work`, `dongo_start_work`, `dongo_update_work`, `dongo_renew_claim`, `dongo_finish_work` |
-| Collaboration writes | `dongo_add_comment`, `dongo_request_attention`, `dongo_resolve_attention` |
+| Collaboration writes | `dongo_add_comment`, `dongo_request_attention`, `dongo_request_owner_attention`, `dongo_resolve_attention` |
 
 Tool rules:
 

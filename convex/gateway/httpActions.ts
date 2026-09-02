@@ -675,6 +675,30 @@ async function dispatchAgentOperation(
         created.attentionRequestId,
       );
     }
+    case "request_owner_attention": {
+      const created = await ctx.runMutation(
+        internal.domains.attention.index.requestForOwner,
+        {
+          authorization: baseAuthorization,
+          intakeId: input.intakeId as Id<"intakes"> | undefined,
+          kind: stringField(input, "kind") as
+            | "review"
+            | "decision"
+            | "question"
+            | "blocked",
+          title: stringField(input, "title"),
+          body: stringField(input, "body"),
+          options: input.options as string[] | undefined,
+          urgency: input.important ? "important" : "normal",
+          idempotencyKey: stringField(input, "idempotencyKey"),
+        },
+      );
+      return await attentionResult(
+        ctx,
+        baseAuthorization,
+        created.attentionRequestId,
+      );
+    }
     case "get_attention":
       return await attentionResult(
         ctx,

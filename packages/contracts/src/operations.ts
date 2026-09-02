@@ -92,6 +92,7 @@ export type OperationMap = {
   finish_work: { input: MutationInput & { workItemId: string; expectedRevision: number; outcome: string; artifacts?: AgentArtifactInput[] }; output: WorkItem };
   add_comment: { input: MutationInput & { workItemId: string; body: string }; output: WorkItem };
   request_attention: { input: MutationInput & { workItemId: string; expectedRevision: number; kind: "review" | "decision" | "question" | "blocked"; title: string; body: string; important?: boolean; options?: string[] }; output: Attention };
+  request_owner_attention: { input: MutationInput & { intakeId?: string; kind: "review" | "decision" | "question" | "blocked"; title: string; body: string; important?: boolean; options?: string[] }; output: Attention };
   get_attention: { input: { attentionId: string }; output: Attention };
   resolve_attention: { input: MutationInput & { attentionId: string; body?: string; selectedOption?: string; resolveWithoutResponse?: boolean }; output: Attention };
   get_attachment: { input: { attachmentId: string }; output: { attachmentId: string; filename: string; contentType: string; byteSize: number; downloadUrl: string; expiresAt: number } };
@@ -288,6 +289,19 @@ export const operationRegistry = {
       ...mutationFields,
       workItemId: identifier,
       expectedRevision,
+      kind: z.enum(["review", "decision", "question", "blocked"]),
+      title: z.string().min(1).max(500),
+      body: boundedText,
+      important: z.boolean().optional(),
+      options: z.array(z.string().min(1).max(2_000)).min(2).max(20).optional(),
+    }).strict(),
+    attentionSchema,
+  ),
+  request_owner_attention: spec(
+    "request_owner_attention", "POST", write, false, true,
+    z.object({
+      ...mutationFields,
+      intakeId: identifier.optional(),
       kind: z.enum(["review", "decision", "question", "blocked"]),
       title: z.string().min(1).max(500),
       body: boundedText,

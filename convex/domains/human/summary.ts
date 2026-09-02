@@ -118,6 +118,7 @@ export function attentionSummaryForHuman(request: Doc<"attentionRequests">) {
   return {
     _id: request._id,
     workItemId: request.workItemId,
+    intakeId: request.intakeId,
     requestedByActorId: request.requestedByActorId,
     kind: request.kind,
     title: request.title,
@@ -129,6 +130,7 @@ export function attentionSummaryForHuman(request: Doc<"attentionRequests">) {
     seenAt: request.seenAt,
     resolvedAt: request.resolvedAt,
     resolutionCommentId: request.resolutionCommentId,
+    resolutionBody: request.resolutionBody,
     selectedOption: request.selectedOption,
     resolutionKind: request.resolutionKind,
   };

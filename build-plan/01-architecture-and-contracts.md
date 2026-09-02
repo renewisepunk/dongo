@@ -174,6 +174,7 @@ renew_claim
 finish_work
 add_comment
 request_attention
+request_owner_attention
 get_attention
 resolve_attention
 get_attachment

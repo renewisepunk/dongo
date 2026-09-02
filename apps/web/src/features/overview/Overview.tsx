@@ -46,7 +46,7 @@ import type {
 import { searchHighlightSegments } from "../../lib/search-highlight";
 import { projectCapacityLabel, projectCreationAction } from "../../lib/plans";
 import { loadPlatformAdminAccess } from "../../lib/platform-data";
-import type { AttachmentSummary, Intake, WorkItem } from "./model";
+import type { AttachmentSummary, Intake, OwnerAttention, WorkItem } from "./model";
 import { CommentComposer } from "./CommentComposer";
 import { IntakeEditor } from "./IntakeEditor";
 import { ConcurrentActivity } from "./ConcurrentActivity";
@@ -251,6 +251,7 @@ export function Overview(props: OverviewProps) {
     search?: string;
   }>();
   const [work, setWork] = createSignal<WorkItem[]>([]);
+  const [ownerAttention, setOwnerAttention] = createSignal<OwnerAttention[]>([]);
   const [intakes, setIntakes] = createSignal<Intake[]>([]);
   const [optimisticIntakes, setOptimisticIntakes] = createSignal<Intake[]>([]);
   const [composerOpen, setComposerOpen] = createSignal(false);
@@ -1607,6 +1608,7 @@ export function Overview(props: OverviewProps) {
             setProjectName(overview.projectName);
             setWork(overview.work);
             setIntakes(overview.intakes);
+            setOwnerAttention(overview.ownerAttention ?? []);
             const committedKeys = new Set(
               overview.intakes.flatMap((intake) =>
                 intake.submissionKey ? [intake.submissionKey] : [],
@@ -2072,19 +2074,39 @@ export function Overview(props: OverviewProps) {
             />
           </Show>
 
-          <Show when={!loading() && !loadError() && work().length === 0 && visibleIntakes().length === 0}>
+          <Show when={!loading() && !loadError() && work().length === 0 && ownerAttention().length === 0 && visibleIntakes().length === 0}>
             <div class="empty-state">
               <div>Add anything you want the agent to look at.</div>
               <div class="empty-state__types">bug · idea · screenshot · video · request</div>
             </div>
           </Show>
 
-          <Show when={needs().length}>
+          <Show when={needs().length || ownerAttention().length}>
             <section class="work-section work-section--attention" aria-labelledby="needs-heading">
               <div class="section-heading section-heading--attention" id="needs-heading">
                 <span class="section-heading__pulse" aria-hidden="true" />
-                <span>needs you</span><span class="section-heading__count">{needs().length}</span>
+                <span>needs you</span><span class="section-heading__count">{needs().length + ownerAttention().length}</span>
               </div>
+              <For each={ownerAttention()}>{(item) => (
+                <OwnerAttentionCard
+                  item={item}
+                  draftScope={`${props.orgSlug}/${props.projectSlug}`}
+                  onSeen={async () => {
+                    if (!connection || !item.unseen) return;
+                    await connection.markAttentionSeen(item.attention.id);
+                  }}
+                  onRespond={async (selectedOption, body) => {
+                    if (!connection) return;
+                    await connection.respondToAttention(item.attention.id, selectedOption, body);
+                    announce("Response sent to your agent");
+                  }}
+                  onResolve={async () => {
+                    if (!connection) return;
+                    await connection.resolveAttention(item.attention.id);
+                    announce("Attention resolved");
+                  }}
+                />
+              )}</For>
               <For each={needs()}>{(item) => (
                 <a
                   class="work-row work-row--attention"
@@ -2481,6 +2503,152 @@ export function Overview(props: OverviewProps) {
         </div>
       </Show>
     </main>
+  );
+}
+
+type OwnerAttentionCardProps = {
+  item: OwnerAttention;
+  draftScope: string;
+  onSeen: () => Promise<void>;
+  onRespond: (selectedOption?: string, body?: string) => Promise<void>;
+  onResolve: () => Promise<void>;
+};
+
+function OwnerAttentionCard(props: OwnerAttentionCardProps) {
+  const draftKey = () => `${props.draftScope}:attention:${props.item.id}`;
+  const readDraft = () => {
+    try {
+      const parsed = JSON.parse(readLocalDraft(draftKey())) as {
+        choice?: string;
+        response?: string;
+      };
+      return {
+        choice: typeof parsed.choice === "string" ? parsed.choice : undefined,
+        response: typeof parsed.response === "string" ? parsed.response : "",
+      };
+    } catch {
+      return { choice: undefined, response: "" };
+    }
+  };
+  const initialDraft = readDraft();
+  const [choice, setChoice] = createSignal<string | undefined>(initialDraft.choice);
+  const [response, setResponse] = createSignal(initialDraft.response);
+  const [pending, setPending] = createSignal(false);
+  const [error, setError] = createSignal("");
+  let seenRequested = false;
+
+  const persistDraft = (savedChoice: string | undefined, savedResponse: string) => {
+    writeLocalDraft(
+      draftKey(),
+      savedChoice || savedResponse
+        ? JSON.stringify({ choice: savedChoice, response: savedResponse })
+        : "",
+    );
+  };
+
+  const markSeen = () => {
+    if (seenRequested || !props.item.unseen) return;
+    seenRequested = true;
+    void props.onSeen().catch(() => {
+      seenRequested = false;
+    });
+  };
+
+  const respond = async () => {
+    const selectedOption = choice();
+    const body = response().trim();
+    if ((!selectedOption && !body) || pending()) return;
+    setPending(true);
+    setError("");
+    try {
+      await props.onRespond(selectedOption, body || undefined);
+      clearLocalDraft(draftKey());
+      setChoice(undefined);
+      setResponse("");
+    } catch {
+      setError("Your response could not be sent; your draft was kept.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const resolve = async () => {
+    if (pending()) return;
+    setPending(true);
+    setError("");
+    try {
+      await props.onResolve();
+      clearLocalDraft(draftKey());
+      setChoice(undefined);
+      setResponse("");
+    } catch {
+      setError("Attention could not be resolved.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <article
+      class="attention-card owner-attention-card"
+      aria-labelledby={`owner-attention-${props.item.id}`}
+      onFocus={markSeen}
+      onPointerEnter={markSeen}
+    >
+      <div class="attention-card__head">
+        <span class="attention-kind">{props.item.attention.kind}</span>
+        <Show when={props.item.attention.important}>
+          <span class="attention-important mono">important</span>
+        </Show>
+        <span class="attention-card__when">{props.item.age}</span>
+      </div>
+      <div class="attention-card__title" id={`owner-attention-${props.item.id}`}>
+        {props.item.attention.title}
+      </div>
+      <MarkdownContent source={props.item.attention.body} class="attention-card__body" />
+      <div class="note">
+        {props.item.agent} is asking about {props.item.intakeId ? "Intake" : "this project"}. Your answer stays in dongo even if the agent session has ended.
+      </div>
+      <div class="attention-options">
+        <For each={props.item.attention.options ?? []}>{(option) => (
+          <button
+            class="attention-option"
+            data-selected={choice() === option}
+            type="button"
+            onClick={() => {
+              setChoice(option);
+              persistDraft(option, response());
+            }}
+          >
+            <span class="attention-option__dot" /><span>{option}</span>
+          </button>
+        )}</For>
+        <textarea
+          class="textarea"
+          aria-label="Response to agent"
+          aria-keyshortcuts="Meta+Enter Control+Enter"
+          value={response()}
+          onInput={(event) => {
+            const next = event.currentTarget.value;
+            setResponse(next);
+            persistDraft(choice(), next);
+          }}
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+              event.preventDefault();
+              void respond();
+            }
+          }}
+          placeholder="Add anything the agent should know…"
+          rows={3}
+        />
+        <div class="response-actions">
+          <button class="button button--primary" type="button" disabled={pending() || (!choice() && !response().trim())} onClick={() => void respond()}>Respond</button>
+          <button class="button button--quiet" type="button" disabled={pending()} onClick={() => void resolve()}>Resolve without response</button>
+        </div>
+        <Show when={error()}><div class="security-note" role="alert">{error()}</div></Show>
+      </div>
+    </article>
   );
 }
 

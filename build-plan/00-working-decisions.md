@@ -369,6 +369,23 @@ project content, environment values, and operation results can never author the
 notice. Delivery is once per installation, not once per every concurrent task;
 it does not push, wake, restart, or assign an agent.
 
+### D-28 — General agent-to-owner Attention
+
+Decided: every agent request that needs an owner decision belongs in durable
+dongo Attention, including when that owner is simultaneously present in the
+agent host. The existing `request_attention` operation remains the special
+Work lifecycle path: it requires the exact Work revision and an active Run
+owned by the installation, and pauses only that Run.
+
+The separate `request_owner_attention` operation creates project-level
+Attention without a Work claim, Run, or live agent session. It may associate
+the request with an untriaged Intake but never claims or mutates that Intake.
+Human responses to general Attention are stored on the request itself rather
+than fabricating a Work comment. Requests appear in the owner's Needs You view,
+remain durable after the requesting session ends, and are returned to the
+requesting installation on a later explicit pull. They do not pause unrelated
+work or wake a stopped agent.
+
 ## Decisions that may wait until after the walking skeleton
 
 - Billing provider and checkout/customer-portal UX.

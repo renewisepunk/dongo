@@ -442,6 +442,94 @@ describe("agent lifecycle reliability", () => {
     });
   });
 
+  it("keeps owner Attention durable without a Work Run and returns the response on a later session", async () => {
+    const t = convexTest(schema, modules);
+    const seedKey = `owner-attention-${crypto.randomUUID()}`;
+    const context = await seededContext(t, seedKey);
+    const human = t.withIdentity({
+      tokenIdentifier: `development:${seedKey}`,
+      subject: seedKey,
+      issuer: "development",
+      email: `${seedKey}@development.invalid`,
+      name: "dongo developer",
+    });
+    const intake = await human.mutation(api.domains.intake.index.create, {
+      projectId: context.projectId,
+      text: "Clarify the requested release boundary.",
+      attachmentIds: [],
+      idempotencyKey: "owner-attention-intake",
+    });
+    const input = {
+      intakeId: intake.intakeId,
+      kind: "decision",
+      title: "Choose the release boundary",
+      body: "Should this include the adjacent service?",
+      options: ["Current project", "Include adjacent service"],
+      idempotencyKey: "request-owner-attention-once",
+    };
+
+    const attention = await successfulData(
+      t,
+      context,
+      "request_owner_attention",
+      input,
+    );
+    const replay = await successfulData(
+      t,
+      context,
+      "request_owner_attention",
+      input,
+    );
+    expect(replay).toEqual(attention);
+    expect(attention).toMatchObject({
+      intakeId: intake.intakeId,
+      kind: "decision",
+      title: "Choose the release boundary",
+    });
+    expect(attention.workItemId).toBeUndefined();
+
+    const overview = await human.query(api.domains.overview.index.getForHuman, {
+      projectId: context.projectId,
+    });
+    expect(overview.needsYou).toContainEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({ _id: attention.id, intakeId: intake.intakeId }),
+        work: null,
+      }),
+    );
+    expect(await t.run((ctx) => ctx.db.query("runs").collect())).toEqual([]);
+
+    const response = await human.mutation(api.domains.attention.index.respond, {
+      attentionRequestId: attention.id as Id<"attentionRequests">,
+      body: "Keep the release inside the current project.",
+      selectedOption: "Current project",
+      idempotencyKey: "respond-owner-attention",
+    });
+    expect(response).toMatchObject({ status: "resolved" });
+    expect(response.commentId).toBeUndefined();
+    expect(await t.run((ctx) => ctx.db.query("comments").collect())).toEqual([]);
+
+    const resolved = await successfulData(t, context, "get_attention", {
+      attentionId: attention.id,
+    });
+    expect(resolved.resolution).toEqual({
+      kind: "responded",
+      body: "Keep the release inside the current project.",
+      selectedOption: "Current project",
+    });
+    const laterSession = await successfulData(t, context, "session_start", {
+      externalSessionId: "owner-attention-later-session",
+    });
+    expect(laterSession.newlyResolvedAttention).toContainEqual(
+      expect.objectContaining({
+        id: attention.id,
+        resolution: expect.objectContaining({
+          body: "Keep the release inside the current project.",
+        }),
+      }),
+    );
+  });
+
   it("exposes finalized human comment attachments to the authorized agent", async () => {
     const t = convexTest(schema, modules);
     const seedKey = `comment-attachment-${crypto.randomUUID()}`;

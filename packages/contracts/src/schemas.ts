@@ -108,7 +108,8 @@ export const conversationEntrySchema = z
 export const attentionSchema = z
   .object({
     id: identifier,
-    workItemId: identifier,
+    workItemId: identifier.optional(),
+    intakeId: identifier.optional(),
     kind: z.enum(["review", "decision", "question", "blocked"]),
     title: z.string().min(1).max(500),
     body: boundedText,

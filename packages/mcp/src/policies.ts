@@ -79,7 +79,12 @@ const PRESENTATION = {
   request_attention: {
     title: "Request human attention",
     description:
-      "Create a review, decision, question, or blocked Attention request when human judgment is required.",
+      "Request human judgment for the active Work and pause only its active Run. Exact Work revision, Run ownership, and claim protections apply.",
+  },
+  request_owner_attention: {
+    title: "Request owner attention",
+    description:
+      "Ask the authorizing owner a durable project-level or Intake-related question without requiring or pausing a Work Run.",
   },
   get_attention: {
     title: "Get attention",

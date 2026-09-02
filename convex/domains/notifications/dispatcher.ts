@@ -127,6 +127,15 @@ export const claimDue = internalMutation({
         });
         continue;
       }
+      if (!attention.workItemId) {
+        await ctx.db.patch(delivery._id, {
+          status: "failed",
+          failedAt: now,
+          deliveryAttemptId: undefined,
+          lastErrorCode: "delivery_context_invalid",
+        });
+        continue;
+      }
       const project = await ctx.db.get(delivery.projectId);
       const work = await ctx.db.get(attention.workItemId);
       const profile = await ctx.db.get(delivery.recipientProfileId);

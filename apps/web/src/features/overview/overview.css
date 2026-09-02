@@ -1386,6 +1386,10 @@
   padding: 16px;
 }
 
+.owner-attention-card {
+  margin: 10px 0;
+}
+
 .attention-card[data-resolved="true"] {
   border-color: var(--line);
   background: var(--surface-0);

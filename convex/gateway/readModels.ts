@@ -113,7 +113,10 @@ async function attentionDto(
     : null;
   return {
     id: id<"attentionRequests">(request._id),
-    workItemId: id<"workItems">(request.workItemId),
+    workItemId: request.workItemId
+      ? id<"workItems">(request.workItemId)
+      : undefined,
+    intakeId: request.intakeId ? id<"intakes">(request.intakeId) : undefined,
     kind: request.kind,
     title: request.title,
     body: request.body ?? "",
@@ -131,7 +134,7 @@ async function attentionDto(
     resolution: request.resolutionKind
       ? {
           kind: request.resolutionKind,
-          body: response?.body,
+          body: response?.body ?? request.resolutionBody,
           selectedOption: request.selectedOption,
         }
       : undefined,
