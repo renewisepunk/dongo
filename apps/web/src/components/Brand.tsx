@@ -7,16 +7,14 @@ type BrandProps = {
 
 export function Brand(props: BrandProps) {
   return (
-    <A class="brand" href={props.href ?? "/"} aria-label="dongo home">
-      <span class="brand__chevron" style={{ "font-size": props.compact ? "18px" : undefined }}>
-        ❯
-      </span>
-      <span class="brand__name" style={{ "font-size": props.compact ? "16px" : undefined }}>
-        dongo
-      </span>
-      <span class="brand__cursor" aria-hidden="true" style={{ "font-size": props.compact ? "14px" : undefined }}>
-        ▌
-      </span>
+    <A
+      classList={{ brand: true, "brand--compact": props.compact }}
+      href={props.href ?? "/"}
+      aria-label="dongo home"
+    >
+      <span class="brand__chevron" aria-hidden="true" />
+      <span class="brand__name">dongo</span>
+      <span class="brand__cursor" aria-hidden="true" />
     </A>
   );
 }
