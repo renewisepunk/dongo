@@ -117,6 +117,14 @@
   fail-open request. A newer stable version produces a fixed, version-pinned
   advisory that requires the agent to ask the user before installation; no
   client self-installs or executes registry-provided text.
+- Production preflight and CI verify the reviewed agent release manifest, its
+  monotonic identifier/sequence history, and exact public CLI version and
+  command. After public smoke and npm reconciliation, production monotonically
+  activates that exact marker. Existing modern and legacy MCP installations can
+  receive the notice on their next eligible successful call without any change
+  to canonical structured output; concurrent delivery occurs at most once,
+  same-release redeploy and rollback do not repeat or regress it, and advisory
+  failure never fails the underlying operation.
 - Published CLI/MCP host packages use immutable artifacts and provenance where supported.
 - Runbooks cover device-flow failure, MCP discovery/login failure, auth-provider isolation, revoked/expired tokens, refresh replay, corrupted host/repo config, export conflict, expired claim, backend outage, upload failure, notification failure, and package rollback.
 

@@ -214,6 +214,16 @@ Agent 10 maps each operation to a namespaced tool such as `dongo_session_start`,
 - Tools declare accurate read-only/destructive/idempotent/open-world hints, but the backend never trusts those hints as authorization.
 - Tool descriptions state preconditions and conflict behavior without embedding a second copy of the product workflow.
 - MCP server-wide instructions contain the cross-tool workflow, tenant boundary, manual/autonomous rule, claim-loss rule, and untrusted-content rule. Publish them through `server/discover` in the modern era and the initialization result for supported legacy hosts. The first 512 characters remain self-contained for Codex.
+- A reviewed and globally activated agent release may append one bounded notice
+  to the next eligible successful authenticated tool result for each MCP
+  installation. The operation
+  `structuredContent`, primary content, and error semantics remain unchanged;
+  only a separate assistant-facing text block and optional `_meta` are additive.
+  A signed identifier and monotonic sequence must exactly match the globally
+  active Convex release channel before they are atomically suppressed per
+  installation. Activation occurs only after the matching npm artifact is
+  published and verified. All human-readable notice copy and the exact
+  consent-first CLI action remain source-controlled in the MCP release bundle.
 - Resources/prompts are optional enhancements. V1 portability is based on tools because tool support is the common host baseline.
 - `sync_snapshot` is read-only remotely. Only the local CLI writes `.agent-work`; the remote server never claims it wrote repository files.
 

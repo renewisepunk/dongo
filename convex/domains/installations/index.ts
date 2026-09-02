@@ -7,10 +7,12 @@ import {
   query,
 } from "../../_generated/server";
 import {
+  resolveAgentPrincipal,
   requireHumanProject,
   requireMembership,
   requireOwner,
 } from "../../lib/authz";
+import { agentContextValidator } from "../../lib/validators";
 import { appendEvent } from "../../lib/events";
 import { lowercaseDongoBrand } from "../../lib/brand";
 import { fail, requireString } from "../../lib/errors";
@@ -283,6 +285,49 @@ export const registerOAuthGrant = internalMutation({
       projectRef: project.publicRef,
       created: true,
       reactivated: false,
+    };
+  },
+});
+
+export const claimAgentReleaseNotice = internalMutation({
+  args: {
+    authorization: agentContextValidator,
+    releaseId: v.string(),
+    releaseSequence: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const principal = await resolveAgentPrincipal(ctx, args.authorization, []);
+    if (
+      !/^[a-z0-9][a-z0-9._-]{0,79}$/u.test(args.releaseId) ||
+      !Number.isSafeInteger(args.releaseSequence) ||
+      args.releaseSequence <= 0
+    ) {
+      fail("validation", "Agent release notice marker is invalid");
+    }
+    const active = await ctx.db
+      .query("agentReleaseNoticeChannels")
+      .withIndex("by_channel", (query) => query.eq("channel", "stable"))
+      .unique();
+    if (
+      active === null ||
+      active.activeReleaseId !== args.releaseId ||
+      active.activeReleaseSequence !== args.releaseSequence ||
+      principal.installation.kind !== "mcp" ||
+      (principal.installation.lastAgentReleaseNoticeSequence ?? 0) >=
+        args.releaseSequence
+    ) {
+      return { deliver: false };
+    }
+    const now = Date.now();
+    await ctx.db.patch(principal.installation._id, {
+      lastAgentReleaseNoticeSequence: args.releaseSequence,
+      lastAgentReleaseNoticeId: args.releaseId,
+      lastAgentReleaseNoticeAt: now,
+    });
+    return {
+      deliver: true,
+      releaseId: args.releaseId,
+      releaseSequence: args.releaseSequence,
     };
   },
 });

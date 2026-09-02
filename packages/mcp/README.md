@@ -23,6 +23,20 @@ The MCP Worker is a resource server, not an authorization server. `BetterAuthInt
 
 The gateway rechecks exact issuer, resource, and project before dispatch. It passes a derived installation principal to `OperationExecutor`; the inbound bearer token and HTTP request are not part of that context. The authorization Worker separately owns RFC 8414 metadata, CIMD/DCR compatibility, authorization code with S256 PKCE, consent, refresh rotation/replay handling, and revocation. Do not implement OAuth token issuance inside this package and do not reuse a CLI grant.
 
+Each reviewed and activated agent release may add a bounded, build-time notice
+to the next eligible successful authenticated tool result for an MCP
+installation. The notice is a
+separate text and `_meta` block; canonical operation `structuredContent` is
+unchanged. Convex requires an exact match with the globally activated monotonic
+release and atomically suppresses the same or older per-installation sequence,
+so parallel calls, retries, redeploys, and rollbacks do not create repeated or
+stale alerts. Activation happens only after the advertised npm artifact is
+published and verified. Delivery failure is fail-open and never changes the
+operation result. A transport loss after the atomic claim can consume this
+at-most-once advisory without displaying it. Notice
+copy is source-controlled and cannot include Intake, comments, operation data,
+registry text, environment values, or a remotely supplied command.
+
 `ConvexHmacOperationExecutor` signs a versioned, bounded JSON envelope for `POST /internal/agent/v1/execute`. The signature covers timestamp, one-time UUID nonce, method, exact path, and the SHA-256 body hash. Convex must enforce the 60-second freshness window, atomically consume nonces, and re-resolve every signed installation, grant, actor, project, and scope before dispatch.
 
 ## Verification
@@ -31,4 +45,4 @@ The gateway rechecks exact issuer, resource, and project before dispatch. It pas
 npm run test --workspace @dongo/mcp
 ```
 
-The suite drives both modern and admitted legacy paths through the official MCP client and covers catalog parity, protected-resource discovery, auth/scope/project failures, token non-forwarding, bounded results, resources, and managed host assets.
+The suite drives both modern and admitted legacy paths through the official MCP client and covers catalog parity, protected-resource discovery, auth/scope/project failures, token non-forwarding, bounded results, additive release notices, resources, and managed host assets.

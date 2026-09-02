@@ -6,6 +6,7 @@ export * from "./instructions.js";
 export * from "./managed-integrations.js";
 export * from "./oauth-introspection.js";
 export * from "./policies.js";
+export * from "./release-notice.js";
 export * from "./results.js";
 export * from "./server.js";
 export * from "./types.js";

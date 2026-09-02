@@ -11,6 +11,7 @@ import type {
   DomainErrorCode,
   McpOperationName,
 } from "@dongo/contracts";
+import type { AgentReleaseNotice } from "./release-notice.js";
 
 export const DONGO_OPERATION_NAMES = Object.freeze(
   [...mcpOperationNames],
@@ -90,6 +91,7 @@ export type OperationExecutionResult =
       readonly ok: true;
       readonly data: JsonRecord;
       readonly requestId?: string;
+      readonly releaseNotice?: AgentReleaseNotice;
     }
   | {
       readonly ok: false;

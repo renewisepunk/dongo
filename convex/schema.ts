@@ -155,12 +155,22 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
     lastUsedAt: v.optional(v.number()),
+    lastAgentReleaseNoticeSequence: v.optional(v.number()),
+    lastAgentReleaseNoticeId: v.optional(v.string()),
+    lastAgentReleaseNoticeAt: v.optional(v.number()),
     revokedAt: v.optional(v.number()),
   })
     .index("by_project_status", ["projectId", "status"])
     .index("by_organization_authorizer", ["organizationId", "authorizedByProfileId"])
     .index("by_actor", ["actorId"])
     .index("by_project_client", ["projectId", "clientId"]),
+
+  agentReleaseNoticeChannels: defineTable({
+    channel: v.literal("stable"),
+    activeReleaseId: v.string(),
+    activeReleaseSequence: v.number(),
+    activatedAt: v.number(),
+  }).index("by_channel", ["channel"]),
 
   agentUpdateSignals: defineTable({
     organizationId: v.id("organizations"),

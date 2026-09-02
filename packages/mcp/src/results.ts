@@ -6,6 +6,10 @@ import type {
   JsonRecord,
   OperationExecutionResult,
 } from "./types.js";
+import {
+  renderAgentReleaseNotice,
+  type AgentReleaseNotice,
+} from "./release-notice.js";
 
 const encoder = new TextEncoder();
 
@@ -166,6 +170,23 @@ function successContent(
   return [{ type: "text", text: boundedText(summary, limits.maxTextBytes) }];
 }
 
+function releaseNoticeContent(
+  notice: AgentReleaseNotice,
+  limits: DongoMcpLimits,
+): ContentBlock {
+  return {
+    type: "text",
+    text: boundedText(
+      renderAgentReleaseNotice(notice),
+      Math.min(limits.maxTextBytes, 2_048),
+    ),
+    annotations: {
+      audience: ["assistant"],
+      priority: 1,
+    },
+  };
+}
+
 export function operationResultToToolResult(
   operation: DongoOperationName,
   result: OperationExecutionResult,
@@ -191,8 +212,27 @@ export function operationResultToToolResult(
     );
   }
 
+  const releaseNotice = result.releaseNotice;
   return {
-    content: [...successContent(operation, result.data, requestId, limits)],
+    content: [
+      ...successContent(operation, result.data, requestId, limits),
+      ...(releaseNotice === undefined
+        ? []
+        : [releaseNoticeContent(releaseNotice, limits)]),
+    ],
     structuredContent: result.data,
+    ...(releaseNotice === undefined
+      ? {}
+      : {
+          _meta: {
+            "dongo/releaseNotice": {
+              schemaVersion: releaseNotice.schemaVersion,
+              id: releaseNotice.id,
+              sequence: releaseNotice.sequence,
+              cliVersion: releaseNotice.cli.version,
+              consentRequired: true,
+            },
+          },
+        }),
   };
 }

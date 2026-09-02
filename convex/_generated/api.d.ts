@@ -62,6 +62,7 @@ import type * as lib_platform from "../lib/platform.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_workUsage from "../lib/workUsage.js";
 import type * as maintenance from "../maintenance.js";
+import type * as operators_agentReleaseNotice from "../operators/agentReleaseNotice.js";
 import type * as operators_projectCapacity from "../operators/projectCapacity.js";
 import type * as testing_fixtures from "../testing/fixtures.js";
 
@@ -126,6 +127,7 @@ declare const fullApi: ApiFromModules<{
   "lib/validators": typeof lib_validators;
   "lib/workUsage": typeof lib_workUsage;
   maintenance: typeof maintenance;
+  "operators/agentReleaseNotice": typeof operators_agentReleaseNotice;
   "operators/projectCapacity": typeof operators_projectCapacity;
   "testing/fixtures": typeof testing_fixtures;
 }>;

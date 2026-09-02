@@ -13,6 +13,9 @@ Production is `https://dongo.so`, Convex `brainy-camel-172`, D1 `dongo-auth`, an
 - Always reconcile the public `@wisepunk/dongo` CLI. A changed package payload
   requires a new unpublished stable version and npm publisher authorization;
   the preflight must fail before any production mutation when either is absent.
+- Always verify the checked-in agent release notice before mutation. When the
+  public CLI version changes, update its unique identifier, monotonically
+  increasing sequence, bounded reviewed summary, and exact pinned command.
 
 ## One-time preparation
 
@@ -50,6 +53,7 @@ npm run verify:contracts
 npm run verify:environment-boundaries
 npm run verify:observability
 npm run verify:runtime-logs
+npm run verify:agent-release-notice
 npm run verify:cli-package
 npm run release:cli:plan
 CLOUDFLARE_ENV=production npm run build --workspace @dongo/web
@@ -71,7 +75,7 @@ npx wrangler deployments list --name dongo-coming-soon --json
 npm run deploy:production
 ```
 
-The runner first verifies whether the public CLI must be published and confirms
+The runner first validates the agent release notice, then verifies whether the public CLI must be published and confirms
 npm authentication plus package-level read-write access on the pinned public
 registry when needed. It then deploys production Convex functions,
 applies additive D1 migrations, deploys auth → API → MCP → files →
@@ -80,7 +84,10 @@ failure. After the production stack passes the public smoke gate, it publishes
 the exact verified CLI archive when its payload changed, confirms npm integrity,
 and installs the registry copy into a clean prefix to verify version, help, and
 unauthenticated status. An unchanged CLI is verified against npm and skipped.
-The old landing stays at the root until the final web step.
+Only then does it monotonically activate the exact reviewed agent-release marker
+in Convex. A failure before that final activation leaves the notice unavailable
+and unconsumed; rollback never lowers the active marker. The old landing stays
+at the root until the final web step.
 
 The runner executes all 18 public checks with the production smoke project
 before any CLI publication. Repeat that exact gate immediately with the accepted
@@ -91,6 +98,15 @@ npm run smoke:production -- --project-ref ps8dhbky-dongo-production-e2e
 ```
 
 Then prove email OTP to an address controlled by the owner, connect a fresh packed CLI with the default `dongo connect`, add a new project-scoped Codex MCP entry, authorize it, call `dongo_session_start`, create/update/finish one disposable work item as the agent, attach and preview one image, revoke that disposable installation, confirm it fails, and reauthorize it to a new installation/actor.
+
+For an agent-release change, keep one already-authorized MCP client open across
+the MCP deployment and final activation. Its first eligible successful
+post-activation dongo tool call must keep the canonical structured result
+unchanged and include the reviewed release notice. A second call from that
+installation must omit the notice. Confirm that
+the copy says hosted MCP is already current and that a local CLI is only checked
+and offered through explicit user approval. This is an at-most-once next-call
+advisory, not a push, wake, or transport-acknowledged delivery guarantee.
 
 ## Rollback
 

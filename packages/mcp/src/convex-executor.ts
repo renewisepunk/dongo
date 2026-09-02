@@ -1,4 +1,9 @@
 import { agentScopes, operationRegistry } from "@dongo/contracts";
+import {
+  CURRENT_AGENT_RELEASE_NOTICE,
+  matchesCurrentAgentRelease,
+  type AgentReleaseDelivery,
+} from "./release-notice.js";
 import type {
   DongoDomainError,
   DongoOperationName,
@@ -37,11 +42,13 @@ type GatewayResponse =
       readonly data: unknown;
       readonly requestId: string;
       readonly apiVersion: "v1";
+      readonly releaseNoticeDelivery?: AgentReleaseDelivery;
     }
   | {
       readonly ok: false;
       readonly error: DongoDomainError;
       readonly requestId: string;
+      readonly releaseNoticeDelivery?: AgentReleaseDelivery;
     };
 
 function validateOrigin(url: URL): URL {
@@ -171,6 +178,21 @@ function parseGatewayResponse(value: unknown): GatewayResponse | undefined {
     return undefined;
   }
   const record = value as JsonRecord;
+  const delivery = record.releaseNoticeDelivery;
+  const parsedDelivery =
+    delivery !== null && typeof delivery === "object" && !Array.isArray(delivery)
+      ? delivery as JsonRecord
+      : undefined;
+  const releaseNoticeDelivery =
+    typeof parsedDelivery?.id === "string" &&
+    typeof parsedDelivery.sequence === "number" &&
+    Number.isSafeInteger(parsedDelivery.sequence) &&
+    Object.keys(parsedDelivery).every((key) => key === "id" || key === "sequence")
+      ? {
+          id: parsedDelivery.id,
+          sequence: parsedDelivery.sequence,
+        }
+      : undefined;
   if (
     typeof record.requestId !== "string" ||
     record.requestId.length === 0 ||
@@ -182,7 +204,15 @@ function parseGatewayResponse(value: unknown): GatewayResponse | undefined {
     if (record.apiVersion !== "v1" || record.data === undefined) {
       return undefined;
     }
-    return record as GatewayResponse;
+    return {
+      ok: true,
+      data: record.data as JsonRecord,
+      requestId: record.requestId,
+      apiVersion: "v1",
+      ...(releaseNoticeDelivery === undefined
+        ? {}
+        : { releaseNoticeDelivery }),
+    };
   }
   if (record.ok !== false) {
     return undefined;
@@ -211,6 +241,9 @@ function parseGatewayResponse(value: unknown): GatewayResponse | undefined {
       retryable: domain.retryable,
       ...(domain.details === undefined ? {} : { details: domain.details }),
     },
+    ...(releaseNoticeDelivery === undefined
+      ? {}
+      : { releaseNoticeDelivery }),
   };
 }
 
@@ -300,6 +333,10 @@ export class ConvexHmacOperationExecutor implements OperationExecutor {
       version: 1 as const,
       operation,
       input,
+      releaseNotice: {
+        id: CURRENT_AGENT_RELEASE_NOTICE.id,
+        sequence: CURRENT_AGENT_RELEASE_NOTICE.sequence,
+      },
       context: {
         requestId: context.requestId,
         installationId: context.principal.installationId,
@@ -407,6 +444,9 @@ export class ConvexHmacOperationExecutor implements OperationExecutor {
         ok: true,
         data: validated.data as JsonRecord,
         requestId: result.requestId,
+        ...(matchesCurrentAgentRelease(result.releaseNoticeDelivery)
+          ? { releaseNotice: CURRENT_AGENT_RELEASE_NOTICE }
+          : {}),
       };
     } catch {
       if (context.signal.aborted) {

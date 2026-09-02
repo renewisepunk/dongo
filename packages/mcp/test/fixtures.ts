@@ -6,6 +6,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
+  CURRENT_AGENT_RELEASE_NOTICE,
   DONGO_OPERATION_NAMES,
   type ContractOperationRegistry,
   type ContractSchema,
@@ -83,6 +84,7 @@ export function gatewayFixture(input?: {
   readonly revoked?: boolean;
   readonly ready?: boolean;
   readonly rateLimited?: boolean;
+  readonly releaseNoticeOnce?: boolean;
 }): GatewayFixture {
   const calls: GatewayFixture["calls"] = [];
   const scopes = input?.tokenScopes ?? [
@@ -137,6 +139,9 @@ export function gatewayFixture(input?: {
               operation,
               authorizationForwarded: "token" in context,
             },
+            ...(input?.releaseNoticeOnce === true && calls.length === 1
+              ? { releaseNotice: CURRENT_AGENT_RELEASE_NOTICE }
+              : {}),
           };
         },
       },

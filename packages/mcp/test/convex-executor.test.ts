@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import test from "node:test";
 import {
+  CURRENT_AGENT_RELEASE_NOTICE,
   ConvexHmacOperationExecutor,
   type OperationExecutionContext,
 } from "../src/index.js";
@@ -82,6 +83,11 @@ test("Convex executor signs the exact versioned envelope without forwarding bear
   assert.equal(envelope.operation, "get_attachment");
   assert.equal("token" in envelope, false);
   assert.equal(rawBody.includes("opaque-access-token"), false);
+  assert.equal(rawBody.includes("npm install"), false);
+  assert.deepEqual(envelope.releaseNotice, {
+    id: CURRENT_AGENT_RELEASE_NOTICE.id,
+    sequence: CURRENT_AGENT_RELEASE_NOTICE.sequence,
+  });
   assert.deepEqual(envelope.context, {
     requestId: "request-id",
     installationId: "installation-id",
@@ -105,6 +111,57 @@ test("Convex executor signs the exact versioned envelope without forwarding bear
     observed.headers.get("x-dongo-signature"),
     expectedSignature,
   );
+});
+
+test("Convex executor accepts only the current release delivery marker", async () => {
+  for (const [delivery, expected] of [
+    [
+      {
+        id: CURRENT_AGENT_RELEASE_NOTICE.id,
+        sequence: CURRENT_AGENT_RELEASE_NOTICE.sequence,
+      },
+      true,
+    ],
+    [
+      {
+        id: "attacker-selected-release",
+        sequence: CURRENT_AGENT_RELEASE_NOTICE.sequence,
+      },
+      false,
+    ],
+    [
+      {
+        id: CURRENT_AGENT_RELEASE_NOTICE.id,
+        sequence: CURRENT_AGENT_RELEASE_NOTICE.sequence + 1,
+      },
+      false,
+    ],
+    [{ id: CURRENT_AGENT_RELEASE_NOTICE.id, sequence: "1" }, false],
+  ] as const) {
+    const executor = new ConvexHmacOperationExecutor({
+      convexSiteUrl: new URL("https://example.convex.site/"),
+      secret: SECRET,
+      nowMs: () => TIMESTAMP,
+      nonce: () => NONCE,
+      fetch: async () =>
+        Response.json({
+          ok: true,
+          data: attachmentData(),
+          requestId: "request-id",
+          apiVersion: "v1",
+          releaseNoticeDelivery: delivery,
+        }),
+    });
+    const result = await executor.execute(
+      "get_attachment",
+      { attachmentId: "attachment-id" },
+      executionContext(),
+    );
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.releaseNotice !== undefined, expected);
+    }
+  }
 });
 
 test("Convex executor includes the validated external session in signed context", async () => {

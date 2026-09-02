@@ -55,6 +55,224 @@ describe("human authorization bridge", () => {
 });
 
 describe("internal signed gateway", () => {
+  it("claims each MCP release once per installation with monotonic rollback safety", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.mutation(
+        internal.operators.agentReleaseNotice.activate,
+        { releaseId: "release-10", releaseSequence: 10 },
+      ),
+    ).resolves.toMatchObject({ activated: true, releaseSequence: 10 });
+    const key = `release-${crypto.randomUUID()}`;
+    const seeded = await t.mutation(internal.dev.bootstrap.createWalkingSkeleton, {
+      key,
+      organizationSlug: `org-${crypto.randomUUID()}`,
+      projectSlug: `project-${crypto.randomUUID()}`,
+    });
+    const project = await t.run(async (ctx) => await ctx.db.get(seeded.projectId!));
+    if (!project) throw new Error("fixture missing");
+    const providerIssuer = "https://auth.example.test";
+    const resource = `https://dev.dongo.so/p/${project.publicRef}/mcp`;
+    const createInstallation = async (suffix: string) =>
+      await t.mutation(
+        internal.domains.installations.index.registerOAuthGrant,
+        {
+          providerIssuer,
+          providerGrantId: `release-grant-${suffix}`,
+          subject: `oauth-user-${suffix}`,
+          clientId: `codex-client-${suffix}`,
+          resource,
+          scopes: ["dongo:work:read", "dongo:work:write", "offline_access"],
+          kind: "mcp",
+          authSubject: `development:${key}`,
+          projectRef: project.publicRef,
+          label: "Codex",
+        },
+      );
+    const firstInstallation = await createInstallation("one");
+    const authorization = {
+      requestId: "release-notice-request",
+      installationId: firstInstallation.installationId,
+      actorId: firstInstallation.actorId,
+      organizationId: firstInstallation.organizationId,
+      projectId: firstInstallation.projectId,
+      projectRef: firstInstallation.projectRef,
+      oauthBindingId: firstInstallation.oauthBindingId,
+      issuer: providerIssuer,
+      resource,
+      clientId: "codex-client-one",
+      scopes: ["dongo:work:read", "dongo:work:write"],
+    };
+    const claim = (releaseId: string, releaseSequence: number) =>
+      t.mutation(
+        internal.domains.installations.index.claimAgentReleaseNotice,
+        { authorization, releaseId, releaseSequence },
+      );
+
+    await expect(claim("release-10", 10)).resolves.toMatchObject({
+      deliver: true,
+      releaseId: "release-10",
+      releaseSequence: 10,
+    });
+    await expect(claim("release-10", 10)).resolves.toEqual({ deliver: false });
+    await expect(claim("rollback-9", 9)).resolves.toEqual({ deliver: false });
+    await expect(claim("changed-10", 10)).resolves.toEqual({ deliver: false });
+    await expect(
+      t.mutation(
+        internal.operators.agentReleaseNotice.activate,
+        { releaseId: "release-11", releaseSequence: 11 },
+      ),
+    ).resolves.toMatchObject({ activated: true, releaseSequence: 11 });
+    await expect(claim("release-11", 11)).resolves.toMatchObject({
+      deliver: true,
+      releaseSequence: 11,
+    });
+
+    await t.mutation(
+      internal.operators.agentReleaseNotice.activate,
+      { releaseId: "release-12", releaseSequence: 12 },
+    );
+    const concurrent = await Promise.all([
+      claim("release-12", 12),
+      claim("release-12", 12),
+    ]);
+    expect(concurrent.filter((result) => result.deliver)).toHaveLength(1);
+
+    const secondInstallation = await createInstallation("two");
+    const secondAuthorization = {
+      ...authorization,
+      requestId: "release-notice-second-installation",
+      installationId: secondInstallation.installationId,
+      actorId: secondInstallation.actorId,
+      oauthBindingId: secondInstallation.oauthBindingId,
+      clientId: "codex-client-two",
+    };
+    await expect(
+      t.mutation(
+        internal.domains.installations.index.claimAgentReleaseNotice,
+        {
+          authorization: secondAuthorization,
+          releaseId: "release-12",
+          releaseSequence: 12,
+        },
+      ),
+    ).resolves.toMatchObject({ deliver: true, releaseSequence: 12 });
+
+    await expect(
+      t.mutation(
+        internal.operators.agentReleaseNotice.activate,
+        { releaseId: "changed-12", releaseSequence: 12 },
+      ),
+    ).rejects.toThrow(/already activated/u);
+    await expect(
+      t.mutation(
+        internal.operators.agentReleaseNotice.activate,
+        { releaseId: "rollback-11", releaseSequence: 11 },
+      ),
+    ).rejects.toThrow(/cannot move backward/u);
+    await expect(
+      t.mutation(
+        internal.operators.agentReleaseNotice.activate,
+        { releaseId: "release-12", releaseSequence: 12 },
+      ),
+    ).resolves.toMatchObject({ activated: false, releaseSequence: 12 });
+
+    await t.mutation(
+      internal.operators.agentReleaseNotice.activate,
+      { releaseId: "release-20", releaseSequence: 20 },
+    );
+    const failed = await callSigned(t, "/internal/agent/v1/execute", {
+      version: 1,
+      operation: "not_an_operation",
+      input: {},
+      releaseNotice: { id: "release-20", sequence: 20 },
+      context: {
+        ...secondAuthorization,
+        requestId: "release-notice-failed-operation",
+        grantId: secondAuthorization.oauthBindingId,
+        oauthBindingId: undefined,
+      },
+    });
+    expect(failed.response.status).toBe(404);
+
+    const delivered = await callSigned(t, "/internal/agent/v1/execute", {
+      version: 1,
+      operation: "get_overview",
+      input: {},
+      releaseNotice: { id: "release-20", sequence: 20 },
+      context: {
+        ...secondAuthorization,
+        requestId: "release-notice-successful-operation",
+        grantId: secondAuthorization.oauthBindingId,
+        oauthBindingId: undefined,
+      },
+    });
+    expect(delivered.response.status).toBe(200);
+    await expect(delivered.response.json()).resolves.toMatchObject({
+      ok: true,
+      releaseNoticeDelivery: { id: "release-20", sequence: 20 },
+    });
+  });
+
+  it("does not deliver an inactive or globally rolled-back release", async () => {
+    const t = convexTest(schema, modules);
+    const key = `inactive-release-${crypto.randomUUID()}`;
+    const seeded = await t.mutation(internal.dev.bootstrap.createWalkingSkeleton, {
+      key,
+      organizationSlug: `org-${crypto.randomUUID()}`,
+      projectSlug: `project-${crypto.randomUUID()}`,
+    });
+    const project = await t.run(async (ctx) => await ctx.db.get(seeded.projectId!));
+    if (!project) throw new Error("fixture missing");
+    const providerIssuer = "https://auth.example.test";
+    const resource = `https://dev.dongo.so/p/${project.publicRef}/mcp`;
+    const installation = await t.mutation(
+      internal.domains.installations.index.registerOAuthGrant,
+      {
+        providerIssuer,
+        providerGrantId: "inactive-release-grant",
+        subject: "inactive-release-user",
+        clientId: "inactive-release-client",
+        resource,
+        scopes: ["dongo:work:read", "dongo:work:write", "offline_access"],
+        kind: "mcp",
+        authSubject: `development:${key}`,
+        projectRef: project.publicRef,
+        label: "Codex",
+      },
+    );
+    const authorization = {
+      requestId: "inactive-release-request",
+      installationId: installation.installationId,
+      actorId: installation.actorId,
+      organizationId: installation.organizationId,
+      projectId: installation.projectId,
+      projectRef: installation.projectRef,
+      oauthBindingId: installation.oauthBindingId,
+      issuer: providerIssuer,
+      clientId: "inactive-release-client",
+      resource,
+      scopes: ["dongo:work:read", "dongo:work:write"],
+    };
+    const claim = (releaseId: string, releaseSequence: number) =>
+      t.mutation(internal.domains.installations.index.claimAgentReleaseNotice, {
+        authorization,
+        releaseId,
+        releaseSequence,
+      });
+
+    await expect(claim("release-1", 1)).resolves.toEqual({ deliver: false });
+    await t.mutation(internal.operators.agentReleaseNotice.activate, {
+      releaseId: "release-2",
+      releaseSequence: 2,
+    });
+    await expect(claim("release-1", 1)).resolves.toEqual({ deliver: false });
+    await expect(claim("release-2", 2)).resolves.toMatchObject({
+      deliver: true,
+      releaseSequence: 2,
+    });
+  });
+
   it("returns canonical DTOs and rejects replay, stale, and tampered calls", async () => {
     const t = convexTest(schema, modules);
     const seeded = await t.mutation(internal.dev.bootstrap.createWalkingSkeleton, {

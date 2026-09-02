@@ -44,6 +44,8 @@
     "verify:cli-package": "node scripts/verify-cli-package.mjs",
     "verify:no-secrets": "node scripts/verify-no-secrets.mjs",
     "verify:runtime-logs": "node scripts/verify-runtime-logs.mjs",
+    "verify:agent-release-notice": "node scripts/verify-agent-release-notice.mjs",
+    "activate:agent-release-notice": "node scripts/activate-agent-release-notice.mjs",
     "types": "wrangler types",
     "convex:codegen": "convex codegen",
     "convex:dev": "convex dev",

@@ -87,8 +87,15 @@ verified and skipped automatically.
 Successful online CLI commands also make a bounded, fail-open check for a newer
 stable `@wisepunk/dongo` version. The resulting human or JSON advisory tells an
 agent to ask the user before running an exact version-pinned install command;
-the CLI never updates itself. The remote MCP service is hosted and remains
-current without a local package upgrade.
+the CLI never updates itself. After the matching npm artifact is verified and
+the notice is explicitly activated, already-connected MCP installations can
+receive one trusted, bounded release notice on their next eligible successful
+dongo tool call. The notice summarizes reviewed changes, says that the hosted
+service is already current, and suggests checking a local CLI only when one is
+in use. It does not wake stopped agents or install anything. Delivery is an
+at-most-once advisory: a connection loss after the atomic claim can suppress a
+notice the host did not receive, while the underlying operation remains
+authoritative.
 
 ## Get started with skills
 

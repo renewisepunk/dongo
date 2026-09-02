@@ -12,6 +12,7 @@ const productionEnvironment = {
 };
 const productionPublicProjectRef = "ps8dhbky-dongo-production-e2e";
 const preflightSteps = [
+  ["agent release notice preflight", executable("node"), ["scripts/verify-agent-release-notice.mjs"]],
   ["public CLI release preflight", executable("node"), ["scripts/release-cli.mjs", "--preflight"]],
 ];
 const steps = [
@@ -29,6 +30,7 @@ const steps = [
     productionPublicProjectRef,
   ]],
   ["public CLI release", executable("node"), ["scripts/release-cli.mjs", "--publish"]],
+  ["agent release notice activation", executable("node"), ["scripts/activate-agent-release-notice.mjs"]],
 ];
 
 if (!existsSync(resolve(root, "package.json")) || !existsSync(resolve(root, "convex/schema.ts"))) {
@@ -69,4 +71,4 @@ for (const [label, command, args] of [...preflightSteps, ...steps]) {
   }
 }
 
-console.log("\nProduction stack deployed, smoke-checked, and its public CLI release reconciled.");
+console.log("\nProduction stack deployed and smoke-checked; its public CLI release was reconciled before the matching agent notice was activated.");

@@ -55,8 +55,10 @@ test("production deployment orders authorization, smoke, and publication safely"
   const convex = source.indexOf("Convex production functions");
   const smoke = source.indexOf("production public smoke gate");
   const publication = source.indexOf('"public CLI release",');
+  const activation = source.indexOf("agent release notice activation");
   assert.ok(preflight >= 0 && preflight < convex);
   assert.ok(convex < smoke && smoke < publication);
+  assert.ok(publication < activation);
   assert.match(source, /scripts\/smoke-production\.mjs[\s\S]*--project-ref[\s\S]*productionPublicProjectRef/u);
 });
 
@@ -90,7 +92,9 @@ test("ambient registry overrides cannot redirect public release inspection", asy
     });
     assert.equal(result.status, 0, result.stderr);
     const manifest = JSON.parse(await readFile(new URL("../apps/cli/package.json", import.meta.url), "utf8"));
-    assert.equal(JSON.parse(result.stdout.trim().split("\n").at(-1)).latestVersion, manifest.version);
+    const plan = JSON.parse(result.stdout.trim().split("\n").at(-1));
+    assert.equal(plan.version, manifest.version);
+    assert.ok(["publish", "skip"].includes(plan.action));
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
   }
@@ -112,8 +116,27 @@ test("CI always checks the public CLI release state", async () => {
 
 test("the agent advisory and public package share one release version", async () => {
   const manifest = JSON.parse(await readFile(new URL("../apps/cli/package.json", import.meta.url), "utf8"));
+  const releaseNotice = await readFile(new URL("../packages/mcp/src/release-notice.ts", import.meta.url), "utf8");
   const instructions = await readFile(new URL("../packages/mcp/src/instructions.ts", import.meta.url), "utf8");
-  assert.match(instructions, new RegExp(`PUBLIC_CLI_VERSION = "${manifest.version.replaceAll(".", "\\.")}"`, "u"));
+  assert.match(releaseNotice, new RegExp(`version: "${manifest.version.replaceAll(".", "\\.")}"`, "u"));
+  assert.match(releaseNotice, new RegExp(`npm install --global @wisepunk/dongo@${manifest.version.replaceAll(".", "\\.")}`, "u"));
+  assert.match(releaseNotice, /sequence: \d+/u);
   assert.match(instructions, /Never install automatically/u);
   assert.match(instructions, /explicit user approval/u);
+});
+
+test("production deployment always verifies the agent release notice before mutation", async () => {
+  const source = await readFile(new URL("./deploy-production.mjs", import.meta.url), "utf8");
+  const noticePreflight = source.indexOf("agent release notice preflight");
+  const convexDeploy = source.indexOf("Convex production functions");
+  assert.ok(noticePreflight >= 0);
+  assert.ok(convexDeploy > noticePreflight);
+});
+
+test("agent release activation uses the reviewed marker only after npm reconciliation", async () => {
+  const source = await readFile(new URL("./activate-agent-release-notice.mjs", import.meta.url), "utf8");
+  assert.match(source, /CURRENT_AGENT_RELEASE_NOTICE\.id/u);
+  assert.match(source, /CURRENT_AGENT_RELEASE_NOTICE\.sequence/u);
+  assert.match(source, /operators\/agentReleaseNotice:activate/u);
+  assert.match(source, /"--prod"/u);
 });

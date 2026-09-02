@@ -22,6 +22,7 @@ const SERVICE_CREDENTIAL_RESOLVE_PATH =
 const ATTACHMENT_FINALIZE_PATH = "/internal/attachments/v1/finalize";
 const MAX_BODY_BYTES = 256 * 1_024;
 const MAX_RESPONSE_BYTES = 1 * 1_024 * 1_024;
+const MAX_MCP_RESULT_BYTES = 512 * 1_024;
 const ALLOWED_CLOCK_SKEW_MS = 60_000;
 const DOWNLOAD_TTL_MS = 5 * 60 * 1_000;
 const GATEWAY_KEY_ID = "v1";
@@ -61,6 +62,13 @@ const agentEnvelopeSchema = z
     operation: z.string().min(1).max(64),
     input: z.unknown(),
     context: contextSchema,
+    releaseNotice: z
+      .object({
+        id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,79}$/u),
+        sequence: z.number().int().positive(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -1109,8 +1117,52 @@ export const executeAgent = httpAction(async (ctx, request) => {
         { issues: issue(parsedOutput.error) },
       );
     }
+    if (
+      new TextEncoder().encode(JSON.stringify(parsedOutput.data)).byteLength >
+        MAX_MCP_RESULT_BYTES
+    ) {
+      throw new GatewayError(
+        "internal",
+        "Agent operation result exceeded the MCP result limit",
+        500,
+      );
+    }
+    let releaseNoticeDelivery:
+      | { id: string; sequence: number }
+      | undefined;
+    if (envelope.data.releaseNotice !== undefined) {
+      try {
+        const claim = await ctx.runMutation(
+          internal.domains.installations.index.claimAgentReleaseNotice,
+          {
+            authorization: authorization(envelope.data.context),
+            releaseId: envelope.data.releaseNotice.id,
+            releaseSequence: envelope.data.releaseNotice.sequence,
+          },
+        );
+        if (claim.deliver) {
+          releaseNoticeDelivery = {
+            id: envelope.data.releaseNotice.id,
+            sequence: envelope.data.releaseNotice.sequence,
+          };
+        }
+      } catch {
+        console.error(JSON.stringify({
+          event: "agent_release_notice_claim_failed",
+          requestId,
+        }));
+      }
+    }
     return jsonResponse(
-      { ok: true, data: parsedOutput.data, requestId, apiVersion: "v1" },
+      {
+        ok: true,
+        data: parsedOutput.data,
+        requestId,
+        apiVersion: "v1",
+        ...(releaseNoticeDelivery === undefined
+          ? {}
+          : { releaseNoticeDelivery }),
+      },
       200,
       requestId,
     );

@@ -323,6 +323,36 @@ its finalized attachments agent-visible only through the created Intake. It
 does not assign, claim, or authorize starting work; the Intake enters the normal
 human-to-agent triage boundary.
 
+### D-27 — Next-call agent release notices
+
+Decided: an already-authorized MCP installation can learn about a new reviewed
+and activated agent release through one additive notice on its next eligible
+successful authenticated dongo tool result. The canonical operation
+`structuredContent`, error meaning,
+and primary content remain unchanged. The notice is a separate bounded text
+block plus optional MCP metadata, so both modern and admitted legacy hosts can
+surface it without reconnecting or rereading initialization instructions.
+
+Notice content is a checked-in build-time manifest with a unique identifier and
+monotonically increasing sequence. Only the identifier and sequence cross the
+signed internal gateway. A global Convex channel advances monotonically only
+after the matching npm artifact has been published and verified; claims must
+exactly match that active marker. Convex then atomically records the highest
+delivered sequence per MCP installation. Concurrent calls yield at most one
+notice, while retries, same-release redeploys, new installations after a
+rollback, and rollbacks themselves do not repeat or regress it. A notice failure
+is fail-open and leaves the successful operation untouched. Because the receipt
+is at-most-once, a connection loss after the atomic claim can suppress a notice
+the host did not receive; normal work never depends on the advisory.
+
+The notice states that hosted MCP is already current and needs no installation
+or restart. It may recommend checking a local CLI, but suggests the exact scoped
+and version-pinned command only when the detected stable CLI is older, and it
+always requires explicit human approval before installation. Registry data,
+project content, environment values, and operation results can never author the
+notice. Delivery is once per installation, not once per every concurrent task;
+it does not push, wake, restart, or assign an agent.
+
 ## Decisions that may wait until after the walking skeleton
 
 - Billing provider and checkout/customer-portal UX.
