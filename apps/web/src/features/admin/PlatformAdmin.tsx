@@ -268,8 +268,14 @@ export function PlatformAdmin(props: PlatformAdminProps) {
           <button type="button" role="tab" aria-selected={tab() === "limits"} onClick={() => setTab("limits")}>Organization limits</button>
         </div>
         <label class="platform-admin__search">
-          <span class="visually-hidden">Filter administration rows</span>
-          <input type="search" placeholder="Filter by name, email, or slug" value={query()} onInput={(event) => setQuery(event.currentTarget.value)} />
+          <span class="field-label">Filter<span class="visually-hidden"> administration rows</span></span>
+          <input
+            class="input"
+            type="search"
+            placeholder="Name, email, or slug"
+            value={query()}
+            onInput={(event) => setQuery(event.currentTarget.value)}
+          />
         </label>
         <p class="visually-hidden" aria-live="polite">{status()}</p>
 
