@@ -33,6 +33,7 @@ export interface RunnerConfig {
   installationId: string;
   repositoryRoot: string;
   repositoryIdentity: string;
+  repositoryIdentityV2?: string;
   executablePaths: Record<RunnerHarness, string>;
   executableIdentities: Record<RunnerHarness, string>;
   environmentPath: string;
@@ -186,6 +187,7 @@ export class LocalRunnerManager {
     }
     const repositoryRoot = await realpath(this.#repositoryRoot);
     const repositoryIdentity = await captureRepositoryIdentity(repositoryRoot);
+    const repositoryIdentityV2 = await captureRepositoryIdentityV2(repositoryRoot);
     const environmentPath = normalizedEnvironmentPath(process.env.PATH);
     const harnesses = normalizedHarnesses(input.harnesses);
     if (harnesses.length === 0) {
@@ -232,6 +234,7 @@ export class LocalRunnerManager {
       installationId: this.#installationId,
       repositoryRoot,
       repositoryIdentity,
+      repositoryIdentityV2,
       executablePaths,
       executableIdentities,
       environmentPath,
@@ -396,10 +399,14 @@ export class LocalRunnerManager {
     }
     const configuredRoot = await realpath(config.repositoryRoot);
     const currentRoot = await realpath(this.#repositoryRoot);
-    const currentIdentity = await captureRepositoryIdentity(currentRoot);
+    const [currentIdentity, currentIdentityV2] = await Promise.all([
+      captureRepositoryIdentity(currentRoot),
+      captureRepositoryIdentityV2(currentRoot),
+    ]);
     if (
       configuredRoot !== currentRoot ||
       currentIdentity !== config.repositoryIdentity ||
+      (config.repositoryIdentityV2 !== undefined && currentIdentityV2 !== config.repositoryIdentityV2) ||
       config.projectRef !== this.#projectRef
     ) {
       throw new CliCoreError({
@@ -407,6 +414,11 @@ export class LocalRunnerManager {
         message: "Runner repository binding does not match this project.",
         exitCode: 4,
       });
+    }
+    if (config.repositoryIdentityV2 === undefined) {
+      config.repositoryIdentityV2 = currentIdentityV2;
+      config.updatedAt = new Date(this.#now()).toISOString();
+      await this.#writeConfig(config);
     }
     await this.#writeState(this.#state(config, "starting"));
     let failureAttempt = 0;
@@ -936,6 +948,8 @@ function parseConfig(
       typeof value.repositoryRoot !== "string" ||
       typeof value.repositoryIdentity !== "string" ||
       !/^[0-9a-f]{64}$/u.test(value.repositoryIdentity) ||
+      (value.repositoryIdentityV2 !== undefined &&
+        (typeof value.repositoryIdentityV2 !== "string" || !/^[0-9a-f]{64}$/u.test(value.repositoryIdentityV2))) ||
       !validExecutablePaths(value.executablePaths, value.harnesses) ||
       !validExecutableIdentities(value.executableIdentities, value.harnesses) ||
       !validEnvironmentPath(value.environmentPath) ||
@@ -1022,6 +1036,36 @@ async function captureRepositoryIdentity(repositoryRoot: string): Promise<string
     lstat(canonicalRoot),
     lstat(path.join(canonicalRoot, ".git")),
   ]);
+  assertSafeRepositoryIdentityPaths(rootInfo, gitInfo);
+  return createHash("sha256")
+    .update(canonicalRoot)
+    .update("\0")
+    .update(`${rootInfo.dev}:${rootInfo.ino}`)
+    .update("\0")
+    .update(`${gitInfo.dev}:${gitInfo.ino}:${gitInfo.isDirectory() ? "directory" : "file"}`)
+    .digest("hex");
+}
+
+async function captureRepositoryIdentityV2(repositoryRoot: string): Promise<string> {
+  const canonicalRoot = await realpath(repositoryRoot);
+  const [rootInfo, gitInfo] = await Promise.all([
+    lstat(canonicalRoot, { bigint: true }),
+    lstat(path.join(canonicalRoot, ".git"), { bigint: true }),
+  ]);
+  assertSafeRepositoryIdentityPaths(rootInfo, gitInfo);
+  return createHash("sha256")
+    .update(canonicalRoot)
+    .update("\0")
+    .update(`${rootInfo.dev}:${rootInfo.ino}:${rootInfo.birthtimeNs}`)
+    .update("\0")
+    .update(`${gitInfo.dev}:${gitInfo.ino}:${gitInfo.birthtimeNs}:${gitInfo.isDirectory() ? "directory" : "file"}`)
+    .digest("hex");
+}
+
+function assertSafeRepositoryIdentityPaths(
+  rootInfo: Awaited<ReturnType<typeof lstat>>,
+  gitInfo: Awaited<ReturnType<typeof lstat>>,
+): void {
   if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) {
     throw new CliCoreError({ code: "unsafe_path", message: "Runner repository root is not a safe directory.", exitCode: 4 });
   }
@@ -1031,13 +1075,6 @@ async function captureRepositoryIdentity(repositoryRoot: string): Promise<string
   ) {
     throw new CliCoreError({ code: "unsafe_path", message: "Runner repository Git metadata is not safe.", exitCode: 4 });
   }
-  return createHash("sha256")
-    .update(canonicalRoot)
-    .update("\0")
-    .update(`${rootInfo.dev}:${rootInfo.ino}`)
-    .update("\0")
-    .update(`${gitInfo.dev}:${gitInfo.ino}:${gitInfo.isDirectory() ? "directory" : "file"}`)
-    .digest("hex");
 }
 
 async function repositoryIsClean(repositoryRoot: string, environmentPath: string): Promise<boolean> {

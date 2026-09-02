@@ -153,10 +153,32 @@ test("runner refuses a repository that was replaced at the approved path", async
   await manager.install({ label: "Bound Mac", harnesses: ["codex"] });
   await rm(path.join(fixture.repository, ".git"), { recursive: true });
   await mkdir(path.join(fixture.repository, ".git"));
-  await assert.rejects(manager.run(), (error: Error & { code?: string }) => {
+  await assert.rejects(manager.run(AbortSignal.timeout(1_000)), (error: Error & { code?: string }) => {
     assert.equal(error.code, "runner_binding_mismatch");
     return true;
   });
+});
+
+test("an existing runner adds the stronger repository identity without reinstalling", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  api.job = runnerJob("delivered", 2);
+  api.onTerminal = () => controller.abort();
+  const manager = fixture.manager(api, new FakeService());
+  await manager.install({ label: "Existing runner", harnesses: ["codex"], approvalMode: "automatic" });
+
+  const key = "runner-config:project-ref";
+  const installed = JSON.parse((await fixture.store.get(key))!) as Record<string, unknown>;
+  const legacyIdentity = installed.repositoryIdentity;
+  delete installed.repositoryIdentityV2;
+  await fixture.store.set(key, JSON.stringify(installed));
+
+  await manager.run(controller.signal);
+
+  const migrated = JSON.parse((await fixture.store.get(key))!) as Record<string, unknown>;
+  assert.equal(migrated.repositoryIdentity, legacyIdentity);
+  assert.match(String(migrated.repositoryIdentityV2), /^[0-9a-f]{64}$/u);
 });
 
 test("a lost terminal response is replayed from owner-only local state", async (context) => {
@@ -575,6 +597,7 @@ async function runnerFixture(context: TestContext) {
     root,
     repository: canonicalRepository,
     nodePath,
+    store,
     manager(
       api: FakeRunnerApi,
       service: FakeService,
