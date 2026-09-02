@@ -9,7 +9,7 @@
   top: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
   min-height: 72px;
@@ -17,6 +17,10 @@
   border-bottom: 1px solid var(--line);
   background: color-mix(in oklab, var(--bg) 94%, transparent);
   backdrop-filter: blur(12px);
+}
+
+.platform-admin__header > div {
+  min-width: 0;
 }
 
 .platform-admin__brand {
@@ -113,7 +117,8 @@
 .platform-admin__error { padding: 20px; border: 1px solid var(--danger); }
 
 @media (max-width: 760px) {
-  .platform-admin__header { grid-template-columns: auto 1fr; }
+  .platform-admin__header { grid-template-columns: auto minmax(0, 1fr); }
+  .platform-admin__header h1 { overflow-wrap: anywhere; }
   .platform-admin__header > .button { grid-column: 2; justify-self: start; }
   .platform-admin__body { width: min(100% - 24px, 1080px); padding-top: 22px; }
   .platform-admin__tabs { overflow-x: auto; }
