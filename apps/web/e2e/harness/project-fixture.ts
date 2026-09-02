@@ -8,6 +8,8 @@ import type {
   ProjectConcurrencySnapshot,
   ProjectOverview,
   ProjectSearchPage,
+  RunnerJob,
+  RunnerSnapshot,
 } from "../../src/lib/project-data";
 import { intakeDisplayLabel } from "../../src/lib/intake-editing";
 
@@ -162,6 +164,37 @@ let work: WorkItem[] = [
     revision: 7,
   },
 ];
+
+let runnerJobs: RunnerJob[] = [];
+const runnerListeners = new Set<(value: RunnerSnapshot) => void>();
+
+function runnerSnapshot(): RunnerSnapshot {
+  const now = Date.now();
+  return {
+    registrations: [{
+      id: "runner-fixture",
+      projectId: currentProject.id,
+      installationId: "installation-fixture",
+      label: "Fixture Mac",
+      platform: "darwin",
+      version: "0.1.0",
+      harnesses: ["codex", "claude"],
+      approvalMode: "ask",
+      status: "active",
+      lastSeenAt: now,
+      waitingUntil: now + 20_000,
+      createdAt: now - 60_000,
+      updatedAt: now,
+    }],
+    jobs: runnerJobs,
+    serverTime: now,
+  };
+}
+
+function emitRunners(): void {
+  const snapshot = runnerSnapshot();
+  for (const listener of runnerListeners) listener(snapshot);
+}
 
 let intakes: Intake[] = [
   {
@@ -384,6 +417,11 @@ const connection: OverviewConnection = {
       return () => window.clearTimeout(timer);
     }
     return () => undefined;
+  },
+  subscribeRunners(onUpdate) {
+    runnerListeners.add(onUpdate);
+    queueMicrotask(() => onUpdate(runnerSnapshot()));
+    return () => runnerListeners.delete(onUpdate);
   },
   subscribeWorkDetail(item, onUpdate) {
     return subscribe(
@@ -660,10 +698,39 @@ const connection: OverviewConnection = {
       ],
     }));
   },
+  async enqueueRunnerJob(workItemId, harness) {
+    const item = work.find((candidate) => candidate.id === workItemId);
+    if (!item || item.state !== "ready") throw new Error("invalid_transition");
+    const now = Date.now();
+    const job: RunnerJob = {
+      id: `runner-job-${runnerJobs.length + 1}`,
+      projectId: currentProject.id,
+      workItemId,
+      workIdentifier: item.identifier,
+      harness,
+      state: "queued",
+      revision: 1,
+      requestedAt: now,
+      expiresAt: now + 86_400_000,
+      updatedAt: now,
+    };
+    runnerJobs = [job, ...runnerJobs];
+    emitRunners();
+    return job;
+  },
+  async cancelRunnerJob(job) {
+    const existing = runnerJobs.find((candidate) => candidate.id === job.id);
+    if (!existing || existing.revision !== job.revision) throw new Error("revision_conflict");
+    const cancelled: RunnerJob = { ...existing, state: "cancelled", revision: existing.revision + 1, updatedAt: Date.now(), terminalAt: Date.now() };
+    runnerJobs = runnerJobs.map((candidate) => candidate.id === job.id ? cancelled : candidate);
+    emitRunners();
+    return cancelled;
+  },
   async close() {
     overviewListeners.clear();
     workListeners.clear();
     intakeListeners.clear();
+    runnerListeners.clear();
   },
 };
 

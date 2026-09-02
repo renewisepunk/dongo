@@ -9,6 +9,9 @@ import {
   type ProjectAdministration,
   type ProjectInfo,
   type ProjectInstallation,
+  type RunnerRegistration,
+  type RunnerJobState,
+  type RunnerSnapshot,
 } from "../../lib/project-data";
 import { lowercaseDongoBrand } from "../../lib/brand-case";
 import {
@@ -24,6 +27,10 @@ type ProjectSettingsConnection = {
     onUpdate: (installations: ProjectInstallation[]) => void,
     onError: (error: Error) => void,
   ) => () => void;
+  subscribeRunners: (
+    onUpdate: (snapshot: RunnerSnapshot) => void,
+    onError: (error: Error) => void,
+  ) => () => void;
   updateProject: (input: {
     name: string;
     repositoryUrl?: string;
@@ -36,6 +43,7 @@ type ProjectSettingsConnection = {
   }) => Promise<void>;
   updateOrganization: (name: string) => Promise<void>;
   revokeInstallation: (installationId: string) => Promise<void>;
+  revokeRunner: (registrationId: string) => Promise<RunnerRegistration>;
   createServiceCredential: (input: {
     label: string;
     scopes: string[];
@@ -61,8 +69,8 @@ export type ProjectSettingsProps = {
   dependencies?: Partial<ProjectSettingsDependencies>;
 };
 
-type Tab = "General" | "Agent access" | "Members" | "Plan & storage";
-const SETTINGS_TABS: readonly Tab[] = ["General", "Agent access", "Members", "Plan & storage"];
+type Tab = "General" | "Agent access" | "Local runner" | "Members" | "Plan & storage";
+const SETTINGS_TABS: readonly Tab[] = ["General", "Agent access", "Local runner", "Members", "Plan & storage"];
 const SERVICE_SCOPES = [
   {
     value: "dongo:work:read",
@@ -102,6 +110,22 @@ function installationType(installation: ProjectInstallation): string {
   return [host, installation.machineLabel].filter(Boolean).join(" · ");
 }
 
+function runnerJobLabel(state: RunnerJobState): string {
+  switch (state) {
+    case "queued": return "queued · waiting for an online runner";
+    case "delivered": return "delivered";
+    case "awaiting_local_approval": return "waiting for local approval";
+    case "starting": return "starting";
+    case "running": return "running";
+    case "blocked": return "blocked";
+    case "cancel_requested": return "cancelling";
+    case "cancelled": return "cancelled";
+    case "failed": return "failed";
+    case "completed": return "completed";
+    case "expired": return "expired";
+  }
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1_024) return `${bytes} B`;
   const units = ["KB", "MB", "GB", "TB"];
@@ -135,6 +159,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   const [project, setProject] = createSignal<ProjectInfo>();
   const [administration, setAdministration] = createSignal<ProjectAdministration>();
   const [installations, setInstallations] = createSignal<ProjectInstallation[]>([]);
+  const [runners, setRunners] = createSignal<RunnerSnapshot>({ registrations: [], jobs: [], serverTime: Date.now() });
   const [projectName, setProjectName] = createSignal("");
   const [repositoryUrl, setRepositoryUrl] = createSignal("");
   const [executionMode, setExecutionMode] = createSignal<"manual" | "autonomous">("manual");
@@ -149,6 +174,8 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   const [savingOrganization, setSavingOrganization] = createSignal(false);
   const [confirmRevoke, setConfirmRevoke] = createSignal<string>();
   const [revoking, setRevoking] = createSignal<string>();
+  const [confirmRunnerRevoke, setConfirmRunnerRevoke] = createSignal<string>();
+  const [revokingRunner, setRevokingRunner] = createSignal<string>();
   const [confirmRemove, setConfirmRemove] = createSignal<string>();
   const [removing, setRemoving] = createSignal<string>();
   const [addingMember, setAddingMember] = createSignal(false);
@@ -164,6 +191,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   const [unarchiving, setUnarchiving] = createSignal(false);
   let connection: ProjectSettingsConnection | undefined;
   let unsubscribe: (() => void) | undefined;
+  let unsubscribeRunners: (() => void) | undefined;
   let manualModeButton: HTMLButtonElement | undefined;
   let autonomousModeButton: HTMLButtonElement | undefined;
   let disposed = false;
@@ -247,6 +275,10 @@ export function ProjectSettings(props: ProjectSettingsProps) {
             setInstallations,
             () => setError("Agent installations are temporarily unavailable."),
           );
+          unsubscribeRunners = connected.subscribeRunners(
+            setRunners,
+            () => setError("Local runner status is temporarily unavailable."),
+          );
         }
         setLoading(false);
       })
@@ -259,6 +291,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   onCleanup(() => {
     disposed = true;
     unsubscribe?.();
+    unsubscribeRunners?.();
     void connection?.close();
   });
 
@@ -336,6 +369,30 @@ export function ProjectSettings(props: ProjectSettingsProps) {
     } finally {
       setRevoking(undefined);
     }
+  };
+
+  const revokeLocalRunner = async (registrationId: string) => {
+    if (!connection || revokingRunner()) return;
+    setRevokingRunner(registrationId);
+    setError("");
+    try {
+      await connection.revokeRunner(registrationId);
+      setConfirmRunnerRevoke(undefined);
+      setStatus("Local runner access revoked. Remove its local service from that computer when available.");
+    } catch {
+      setError("The local runner could not be revoked. Try again.");
+    } finally {
+      setRevokingRunner(undefined);
+    }
+  };
+
+  const runnerPresence = (runner: RunnerRegistration) => {
+    if (runner.status === "revoked") return "revoked";
+    if (
+      (runner.waitingUntil !== undefined && runner.waitingUntil > runners().serverTime) ||
+      (runner.lastSeenAt !== undefined && runner.lastSeenAt >= runners().serverTime - 45_000)
+    ) return "online · waiting for work";
+    return runner.lastSeenAt ? `offline · ${relativeTime(runner.lastSeenAt)}` : "offline · never connected";
   };
 
   const toggleServiceScope = (scope: string) => {
@@ -613,6 +670,61 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                       <button class="button" type="submit" disabled={creatingServiceCredential()} style={{ "align-self": "flex-start" }}>{creatingServiceCredential() ? "Creating…" : "Create CI credential"}</button>
                     </form>
                   </Show>
+                </section>
+              </Show>
+            </>
+          )}</Show>
+
+          <Show when={!loading() && tab() === "Local runner" ? administration() : undefined}>{(_admin) => (
+            <>
+              <div class="settings-title-group">
+                <div class="eyebrow">Project settings</div>
+                <h1 class="settings-title">Local runner</h1>
+                <p class="auth-lede">Optionally queue Ready work for Codex or Claude Code on a computer you control.</p>
+              </div>
+              <Show when={owner()} fallback={<div class="security-note">Only an organization owner can view, install, or revoke local runners.</div>}>
+                <section class="settings-section runner-setup">
+                  <div class="settings-section__title">Install on a trusted computer</div>
+                  <ol class="runner-steps">
+                    <li>Open this connected repository on the computer that should run the work.</li>
+                    <li>Install and sign in to Codex and/or Claude Code locally.</li>
+                    <li>Run <code>dongo runner install --harness codex</code>, <code>dongo runner install --harness claude</code>, or include both <code>--harness</code> options.</li>
+                    <li>Confirm <code>dongo runner status</code> shows the service waiting.</li>
+                  </ol>
+                  <p class="security-note">Local approval is required for every job by default. Add <code>--approval automatic</code> only when this exact repository and computer are deliberately trusted. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects.</p>
+                </section>
+                <section class="settings-section">
+                  <div class="settings-section__title">Registered computers</div>
+                  <p class="note">Every registration below is scoped to {project()?.name}{project()?.repositoryUrl ? ` · ${project()!.repositoryUrl}` : ""}. The local repository path remains private to that computer.</p>
+                  <div class="installation-list">
+                    <For each={runners().registrations}>{(runner) => (
+                      <div class="installation-row">
+                        <div class="installation-row__name">
+                          <span>{runner.label}</span>
+                          <span class="installation-row__meta">{runner.platform === "darwin" ? "macOS" : "Linux"} · {runner.harnesses.map((harness) => harness === "claude" ? "Claude Code" : "Codex").join(" + ")} · {runner.approvalMode === "ask" ? "asks locally" : "automatic for this repository"} · v{runner.version}</span>
+                        </div>
+                        <div class="installation-row__meta" data-runner-presence={runnerPresence(runner).startsWith("online") ? "online" : "offline"}>{runnerPresence(runner)}</div>
+                        <Show when={runner.status !== "revoked"} fallback={<span class="installation-row__meta">revoked</span>}>
+                          <Show when={confirmRunnerRevoke() === runner.id} fallback={<button class="button button--quiet button--danger" type="button" onClick={() => setConfirmRunnerRevoke(runner.id)}>Revoke</button>}>
+                            <div class="installation-row__actions"><button class="button button--danger" type="button" disabled={Boolean(revokingRunner())} onClick={() => void revokeLocalRunner(runner.id)}>{revokingRunner() === runner.id ? "Revoking…" : "Confirm"}</button><button class="button button--quiet" type="button" disabled={Boolean(revokingRunner())} onClick={() => setConfirmRunnerRevoke(undefined)}>Cancel</button></div>
+                          </Show>
+                        </Show>
+                      </div>
+                    )}</For>
+                    <Show when={runners().registrations.length === 0}><div class="note" style={{ padding: "16px" }}>No local runner is registered for this project.</div></Show>
+                  </div>
+                </section>
+                <section class="settings-section">
+                  <div class="settings-section__title">Recent queued work</div>
+                  <div class="installation-list">
+                    <For each={runners().jobs.slice(0, 20)}>{(job) => (
+                      <div class="installation-row">
+                        <div class="installation-row__name"><A href={`/app/${props.orgSlug}/${props.projectSlug}?work=${encodeURIComponent(job.workIdentifier)}`}>{job.workIdentifier}</A><span class="installation-row__meta">{job.harness === "claude" ? "Claude Code" : "Codex"} · {job.safeSummary ?? job.safeMessage ?? runnerJobLabel(job.state)}</span></div>
+                        <span class="runner-state" data-state={job.state}>{runnerJobLabel(job.state)}</span>
+                      </div>
+                    )}</For>
+                    <Show when={runners().jobs.length === 0}><div class="note" style={{ padding: "16px" }}>No work has been queued for a local runner yet.</div></Show>
+                  </div>
                 </section>
               </Show>
             </>

@@ -152,6 +152,33 @@
   font-size: 12px;
 }
 
+.installation-row__meta[data-runner-presence="online"] { color: var(--green); }
+
+.runner-setup code,
+.runner-state {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.runner-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 24px;
+  color: var(--text-body);
+  line-height: 1.5;
+}
+
+.runner-state[data-state="running"],
+.runner-state[data-state="completed"] { color: var(--green); }
+
+.runner-state[data-state="queued"],
+.runner-state[data-state="awaiting_local_approval"],
+.runner-state[data-state="starting"] { color: var(--amber); }
+
+.runner-state[data-state="failed"],
+.runner-state[data-state="expired"] { color: var(--danger); }
+
 .plan-card {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

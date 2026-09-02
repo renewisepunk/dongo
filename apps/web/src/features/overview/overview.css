@@ -1202,6 +1202,44 @@
   text-wrap: pretty;
 }
 
+.runner-work-card .detail-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.runner-work-actions,
+.runner-job-status__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.runner-job-status__head { justify-content: space-between; width: 100%; }
+
+.runner-state {
+  color: var(--text-quiet);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.runner-state[data-state="running"],
+.runner-state[data-state="completed"] { color: var(--green); }
+
+.runner-state[data-state="queued"],
+.runner-state[data-state="awaiting_local_approval"],
+.runner-state[data-state="starting"] { color: var(--amber); }
+
+.runner-state[data-state="failed"],
+.runner-state[data-state="expired"] { color: var(--danger); }
+
+@media (max-width: 520px) {
+  .runner-work-actions { width: 100%; }
+  .runner-work-actions .button { width: 100%; }
+}
+
 .intake-editor {
   display: flex;
   flex-direction: column;

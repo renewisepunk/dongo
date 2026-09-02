@@ -91,6 +91,17 @@ test("uses canonical compact IDs in live rows and links", async ({ page }) => {
   await expect(page.getByText("DONGO-7", { exact: true })).toBeHidden();
 });
 
+test("queues and cancels Ready work through a truthful live runner state", async ({ page }) => {
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  const detail = workDetail(page, "Verify fixture search");
+  await expect(detail.getByText("A compatible runner is online.")).toBeVisible();
+  await detail.getByRole("button", { name: "Run with Codex" }).click();
+  await expect(detail.getByText("Queued · waiting for an online runner")).toBeVisible();
+  await expect(detail.getByText(/asks for approval on its computer/)).toBeHidden();
+  await detail.getByRole("button", { name: "Cancel local run" }).click();
+  await expect(detail.getByText("Cancelled", { exact: true })).toBeVisible();
+});
+
 test("switches projects through an accessible keyboard menu", async ({ page }) => {
   const trigger = page.getByRole("button", { name: "Select organization or project" });
   await trigger.click();

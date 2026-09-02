@@ -586,6 +586,29 @@ const settingsDependencies = {
           document.documentElement.dataset.fixtureSettingsUnsubscribed = "true";
         };
       },
+      subscribeRunners(onUpdate: (value: import("../../src/lib/project-data").RunnerSnapshot) => void) {
+        const now = Date.now();
+        onUpdate({
+          registrations: [{
+            id: "runner-settings-fixture",
+            projectId: project.id,
+            installationId: "installation-cli",
+            label: "Fixture Mac",
+            platform: "darwin",
+            version: "0.1.0",
+            harnesses: ["codex", "claude"],
+            approvalMode: "ask",
+            status: "active",
+            lastSeenAt: now,
+            waitingUntil: now + 20_000,
+            createdAt: now - 60_000,
+            updatedAt: now,
+          }],
+          jobs: [],
+          serverTime: now,
+        });
+        return () => undefined;
+      },
       async updateProject(input: {
         name: string;
         repositoryUrl?: string;
@@ -610,6 +633,24 @@ const settingsDependencies = {
       async revokeInstallation(installationId: string) {
         if (oauthScenario() === "mutation-error") throw new Error("fixture revoke detail must stay hidden");
         document.documentElement.dataset.fixtureRevokedInstallation = installationId;
+      },
+      async revokeRunner(registrationId: string) {
+        document.documentElement.dataset.fixtureRevokedRunner = registrationId;
+        const now = Date.now();
+        return {
+          id: registrationId,
+          projectId: project.id,
+          installationId: "installation-cli",
+          label: "Fixture Mac",
+          platform: "darwin" as const,
+          version: "0.1.0",
+          harnesses: ["codex" as const, "claude" as const],
+          approvalMode: "ask" as const,
+          status: "revoked" as const,
+          createdAt: now - 60_000,
+          updatedAt: now,
+          revokedAt: now,
+        };
       },
       async createServiceCredential(input: { label: string; scopes: string[] }) {
         document.documentElement.dataset.fixtureServiceCredential = JSON.stringify(input);

@@ -99,6 +99,20 @@ test("revokes installations and creates a one-time scoped CI credential", async 
   await expect(page.getByLabel("One-time DONGO_TOKEN value")).toBeHidden();
 });
 
+test("shows truthful local runner presence, setup, and revocation", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo/settings?tab=Local%20runner");
+  await expect(page.getByRole("heading", { name: "Local runner" })).toBeVisible();
+  await expect(page.getByText("Fixture Mac", { exact: true })).toBeVisible();
+  await expect(page.getByText("online · waiting for work", { exact: true })).toBeVisible();
+  await expect(page.getByText(/dongo does not wake a sleeping or powered-off computer/)).toBeVisible();
+  await expect(page.getByText("dongo runner install --harness codex", { exact: true })).toBeVisible();
+  await expect(page.getByText("dongo runner install --harness claude", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Revoke" }).click();
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByRole("status")).toContainText("Local runner access revoked");
+  await expect(page.locator("html")).toHaveAttribute("data-fixture-revoked-runner", "runner-settings-fixture");
+});
+
 test("updates organization membership and confirms removal", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo/settings?tab=Members");
   await page.getByLabel("Organization name").fill("Fixture Collective");

@@ -184,6 +184,62 @@ export type ProjectInstallation = {
   lastUsedAt?: number;
 };
 
+export type RunnerHarness = "codex" | "claude";
+export type RunnerJobState =
+  | "queued"
+  | "delivered"
+  | "awaiting_local_approval"
+  | "starting"
+  | "running"
+  | "blocked"
+  | "cancel_requested"
+  | "cancelled"
+  | "failed"
+  | "completed"
+  | "expired";
+
+export type RunnerRegistration = {
+  id: string;
+  projectId: string;
+  installationId: string;
+  label: string;
+  platform: "darwin" | "linux";
+  version: string;
+  harnesses: RunnerHarness[];
+  approvalMode: "ask" | "automatic";
+  status: "active" | "revoked";
+  lastSeenAt?: number;
+  waitingUntil?: number;
+  createdAt: number;
+  updatedAt: number;
+  revokedAt?: number;
+};
+
+export type RunnerJob = {
+  id: string;
+  projectId: string;
+  workItemId: string;
+  workIdentifier: string;
+  harness: RunnerHarness;
+  state: RunnerJobState;
+  revision: number;
+  registrationId?: string;
+  safeCode?: string;
+  safeMessage?: string;
+  safeSummary?: string;
+  sessionReferencePresent?: boolean;
+  requestedAt: number;
+  expiresAt: number;
+  updatedAt: number;
+  terminalAt?: number;
+};
+
+export type RunnerSnapshot = {
+  registrations: RunnerRegistration[];
+  jobs: RunnerJob[];
+  serverTime: number;
+};
+
 export type IntakeUpdateInput = {
   intakeId: string;
   expectedRevision: number;
@@ -649,6 +705,26 @@ const createServiceCredentialReference = makeFunctionReference<
   { projectId: string; label: string; scopes: string[] },
   CreatedServiceCredential
 >("domains/installations/actions:createServiceCredential");
+const listRunnersReference = makeFunctionReference<
+  "query",
+  { projectId: string },
+  RunnerSnapshot
+>("domains/runner/index:listForHuman");
+const enqueueRunnerReference = makeFunctionReference<
+  "mutation",
+  { projectId: string; workItemId: string; harness: RunnerHarness; idempotencyKey: string },
+  RunnerJob
+>("domains/runner/index:enqueue");
+const cancelRunnerReference = makeFunctionReference<
+  "mutation",
+  { projectId: string; jobId: string; expectedRevision: number; idempotencyKey: string },
+  RunnerJob
+>("domains/runner/index:cancel");
+const revokeRunnerReference = makeFunctionReference<
+  "mutation",
+  { projectId: string; registrationId: string },
+  RunnerRegistration
+>("domains/runner/index:revokeForHuman");
 const archiveProjectReference = makeFunctionReference<
   "mutation",
   { projectId: string },
@@ -1609,6 +1685,43 @@ export class ProjectDataConnection {
       }))),
       onError,
     );
+  }
+
+  subscribeRunners(
+    onUpdate: (snapshot: RunnerSnapshot) => void,
+    onError: (error: Error) => void,
+  ): () => void {
+    return this.#client.onUpdate(
+      listRunnersReference,
+      { projectId: this.projectId },
+      onUpdate,
+      onError,
+    );
+  }
+
+  async enqueueRunnerJob(workItemId: string, harness: RunnerHarness): Promise<RunnerJob> {
+    return await this.#client.mutation(enqueueRunnerReference, {
+      projectId: this.projectId,
+      workItemId,
+      harness,
+      idempotencyKey: crypto.randomUUID(),
+    });
+  }
+
+  async cancelRunnerJob(job: Pick<RunnerJob, "id" | "revision">): Promise<RunnerJob> {
+    return await this.#client.mutation(cancelRunnerReference, {
+      projectId: this.projectId,
+      jobId: job.id,
+      expectedRevision: job.revision,
+      idempotencyKey: crypto.randomUUID(),
+    });
+  }
+
+  async revokeRunner(registrationId: string): Promise<RunnerRegistration> {
+    return await this.#client.mutation(revokeRunnerReference, {
+      projectId: this.projectId,
+      registrationId,
+    });
   }
 
   async revokeInstallation(installationId: string): Promise<void> {

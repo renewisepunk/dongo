@@ -285,6 +285,7 @@ export default defineSchema({
     terminalAt: v.optional(v.number()),
     updatedAt: v.number(),
   })
+    .index("by_project_requested", ["projectId", "requestedAt"])
     .index("by_project_state_requested", ["projectId", "state", "requestedAt"])
     .index("by_project_work_requested", ["projectId", "workItemId", "requestedAt"])
     .index("by_registration_state_updated", ["registrationId", "state", "updatedAt"]),

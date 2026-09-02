@@ -602,7 +602,7 @@ export const listForHuman = query({
     await requireHumanProject(ctx, args.projectId, { allowArchived: true });
     const [registrations, jobs] = await Promise.all([
       ctx.db.query("runnerRegistrations").withIndex("by_project_status", (q) => q.eq("projectId", args.projectId)).take(100),
-      ctx.db.query("runnerJobs").withIndex("by_project_state_requested", (q) => q.eq("projectId", args.projectId)).order("desc").take(200),
+      ctx.db.query("runnerJobs").withIndex("by_project_requested", (q) => q.eq("projectId", args.projectId)).order("desc").take(200),
     ]);
     return {
       registrations: registrations.map(registrationDto),

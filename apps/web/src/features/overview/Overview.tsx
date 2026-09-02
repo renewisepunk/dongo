@@ -38,6 +38,10 @@ import type {
   ProjectSearchCursor,
   ProjectSearchResult,
   ProjectConcurrencySnapshot,
+  RunnerHarness,
+  RunnerJob,
+  RunnerJobState,
+  RunnerSnapshot,
 } from "../../lib/project-data";
 import { searchHighlightSegments } from "../../lib/search-highlight";
 import type { AttachmentSummary, Intake, WorkItem } from "./model";
@@ -52,6 +56,7 @@ export type OverviewConnection = Pick<
   | "availableProjects"
   | "subscribeOverview"
   | "subscribeConcurrency"
+  | "subscribeRunners"
   | "subscribeWorkDetail"
   | "subscribeWorkById"
   | "subscribeWorkByIdentifier"
@@ -68,6 +73,8 @@ export type OverviewConnection = Pick<
   | "respondToAttention"
   | "resolveAttention"
   | "addComment"
+  | "enqueueRunnerJob"
+  | "cancelRunnerJob"
   | "close"
 >;
 
@@ -216,6 +223,22 @@ function sameOverviewRoute(
     left.search === right.search;
 }
 
+function runnerJobLabel(state: RunnerJobState): string {
+  switch (state) {
+    case "queued": return "Queued · waiting for an online runner";
+    case "delivered": return "Delivered to a runner";
+    case "awaiting_local_approval": return "Waiting for approval on the runner computer";
+    case "starting": return "Starting locally";
+    case "running": return "Running locally";
+    case "blocked": return "Blocked";
+    case "cancel_requested": return "Cancellation requested";
+    case "cancelled": return "Cancelled";
+    case "failed": return "Failed";
+    case "completed": return "Completed";
+    case "expired": return "Expired before it could start";
+  }
+}
+
 export function Overview(props: OverviewProps) {
   const navigate = useNavigate();
   const [routeParams, setRouteParams] = useSearchParams<{
@@ -237,6 +260,7 @@ export function Overview(props: OverviewProps) {
   const [selectedIntakeDetail, setSelectedIntakeDetail] = createSignal<Intake>();
   const [concurrency, setConcurrency] = createSignal<ProjectConcurrencySnapshot>();
   const [concurrencyStatus, setConcurrencyStatus] = createSignal<"loading" | "ready" | "error">("loading");
+  const [runnerSnapshot, setRunnerSnapshot] = createSignal<RunnerSnapshot>({ registrations: [], jobs: [], serverTime: Date.now() });
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [query, setQuery] = createSignal("");
   const [searchResults, setSearchResults] = createSignal<ProjectSearchResult[]>([]);
@@ -266,6 +290,7 @@ export function Overview(props: OverviewProps) {
   let connection: OverviewConnection | undefined;
   let unsubscribeOverview: (() => void) | undefined;
   let unsubscribeConcurrency: (() => void) | undefined;
+  let unsubscribeRunners: (() => void) | undefined;
   let unsubscribeWork: (() => void) | undefined;
   let unsubscribeIntake: (() => void) | undefined;
   let fileInput: HTMLInputElement | undefined;
@@ -1576,6 +1601,10 @@ export function Overview(props: OverviewProps) {
           },
           () => setConcurrencyStatus("error"),
         );
+        unsubscribeRunners = connected.subscribeRunners(
+          setRunnerSnapshot,
+          () => announce("Local runner status is temporarily unavailable"),
+        );
       } catch {
         setLoadError("This project could not be loaded for your account.");
         setLoading(false);
@@ -1604,6 +1633,7 @@ export function Overview(props: OverviewProps) {
     uploadControllers.clear();
     unsubscribeOverview?.();
     unsubscribeConcurrency?.();
+    unsubscribeRunners?.();
     unsubscribeWork?.();
     unsubscribeIntake?.();
     void (async () => {
@@ -2250,6 +2280,28 @@ export function Overview(props: OverviewProps) {
               throw error;
             }
           }}
+          runnerJob={runnerSnapshot().jobs.find((job) => job.workItemId === item().id)}
+          runnerHarnesses={[...new Set(
+            runnerSnapshot().registrations
+              .filter((runner) => runner.status === "active")
+              .flatMap((runner) => runner.harnesses),
+          )]}
+          runnerOnline={runnerSnapshot().registrations.some((runner) =>
+            runner.status === "active" &&
+            ((runner.waitingUntil !== undefined && runner.waitingUntil > runnerSnapshot().serverTime) ||
+              (runner.lastSeenAt !== undefined && runner.lastSeenAt >= runnerSnapshot().serverTime - 45_000))
+          )}
+          runnerSettingsHref={`/app/${props.orgSlug}/${props.projectSlug}/settings?tab=Local%20runner`}
+          onQueueRunner={async (harness) => {
+            if (!connection) return;
+            await connection.enqueueRunnerJob(item().id, harness);
+            announce(`${harness === "claude" ? "Claude Code" : "Codex"} work queued`);
+          }}
+          onCancelRunner={async (job) => {
+            if (!connection) return;
+            await connection.cancelRunnerJob(job);
+            announce("Runner cancellation requested");
+          }}
         />
         )}</Show>
       )}</For>
@@ -2387,6 +2439,12 @@ type WorkDetailProps = {
   onRespond: (selectedOption?: string, body?: string) => Promise<void>;
   onResolve: () => Promise<void>;
   onComment: (body: string | undefined, attachmentIds: string[]) => Promise<void>;
+  runnerJob?: RunnerJob;
+  runnerHarnesses: RunnerHarness[];
+  runnerOnline: boolean;
+  runnerSettingsHref: string;
+  onQueueRunner: (harness: RunnerHarness) => Promise<void>;
+  onCancelRunner: (job: RunnerJob) => Promise<void>;
 };
 
 function WorkDetail(props: WorkDetailProps) {
@@ -2412,6 +2470,8 @@ function WorkDetail(props: WorkDetailProps) {
   const [pending, setPending] = createSignal(false);
   const [editNotice, setEditNotice] = createSignal("");
   const [identifierCopied, setIdentifierCopied] = createSignal(false);
+  const [runnerPending, setRunnerPending] = createSignal(false);
+  const [runnerError, setRunnerError] = createSignal("");
   let detailPanel: HTMLElement | undefined;
   let closeButton: HTMLButtonElement | undefined;
   let identifierCopyTimer: number | undefined;
@@ -2528,6 +2588,32 @@ function WorkDetail(props: WorkDetailProps) {
     } catch {
       setIdentifierCopied(false);
       props.announce("This issue ID could not be copied");
+    }
+  };
+
+  const queueRunner = async (harness: RunnerHarness) => {
+    if (runnerPending()) return;
+    setRunnerPending(true);
+    setRunnerError("");
+    try {
+      await props.onQueueRunner(harness);
+    } catch {
+      setRunnerError("This work could not be queued. Its state or runner availability may have changed.");
+    } finally {
+      setRunnerPending(false);
+    }
+  };
+
+  const cancelRunner = async () => {
+    if (!props.runnerJob || runnerPending()) return;
+    setRunnerPending(true);
+    setRunnerError("");
+    try {
+      await props.onCancelRunner(props.runnerJob);
+    } catch {
+      setRunnerError("Cancellation could not be requested because this job changed. The latest state is shown.");
+    } finally {
+      setRunnerPending(false);
     }
   };
 
@@ -2656,6 +2742,54 @@ function WorkDetail(props: WorkDetailProps) {
         <section class="detail-section">
           <div class="detail-section__label">goal</div>
           <MarkdownContent source={props.item.goal} class="detail-section__body" />
+        </section>
+
+        <section class="detail-section runner-work-card" aria-labelledby="runner-work-heading">
+          <div class="detail-section__label" id="runner-work-heading">local runner</div>
+          <Show when={props.runnerJob} fallback={
+            <Show when={props.item.state === "ready"} fallback={<p class="note">Local execution can be queued only while work is Ready.</p>}>
+              <Show when={props.runnerHarnesses.length > 0} fallback={
+                <div class="detail-card">
+                  <strong>No local runner is connected.</strong>
+                  <p class="note">Set up Codex or Claude Code on a computer you control, then return here to queue this work.</p>
+                  <a class="button button--quiet" href={props.runnerSettingsHref}>Set up local runner</a>
+                </div>
+              }>
+                <div class="detail-card">
+                  <strong>Run this Ready work with a local agent</strong>
+                  <p class="note">{props.runnerOnline ? "A compatible runner is online." : "The runner is offline. dongo will keep the work queued until that computer reconnects; it cannot wake a sleeping or powered-off computer."}</p>
+                  <div class="runner-work-actions">
+                    <For each={props.runnerHarnesses}>{(harness) => (
+                      <button class="button button--primary" type="button" disabled={runnerPending()} onClick={() => void queueRunner(harness)}>
+                        {runnerPending() ? "Queuing…" : `Run with ${harness === "claude" ? "Claude Code" : "Codex"}`}
+                      </button>
+                    )}</For>
+                  </div>
+                  <p class="security-note">The runner asks for approval on its computer unless that repository was explicitly installed in automatic mode.</p>
+                </div>
+              </Show>
+            </Show>
+          }>{(job) => (
+            <div class="detail-card runner-job-status" data-state={job().state}>
+              <div class="runner-job-status__head"><strong>{job().harness === "claude" ? "Claude Code" : "Codex"}</strong><span class="runner-state" data-state={job().state}>{runnerJobLabel(job().state)}</span></div>
+              <Show when={job().safeSummary ?? job().safeMessage}><p class="note">{job().safeSummary ?? job().safeMessage}</p></Show>
+              <Show when={["queued", "delivered", "awaiting_local_approval", "starting", "running", "blocked"].includes(job().state)}>
+                <button class="button button--quiet button--danger" type="button" disabled={runnerPending()} onClick={() => void cancelRunner()}>{runnerPending() ? "Requesting…" : "Cancel local run"}</button>
+              </Show>
+              <Show when={job().state === "awaiting_local_approval"}><p class="security-note">Approve this exact job on the runner computer with <code>dongo runner approve --job-id {job().id}</code>.</p></Show>
+              <Show when={job().state === "queued" && !props.runnerOnline}><p class="security-note">This queue is durable, but no computer is currently waiting. dongo will deliver it after a compatible runner reconnects.</p></Show>
+              <Show when={["cancelled", "failed", "expired", "completed"].includes(job().state) && props.item.state === "ready" && props.runnerHarnesses.length > 0}>
+                <div class="runner-work-actions">
+                  <For each={props.runnerHarnesses}>{(harness) => (
+                    <button class="button button--quiet" type="button" disabled={runnerPending()} onClick={() => void queueRunner(harness)}>
+                      {runnerPending() ? "Queuing…" : `Run again with ${harness === "claude" ? "Claude Code" : "Codex"}`}
+                    </button>
+                  )}</For>
+                </div>
+              </Show>
+            </div>
+          )}</Show>
+          <Show when={runnerError()}><div class="security-note" role="alert">{runnerError()}</div></Show>
         </section>
 
         <Show when={props.item.sources?.length}>
