@@ -19,6 +19,7 @@ The HTML is a behavioral and visual reference, not an application dependency. Re
 - Amber is `oklch(0.84 0.19 78)` and communicates dongo identity, focus, current activity, and human Attention. Green is `oklch(0.82 0.20 150)` and communicates successful connection/completion.
 - Geometry is square and compact: one-pixel borders, no decorative rounding, restrained shadows, dense 12–18 px type, and no ornamental gradients.
 - Motion is limited to the blinking terminal cursor/activity dot, small spinners, and short 180–280 ms entry transitions. Respect reduced-motion preferences.
+- The shared dongo logo uses one explicit stroke width for both sides of its amber arrow and its animated cursor bar. Compact and full variants may change mark height, but never their relative weight.
 - Focus is always visible. Icon-only controls require accessible names. Minimum interactive height is 36 px for compact controls and 44–48 px for primary/mobile actions.
 - “Needs You” is the strongest content block. No dashboard charts, project-management sidebar, board, sprint, or status-management chrome is added.
 

@@ -149,6 +149,10 @@ a:hover {
 .eyebrow--green { color: var(--green); }
 
 .brand {
+  --brand-mark-stroke: 3px;
+  --brand-chevron-size: 11px;
+  --brand-cursor-height: 18px;
+  --brand-name-size: 20px;
   display: inline-flex;
   min-height: 36px;
   align-items: center;
@@ -158,26 +162,37 @@ a:hover {
 
 .brand:hover { color: var(--text); }
 
+.brand--compact {
+  --brand-chevron-size: 9px;
+  --brand-cursor-height: 14px;
+  --brand-name-size: 16px;
+}
+
 .brand__chevron {
+  box-sizing: border-box;
   color: var(--amber);
-  font-family: var(--mono);
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
+  width: var(--brand-chevron-size);
+  height: var(--brand-chevron-size);
+  flex: 0 0 var(--brand-chevron-size);
+  border-right: var(--brand-mark-stroke) solid currentColor;
+  border-bottom: var(--brand-mark-stroke) solid currentColor;
+  transform: rotate(-45deg);
 }
 
 .brand__name {
-  font-size: 20px;
+  font-size: var(--brand-name-size);
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.4;
 }
 
 .brand__cursor {
+  display: inline-block;
   color: var(--amber);
-  font-family: var(--mono);
-  font-size: 18px;
-  line-height: 1;
+  width: var(--brand-mark-stroke);
+  height: var(--brand-cursor-height);
+  flex: 0 0 var(--brand-mark-stroke);
+  background: currentColor;
   animation: dongo-cursor-pulse 4.8s ease-in-out infinite;
 }
 

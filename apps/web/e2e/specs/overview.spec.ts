@@ -1118,6 +1118,36 @@ test("keeps the dongo logo cursor animation slow and subtle", async ({ page }) =
   expect(motion.opacityFloor).toBeLessThan(1);
 });
 
+test("uses one exact stroke weight for the dongo logo arrow and cursor", async ({ page }) => {
+  const weights = await page.locator(".brand").evaluate((brand) => {
+    const chevron = brand.querySelector<HTMLElement>(".brand__chevron");
+    const cursor = brand.querySelector<HTMLElement>(".brand__cursor");
+    if (!chevron || !cursor) throw new Error("Brand marks are missing");
+
+    const measure = () => {
+      const chevronStyle = getComputedStyle(chevron);
+      const cursorStyle = getComputedStyle(cursor);
+      return {
+        cursorWidth: Number.parseFloat(cursorStyle.width),
+        chevronRightStroke: Number.parseFloat(chevronStyle.borderRightWidth),
+        chevronBottomStroke: Number.parseFloat(chevronStyle.borderBottomWidth),
+      };
+    };
+
+    const compact = measure();
+    brand.classList.remove("brand--compact");
+    const full = measure();
+    brand.classList.add("brand--compact");
+    return { compact, full };
+  });
+
+  for (const variant of [weights.compact, weights.full]) {
+    expect(variant.cursorWidth).toBeGreaterThan(0);
+    expect(variant.cursorWidth).toBe(variant.chevronRightStroke);
+    expect(variant.cursorWidth).toBe(variant.chevronBottomStroke);
+  }
+});
+
 test("reflows at 320 CSS pixels and honors reduced motion", async ({ page, browserName }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 320, height: 720 });
