@@ -46,6 +46,9 @@ test("all host instruction blocks exactly match canonical server instructions", 
   assert.match(DONGO_MCP_INSTRUCTIONS, /Humans may enrich waiting or claimed Intake/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /save preserves the claim but advances the Intake revision/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /review the current text, context, links, and finalized attachments/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /@wisepunk\/dongo@0\.2\.0/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /ask whether they want to install it/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /Never install automatically/u);
 });
 
 test("renderer creates distinct non-secret project host assets", () => {
@@ -59,7 +62,7 @@ test("renderer creates distinct non-secret project host assets", () => {
     publicProjectRef: "project_uvwxyz",
     shortProjectRef: "uvwxyz",
   });
-  assert.equal(first.integrationVersion, "0.1.8");
+  assert.equal(first.integrationVersion, "0.1.9");
   assert.notEqual(first.serverName, second.serverName);
   assert.notEqual(first.endpoint, second.endpoint);
   assert.match(first.codexConfigToml, /https:\/\/dev\.dongo\.so\/p\/project_abcdef\/mcp/);

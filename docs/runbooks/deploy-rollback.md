@@ -73,6 +73,12 @@ Recheck the affected readiness route and its upstream/downstream dependencies. A
 
 ## CLI/package rollback
 
+The normal production runner always reconciles the public CLI after the
+production smoke gate. Do not publish a separately packed archive during a
+normal release. `npm run release:cli:plan` previews whether the verified payload
+will be skipped or published, and `npm run release:cli` is reserved for retrying
+the exact accepted revision after a registry-only failure.
+
 The CLI release artifact must be the exact packed archive accepted by CI:
 
 ```sh

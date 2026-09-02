@@ -9,6 +9,7 @@ import { CliCoreError, type IntegrationResult } from "@dongo/cli-core";
 import { DongoClientError } from "@dongo/client";
 import { COMMAND_SCHEMAS } from "../src/command-schema.ts";
 import { isEntrypoint, runCli } from "../src/index.ts";
+import { checkForCliUpdate } from "../src/update.ts";
 
 const noncanonicalProductCase = /\b(?:Dongo|DONGO)\b(?![-_.])/u;
 
@@ -146,7 +147,7 @@ test("every command provides specific human and machine-readable help", async ()
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.1.0\n");
+  assert.equal(human.values().stdout, "dongo 0.2.0\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -154,7 +155,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.1.0" },
+    data: { version: "0.2.0" },
   });
   assert.equal(json.values().stderr, "");
 });
@@ -174,6 +175,63 @@ test("--json writes exactly one machine-readable result to stdout", async () => 
   });
   assert.equal(values.stderr, "");
   assert.equal(values.stdout.trim().split("\n").length, 1);
+});
+
+test("online commands expose a consent-first CLI update advisory to agents", async () => {
+  const stream = capture();
+  const advisory = {
+    available: true as const,
+    package: "@wisepunk/dongo" as const,
+    currentVersion: "0.2.0",
+    latestVersion: "0.3.0",
+    consentRequired: true as const,
+    prompt: "A newer dongo CLI is available. Ask the user whether they want to install it before running the command.",
+    installCommand: "npm install --global @wisepunk/dongo@0.3.0",
+  };
+  assert.equal(await runCli(["overview", "--json"], {
+    output: stream.output,
+    serviceFactory: () => fakeService as never,
+    updateChecker: async () => advisory,
+  }), 0);
+  assert.deepEqual(JSON.parse(stream.values().stdout).update, advisory);
+  assert.equal(stream.values().stderr, "");
+
+  const human = capture();
+  assert.equal(await runCli(["overview"], {
+    output: human.output,
+    serviceFactory: () => fakeService as never,
+    updateChecker: async () => advisory,
+  }), 0);
+  assert.match(human.values().stderr, /Ask the user before running/u);
+  assert.match(human.values().stderr, /@wisepunk\/dongo@0\.3\.0/u);
+});
+
+test("the update checker accepts only a newer stable version from the fixed package response", async () => {
+  const response = (body: unknown) => async () => new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  assert.equal(await checkForCliUpdate("0.2.0", { fetch: response({ version: "0.2.0" }) }), undefined);
+  assert.equal(await checkForCliUpdate("0.2.0", { fetch: response({ version: "latest; rm -rf" }) }), undefined);
+  assert.equal(await checkForCliUpdate("0.2.0", { fetch: async () => { throw new Error("offline"); } }), undefined);
+  assert.deepEqual(await checkForCliUpdate("0.2.0", { fetch: response({ version: "0.2.1" }) }), {
+    available: true,
+    package: "@wisepunk/dongo",
+    currentVersion: "0.2.0",
+    latestVersion: "0.2.1",
+    consentRequired: true,
+    prompt: "A newer dongo CLI is available. Ask the user whether they want to install it before running the command.",
+    installCommand: "npm install --global @wisepunk/dongo@0.2.1",
+  });
+
+  const startedAt = Date.now();
+  assert.equal(await checkForCliUpdate("0.2.0", {
+    timeoutMilliseconds: 10,
+    fetch: async (_input, init) => await new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }),
+  }), undefined);
+  assert.ok(Date.now() - startedAt < 250);
 });
 
 test("doctor failure has deterministic JSON and exit code", async () => {

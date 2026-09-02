@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "integrationVersion": "0.1.8",
+  "integrationVersion": "0.1.9",
   "transport": "streamable-http",
   "endpointTemplate": "{{origin}}/p/{{publicProjectRef}}/mcp",
   "serverNameTemplate": "dongo-{{shortProjectRef}}",

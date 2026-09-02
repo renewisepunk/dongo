@@ -4,7 +4,7 @@ const PROJECT_REF = /^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/;
 const SHORT_REF = /^[A-Za-z0-9][A-Za-z0-9_-]{1,31}$/;
 
 export interface DongoManagedIntegrationBundle {
-  readonly integrationVersion: "0.1.8";
+  readonly integrationVersion: "0.1.9";
   readonly serverName: string;
   readonly endpoint: string;
   readonly managedInstructionBlock: string;
@@ -66,7 +66,7 @@ export function renderDongoManagedIntegrationBundle(input: {
   )}\n`;
 
   return Object.freeze({
-    integrationVersion: "0.1.8",
+    integrationVersion: "0.1.9",
     serverName,
     endpoint,
     managedInstructionBlock: managedInstructionBlock(),

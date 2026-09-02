@@ -104,3 +104,6 @@ jobs:
 
       - name: Verify the immutable CLI package
         run: npm run verify:cli-package
+
+      - name: Verify the public CLI release state
+        run: npm run release:cli:plan

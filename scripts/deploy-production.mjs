@@ -10,6 +10,10 @@ const productionEnvironment = {
   CI: "true",
   CLOUDFLARE_ENV: "production",
 };
+const productionPublicProjectRef = "ps8dhbky-dongo-production-e2e";
+const preflightSteps = [
+  ["public CLI release preflight", executable("node"), ["scripts/release-cli.mjs", "--preflight"]],
+];
 const steps = [
   ["Convex production functions", executable("npx"), ["convex", "deploy", "--yes", "--message", "dongo production release"]],
   ["production auth migrations", executable("npx"), ["wrangler", "d1", "migrations", "apply", "AUTH_DB", "--remote", "--config", "apps/auth/wrangler.jsonc", "--env", "production"]],
@@ -19,6 +23,12 @@ const steps = [
   ["production attachment Worker", executable("npx"), ["wrangler", "deploy", "--config", "apps/files/wrangler.jsonc", "--env", "production"]],
   ["production notification Worker", executable("npx"), ["wrangler", "deploy", "--config", "apps/notifications/wrangler.jsonc", "--env", "production"]],
   ["production web application", executable("node"), ["scripts/deploy-production-web.mjs"]],
+  ["production public smoke gate", executable("node"), [
+    "scripts/smoke-production.mjs",
+    "--project-ref",
+    productionPublicProjectRef,
+  ]],
+  ["public CLI release", executable("node"), ["scripts/release-cli.mjs", "--publish"]],
 ];
 
 if (!existsSync(resolve(root, "package.json")) || !existsSync(resolve(root, "convex/schema.ts"))) {
@@ -27,7 +37,7 @@ if (!existsSync(resolve(root, "package.json")) || !existsSync(resolve(root, "con
 }
 
 if (process.argv.includes("--plan")) {
-  for (const [label, command, args] of steps) {
+  for (const [label, command, args] of [...preflightSteps, ...steps]) {
     console.log(`${label}: ${command} ${args.join(" ")}`);
   }
   process.exit(0);
@@ -42,7 +52,7 @@ if (status.status !== 0 || status.stdout.trim() !== "") {
   process.exit(2);
 }
 
-for (const [label, command, args] of steps) {
+for (const [label, command, args] of [...preflightSteps, ...steps]) {
   console.log(`\n==> ${label}`);
   const result = spawnSync(command, args, {
     cwd: root,
@@ -59,4 +69,4 @@ for (const [label, command, args] of steps) {
   }
 }
 
-console.log("\nProduction stack deployed. Run the production smoke gate before announcing availability.");
+console.log("\nProduction stack deployed, smoke-checked, and its public CLI release reconciled.");

@@ -42,7 +42,7 @@ Build and install the self-contained package archive so the command does not dep
 
 ```sh
 npm pack --workspace @wisepunk/dongo
-npm install --global ./wisepunk-dongo-0.1.0.tgz
+npm install --global ./wisepunk-dongo-0.2.0.tgz
 dongo --version
 dongo --help
 ```
@@ -56,6 +56,13 @@ npm run verify:cli-package
 ```
 
 The gate inspects the archive, installs it into an isolated prefix, runs it from a clean Git repository with no credential, and compares a canonical file-content digest with `apps/cli/package-payload.sha256`. npm versions may encode different tar/gzip envelope metadata, so the archive digest identifies one exact artifact while the pinned payload digest proves that supported build hosts produced the same package contents. When an intentional CLI change alters the payload, review the built archive first and then update the pinned digest to the `received` value printed by the failing gate.
+
+Production releases always run the CLI release reconciler. It compares the
+verified local payload with npm, fails before production changes when a changed
+payload has no new immutable version or package-level read-write authorization
+on the pinned public registry, and publishes the
+same verified archive only after the production stack passes its public smoke
+gate. An unchanged package is verified against npm and skipped.
 
 ## Commands
 
@@ -106,6 +113,14 @@ Every command and subcommand has focused help; for example, run
 schema in a success envelope. Argument validation reports all detectable
 problems together before contacting dongo. In JSON mode, validation errors put
 the complete issue list and expected command schema in `error.details`.
+
+After a successful online command, the CLI performs one bounded, fail-open check
+against the official scoped package on npm. When a newer stable version exists,
+human output says to ask before installing, while JSON output includes a fixed
+`update` advisory with `consentRequired: true` and an exact version-pinned install
+command. The CLI never installs itself, never executes registry-provided text,
+and does not turn an unavailable registry into a command failure. Remote MCP is
+hosted by dongo and does not need a local package upgrade.
 
 Work uses a canonical four-letter, three-digit identifier such as `dong008`.
 Pass it to `dongo work get --identifier dong008`. Exact legacy identifiers

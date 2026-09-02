@@ -9,7 +9,16 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const publicRegistry = "https://registry.npmjs.org/";
 const execFileAsync = promisify(execFile);
+const archiveArgumentIndex = process.argv.indexOf("--archive");
+const suppliedArchivePath = archiveArgumentIndex >= 0
+  ? process.argv[archiveArgumentIndex + 1]
+  : undefined;
+
+if (archiveArgumentIndex >= 0 && !suppliedArchivePath) {
+  throw new Error("--archive requires a package archive path.");
+}
 
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
@@ -74,11 +83,18 @@ try {
   ]);
   await chmod(configDirectory, 0o700);
 
-  run("npm", ["pack", "--workspace", "@wisepunk/dongo", "--pack-destination", packageDirectory]);
-  const archives = (await readdir(packageDirectory)).filter((name) => name.endsWith(".tgz"));
-  invariant(archives.length === 1, "CLI packaging must create exactly one archive.");
-
-  const archivePath = join(packageDirectory, archives[0]);
+  let archivePath;
+  if (suppliedArchivePath) {
+    archivePath = resolve(repositoryRoot, suppliedArchivePath);
+    await access(archivePath, constants.R_OK);
+  } else {
+    run("npm", ["pack", "--workspace", "@wisepunk/dongo", "--pack-destination", packageDirectory]);
+    const archives = (await readdir(packageDirectory)).filter((name) => name.endsWith(".tgz"));
+    invariant(archives.length === 1, "CLI packaging must create exactly one archive.");
+    archivePath = join(packageDirectory, archives[0]);
+  }
+  const archiveName = archivePath.split(/[\\/]/u).at(-1);
+  invariant(archiveName?.endsWith(".tgz"), "CLI package archive must use the .tgz extension.");
   const archiveEntries = run("tar", ["-tf", archivePath]).trim().split("\n").filter(Boolean);
   const requiredEntries = ["package/package.json", "package/README.md", "package/dist/dongo.js"];
   for (const entry of requiredEntries) {
@@ -97,7 +113,19 @@ try {
     "Packaged CLI contains a forbidden credential-helper integration.",
   );
 
-  run("npm", ["install", "--global", "--prefix", installPrefix, "--ignore-scripts", archivePath]);
+  run("npm", [
+    "install",
+    "--global",
+    "--prefix",
+    installPrefix,
+    "--ignore-scripts",
+    "--no-audit",
+    "--no-fund",
+    archivePath,
+    "--registry",
+    publicRegistry,
+    `--@wisepunk:registry=${publicRegistry}`,
+  ]);
   const binaryPath = join(installPrefix, "bin", "dongo");
   await access(binaryPath, constants.X_OK);
 
@@ -122,11 +150,20 @@ try {
   isolatedEnvironment.PATH = `${helperDirectory}:${isolatedEnvironment.PATH ?? ""}`;
   isolatedEnvironment.DONGO_HELPER_LOG = helperLog;
 
+  const packageManifest = JSON.parse(await readFile(join(repositoryRoot, "apps", "cli", "package.json"), "utf8"));
+  const expectedVersion = packageManifest.version;
+  invariant(typeof expectedVersion === "string", "CLI package manifest is missing its version.");
+  const versionParts = expectedVersion.split(".").map(Number);
+  invariant(
+    versionParts.length === 3 && versionParts.every(Number.isSafeInteger),
+    "CLI package version must be a stable numeric semantic version.",
+  );
+  const updateTestVersion = `${versionParts[0]}.${versionParts[1]}.${versionParts[2] + 1}`;
   const version = run(binaryPath, ["--version"], {
     cwd: cleanRepository,
     env: isolatedEnvironment,
   }).trim();
-  invariant(version === "dongo 0.1.0", `Unexpected packaged CLI version: ${version}`);
+  invariant(version === `dongo ${expectedVersion}`, `Unexpected packaged CLI version: ${version}`);
 
   const help = run(binaryPath, ["--help"], {
     cwd: cleanRepository,
@@ -283,6 +320,13 @@ if (!testOrigin) throw new Error("DONGO_PACKAGE_TEST_ORIGIN is required");
 globalThis.fetch = (input, init) => {
   const source = input instanceof Request ? input.url : String(input);
   const url = new URL(source);
+  if (url.href === "https://registry.npmjs.org/@wisepunk%2Fdongo/latest") {
+    const version = process.env.DONGO_PACKAGE_TEST_LATEST_VERSION ?? ${JSON.stringify(expectedVersion)};
+    return Promise.resolve(new Response(JSON.stringify({ version }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+  }
   if (url.origin !== "https://dongo.so") return nativeFetch(input, init);
   const rewritten = new URL(url.pathname + url.search, testOrigin);
   return input instanceof Request
@@ -293,6 +337,7 @@ globalThis.fetch = (input, init) => {
   const productionInterceptEnvironment = {
     ...isolatedEnvironment,
     DONGO_PACKAGE_TEST_ORIGIN: origin,
+    DONGO_PACKAGE_TEST_LATEST_VERSION: updateTestVersion,
     NODE_OPTIONS: `${isolatedEnvironment.NODE_OPTIONS ? `${isolatedEnvironment.NODE_OPTIONS} ` : ""}--import=${fetchPreloader}`,
   };
 
@@ -309,6 +354,12 @@ globalThis.fetch = (input, init) => {
   ], { cwd: cleanRepository, env: productionInterceptEnvironment });
   const connected = JSON.parse(connect.stdout);
   invariant(connected.ok === true, "Installed CLI did not complete local device authorization.");
+  invariant(connected.update?.latestVersion === updateTestVersion, "Installed CLI did not report the newer release.");
+  invariant(connected.update?.consentRequired === true, "Installed CLI update did not require user consent.");
+  invariant(
+    connected.update?.installCommand === `npm install --global @wisepunk/dongo@${updateTestVersion}`,
+    "Installed CLI update command was not pinned to the validated version.",
+  );
   invariant(
     connected.data?.credentialStore === "local-user-file",
     "Installed CLI did not report its local credential storage class.",
@@ -391,7 +442,7 @@ globalThis.fetch = (input, init) => {
   );
   process.stdout.write(`${JSON.stringify({
     ok: true,
-    archive: archives[0],
+    archive: archiveName,
     sha256: digest,
     payloadSha256: payloadDigest,
     entries: archiveEntries.length,

@@ -10,6 +10,9 @@ Production is `https://dongo.so`, Convex `brainy-camel-172`, D1 `dongo-auth`, an
 - Send production OTP email from `auth@dongo.so`, using the apex domain onboarded in Cloudflare Email Service. The Worker binding permits only that exact production address; development remains restricted to `auth@dev.dongo.so`.
 - Send production notification email from `notifications@dongo.so`, using the apex domain verified through DKIM and SPF on the `rene@wisepunk.com` Resend account. Development remains on `notifications@dev.dongo.so`.
 - Record the current production landing Worker version and every new Worker version before cutover. Never print or retain secret values in release evidence.
+- Always reconcile the public `@wisepunk/dongo` CLI. A changed package payload
+  requires a new unpublished stable version and npm publisher authorization;
+  the preflight must fail before any production mutation when either is absent.
 
 ## One-time preparation
 
@@ -48,6 +51,7 @@ npm run verify:environment-boundaries
 npm run verify:observability
 npm run verify:runtime-logs
 npm run verify:cli-package
+npm run release:cli:plan
 CLOUDFLARE_ENV=production npm run build --workspace @dongo/web
 npm run deploy:production:plan
 git status --short
@@ -67,18 +71,23 @@ npx wrangler deployments list --name dongo-coming-soon --json
 npm run deploy:production
 ```
 
-The runner deploys production Convex functions, applies additive D1 migrations, deploys auth → API → MCP → files → notifications, then builds and deploys the web Worker last. It stops on the first failure. The old landing stays at the root until the final web step.
+The runner first verifies whether the public CLI must be published and confirms
+npm authentication plus package-level read-write access on the pinned public
+registry when needed. It then deploys production Convex functions,
+applies additive D1 migrations, deploys auth → API → MCP → files →
+notifications, and builds and deploys the web Worker. It stops on the first
+failure. After the production stack passes the public smoke gate, it publishes
+the exact verified CLI archive when its payload changed, confirms npm integrity,
+and installs the registry copy into a clean prefix to verify version, help, and
+unauthenticated status. An unchanged CLI is verified against npm and skipped.
+The old landing stays at the root until the final web step.
 
-Run the public gate immediately:
+The runner executes all 18 public checks with the production smoke project
+before any CLI publication. Repeat that exact gate immediately with the accepted
+release evidence:
 
 ```sh
-npm run smoke:production
-```
-
-After the first production project is created, repeat it with the exact project reference:
-
-```sh
-npm run smoke:production -- --project-ref <public-project-ref>
+npm run smoke:production -- --project-ref ps8dhbky-dongo-production-e2e
 ```
 
 Then prove email OTP to an address controlled by the owner, connect a fresh packed CLI with the default `dongo connect`, add a new project-scoped Codex MCP entry, authorize it, call `dongo_session_start`, create/update/finish one disposable work item as the agent, attach and preview one image, revoke that disposable installation, confirm it fails, and reauthorize it to a new installation/actor.

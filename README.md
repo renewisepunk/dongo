@@ -75,6 +75,21 @@ npm run deploy:production
 
 The default `npm run deploy` points to that production release path. Rollback and environment checks are documented in [`docs/runbooks/production-release.md`](docs/runbooks/production-release.md).
 
+Every production release also reconciles the public `@wisepunk/dongo` CLI. The
+preflight compares the verified package payload with npm and fails before any
+production mutation if a changed CLI has no new immutable version or the
+publisher is not authenticated with package-level read-write access on the
+pinned public registry. After the production stack passes all 18 public smoke
+checks, the runner publishes that exact verified archive and confirms its
+registry integrity and clean installed behavior. Unchanged CLI payloads are
+verified and skipped automatically.
+
+Successful online CLI commands also make a bounded, fail-open check for a newer
+stable `@wisepunk/dongo` version. The resulting human or JSON advisory tells an
+agent to ask the user before running an exact version-pinned install command;
+the CLI never updates itself. The remote MCP service is hosted and remains
+current without a local package upgrade.
+
 ## Get started with skills
 
 The shortest path is to install the dongo skills in the coding agent you already

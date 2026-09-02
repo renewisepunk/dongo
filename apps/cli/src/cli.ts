@@ -9,6 +9,8 @@ import { commandName, renderHelp, validateCommand } from "./command-schema.ts";
 import { renderIntegrationOutput } from "./integration-output.ts";
 import type { OutputWriter } from "./output.ts";
 import { errorResult, processOutput, writeJson } from "./output.ts";
+import { checkForCliUpdate } from "./update.ts";
+import type { CliUpdateAdvisory } from "./update.ts";
 
 const CLI_VERSION = (JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
@@ -18,6 +20,7 @@ export interface CliDependencies {
   output?: OutputWriter;
   signal?: AbortSignal;
   wait?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
+  updateChecker?: () => Promise<CliUpdateAdvisory | undefined>;
   serviceFactory?: () => Pick<
     CoreService,
     | "connect"
@@ -41,6 +44,36 @@ export interface CliDependencies {
     | "runnerRun"
   >;
 }
+
+const updateAwareCommands = new Set([
+  "connect",
+  "project create",
+  "ci setup",
+  "doctor",
+  "session-start",
+  "session start",
+  "overview",
+  "intake get",
+  "intake claim",
+  "intake renew",
+  "intake complete",
+  "work create",
+  "work get",
+  "work start",
+  "work update",
+  "work renew",
+  "work finish",
+  "comment add",
+  "attention request",
+  "attention get",
+  "attention wait",
+  "attention resolve",
+  "updates get",
+  "updates wait",
+  "attachment get",
+  "attachment fetch",
+  "sync",
+]);
 
 function humanJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2).replace(/[\u202a-\u202e\u2066-\u2069]/gi, (character) =>
@@ -675,13 +708,25 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         throw new CliCoreError({ code: "validation", message: `Unknown command: ${parsed.command}`, exitCode: 2 });
     }
 
+    const update = updateAwareCommands.has(command)
+      ? await (dependencies.updateChecker
+          ?? (dependencies.serviceFactory ? async () => undefined : () => checkForCliUpdate(CLI_VERSION)))()
+      : undefined;
     if (parsed.json) writeJson(output, {
       ok: true,
       command,
       data,
+      ...(update ? { update } : {}),
       ...(mutationRecoveryKey ? { recovery: { idempotencyKey: mutationRecoveryKey } } : {}),
     });
-    else output.stdout(humanOutput ?? humanJson(data));
+    else {
+      output.stdout(humanOutput ?? humanJson(data));
+      if (update) {
+        output.stderr(
+          `dongo CLI ${update.latestVersion} is available. Ask the user before running: ${update.installCommand}\n`,
+        );
+      }
+    }
     return 0;
   } catch (error) {
     const failure = errorResult(error, parsed ? (commandName(parsed) ?? parsed.command) : "unknown");

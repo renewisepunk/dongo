@@ -107,6 +107,16 @@
 - Alerts cover human/CLI/MCP auth failure spikes, OAuth discovery/token failures, API/MCP mutation failure rate, notification failure, upload finalization failure, and deployment failure.
 - Staging deploy and rollback have been rehearsed.
 - Database changes are additive across supported client versions.
+- Every production release automatically reconciles the public CLI: unchanged
+  payloads match npm and skip, while changed payloads require a new unpublished
+  version and package-level read-write authorization on the pinned public npm
+  registry before production mutation. Publication
+  happens only after the production smoke gate, reuses the exact verified
+  archive, and proves registry integrity plus clean installed behavior.
+- Online CLI commands check the official scoped npm package with a bounded,
+  fail-open request. A newer stable version produces a fixed, version-pinned
+  advisory that requires the agent to ask the user before installation; no
+  client self-installs or executes registry-provided text.
 - Published CLI/MCP host packages use immutable artifacts and provenance where supported.
 - Runbooks cover device-flow failure, MCP discovery/login failure, auth-provider isolation, revoked/expired tokens, refresh replay, corrupted host/repo config, export conflict, expired claim, backend outage, upload failure, notification failure, and package rollback.
 

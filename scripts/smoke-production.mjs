@@ -10,6 +10,10 @@ function option(name) {
 }
 
 const projectRef = option("project-ref") ?? process.env.DONGO_PROJECT_REF;
+if (!projectRef) {
+  console.error("Usage: npm run smoke:production -- --project-ref <public-project-ref>");
+  process.exit(2);
+}
 if (projectRef && !/^[a-z0-9][a-z0-9-]{2,199}$/.test(projectRef)) {
   console.error("--project-ref must be a valid public project reference");
   process.exit(2);
