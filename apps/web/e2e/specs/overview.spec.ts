@@ -1018,6 +1018,32 @@ test("traps keyboard focus inside work detail", async ({ page }) => {
   await expect(close).toBeFocused();
 });
 
+test("keeps the dongo logo cursor animation slow and subtle", async ({ page }) => {
+  const motion = await page.locator(".brand__cursor").evaluate((element) => {
+    const style = getComputedStyle(element);
+    const animation = element.getAnimations()[0];
+    const keyframes = animation?.effect instanceof KeyframeEffect
+      ? animation.effect.getKeyframes()
+      : [];
+    const opacities = keyframes
+      .map((keyframe) => Number.parseFloat(String(keyframe.opacity)))
+      .filter(Number.isFinite);
+
+    return {
+      duration: Number.parseFloat(style.animationDuration),
+      name: style.animationName,
+      opacityFloor: Math.min(...opacities),
+      timing: style.animationTimingFunction,
+    };
+  });
+
+  expect(motion.name).toBe("dongo-cursor-pulse");
+  expect(motion.duration).toBeGreaterThanOrEqual(4);
+  expect(motion.timing).toBe("ease-in-out");
+  expect(motion.opacityFloor).toBeGreaterThanOrEqual(0.5);
+  expect(motion.opacityFloor).toBeLessThan(1);
+});
+
 test("reflows at 320 CSS pixels and honors reduced motion", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 320, height: 720 });
