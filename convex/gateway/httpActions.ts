@@ -714,6 +714,102 @@ async function dispatchAgentOperation(
       return await ctx.runQuery(internal.gateway.readModels.syncSnapshot, {
         authorization: baseAuthorization,
       });
+    case "runner_register":
+      return await ctx.runMutation(internal.domains.runner.index.register, {
+        authorization: baseAuthorization,
+        token: stringField(input, "token"),
+        label: stringField(input, "label"),
+        platform: stringField(input, "platform") as "darwin" | "linux",
+        version: stringField(input, "version"),
+        harnesses: input.harnesses as Array<"codex" | "claude">,
+        approvalMode: stringField(input, "approvalMode") as "ask" | "automatic",
+      });
+    case "runner_rotate":
+      return await ctx.runMutation(internal.domains.runner.index.rotate, {
+        authorization: baseAuthorization,
+        registrationId: stringField(input, "registrationId") as Id<"runnerRegistrations">,
+        token: stringField(input, "token"),
+        replacementToken: stringField(input, "replacementToken"),
+      });
+    case "runner_revoke":
+      return await ctx.runMutation(internal.domains.runner.index.revoke, {
+        authorization: baseAuthorization,
+        registrationId: stringField(input, "registrationId") as Id<"runnerRegistrations">,
+        token: stringField(input, "token"),
+      });
+    case "runner_wait": {
+      const waitSeconds = (input.waitSeconds as number | undefined) ?? 0;
+      const startedAt = Date.now();
+      let intervalMilliseconds = 1_000;
+      let result: { registration: unknown; job?: unknown } | undefined;
+      try {
+        while (true) {
+          result = await ctx.runMutation(internal.domains.runner.index.reserve, {
+            authorization: baseAuthorization,
+            registrationId: stringField(input, "registrationId") as Id<"runnerRegistrations">,
+            token: stringField(input, "token"),
+            waitSeconds,
+            platform: stringField(input, "platform") as "darwin" | "linux",
+            version: stringField(input, "version"),
+            harnesses: input.harnesses as Array<"codex" | "claude">,
+            approvalMode: stringField(input, "approvalMode") as "ask" | "automatic",
+          });
+          if (result.job || waitSeconds === 0) break;
+          const remaining = waitSeconds * 1_000 - (Date.now() - startedAt);
+          if (remaining <= 0) break;
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.min(intervalMilliseconds, remaining))
+          );
+          intervalMilliseconds = Math.min(intervalMilliseconds * 2, 5_000);
+        }
+      } finally {
+        await ctx.runMutation(internal.domains.runner.index.finishWait, {
+          authorization: baseAuthorization,
+          registrationId: stringField(input, "registrationId") as Id<"runnerRegistrations">,
+          token: stringField(input, "token"),
+        });
+      }
+      if (!result) throw new Error("Runner wait was unavailable");
+      return {
+        ...result,
+        wait: {
+          status: result.job
+            ? "job_available"
+            : waitSeconds > 0
+              ? "timed_out"
+              : "not_requested",
+          requestedSeconds: waitSeconds,
+          elapsedMilliseconds: Math.max(0, Date.now() - startedAt),
+        },
+        serverTime: Date.now(),
+      };
+    }
+    case "runner_update_job": {
+      const jobId = stringField(input, "jobId") as Id<"runnerJobs">;
+      await ctx.runMutation(internal.domains.runner.index.updateJob, {
+        authorization: baseAuthorization,
+        registrationId: stringField(input, "registrationId") as Id<"runnerRegistrations">,
+        token: stringField(input, "token"),
+        jobId,
+        expectedRevision: numberField(input, "expectedRevision"),
+        state: stringField(input, "state") as
+          | "queued" | "delivered" | "awaiting_local_approval" | "starting"
+          | "running" | "blocked" | "cancel_requested" | "cancelled"
+          | "failed" | "completed" | "expired",
+        leaseSeconds: input.leaseSeconds as number | undefined,
+        safeCode: optionalStringField(input, "safeCode"),
+        safeMessage: optionalStringField(input, "safeMessage"),
+        safeSummary: optionalStringField(input, "safeSummary"),
+        sessionReferencePresent: input.sessionReferencePresent as boolean | undefined,
+        idempotencyKey: stringField(input, "idempotencyKey"),
+      });
+      return await ctx.runQuery(internal.domains.runner.index.getJob, {
+        authorization: baseAuthorization,
+        registrationId: stringField(input, "registrationId") as Id<"runnerRegistrations">,
+        token: stringField(input, "token"),
+        jobId,
+      });
+    }
   }
 }
 

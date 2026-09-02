@@ -5,6 +5,9 @@ import type {
   Intake,
   Overview,
   ProjectUpdates,
+  RunnerJob,
+  RunnerRegistration,
+  RunnerWait,
   SessionStart,
   SyncSnapshot,
   WorkItem,
@@ -15,6 +18,13 @@ import {
   intakeSchema,
   overviewSchema,
   projectUpdatesSchema,
+  runnerApprovalModeSchema,
+  runnerHarnessSchema,
+  runnerJobSchema,
+  runnerJobStateSchema,
+  runnerPlatformSchema,
+  runnerRegistrationSchema,
+  runnerWaitSchema,
   schemaFields,
   sessionStartSchema,
   syncSnapshotSchema,
@@ -31,6 +41,14 @@ export const agentScopes = [
 export type AgentScope = (typeof agentScopes)[number];
 
 export type OperationName = keyof OperationMap;
+export type McpOperationName = Exclude<
+  OperationName,
+  | "runner_register"
+  | "runner_rotate"
+  | "runner_revoke"
+  | "runner_wait"
+  | "runner_update_job"
+>;
 
 export type RequestIdentity = {
   requestId: string;
@@ -78,6 +96,11 @@ export type OperationMap = {
   resolve_attention: { input: MutationInput & { attentionId: string; body?: string; selectedOption?: string; resolveWithoutResponse?: boolean }; output: Attention };
   get_attachment: { input: { attachmentId: string }; output: { attachmentId: string; filename: string; contentType: string; byteSize: number; downloadUrl: string; expiresAt: number } };
   sync_snapshot: { input: Record<string, never>; output: SyncSnapshot };
+  runner_register: { input: MutationInput & { token: string; label: string; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic" }; output: RunnerRegistration };
+  runner_rotate: { input: MutationInput & { registrationId: string; token: string; replacementToken: string }; output: RunnerRegistration };
+  runner_revoke: { input: MutationInput & { registrationId: string; token: string }; output: RunnerRegistration };
+  runner_wait: { input: MutationInput & { registrationId: string; token: string; waitSeconds?: number; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic" }; output: RunnerWait };
+  runner_update_job: { input: MutationInput & { registrationId: string; token: string; jobId: string; expectedRevision: number; state: RunnerJob["state"]; leaseSeconds?: number; safeCode?: string; safeMessage?: string; safeSummary?: string; sessionReferencePresent?: boolean }; output: RunnerJob };
 };
 
 export type OperationInput<N extends OperationName> = OperationMap[N]["input"];
@@ -92,6 +115,7 @@ export type OperationSpec<N extends OperationName = OperationName> = {
   idempotent: boolean;
   destructive: boolean;
   openWorld: boolean;
+  mcpExposed: boolean;
   inputSchema: z.ZodType;
   outputSchema: z.ZodType;
 };
@@ -132,6 +156,18 @@ const runWorkspaceInput = z.object({
   worktreeName: z.string().trim().min(1).max(240).optional(),
   branch: z.string().trim().min(1).max(240).optional(),
 }).strict();
+const runnerToken = z.string().regex(
+  /^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$/u,
+  "Runner credential format is invalid",
+);
+const runnerRegistrationFields = {
+  token: runnerToken,
+  label: z.string().trim().min(1).max(120),
+  platform: runnerPlatformSchema,
+  version: z.string().trim().min(1).max(64),
+  harnesses: z.array(runnerHarnessSchema).min(1).max(2),
+  approvalMode: runnerApprovalModeSchema,
+} as const;
 
 export const operationRegistry = {
   session_start: spec(
@@ -280,6 +316,53 @@ export const operationRegistry = {
   sync_snapshot: spec(
     "sync_snapshot", "GET", read, true, true, emptyInput, syncSnapshotSchema,
   ),
+  runner_register: spec(
+    "runner_register", "POST", write, false, true,
+    z.object({ ...mutationFields, ...runnerRegistrationFields }).strict(), runnerRegistrationSchema, false, false,
+  ),
+  runner_rotate: spec(
+    "runner_rotate", "POST", write, false, true,
+    z.object({
+      ...mutationFields,
+      registrationId: identifier,
+      token: runnerToken,
+      replacementToken: runnerToken,
+    }).strict(), runnerRegistrationSchema, false, false,
+  ),
+  runner_revoke: spec(
+    "runner_revoke", "POST", write, false, true,
+    z.object({ ...mutationFields, registrationId: identifier, token: runnerToken }).strict(),
+    runnerRegistrationSchema, false, false,
+  ),
+  runner_wait: spec(
+    "runner_wait", "POST", write, false, true,
+    z.object({
+      ...mutationFields,
+      registrationId: identifier,
+      token: runnerToken,
+      waitSeconds: z.number().int().min(0).max(20).optional(),
+      platform: runnerPlatformSchema,
+      version: z.string().trim().min(1).max(64),
+      harnesses: z.array(runnerHarnessSchema).min(1).max(2),
+      approvalMode: runnerApprovalModeSchema,
+    }).strict(), runnerWaitSchema, false, false,
+  ),
+  runner_update_job: spec(
+    "runner_update_job", "POST", write, false, true,
+    z.object({
+      ...mutationFields,
+      registrationId: identifier,
+      token: runnerToken,
+      jobId: identifier,
+      expectedRevision,
+      state: runnerJobStateSchema,
+      leaseSeconds,
+      safeCode: z.string().trim().min(1).max(80).optional(),
+      safeMessage: z.string().max(500).optional(),
+      safeSummary: z.string().max(2_000).optional(),
+      sessionReferencePresent: z.boolean().optional(),
+    }).strict(), runnerJobSchema, false, false,
+  ),
 } satisfies { [N in OperationName]: OperationSpec<N> };
 
 function spec<N extends OperationName>(
@@ -291,6 +374,7 @@ function spec<N extends OperationName>(
   inputSchema: z.ZodType,
   outputSchema: z.ZodType,
   openWorld = false,
+  mcpExposed = true,
 ): OperationSpec<N> {
   return {
     name,
@@ -301,11 +385,16 @@ function spec<N extends OperationName>(
     idempotent,
     destructive: false,
     openWorld,
+    mcpExposed,
     inputSchema,
     outputSchema,
   };
 }
 
-export const mcpToolNames = Object.keys(operationRegistry).map(
+export const mcpOperationNames = Object.values(operationRegistry)
+  .filter((operation) => operation.mcpExposed)
+  .map((operation) => operation.name) as McpOperationName[];
+
+export const mcpToolNames = mcpOperationNames.map(
   (name) => `dongo_${name}`,
-) as Array<`dongo_${OperationName}`>;
+) as Array<`dongo_${McpOperationName}`>;

@@ -7,7 +7,9 @@ describe("operation registry", () => {
   it("uses one project-safe v1 path and one MCP name per operation", () => {
     const operations = Object.values(operationRegistry);
     expect(new Set(operations.map((operation) => operation.path)).size).toBe(operations.length);
-    expect(mcpToolNames).toHaveLength(operations.length);
+    expect(mcpToolNames).toHaveLength(
+      operations.filter((operation) => operation.mcpExposed).length,
+    );
     expect(operations.every((operation) => operation.path.startsWith("/api/agent/v1/"))).toBe(true);
   });
 
@@ -294,6 +296,49 @@ describe("operation registry", () => {
         label: "Unsupported",
         repositoryPath: "build-plan/README.md",
       },
+    }).success).toBe(false);
+  });
+
+  it("keeps runner delivery bounded and command-free", () => {
+    const token = `dng_run_${"a".repeat(11)}_${"b".repeat(43)}`;
+    const registration = {
+      idempotencyKey: "runner-register-1",
+      token,
+      label: "Studio Mac",
+      platform: "darwin",
+      version: "0.1.0",
+      harnesses: ["codex", "claude"],
+      approvalMode: "ask",
+    };
+    expect(operationRegistry.runner_register.method).toBe("POST");
+    expect(operationRegistry.runner_register.mcpExposed).toBe(false);
+    expect(operationRegistry.runner_register.inputSchema.safeParse(registration).success)
+      .toBe(true);
+    expect(operationRegistry.runner_register.inputSchema.safeParse({
+      ...registration,
+      command: "rm -rf /",
+    }).success).toBe(false);
+    expect(operationRegistry.runner_wait.method).toBe("POST");
+    expect(operationRegistry.runner_wait.readOnly).toBe(false);
+    expect(operationRegistry.runner_wait.inputSchema.safeParse({
+      idempotencyKey: "runner-wait-1",
+      registrationId: "registration-1",
+      token,
+      waitSeconds: 20,
+      platform: "darwin",
+      version: "0.1.0",
+      harnesses: ["codex"],
+      approvalMode: "ask",
+    }).success).toBe(true);
+    expect(operationRegistry.runner_update_job.inputSchema.safeParse({
+      idempotencyKey: "runner-update-1",
+      registrationId: "registration-1",
+      token,
+      jobId: "job-1",
+      expectedRevision: 2,
+      state: "running",
+      safeMessage: "Working",
+      stdout: "must never be uploaded",
     }).success).toBe(false);
   });
 });

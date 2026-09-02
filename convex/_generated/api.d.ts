@@ -36,6 +36,8 @@ import type * as domains_notifications_service from "../domains/notifications/se
 import type * as domains_overview_index from "../domains/overview/index.js";
 import type * as domains_projects_actions from "../domains/projects/actions.js";
 import type * as domains_projects_index from "../domains/projects/index.js";
+import type * as domains_runner_credentialSecurity from "../domains/runner/credentialSecurity.js";
+import type * as domains_runner_index from "../domains/runner/index.js";
 import type * as domains_search_index from "../domains/search/index.js";
 import type * as domains_sync_index from "../domains/sync/index.js";
 import type * as domains_work_concurrency from "../domains/work/concurrency.js";
@@ -94,6 +96,8 @@ declare const fullApi: ApiFromModules<{
   "domains/overview/index": typeof domains_overview_index;
   "domains/projects/actions": typeof domains_projects_actions;
   "domains/projects/index": typeof domains_projects_index;
+  "domains/runner/credentialSecurity": typeof domains_runner_credentialSecurity;
+  "domains/runner/index": typeof domains_runner_index;
   "domains/search/index": typeof domains_search_index;
   "domains/sync/index": typeof domains_sync_index;
   "domains/work/concurrency": typeof domains_work_concurrency;

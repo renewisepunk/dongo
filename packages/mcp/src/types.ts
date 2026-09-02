@@ -5,18 +5,18 @@ import type {
   StandardSchemaWithJSON,
   ToolAnnotations,
 } from "@modelcontextprotocol/server";
-import { operationRegistry } from "@dongo/contracts";
+import { mcpOperationNames } from "@dongo/contracts";
 import type {
   AgentScope,
   DomainErrorCode,
-  OperationName,
+  McpOperationName,
 } from "@dongo/contracts";
 
 export const DONGO_OPERATION_NAMES = Object.freeze(
-  Object.keys(operationRegistry) as OperationName[],
+  [...mcpOperationNames],
 );
 
-export type DongoOperationName = OperationName;
+export type DongoOperationName = McpOperationName;
 export type DongoScope = Exclude<AgentScope, "offline_access">;
 
 export type JsonRecord = Record<string, unknown>;

@@ -249,10 +249,10 @@ export class DongoClient {
   ): Promise<OperationOutput<Name>> {
     const token = await this.#tokenProvider.getAccessToken();
     const timeoutController = new AbortController();
-    const updateWaitSeconds = operation === "get_updates"
+    const updateWaitSeconds = operation === "get_updates" || operation === "runner_wait"
       ? ((input as { waitSeconds?: number }).waitSeconds ?? 0)
       : 0;
-    const requestTimeoutMs = operation === "get_updates"
+    const requestTimeoutMs = operation === "get_updates" || operation === "runner_wait"
       ? Math.max(this.#requestTimeoutMs, updateWaitSeconds * 1_000 + 5_000)
       : this.#requestTimeoutMs;
     const timeout = setTimeout(() => timeoutController.abort(new Error("request timeout")), requestTimeoutMs);
@@ -410,6 +410,26 @@ export class DongoClient {
 
   getAttachment(input: OperationInput<"get_attachment">, options?: CallOptions) {
     return this.call("get_attachment", input, options);
+  }
+
+  runnerRegister(input: OperationInput<"runner_register">, options?: CallOptions) {
+    return this.call("runner_register", input, options);
+  }
+
+  runnerRotate(input: OperationInput<"runner_rotate">, options?: CallOptions) {
+    return this.call("runner_rotate", input, options);
+  }
+
+  runnerRevoke(input: OperationInput<"runner_revoke">, options?: CallOptions) {
+    return this.call("runner_revoke", input, options);
+  }
+
+  runnerWait(input: OperationInput<"runner_wait">, options?: CallOptions) {
+    return this.call("runner_wait", input, options);
+  }
+
+  runnerUpdateJob(input: OperationInput<"runner_update_job">, options?: CallOptions) {
+    return this.call("runner_update_job", input, options);
   }
 
   static idempotencyKey(): string {

@@ -90,6 +90,60 @@ test("project updates use bounded cursor query parameters", async () => {
   assert.equal(await request?.text(), "");
 });
 
+test("runner waits keep credentials in a bounded POST body", async () => {
+  let request: Request | undefined;
+  const token = `dng_run_${"a".repeat(11)}_${"b".repeat(43)}`;
+  const client = new DongoClient({
+    baseUrl: "https://dev.dongo.so/api/agent/v1",
+    tokenProvider,
+    requestTimeoutMs: 1,
+    fetch: async (input, init) => {
+      request = new Request(input, init);
+      return Response.json({
+        ok: true,
+        data: {
+          registration: {
+            id: "registration-1",
+            projectId: "project-1",
+            installationId: "installation-1",
+            label: "Studio Mac",
+            platform: "darwin",
+            version: "0.1.0",
+            harnesses: ["codex"],
+            approvalMode: "ask",
+            status: "active",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          wait: {
+            status: "timed_out",
+            requestedSeconds: 20,
+            elapsedMilliseconds: 20_000,
+          },
+          serverTime: 20_000,
+        },
+        requestId: "req_runner_wait",
+        apiVersion: "v1",
+      });
+    },
+  });
+  const input = {
+    idempotencyKey: "runner-wait-client",
+    registrationId: "registration-1",
+    token,
+    waitSeconds: 20,
+    platform: "darwin" as const,
+    version: "0.1.0",
+    harnesses: ["codex" as const],
+    approvalMode: "ask" as const,
+  };
+  await client.runnerWait(input);
+  assert.equal(request?.method, "POST");
+  assert.equal(request?.url, "https://dev.dongo.so/api/agent/v1/runner_wait");
+  assert.deepEqual(JSON.parse((await request?.text()) ?? ""), input);
+  assert.doesNotMatch(request?.url ?? "", /dng_run_/u);
+});
+
 test("read operations retry transient failures", async () => {
   let calls = 0;
   const client = new DongoClient({

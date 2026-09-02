@@ -57,6 +57,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -109,6 +110,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "parameters": []
       }
     },
@@ -152,6 +154,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "parameters": [
           {
             "name": "cursor",
@@ -216,6 +219,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "parameters": [
           {
             "name": "intakeId",
@@ -270,6 +274,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -322,6 +327,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -374,6 +380,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -426,6 +433,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -478,6 +486,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "parameters": [
           {
             "name": "workItemId",
@@ -542,6 +551,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -594,6 +604,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -646,6 +657,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -698,6 +710,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -750,6 +763,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -802,6 +816,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -854,6 +869,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "parameters": [
           {
             "name": "attentionId",
@@ -908,6 +924,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -962,6 +979,7 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": true,
+        "x-dongo-mcp-exposed": true,
         "parameters": [
           {
             "name": "attachmentId",
@@ -1016,7 +1034,273 @@
         "x-dongo-idempotent": true,
         "x-dongo-destructive": false,
         "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
         "parameters": []
+      }
+    },
+    "/api/agent/v1/runner_register": {
+      "post": {
+        "operationId": "runner_register",
+        "summary": "dongo runner register",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerRegisterSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunnerRegisterInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/runner_rotate": {
+      "post": {
+        "operationId": "runner_rotate",
+        "summary": "dongo runner rotate",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerRotateSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunnerRotateInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/runner_revoke": {
+      "post": {
+        "operationId": "runner_revoke",
+        "summary": "dongo runner revoke",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerRevokeSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunnerRevokeInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/runner_wait": {
+      "post": {
+        "operationId": "runner_wait",
+        "summary": "dongo runner wait",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerWaitSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunnerWaitInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/v1/runner_update_job": {
+      "post": {
+        "operationId": "runner_update_job",
+        "summary": "dongo runner update job",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerUpdateJobSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunnerUpdateJobInput"
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -2239,6 +2523,286 @@
         ],
         "additionalProperties": false
       },
+      "RunnerRegistration": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "projectId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "installationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "darwin",
+              "linux"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "harnesses": {
+            "minItems": 1,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "codex",
+                "claude"
+              ]
+            }
+          },
+          "approvalMode": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "automatic"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "revoked"
+            ]
+          },
+          "lastSeenAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "waitingUntil": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "updatedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "revokedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "installationId",
+          "label",
+          "platform",
+          "version",
+          "harnesses",
+          "approvalMode",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "RunnerJob": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "projectId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "workItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "workIdentifier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "harness": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "claude"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "delivered",
+              "awaiting_local_approval",
+              "starting",
+              "running",
+              "blocked",
+              "cancel_requested",
+              "cancelled",
+              "failed",
+              "completed",
+              "expired"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "registrationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "safeCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "safeMessage": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "safeSummary": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "sessionReferencePresent": {
+            "type": "boolean"
+          },
+          "requestedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "expiresAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "deliveredAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reservationExpiresAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "leaseExpiresAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cancellationRequestedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "terminalAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "updatedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "workItemId",
+          "workIdentifier",
+          "harness",
+          "state",
+          "revision",
+          "requestedAt",
+          "expiresAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "RunnerWait": {
+        "type": "object",
+        "properties": {
+          "registration": {
+            "$ref": "#/components/schemas/RunnerRegistration"
+          },
+          "job": {
+            "$ref": "#/components/schemas/RunnerJob"
+          },
+          "wait": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "job_available",
+                  "timed_out",
+                  "not_requested"
+                ]
+              },
+              "requestedSeconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 20
+              },
+              "elapsedMilliseconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "status",
+              "requestedSeconds",
+              "elapsedMilliseconds"
+            ],
+            "additionalProperties": false
+          },
+          "serverTime": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "registration",
+          "wait",
+          "serverTime"
+        ],
+        "additionalProperties": false
+      },
       "SessionStartInput": {
         "type": "object",
         "properties": {
@@ -3369,6 +3933,391 @@
           },
           "data": {
             "$ref": "#/components/schemas/SyncSnapshot"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "RunnerRegisterInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "darwin",
+              "linux"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "harnesses": {
+            "minItems": 1,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "codex",
+                "claude"
+              ]
+            }
+          },
+          "approvalMode": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "automatic"
+            ]
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "token",
+          "label",
+          "platform",
+          "version",
+          "harnesses",
+          "approvalMode"
+        ],
+        "additionalProperties": false
+      },
+      "RunnerRegisterSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunnerRegistration"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "RunnerRotateInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "registrationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+          },
+          "replacementToken": {
+            "type": "string",
+            "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "registrationId",
+          "token",
+          "replacementToken"
+        ],
+        "additionalProperties": false
+      },
+      "RunnerRotateSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunnerRegistration"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "RunnerRevokeInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "registrationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "registrationId",
+          "token"
+        ],
+        "additionalProperties": false
+      },
+      "RunnerRevokeSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunnerRegistration"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "RunnerWaitInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "registrationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+          },
+          "waitSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "darwin",
+              "linux"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "harnesses": {
+            "minItems": 1,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "codex",
+                "claude"
+              ]
+            }
+          },
+          "approvalMode": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "automatic"
+            ]
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "registrationId",
+          "token",
+          "platform",
+          "version",
+          "harnesses",
+          "approvalMode"
+        ],
+        "additionalProperties": false
+      },
+      "RunnerWaitSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunnerWait"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "RunnerUpdateJobInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "registrationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+          },
+          "jobId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "delivered",
+              "awaiting_local_approval",
+              "starting",
+              "running",
+              "blocked",
+              "cancel_requested",
+              "cancelled",
+              "failed",
+              "completed",
+              "expired"
+            ]
+          },
+          "leaseSeconds": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 3600
+          },
+          "safeCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "safeMessage": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "safeSummary": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "sessionReferencePresent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "registrationId",
+          "token",
+          "jobId",
+          "expectedRevision",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "RunnerUpdateJobSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunnerJob"
           },
           "requestId": {
             "type": "string",

@@ -226,6 +226,96 @@ export default defineSchema({
     .index("by_token_prefix", ["tokenPrefix"])
     .index("by_installation", ["installationId"]),
 
+  runnerRegistrations: defineTable({
+    organizationId: v.id("organizations"),
+    projectId: v.id("projects"),
+    installationId: v.id("installations"),
+    actorId: v.id("actors"),
+    tokenPrefix: v.string(),
+    tokenHash: v.string(),
+    previousTokenHash: v.optional(v.string()),
+    previousTokenValidUntil: v.optional(v.number()),
+    label: v.string(),
+    platform: v.union(v.literal("darwin"), v.literal("linux")),
+    version: v.string(),
+    harnesses: v.array(v.union(v.literal("codex"), v.literal("claude"))),
+    approvalMode: v.union(v.literal("ask"), v.literal("automatic")),
+    status: v.union(v.literal("active"), v.literal("revoked")),
+    lastSeenAt: v.optional(v.number()),
+    waitingUntil: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  })
+    .index("by_token_prefix", ["tokenPrefix"])
+    .index("by_project_status", ["projectId", "status"])
+    .index("by_installation_status", ["installationId", "status"]),
+
+  runnerJobs: defineTable({
+    organizationId: v.id("organizations"),
+    projectId: v.id("projects"),
+    workItemId: v.id("workItems"),
+    requestedByActorId: v.id("actors"),
+    harness: v.union(v.literal("codex"), v.literal("claude")),
+    state: v.union(
+      v.literal("queued"),
+      v.literal("delivered"),
+      v.literal("awaiting_local_approval"),
+      v.literal("starting"),
+      v.literal("running"),
+      v.literal("blocked"),
+      v.literal("cancel_requested"),
+      v.literal("cancelled"),
+      v.literal("failed"),
+      v.literal("completed"),
+      v.literal("expired"),
+    ),
+    revision: v.number(),
+    registrationId: v.optional(v.id("runnerRegistrations")),
+    safeCode: v.optional(v.string()),
+    safeMessage: v.optional(v.string()),
+    safeSummary: v.optional(v.string()),
+    sessionReferencePresent: v.optional(v.boolean()),
+    requestedAt: v.number(),
+    expiresAt: v.number(),
+    deliveredAt: v.optional(v.number()),
+    reservationExpiresAt: v.optional(v.number()),
+    leaseExpiresAt: v.optional(v.number()),
+    cancellationRequestedAt: v.optional(v.number()),
+    terminalAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_project_state_requested", ["projectId", "state", "requestedAt"])
+    .index("by_project_work_requested", ["projectId", "workItemId", "requestedAt"])
+    .index("by_registration_state_updated", ["registrationId", "state", "updatedAt"]),
+
+  runnerJobEvents: defineTable({
+    organizationId: v.id("organizations"),
+    projectId: v.id("projects"),
+    jobId: v.id("runnerJobs"),
+    registrationId: v.optional(v.id("runnerRegistrations")),
+    actorId: v.id("actors"),
+    sequence: v.number(),
+    state: v.union(
+      v.literal("queued"),
+      v.literal("delivered"),
+      v.literal("awaiting_local_approval"),
+      v.literal("starting"),
+      v.literal("running"),
+      v.literal("blocked"),
+      v.literal("cancel_requested"),
+      v.literal("cancelled"),
+      v.literal("failed"),
+      v.literal("completed"),
+      v.literal("expired"),
+    ),
+    safeCode: v.optional(v.string()),
+    safeMessage: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_job_sequence", ["jobId", "sequence"])
+    .index("by_project_created", ["projectId", "createdAt"]),
+
   ideas: defineTable({
     organizationId: v.id("organizations"),
     projectId: v.id("projects"),

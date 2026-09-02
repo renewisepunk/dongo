@@ -278,6 +278,74 @@ export const attachmentAccessSchema = z
   })
   .strict();
 
+export const runnerHarnessSchema = z.enum(["codex", "claude"]);
+export const runnerPlatformSchema = z.enum(["darwin", "linux"]);
+export const runnerApprovalModeSchema = z.enum(["ask", "automatic"]);
+export const runnerJobStateSchema = z.enum([
+  "queued",
+  "delivered",
+  "awaiting_local_approval",
+  "starting",
+  "running",
+  "blocked",
+  "cancel_requested",
+  "cancelled",
+  "failed",
+  "completed",
+  "expired",
+]);
+
+export const runnerRegistrationSchema = z.object({
+  id: identifier,
+  projectId: identifier,
+  installationId: identifier,
+  label: z.string().min(1).max(120),
+  platform: runnerPlatformSchema,
+  version: z.string().min(1).max(64),
+  harnesses: z.array(runnerHarnessSchema).min(1).max(2),
+  approvalMode: runnerApprovalModeSchema,
+  status: z.enum(["active", "revoked"]),
+  lastSeenAt: timestamp.optional(),
+  waitingUntil: timestamp.optional(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+  revokedAt: timestamp.optional(),
+}).strict();
+
+export const runnerJobSchema = z.object({
+  id: identifier,
+  projectId: identifier,
+  workItemId: identifier,
+  workIdentifier: z.string().min(1).max(64),
+  harness: runnerHarnessSchema,
+  state: runnerJobStateSchema,
+  revision: z.number().int().positive(),
+  registrationId: identifier.optional(),
+  safeCode: z.string().min(1).max(80).optional(),
+  safeMessage: z.string().max(500).optional(),
+  safeSummary: z.string().max(2_000).optional(),
+  sessionReferencePresent: z.boolean().optional(),
+  requestedAt: timestamp,
+  expiresAt: timestamp,
+  deliveredAt: timestamp.optional(),
+  reservationExpiresAt: timestamp.optional(),
+  leaseExpiresAt: timestamp.optional(),
+  cancellationRequestedAt: timestamp.optional(),
+  terminalAt: timestamp.optional(),
+  updatedAt: timestamp,
+}).strict();
+
+export const runnerWaitSchema = z.object({
+  registration: runnerRegistrationSchema,
+  job: runnerJobSchema.optional(),
+  wait: z.object({
+    status: z.enum(["job_available", "timed_out", "not_requested"]),
+    requestedSeconds: z.number().int().min(0).max(20),
+    elapsedMilliseconds: z.number().int().nonnegative(),
+  }).strict(),
+  serverTime: timestamp,
+}).strict();
+
 export const schemaFields = {
   identifier,
   boundedText,

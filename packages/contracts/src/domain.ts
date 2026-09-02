@@ -23,6 +23,22 @@ export type RunState = "running" | "waiting_for_human" | "finished" | "failed" |
 export type AttentionKind = "review" | "decision" | "question" | "blocked";
 export type ArtifactKind = "commit" | "pull_request" | "deployment" | "preview" | "url" | "image" | "file" | "report";
 export type ActorKind = "human" | "installation" | "service";
+export type RunnerHarness = "codex" | "claude";
+export type RunnerPlatform = "darwin" | "linux";
+export type RunnerApprovalMode = "ask" | "automatic";
+export type RunnerRegistrationStatus = "active" | "revoked";
+export type RunnerJobState =
+  | "queued"
+  | "delivered"
+  | "awaiting_local_approval"
+  | "starting"
+  | "running"
+  | "blocked"
+  | "cancel_requested"
+  | "cancelled"
+  | "failed"
+  | "completed"
+  | "expired";
 
 export type ActorSummary = {
   id: Id<"actors">;
@@ -215,4 +231,55 @@ export type SyncSnapshot = {
   generatedAt: number;
   project: ProjectSummary;
   workItems: WorkItem[];
+};
+
+export type RunnerRegistration = {
+  id: Id<"runnerRegistrations">;
+  projectId: Id<"projects">;
+  installationId: Id<"installations">;
+  label: string;
+  platform: RunnerPlatform;
+  version: string;
+  harnesses: RunnerHarness[];
+  approvalMode: RunnerApprovalMode;
+  status: RunnerRegistrationStatus;
+  lastSeenAt?: number;
+  waitingUntil?: number;
+  createdAt: number;
+  updatedAt: number;
+  revokedAt?: number;
+};
+
+export type RunnerJob = {
+  id: Id<"runnerJobs">;
+  projectId: Id<"projects">;
+  workItemId: Id<"workItems">;
+  workIdentifier: string;
+  harness: RunnerHarness;
+  state: RunnerJobState;
+  revision: number;
+  registrationId?: Id<"runnerRegistrations">;
+  safeCode?: string;
+  safeMessage?: string;
+  safeSummary?: string;
+  sessionReferencePresent?: boolean;
+  requestedAt: number;
+  expiresAt: number;
+  deliveredAt?: number;
+  reservationExpiresAt?: number;
+  leaseExpiresAt?: number;
+  cancellationRequestedAt?: number;
+  terminalAt?: number;
+  updatedAt: number;
+};
+
+export type RunnerWait = {
+  registration: RunnerRegistration;
+  job?: RunnerJob;
+  wait: {
+    status: "job_available" | "timed_out" | "not_requested";
+    requestedSeconds: number;
+    elapsedMilliseconds: number;
+  };
+  serverTime: number;
 };

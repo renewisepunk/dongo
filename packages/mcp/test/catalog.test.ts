@@ -15,7 +15,9 @@ test("catalog has exact parity with the canonical operation registry", () => {
   const catalog = createDongoToolCatalog(fixtureContracts());
   assert.deepEqual(
     catalog.map((tool) => tool.operation),
-    Object.keys(operationRegistry),
+    Object.values(operationRegistry)
+      .filter((operation) => operation.mcpExposed)
+      .map((operation) => operation.name),
   );
   assert.deepEqual(
     catalog.map((tool) => tool.toolName),
@@ -95,7 +97,12 @@ test("catalog rejects a mutation schema without required idempotencyKey", () => 
 });
 
 test("operation list is derived rather than maintained independently", () => {
-  assert.deepEqual(DONGO_OPERATION_NAMES, Object.keys(operationRegistry));
+  assert.deepEqual(
+    DONGO_OPERATION_NAMES,
+    Object.values(operationRegistry)
+      .filter((operation) => operation.mcpExposed)
+      .map((operation) => operation.name),
+  );
 });
 
 test("parallel capability and worktree fields flow through canonical MCP schemas", () => {

@@ -601,6 +601,60 @@ export const revoke = mutation({
           await ctx.db.patch(credential._id, { revokedAt: now });
         }
       }
+      const runnerRegistrations = await ctx.db
+        .query("runnerRegistrations")
+        .withIndex("by_installation_status", (q) =>
+          q.eq("installationId", installation._id).eq("status", "active"),
+        )
+        .take(100);
+      for (const registration of runnerRegistrations) {
+        await ctx.db.patch(registration._id, {
+          status: "revoked",
+          waitingUntil: undefined,
+          revokedAt: now,
+          updatedAt: now,
+        });
+        const jobs = await ctx.db
+          .query("runnerJobs")
+          .withIndex("by_registration_state_updated", (q) =>
+            q.eq("registrationId", registration._id),
+          )
+          .take(100);
+        for (const job of jobs) {
+          if (["cancelled", "failed", "completed", "expired", "cancel_requested"].includes(job.state)) continue;
+          await ctx.db.patch(job._id, {
+            state: "cancel_requested",
+            revision: job.revision + 1,
+            cancellationRequestedAt: now,
+            updatedAt: now,
+          });
+          await ctx.db.insert("runnerJobEvents", {
+            organizationId: job.organizationId,
+            projectId: job.projectId,
+            jobId: job._id,
+            registrationId: registration._id,
+            actorId: principal.actor._id,
+            sequence: job.revision + 1,
+            state: "cancel_requested",
+            safeCode: "parent_installation_revoked",
+            createdAt: now,
+          });
+          await appendEvent(ctx, {
+            organizationId: job.organizationId,
+            projectId: job.projectId,
+            workItemId: job.workItemId,
+            actorId: principal.actor._id,
+            type: "runner.job_cancel_requested",
+            data: {
+              jobId: job._id,
+              registrationId: registration._id,
+              revision: job.revision + 1,
+              safeCode: "parent_installation_revoked",
+            },
+            createdAt: now,
+          });
+        }
+      }
       await appendEvent(ctx, {
         organizationId: installation.organizationId,
         projectId: installation.projectId,

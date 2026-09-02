@@ -14,6 +14,9 @@ import {
   projectUpdateSchema,
   projectUpdatesSchema,
   projectSummarySchema,
+  runnerJobSchema,
+  runnerRegistrationSchema,
+  runnerWaitSchema,
   runSchema,
   sessionStartSchema,
   syncSnapshotSchema,
@@ -39,6 +42,9 @@ const domainSchemaEntries = [
   ["SessionStart", sessionStartSchema],
   ["SyncSnapshot", syncSnapshotSchema],
   ["AttachmentAccess", attachmentAccessSchema],
+  ["RunnerRegistration", runnerRegistrationSchema],
+  ["RunnerJob", runnerJobSchema],
+  ["RunnerWait", runnerWaitSchema],
 ] as const;
 const domainComponentBySchema = new Map<z.ZodType, string>(
   domainSchemaEntries.map(([name, schema]) => [schema, name]),
@@ -163,6 +169,7 @@ export function createAgentApiJsonSchema(): JsonObject {
       idempotent: specification.idempotent,
       destructive: specification.destructive,
       openWorld: specification.openWorld,
+      mcpExposed: specification.mcpExposed,
       input: { $ref: `#/$defs/${stem}Input` },
       output: { $ref: `#/$defs/${outputName}` },
       successResponse: { $ref: `#/$defs/${stem}SuccessResponse` },
@@ -231,6 +238,7 @@ export function createAgentApiOpenApi(): JsonObject {
       "x-dongo-idempotent": specification.idempotent,
       "x-dongo-destructive": specification.destructive,
       "x-dongo-open-world": specification.openWorld,
+      "x-dongo-mcp-exposed": specification.mcpExposed,
     };
     if (specification.method === "GET") {
       operation.parameters = getParameters(input);

@@ -1207,6 +1207,286 @@
       ],
       "additionalProperties": false
     },
+    "RunnerRegistration": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "installationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "darwin",
+            "linux"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "harnesses": {
+          "minItems": 1,
+          "maxItems": 2,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "claude"
+            ]
+          }
+        },
+        "approvalMode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "automatic"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "revoked"
+          ]
+        },
+        "lastSeenAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "waitingUntil": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "updatedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "revokedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "installationId",
+        "label",
+        "platform",
+        "version",
+        "harnesses",
+        "approvalMode",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "RunnerJob": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "workIdentifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "harness": {
+          "type": "string",
+          "enum": [
+            "codex",
+            "claude"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "delivered",
+            "awaiting_local_approval",
+            "starting",
+            "running",
+            "blocked",
+            "cancel_requested",
+            "cancelled",
+            "failed",
+            "completed",
+            "expired"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "registrationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "safeCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "safeMessage": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "safeSummary": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "sessionReferencePresent": {
+          "type": "boolean"
+        },
+        "requestedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "deliveredAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reservationExpiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "leaseExpiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cancellationRequestedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "terminalAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "updatedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "workItemId",
+        "workIdentifier",
+        "harness",
+        "state",
+        "revision",
+        "requestedAt",
+        "expiresAt",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "RunnerWait": {
+      "type": "object",
+      "properties": {
+        "registration": {
+          "$ref": "#/$defs/RunnerRegistration"
+        },
+        "job": {
+          "$ref": "#/$defs/RunnerJob"
+        },
+        "wait": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "job_available",
+                "timed_out",
+                "not_requested"
+              ]
+            },
+            "requestedSeconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "elapsedMilliseconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "status",
+            "requestedSeconds",
+            "elapsedMilliseconds"
+          ],
+          "additionalProperties": false
+        },
+        "serverTime": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "registration",
+        "wait",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
     "SessionStartInput": {
       "type": "object",
       "properties": {
@@ -2347,6 +2627,391 @@
           "const": "v1"
         }
       }
+    },
+    "RunnerRegisterInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "token": {
+          "type": "string",
+          "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "darwin",
+            "linux"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "harnesses": {
+          "minItems": 1,
+          "maxItems": 2,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "claude"
+            ]
+          }
+        },
+        "approvalMode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "automatic"
+          ]
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "token",
+        "label",
+        "platform",
+        "version",
+        "harnesses",
+        "approvalMode"
+      ],
+      "additionalProperties": false
+    },
+    "RunnerRegisterSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/RunnerRegistration"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "RunnerRotateInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "registrationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "token": {
+          "type": "string",
+          "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+        },
+        "replacementToken": {
+          "type": "string",
+          "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "registrationId",
+        "token",
+        "replacementToken"
+      ],
+      "additionalProperties": false
+    },
+    "RunnerRotateSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/RunnerRegistration"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "RunnerRevokeInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "registrationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "token": {
+          "type": "string",
+          "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "registrationId",
+        "token"
+      ],
+      "additionalProperties": false
+    },
+    "RunnerRevokeSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/RunnerRegistration"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "RunnerWaitInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "registrationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "token": {
+          "type": "string",
+          "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+        },
+        "waitSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "darwin",
+            "linux"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "harnesses": {
+          "minItems": 1,
+          "maxItems": 2,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "claude"
+            ]
+          }
+        },
+        "approvalMode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "automatic"
+          ]
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "registrationId",
+        "token",
+        "platform",
+        "version",
+        "harnesses",
+        "approvalMode"
+      ],
+      "additionalProperties": false
+    },
+    "RunnerWaitSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/RunnerWait"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "RunnerUpdateJobInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "registrationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "token": {
+          "type": "string",
+          "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+        },
+        "jobId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "delivered",
+            "awaiting_local_approval",
+            "starting",
+            "running",
+            "blocked",
+            "cancel_requested",
+            "cancelled",
+            "failed",
+            "completed",
+            "expired"
+          ]
+        },
+        "leaseSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 3600
+        },
+        "safeCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "safeMessage": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "safeSummary": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "sessionReferencePresent": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "registrationId",
+        "token",
+        "jobId",
+        "expectedRevision",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "RunnerUpdateJobSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/RunnerJob"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
     }
   },
   "x-dongo-operations": {
@@ -2360,6 +3025,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/SessionStartInput"
       },
@@ -2380,6 +3046,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/GetOverviewInput"
       },
@@ -2400,6 +3067,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/GetUpdatesInput"
       },
@@ -2420,6 +3088,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/GetIntakeInput"
       },
@@ -2440,6 +3109,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/ClaimIntakeInput"
       },
@@ -2460,6 +3130,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/RenewIntakeClaimInput"
       },
@@ -2480,6 +3151,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/CompleteTriageInput"
       },
@@ -2500,6 +3172,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/CreateWorkInput"
       },
@@ -2520,6 +3193,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/GetWorkInput"
       },
@@ -2540,6 +3214,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/StartWorkInput"
       },
@@ -2560,6 +3235,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/UpdateWorkInput"
       },
@@ -2580,6 +3256,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/RenewClaimInput"
       },
@@ -2600,6 +3277,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/FinishWorkInput"
       },
@@ -2620,6 +3298,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/AddCommentInput"
       },
@@ -2640,6 +3319,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/RequestAttentionInput"
       },
@@ -2660,6 +3340,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/GetAttentionInput"
       },
@@ -2680,6 +3361,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/ResolveAttentionInput"
       },
@@ -2701,6 +3383,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": true,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/GetAttachmentInput"
       },
@@ -2721,6 +3404,7 @@
       "idempotent": true,
       "destructive": false,
       "openWorld": false,
+      "mcpExposed": true,
       "input": {
         "$ref": "#/$defs/SyncSnapshotInput"
       },
@@ -2729,6 +3413,111 @@
       },
       "successResponse": {
         "$ref": "#/$defs/SyncSnapshotSuccessResponse"
+      }
+    },
+    "runner_register": {
+      "method": "POST",
+      "path": "/api/agent/v1/runner_register",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "mcpExposed": false,
+      "input": {
+        "$ref": "#/$defs/RunnerRegisterInput"
+      },
+      "output": {
+        "$ref": "#/$defs/RunnerRegistration"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/RunnerRegisterSuccessResponse"
+      }
+    },
+    "runner_rotate": {
+      "method": "POST",
+      "path": "/api/agent/v1/runner_rotate",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "mcpExposed": false,
+      "input": {
+        "$ref": "#/$defs/RunnerRotateInput"
+      },
+      "output": {
+        "$ref": "#/$defs/RunnerRegistration"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/RunnerRotateSuccessResponse"
+      }
+    },
+    "runner_revoke": {
+      "method": "POST",
+      "path": "/api/agent/v1/runner_revoke",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "mcpExposed": false,
+      "input": {
+        "$ref": "#/$defs/RunnerRevokeInput"
+      },
+      "output": {
+        "$ref": "#/$defs/RunnerRegistration"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/RunnerRevokeSuccessResponse"
+      }
+    },
+    "runner_wait": {
+      "method": "POST",
+      "path": "/api/agent/v1/runner_wait",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "mcpExposed": false,
+      "input": {
+        "$ref": "#/$defs/RunnerWaitInput"
+      },
+      "output": {
+        "$ref": "#/$defs/RunnerWait"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/RunnerWaitSuccessResponse"
+      }
+    },
+    "runner_update_job": {
+      "method": "POST",
+      "path": "/api/agent/v1/runner_update_job",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "mcpExposed": false,
+      "input": {
+        "$ref": "#/$defs/RunnerUpdateJobInput"
+      },
+      "output": {
+        "$ref": "#/$defs/RunnerJob"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/RunnerUpdateJobSuccessResponse"
       }
     }
   }
