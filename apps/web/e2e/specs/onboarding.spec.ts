@@ -2,11 +2,13 @@ import { expect, test } from "@playwright/test";
 
 test("creates a project with normalized repository and explicit execution mode", async ({ page }) => {
   await page.goto("/onboarding?returnTo=%2Fconnect%3Frequest%3Dfixture");
-  await expect(page.getByText("dev.dongo.so/fixture-owner-serfixture/", { exact: false })).toBeVisible();
+  await expect(page.getByLabel("Organization name")).toHaveValue("Fixture Owner");
+  await page.getByLabel("Organization name").fill("Fixture Labs");
+  await expect(page.getByText("dev.dongo.so/fixture-labs/", { exact: false })).toBeVisible();
 
   await page.getByLabel("Project name").fill("Checkout Service");
   await expect(page.getByText(
-    "dev.dongo.so/fixture-owner-serfixture/checkout-service",
+    "dev.dongo.so/fixture-labs/checkout-service",
     { exact: true },
   )).toBeVisible();
   await page.getByLabel("Repository URL").fill("github.com/renewisepunk/dongo");
@@ -32,11 +34,18 @@ test("creates a project with normalized repository and explicit execution mode",
     publicRef: "fixture-created",
     projectId: "project-created",
     organizationId: "organization-fixture",
-    organizationSlug: "fixture-owner-serfixture",
+    organizationSlug: "fixture-labs",
   });
-  expect(await page.locator("html").getAttribute("data-fixture-onboarding-project")).toContain(
-    '"parallelExecution":{"enabled":true,"maxConcurrentRuns":6,"requiresIsolatedWorkspaces":true}',
-  );
+  expect(JSON.parse(
+    await page.locator("html").getAttribute("data-fixture-onboarding-project") ?? "null",
+  )).toMatchObject({
+    organizationName: "Fixture Labs",
+    parallelExecution: {
+      enabled: true,
+      maxConcurrentRuns: 6,
+      requiresIsolatedWorkspaces: true,
+    },
+  });
 });
 
 test("rejects unsafe repository URLs before provisioning", async ({ page }) => {
@@ -48,6 +57,17 @@ test("rejects unsafe repository URLs before provisioning", async ({ page }) => {
     "Enter a valid HTTP or HTTPS repository URL.",
   );
   await expect(page).toHaveURL(/\/onboarding$/);
+  expect(await page.evaluate(() => sessionStorage.getItem("dongo:project"))).toBeNull();
+});
+
+test("requires an organization name that can form an address", async ({ page }) => {
+  await page.goto("/onboarding");
+  await page.getByLabel("Organization name").fill("你好");
+  await page.getByLabel("Project name").fill("Safe project");
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Use at least one letter or number in the organization name.",
+  );
   expect(await page.evaluate(() => sessionStorage.getItem("dongo:project"))).toBeNull();
 });
 
@@ -83,6 +103,7 @@ test("creates another project on a paid plan and selects it for setup", async ({
   await page.goto("/onboarding?scenario=paid&organization=fixture-studio");
 
   await expect(page.getByRole("heading", { name: "Create another project" })).toBeVisible();
+  await expect(page.getByLabel("Organization name")).toHaveCount(0);
   await expect(page.getByText("Signed in as fixture@example.test.", { exact: true })).toBeVisible();
   await expect(page.getByText("Paid plan · 1 active projects; no project limit.", { exact: true })).toBeVisible();
   await expect(page.getByText(

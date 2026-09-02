@@ -174,7 +174,7 @@ When authentication was initiated by `/device` or `/oauth/consent`, the callback
 
 Purpose: establish the repository/codebase the user will coordinate.
 
-This is the web-started fallback, not a mandatory gate before an agent can authenticate. The canonical agent-first path is Screen 5B → Screen 5C, where `dongo connect` proposes the repository as the first project and the human creates and approves it in one consent action. The first-project fallback creates a personal organization automatically; a later project is created in an explicitly selected owner organization.
+This is the web-started fallback, not a mandatory gate before an agent can authenticate. The canonical agent-first path is Screen 5B → Screen 5C, where `dongo connect` proposes the repository as the first project and the human names its organization, then creates and approves both in one consent action. The first-project fallback uses the same explicit organization name; a later project is created in an explicitly selected owner organization.
 
 Visible elements:
 
@@ -183,7 +183,8 @@ Visible elements:
 - Heading: “Create your first project” or “Create another project,” based on durable project state.
 - Authenticated account identity and explicit copy distinguishing account sign-in from project/repository binding.
 - Explanation: “A project maps to one repository or codebase.”
-- Organization selector when the person owns more than one organization.
+- Organization name field when the first organization must be created; its address slug is derived from the name and receives a stable suffix only if the readable slug is already occupied.
+- Organization selector when the person already owns more than one organization.
 - Current plan, active-project usage, and exact allowance before submission.
 - Project name field.
 - Generated project slug preview.
@@ -263,7 +264,7 @@ Visible elements:
 - Repository/machine label when safely supplied.
 - Fixed project selected by the CLI/agent from an exact reference, the repository marker, repository URL, unique name/slug, or the account's only active project. The human confirms this binding but does not choose it on the consent page.
 - If an account has multiple projects and repository context does not resolve exactly one, show “No unambiguous project match,” disable approval, and tell the agent to reconnect with an exact public project reference.
-- When no project exists and the current official CLI link contains a valid proposal: a clearly labeled CLI project proposal showing name, repository URL when present, and Manual/Autonomous mode; Requested access explicitly includes creating that first project; the primary action reads “Create & approve.”
+- When no project exists and the current official CLI link contains a valid proposal: a clearly labeled CLI project proposal showing name, repository URL when present, and Manual/Autonomous mode; an editable organization name and derived address preview; Requested access explicitly includes creating that first project and organization; the primary action reads “Create & approve.”
 - When an explicit `dongo project create` request contains a valid proposal: do not match or reuse an existing project. Show the target owner organization and allowance, create a new project, bind the terminal to the resulting public project reference, then approve.
 - When the selected organization has reached its Free-plan active-project allowance: disable Create & approve and show use-existing, archive-existing, and plan/upgrade actions without restarting authentication.
 - When no project exists and the request has no valid proposal: approval stays disabled and the web Create project fallback is available.
@@ -279,7 +280,7 @@ States:
 - No available project/entitlement reached: explain the limitation and allow project management in a separate tab.
 - Invalid, already used, denied, or expired request: show a terminal retry instruction.
 
-For any project creation request, Create & approve provisions the project through the authenticated Convex identity, binds its resulting public project reference to the authorization-server user, and only then approves the device request. A first project also provisions the personal organization. Approval creates a separate project-scoped installation Actor and grant. It never issues an account-wide work token and never reveals token material.
+For any project creation request, Create & approve provisions the project through the authenticated Convex identity, binds its resulting public project reference to the authorization-server user, and only then approves the device request. A first project also provisions the named organization and its server-derived slug. Approval creates a separate project-scoped installation Actor and grant. It never issues an account-wide work token and never reveals token material.
 
 ### Screen 5D — Browser: authorization complete
 
@@ -982,7 +983,7 @@ Revocation confirmation shows the installation name and warns that its next serv
 Visible elements:
 
 - Organization name field.
-- Organization slug.
+- Organization slug and a preview of the new address while an owner edits the name.
 - Current user role.
 - Members list.
 - Each member row shows avatar, name, email, role, and Remove action when permitted.
@@ -990,6 +991,11 @@ Visible elements:
 - Pending invitations, if invitation support is included.
 - Owner/member role explanation.
 - Save organization action.
+
+Saving an organization rename updates its slug in the same owner-authorized
+mutation and replaces the browser route with the new canonical address. Project
+public references, memberships, agent grants, and project slugs do not change.
+Old organization-slug bookmarks are not treated as canonical after the rename.
 
 Invite flow elements:
 

@@ -116,12 +116,14 @@ test("shows truthful local runner presence, setup, and revocation", async ({ pag
 test("updates organization membership and confirms removal", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo/settings?tab=Members");
   await page.getByLabel("Organization name").fill("Fixture Collective");
+  await expect(page.getByText("fixture-collective", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Save organization" }).click();
   await expect(page.getByRole("status")).toHaveText("Organization settings saved.");
-  await expect(page.locator("html")).toHaveAttribute(
-    "data-fixture-organization-update",
-    "Fixture Collective",
-  );
+  await expect(page).toHaveURL(/\/app\/fixture-collective\/dongo\/settings\?tab=Members$/);
+  await expect(page.getByLabel("Organization slug")).toHaveValue("fixture-collective");
+  expect(JSON.parse(
+    await page.locator("html").getAttribute("data-fixture-organization-update") ?? "null",
+  )).toEqual({ name: "Fixture Collective", slug: "fixture-collective" });
 
   await page.getByLabel("Account email").fill("new@example.test");
   await page.getByRole("button", { name: "Add member" }).click();
@@ -134,6 +136,16 @@ test("updates organization membership and confirms removal", async ({ page }) =>
   await memberRow.getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByRole("status")).toHaveText("Member access removed.");
   await expect(page.locator("html")).toHaveAttribute("data-fixture-removed-member", "membership-member");
+});
+
+test("validates an organization address before saving", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo/settings?tab=Members");
+  await page.getByLabel("Organization name").fill("你好");
+  await page.getByRole("button", { name: "Save organization" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Use at least one letter or number in the organization name.",
+  );
+  await expect(page).toHaveURL(/\/app\/fixture-studio\/dongo\/settings\?tab=Members$/);
 });
 
 test("aligns the member action with its field and stacks both controls on small screens", async ({ page }) => {

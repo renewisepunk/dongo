@@ -3,7 +3,7 @@ import { makeFunctionReference } from "convex/server";
 
 import { authWorkerUrl, convexDeploymentUrl } from "./auth-config";
 import { convexAccessToken } from "./auth-client";
-import { personalOrganizationSlug, projectIdentifierPrefix, signedOAuthQuery } from "./auth-flow";
+import { projectIdentifierPrefix, signedOAuthQuery } from "./auth-flow";
 
 type BridgeAssertion = {
   assertion: string;
@@ -94,7 +94,7 @@ const listProjectsReference = makeFunctionReference<"query", Record<string, neve
 
 const createPersonalOrganizationReference = makeFunctionReference<
   "mutation",
-  { name: string; slug: string },
+  { name: string; slug?: string },
   { organizationId: string; created: boolean }
 >("domains/projects/index:createPersonalOrganization");
 
@@ -288,6 +288,7 @@ export async function getProjectCreationContext(): Promise<ProjectCreationContex
 export async function createFirstProject(input: {
   user: { id: string; name?: string; email?: string };
   organizationId?: string;
+  organizationName?: string;
   name: string;
   slug: string;
   repositoryUrl?: string;
@@ -308,9 +309,9 @@ export async function createFirstProject(input: {
     );
     let organizationId = ownerGroup?.membership.organizationId;
     if (!organizationId && groups.length === 0 && input.organizationId === undefined) {
+      const organizationName = input.organizationName?.trim() || input.user.name?.trim() || "Personal workspace";
       const organization = await client.mutation(createPersonalOrganizationReference, {
-        name: input.user.name?.trim() || "Personal workspace",
-        slug: personalOrganizationSlug({ ...input.user, userId: input.user.id }),
+        name: organizationName,
       });
       organizationId = organization.organizationId;
       groups = await client.query(listProjectsReference, {});

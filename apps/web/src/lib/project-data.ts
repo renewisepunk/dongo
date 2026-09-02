@@ -787,7 +787,7 @@ const updateProjectReference = makeFunctionReference<
 const updateOrganizationReference = makeFunctionReference<
   "mutation",
   { projectId: string; name: string },
-  { name: string }
+  { name: string; slug: string }
 >("domains/projects/index:updateOrganization");
 const removeMemberReference = makeFunctionReference<
   "mutation",
@@ -1811,12 +1811,14 @@ export class ProjectDataConnection {
     Object.assign(this.project, updated);
   }
 
-  async updateOrganization(name: string): Promise<void> {
+  async updateOrganization(name: string): Promise<{ name: string; slug: string }> {
     const updated = await this.#client.mutation(updateOrganizationReference, {
       projectId: this.projectId,
       name,
     });
     this.project.organizationName = updated.name;
+    this.project.organizationSlug = updated.slug;
+    return updated;
   }
 
   async removeMember(membershipId: string): Promise<void> {

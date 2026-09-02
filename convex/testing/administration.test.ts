@@ -29,6 +29,35 @@ const invitedIdentity = {
 };
 
 describe("project administration", () => {
+  it("derives readable unique organization slugs from names", async () => {
+    const root = convexTest(schema, modules);
+    const first = root.withIdentity(ownerIdentity);
+    const second = root.withIdentity({
+      ...memberIdentity,
+      tokenIdentifier: "https://human.example.test|second-owner",
+      subject: "second-owner",
+    });
+    await first.mutation(api.domains.identity.index.bootstrapCurrentUser, {});
+    await second.mutation(api.domains.identity.index.bootstrapCurrentUser, {});
+
+    const firstOrganization = await first.mutation(
+      api.domains.projects.index.createPersonalOrganization,
+      { name: "Shared Studio" },
+    );
+    const secondOrganization = await second.mutation(
+      api.domains.projects.index.createPersonalOrganization,
+      { name: "Shared Studio" },
+    );
+    const stored = await root.run(async (ctx) => ({
+      first: await ctx.db.get(firstOrganization.organizationId),
+      second: await ctx.db.get(secondOrganization.organizationId),
+    }));
+
+    expect(stored.first?.slug).toBe("shared-studio");
+    expect(stored.second?.slug).toMatch(/^shared-studio-[a-z0-9]+$/);
+    expect(stored.second?.slug).not.toBe(stored.first?.slug);
+  });
+
   it("adds an existing account once and revokes its installations on removal", async () => {
     const root = convexTest(schema, modules);
     const owner = root.withIdentity(ownerIdentity);
@@ -296,6 +325,10 @@ describe("project administration", () => {
       name: "Forbidden rename",
       executionMode: "manual",
     })).rejects.toThrow();
+    await expect(member.mutation(api.domains.projects.index.updateOrganization, {
+      projectId: project.projectId,
+      name: "Forbidden organization rename",
+    })).rejects.toThrow();
 
     await owner.mutation(api.domains.projects.index.updateProject, {
       projectId: project.projectId,
@@ -303,9 +336,13 @@ describe("project administration", () => {
       repositoryUrl: "https://github.com/example/dongo",
       executionMode: "autonomous",
     });
-    await owner.mutation(api.domains.projects.index.updateOrganization, {
+    const renamedOrganization = await owner.mutation(api.domains.projects.index.updateOrganization, {
       projectId: project.projectId,
       name: "Renamed organization",
+    });
+    expect(renamedOrganization).toEqual({
+      name: "Renamed organization",
+      slug: "renamed-organization",
     });
     const updated = await owner.query(api.domains.projects.index.administration, {
       projectId: project.projectId,
@@ -363,7 +400,10 @@ describe("project administration", () => {
       parallelExecutionEnabled: false,
       maxConcurrentRuns: 4,
     });
-    expect(updated.organization.name).toBe("Renamed organization");
+    expect(updated.organization).toMatchObject({
+      name: "Renamed organization",
+      slug: "renamed-organization",
+    });
     await expect(owner.mutation(api.domains.projects.index.updateProject, {
       projectId: project.projectId,
       name: "Unsafe repository",
