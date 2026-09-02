@@ -44,10 +44,10 @@ export default function IndexRoute(props: IndexRouteProps = {}) {
 
   return (
     <>
-      <Title>dongo — a shared work queue for humans and coding agents</Title>
+      <Title>dongo — ideas into visible agent work</Title>
       <Meta
         name="description"
-        content="Give coding agents work, see what they are doing, and answer when they need you—all in one shared work queue."
+        content="Capture ideas, work with coding agents, and keep progress and decisions visible."
       />
       <MarketingHome />
     </>
