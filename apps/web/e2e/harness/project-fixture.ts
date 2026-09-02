@@ -278,6 +278,7 @@ let fixtureIntakeConflictRaised = false;
 let fixtureOwnerAttentionResolved = false;
 let fixtureOwnerAttentionSeen = false;
 let fixtureOwnerAttentionResponseAttempts = 0;
+let fixtureLiveOwnerAttention = false;
 const uploadAttempts = new Map<string, number>();
 const uploadedAttachments = new Map<string, {
   id: string;
@@ -300,7 +301,11 @@ function attachmentSummary(attachmentId: string): AttachmentSummary | undefined 
 
 function ownerAttention(): OwnerAttention[] {
   const scenario = fixtureScenario();
-  if (!scenario?.startsWith("owner-attention") || fixtureOwnerAttentionResolved) {
+  if (
+    !scenario?.startsWith("owner-attention") ||
+    fixtureOwnerAttentionResolved ||
+    (scenario === "owner-attention-live" && !fixtureLiveOwnerAttention)
+  ) {
     return [];
   }
   return [{
@@ -335,6 +340,12 @@ function emitOverview(): void {
   const value = overview();
   for (const listener of overviewListeners) listener(value);
 }
+
+window.addEventListener("dongo:test:publish-owner-attention", () => {
+  if (fixtureScenario() !== "owner-attention-live") return;
+  fixtureLiveOwnerAttention = true;
+  emitOverview();
+});
 
 function emitWork(id: string): void {
   const item = work.find((candidate) => candidate.id === id);

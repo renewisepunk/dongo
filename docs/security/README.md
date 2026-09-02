@@ -56,6 +56,15 @@ dongo retains the shared project record needed for people and agents to continue
 
 Repository source, diffs, Git history, shell history, environment variables, local credentials, browser sessions, and repository-provider accounts are not collected automatically. A local agent can still share content it is allowed to read, so existing agent permissions and repository data-handling rules remain important.
 
+Desktop browser alerts are optional and local to the browser profile. dongo
+requests notification permission only after a person chooses the in-app alert
+control. The open authenticated project page can then show a generic native
+alert for newly observed owner Attention while that page is unfocused; the
+notification does not include Work titles, project names, comments, or other
+project content. Denied and unsupported permission states are not retried
+automatically. This browser feature does not wake a closed browser or a stopped
+agent.
+
 The current service does not offer customer-configurable retention windows or self-service project deletion. Treat content added to a project as retained until dongo provides an explicit deletion process.
 
 ## Current assurance

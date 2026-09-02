@@ -22,6 +22,16 @@ The HTML is a behavioral and visual reference, not an application dependency. Re
 - The shared dongo logo uses one explicit stroke width for both sides of its amber arrow and its animated cursor bar. Compact and full variants may change mark height, but never their relative weight.
 - Focus is always visible. Icon-only controls require accessible names. Minimum interactive height is 36 px for compact controls and 44–48 px for primary/mobile actions.
 - “Needs You” is the strongest content block. No dashboard charts, project-management sidebar, board, sprint, or status-management chrome is added.
+- When present, “Needs You” is the first content block below the authenticated
+  application header, ahead of capture, live activity, and every other Work
+  lane. The document title carries the current actionable count until it is
+  resolved.
+- Desktop browser alerts are an explicit per-project, per-browser opt-in. The
+  permission request must begin from the owner's button gesture; unsupported or
+  denied permission remains truthful and is never repeatedly prompted. Native
+  alerts cover only newly observed Attention while the open dongo page is not
+  focused, collapse duplicate live updates, and use generic copy that does not
+  expose Work or project content on a lock screen.
 
 ## Responsive contract
 

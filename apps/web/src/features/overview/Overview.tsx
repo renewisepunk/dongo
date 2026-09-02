@@ -45,6 +45,18 @@ import type {
 } from "../../lib/project-data";
 import { searchHighlightSegments } from "../../lib/search-highlight";
 import { projectCapacityLabel, projectCreationAction } from "../../lib/plans";
+import {
+  attentionNotificationBody,
+  attentionPageTitle,
+  desktopAlertPreferenceKey,
+  newlyObservedAttentionIds,
+  readDesktopAlertPreference,
+  readSeenAttentionIds,
+  seenAttentionStorageKey,
+  writeDesktopAlertPreference,
+  writeSeenAttentionIds,
+  type DesktopAlertPermission,
+} from "../../lib/attention-alerts";
 import { loadPlatformAdminAccess } from "../../lib/platform-data";
 import type { AttachmentSummary, Intake, OwnerAttention, WorkItem } from "./model";
 import { CommentComposer } from "./CommentComposer";
@@ -293,6 +305,9 @@ export function Overview(props: OverviewProps) {
   const [draggedReadyId, setDraggedReadyId] = createSignal<string>();
   const [fileDropActive, setFileDropActive] = createSignal(false);
   const [wideDetailLayout, setWideDetailLayout] = createSignal(false);
+  const [desktopAlertsAvailable, setDesktopAlertsAvailable] = createSignal(false);
+  const [desktopAlertsEnabled, setDesktopAlertsEnabled] = createSignal(false);
+  const [desktopAlertPermission, setDesktopAlertPermission] = createSignal<DesktopAlertPermission>("unsupported");
   let connection: OverviewConnection | undefined;
   let unsubscribeOverview: (() => void) | undefined;
   let unsubscribeConcurrency: (() => void) | undefined;
@@ -320,6 +335,11 @@ export function Overview(props: OverviewProps) {
   let searchGeneration = 0;
   let fileDragDepth = 0;
   let pendingRouteState: OverviewRouteState | undefined;
+  const originalPageTitle = typeof document === "undefined" ? undefined : document.title;
+  let previousAttentionIds: Set<string> | undefined;
+  let seenAttentionIds = new Set<string>();
+  const alertPreferenceKey = desktopAlertPreferenceKey(props.orgSlug, props.projectSlug);
+  const seenAlertKey = seenAttentionStorageKey(props.orgSlug, props.projectSlug);
 
   const currentRouteState = (): OverviewRouteState => ({
     work: routeParams.work?.trim() || undefined,
@@ -335,6 +355,11 @@ export function Overview(props: OverviewProps) {
   };
 
   const needs = createMemo(() => work().filter((item) => item.state === "needs"));
+  const attentionCount = createMemo(() => needs().length + ownerAttention().length);
+  const actionableAttentionIds = createMemo(() => [
+    ...ownerAttention().map((item) => item.attention.id),
+    ...needs().flatMap((item) => item.attention?.id ? [item.attention.id] : [item.id]),
+  ]);
   const activeRunWorkIds = createMemo(() =>
     concurrencyStatus() === "ready"
       ? new Set((concurrency()?.runs ?? []).map((run) => run.workItem.id))
@@ -422,6 +447,56 @@ export function Overview(props: OverviewProps) {
   );
 
   createEffect(() => {
+    const title = attentionPageTitle(attentionCount());
+    if (typeof document !== "undefined") document.title = title;
+  });
+
+  createEffect(() => {
+    const ids = actionableAttentionIds();
+    if (loading()) return;
+
+    if (!previousAttentionIds) {
+      previousAttentionIds = new Set(ids);
+      for (const id of ids) seenAttentionIds.add(id);
+      if (typeof sessionStorage !== "undefined") {
+        writeSeenAttentionIds(sessionStorage, seenAlertKey, seenAttentionIds);
+      }
+      return;
+    }
+
+    const newIds = newlyObservedAttentionIds(ids, previousAttentionIds, seenAttentionIds);
+    previousAttentionIds = new Set(ids);
+    if (newIds.length === 0) return;
+
+    for (const id of newIds) seenAttentionIds.add(id);
+    if (typeof sessionStorage !== "undefined") {
+      writeSeenAttentionIds(sessionStorage, seenAlertKey, seenAttentionIds);
+    }
+
+    if (
+      !desktopAlertsAvailable() ||
+      !desktopAlertsEnabled() ||
+      typeof document === "undefined" ||
+      (document.visibilityState !== "hidden" && document.hasFocus()) ||
+      window.Notification.permission !== "granted"
+    ) return;
+
+    try {
+      const notification = new window.Notification("dongo needs you", {
+        body: attentionNotificationBody(newIds.length),
+        tag: "dongo-needs-you",
+      });
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+    } catch {
+      setDesktopAlertsEnabled(false);
+      writeDesktopAlertPreference(localStorage, alertPreferenceKey, false);
+    }
+  });
+
+  createEffect(() => {
     const open = searchOpen();
     const term = query().trim();
     void searchRetry();
@@ -455,6 +530,38 @@ export function Overview(props: OverviewProps) {
   const announce = (message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(""), 2200);
+  };
+
+  const toggleDesktopAlerts = async () => {
+    if (!desktopAlertsAvailable()) return;
+    if (desktopAlertsEnabled()) {
+      setDesktopAlertsEnabled(false);
+      writeDesktopAlertPreference(localStorage, alertPreferenceKey, false);
+      announce("Desktop alerts turned off");
+      return;
+    }
+
+    try {
+      const permission = window.Notification.permission === "granted"
+        ? "granted"
+        : await window.Notification.requestPermission();
+      setDesktopAlertPermission(permission);
+      if (permission !== "granted") {
+        setDesktopAlertsEnabled(false);
+        writeDesktopAlertPreference(localStorage, alertPreferenceKey, false);
+        announce(permission === "denied"
+          ? "Desktop alerts are blocked in browser settings"
+          : "Desktop alerts were not turned on");
+        return;
+      }
+      setDesktopAlertsEnabled(true);
+      writeDesktopAlertPreference(localStorage, alertPreferenceKey, true);
+      announce("Desktop alerts turned on while dongo is open");
+    } catch {
+      setDesktopAlertPermission("unsupported");
+      setDesktopAlertsAvailable(false);
+      announce("Desktop alerts are not available in this browser");
+    }
   };
 
   const openSearch = (updateRoute = true, preferredReturnFocus?: HTMLElement) => {
@@ -1125,9 +1232,15 @@ export function Overview(props: OverviewProps) {
     else openIntake(result.targetId, true, returnFocus);
   };
 
-  const navigableItems = (): HTMLElement[] =>
-    [...document.querySelectorAll<HTMLElement>("[data-nav-item]")]
+  const navigableItems = (): HTMLElement[] => {
+    const visible = [...document.querySelectorAll<HTMLElement>("[data-nav-item]")]
       .filter((element) => element.offsetParent !== null);
+    const capture = visible.filter((element) => element.dataset.navKind === "capture");
+    const issues = visible.filter((element) => element.dataset.navKind !== "capture");
+    // J/K remains an issue navigator: its first forward stop is the highest
+    // priority issue, while K from that boundary still exposes quick capture.
+    return [...capture, ...issues];
+  };
 
   const navKey = (element: HTMLElement): string | undefined => {
     const kind = element.dataset.navKind;
@@ -1412,6 +1525,22 @@ export function Overview(props: OverviewProps) {
     const updateWideDetailLayout = () => setWideDetailLayout(wideDetailMedia.matches);
     updateWideDetailLayout();
     wideDetailMedia.addEventListener("change", updateWideDetailLayout);
+    const desktopAlertMedia = window.matchMedia("(min-width: 700px)");
+    const notificationsSupported = window.isSecureContext && typeof window.Notification === "function";
+    const updateDesktopAlertAvailability = () => {
+      setDesktopAlertsAvailable(notificationsSupported && desktopAlertMedia.matches);
+    };
+    updateDesktopAlertAvailability();
+    desktopAlertMedia.addEventListener("change", updateDesktopAlertAvailability);
+    if (notificationsSupported) {
+      const permission = window.Notification.permission;
+      setDesktopAlertPermission(permission);
+      setDesktopAlertsEnabled(
+        permission === "granted" &&
+        readDesktopAlertPreference(localStorage, alertPreferenceKey),
+      );
+    }
+    seenAttentionIds = readSeenAttentionIds(sessionStorage, seenAlertKey);
     const previousScrollRestoration = window.history.scrollRestoration;
     window.history.scrollRestoration = "manual";
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1664,6 +1793,7 @@ export function Overview(props: OverviewProps) {
     })();
     onCleanup(() => {
       wideDetailMedia.removeEventListener("change", updateWideDetailLayout);
+      desktopAlertMedia.removeEventListener("change", updateDesktopAlertAvailability);
       window.history.scrollRestoration = previousScrollRestoration;
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("pointerdown", onPointerDown);
@@ -1676,6 +1806,7 @@ export function Overview(props: OverviewProps) {
 
   onCleanup(() => {
     disposed = true;
+    if (originalPageTitle !== undefined) document.title = originalPageTitle;
     const connected = connection;
     const unattachedIds = availableAttachmentIds();
     for (const attachment of draftAttachments()) {
@@ -1859,6 +1990,75 @@ export function Overview(props: OverviewProps) {
 
       <div class="overview-scroll">
         <div class="overview-content">
+          <Show when={attentionCount()}>
+            <section class="work-section work-section--attention" aria-labelledby="needs-heading">
+              <div class="section-heading section-heading--attention" id="needs-heading">
+                <span class="section-heading__pulse" aria-hidden="true" />
+                <span>needs you</span><span class="section-heading__count">{attentionCount()}</span>
+                <Show when={desktopAlertsAvailable() && desktopAlertPermission() !== "denied"}>
+                  <span class="section-heading__aside attention-alerts">
+                    <button
+                      class="attention-alerts__button"
+                      type="button"
+                      aria-pressed={desktopAlertsEnabled()}
+                      title="Alerts arrive for new action while dongo is open in this browser"
+                      onClick={() => void toggleDesktopAlerts()}
+                    >
+                      {desktopAlertsEnabled() ? "desktop alerts on" : "turn on desktop alerts"}
+                    </button>
+                  </span>
+                </Show>
+              </div>
+              <For each={ownerAttention()}>{(item) => (
+                <OwnerAttentionCard
+                  item={item}
+                  draftScope={`${props.orgSlug}/${props.projectSlug}`}
+                  onSeen={async () => {
+                    if (!connection || !item.unseen) return;
+                    await connection.markAttentionSeen(item.attention.id);
+                  }}
+                  onRespond={async (selectedOption, body) => {
+                    if (!connection) return;
+                    await connection.respondToAttention(item.attention.id, selectedOption, body);
+                    announce("Response sent to your agent");
+                  }}
+                  onResolve={async () => {
+                    if (!connection) return;
+                    await connection.resolveAttention(item.attention.id);
+                    announce("Attention resolved");
+                  }}
+                />
+              )}</For>
+              <For each={needs()}>{(item) => (
+                <a
+                  class="work-row work-row--attention"
+                  href={workDetailHref(item.identifier)}
+                  data-work-id={item.id}
+                  data-nav-item
+                  data-nav-kind="work"
+                  data-nav-id={item.id}
+                  data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
+                  aria-current={selectedWorkId() === item.id ? "page" : undefined}
+                  aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
+                  onFocus={() => trackNavigationItemFocus("work", item.id)}
+                  onClick={(event) => handleWorkLink(event, item.identifier)}
+                >
+                  <span class="work-row__head">
+                    <span class="work-row__title">{item.title}</span>
+                    <span class="work-row__identifier mono">{item.identifier}</span>
+                    <Show when={item.unseen}><span class="unseen-dot" aria-label="Unseen" /></Show>
+                  </span>
+                  <span class="work-row__summary">{item.agent} needs a {item.attention?.kind.toLowerCase()}</span>
+                  <span class="work-row__meta">
+                    <span class="attention-kind">{item.attention?.kind}</span>
+                    <Show when={item.attention?.important}><span class="attention-important">important</span></Show>
+                    <span>{item.agent}</span><span>·</span><span>{item.age}</span>
+                  </span>
+                </a>
+              )}</For>
+            </section>
+          </Show>
+
           <Show
             when={composerOpen()}
             fallback={
@@ -2079,62 +2279,6 @@ export function Overview(props: OverviewProps) {
               <div>Add anything you want the agent to look at.</div>
               <div class="empty-state__types">bug · idea · screenshot · video · request</div>
             </div>
-          </Show>
-
-          <Show when={needs().length || ownerAttention().length}>
-            <section class="work-section work-section--attention" aria-labelledby="needs-heading">
-              <div class="section-heading section-heading--attention" id="needs-heading">
-                <span class="section-heading__pulse" aria-hidden="true" />
-                <span>needs you</span><span class="section-heading__count">{needs().length + ownerAttention().length}</span>
-              </div>
-              <For each={ownerAttention()}>{(item) => (
-                <OwnerAttentionCard
-                  item={item}
-                  draftScope={`${props.orgSlug}/${props.projectSlug}`}
-                  onSeen={async () => {
-                    if (!connection || !item.unseen) return;
-                    await connection.markAttentionSeen(item.attention.id);
-                  }}
-                  onRespond={async (selectedOption, body) => {
-                    if (!connection) return;
-                    await connection.respondToAttention(item.attention.id, selectedOption, body);
-                    announce("Response sent to your agent");
-                  }}
-                  onResolve={async () => {
-                    if (!connection) return;
-                    await connection.resolveAttention(item.attention.id);
-                    announce("Attention resolved");
-                  }}
-                />
-              )}</For>
-              <For each={needs()}>{(item) => (
-                <a
-                  class="work-row work-row--attention"
-                  href={workDetailHref(item.identifier)}
-                  data-work-id={item.id}
-                  data-nav-item
-                  data-nav-kind="work"
-                  data-nav-id={item.id}
-                  data-keyboard-selected={keyboardSelection() === `work:${item.id}`}
-                  aria-current={selectedWorkId() === item.id ? "page" : undefined}
-                  aria-keyshortcuts="J ArrowDown K ArrowUp ArrowLeft Enter Space R W D E"
-                  onFocus={() => trackNavigationItemFocus("work", item.id)}
-                  onClick={(event) => handleWorkLink(event, item.identifier)}
-                >
-                  <span class="work-row__head">
-                    <span class="work-row__title">{item.title}</span>
-                    <span class="work-row__identifier mono">{item.identifier}</span>
-                    <Show when={item.unseen}><span class="unseen-dot" aria-label="Unseen" /></Show>
-                  </span>
-                  <span class="work-row__summary">{item.agent} needs a {item.attention?.kind.toLowerCase()}</span>
-                  <span class="work-row__meta">
-                    <span class="attention-kind">{item.attention?.kind}</span>
-                    <Show when={item.attention?.important}><span class="attention-important">important</span></Show>
-                    <span>{item.agent}</span><span>·</span><span>{item.age}</span>
-                  </span>
-                </a>
-              )}</For>
-            </section>
           </Show>
 
           <Show when={working().length}>

@@ -42,6 +42,136 @@ test("renders every live work lane without browser errors", async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+test("keeps Needs You first and carries its live count in the page title", async ({ page }) => {
+  const needsYou = page.locator(".work-section--attention");
+  const composer = page.getByRole("region", { name: "Add something" });
+  const activity = page.getByRole("region", { name: "agent activity" });
+
+  await expect(page).toHaveTitle("(1) needs you — dongo");
+  await expect.poll(async () => await needsYou.evaluate((element) => {
+    const needsTop = element.getBoundingClientRect().top;
+    const composerTop = document.querySelector(".composer")?.getBoundingClientRect().top ?? Infinity;
+    const activityTop = document.querySelector(".concurrent-activity")?.getBoundingClientRect().top ?? Infinity;
+    return needsTop < composerTop && needsTop < activityTop;
+  })).toBe(true);
+
+  await page.locator('[data-work-id="work-needs"]').click();
+  const detail = workDetail(page, "Approve the release candidate");
+  await detail.getByRole("button", { name: "Approve staging" }).click();
+  await detail.getByRole("button", { name: "Respond", exact: true }).click();
+  await expect(needsYou).toBeHidden();
+  await expect(page).toHaveTitle("overview — dongo");
+});
+
+test("requests desktop permission from a gesture and deduplicates private native alerts", async ({ page }) => {
+  await page.addInitScript(() => {
+    class FixtureNotification {
+      static permission: NotificationPermission = "default";
+      static async requestPermission(): Promise<NotificationPermission> {
+        document.documentElement.dataset.fixtureNotificationPermissionRequests = String(
+          Number(document.documentElement.dataset.fixtureNotificationPermissionRequests ?? "0") + 1,
+        );
+        FixtureNotification.permission = "granted";
+        return "granted";
+      }
+
+      onclick: (() => void) | null = null;
+
+      constructor(title: string, options?: NotificationOptions) {
+        document.documentElement.dataset.fixtureNotificationCount = String(
+          Number(document.documentElement.dataset.fixtureNotificationCount ?? "0") + 1,
+        );
+        document.documentElement.dataset.fixtureNotificationTitle = title;
+        document.documentElement.dataset.fixtureNotificationBody = options?.body ?? "";
+        document.documentElement.dataset.fixtureNotificationTag = options?.tag ?? "";
+      }
+
+      close() {}
+    }
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: FixtureNotification,
+    });
+  });
+  await page.goto("/app/fixture-studio/dongo?scenario=owner-attention-live");
+
+  const alerts = page.locator(".attention-alerts__button");
+  await expect(alerts).toBeVisible();
+  await expect(alerts).toHaveAccessibleName("turn on desktop alerts");
+  expect(await page.evaluate(() =>
+    document.documentElement.dataset.fixtureNotificationPermissionRequests,
+  )).toBeUndefined();
+  await alerts.click();
+  await expect(alerts).toHaveAttribute("aria-pressed", "true");
+  await expect(alerts).toHaveText("desktop alerts on");
+  expect(await page.evaluate(() =>
+    document.documentElement.dataset.fixtureNotificationPermissionRequests,
+  )).toBe("1");
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    Object.defineProperty(document, "hasFocus", {
+      configurable: true,
+      value: () => false,
+    });
+    window.dispatchEvent(new Event("dongo:test:publish-owner-attention"));
+    window.dispatchEvent(new Event("dongo:test:publish-owner-attention"));
+  });
+
+  await expect.poll(async () => await page.evaluate(() =>
+    document.documentElement.dataset.fixtureNotificationCount,
+  )).toBe("1");
+  expect(await page.evaluate(() => ({
+    title: document.documentElement.dataset.fixtureNotificationTitle,
+    body: document.documentElement.dataset.fixtureNotificationBody,
+    tag: document.documentElement.dataset.fixtureNotificationTag,
+  }))).toEqual({
+    title: "dongo needs you",
+    body: "A new action is waiting. Open dongo to review it.",
+    tag: "dongo-needs-you",
+  });
+  await expect(page).toHaveTitle("(2) needs you — dongo");
+});
+
+test("does not repeat a denied desktop notification request", async ({ page }) => {
+  await page.addInitScript(() => {
+    class DeniedNotification {
+      static permission: NotificationPermission = "default";
+      static async requestPermission(): Promise<NotificationPermission> {
+        DeniedNotification.permission = "denied";
+        return "denied";
+      }
+    }
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: DeniedNotification,
+    });
+  });
+  await page.goto("/app/fixture-studio/dongo");
+
+  await page.getByRole("button", { name: "turn on desktop alerts" }).click();
+  await expect(page.getByRole("button", { name: "turn on desktop alerts" })).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText(
+    "Desktop alerts are blocked in browser settings",
+  );
+});
+
+test("hides the desktop alert control when native notifications are unsupported", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+  await page.goto("/app/fixture-studio/dongo");
+
+  await expect(page.locator(".work-section--attention")).toBeVisible();
+  await expect(page.locator(".attention-alerts")).toHaveCount(0);
+});
+
 test("shows concurrent agents, safe workspace detail, and live progress", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo?scenario=concurrency-live");
   const activity = page.getByRole("region", { name: "agent activity" });
