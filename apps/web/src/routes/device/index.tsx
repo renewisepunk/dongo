@@ -21,7 +21,7 @@ import {
   DEFAULT_PARALLEL_RUN_LIMIT,
   parallelExecutionPolicy,
 } from "../../lib/parallel-execution";
-import { slugify } from "../../lib/slug";
+import { organizationSlugify, slugify } from "../../lib/slug";
 import { upgradePath } from "../../lib/plans";
 
 type ApprovalState = "entry" | "loading" | "review" | "approved" | "denied" | "error";
@@ -127,6 +127,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
   const [projects, setProjects] = createSignal<AuthorizableProject[]>([]);
   const [creationContext, setCreationContext] = createSignal<ProjectCreationContext>();
   const [selectedOrganizationId, setSelectedOrganizationId] = createSignal("");
+  const [organizationName, setOrganizationName] = createSignal("");
   const [accountUser, setAccountUser] = createSignal<HumanUser>();
   const [error, setError] = createSignal("");
   const [serverPlanBlocked, setServerPlanBlocked] = createSignal(false);
@@ -201,12 +202,18 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
   const wantsProjectCreation = createMemo(() =>
     createIntent() || projects().length === 0,
   );
+  const createsOrganization = createMemo(() => {
+    const context = creationContext();
+    return Boolean(context && context.organizations.length === 0 && context.projects.length === 0);
+  });
   const canCreateProject = createMemo(() => {
     if (serverPlanBlocked()) return false;
     if (!projectProposal()) return false;
     const context = creationContext();
     if (!context) return false;
-    if (context.organizations.length === 0) return context.projects.length === 0;
+    if (context.organizations.length === 0) {
+      return context.projects.length === 0 && Boolean(organizationSlugify(organizationName()));
+    }
     return selectedOrganization()?.canCreate === true;
   });
   const projectLimitReached = createMemo(() =>
@@ -245,6 +252,9 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
         return;
       }
       setAccountUser(session.user);
+      setOrganizationName(
+        session.user.name?.trim() || session.user.email?.split("@")[0] || "Personal workspace",
+      );
       await bridgeSession(currentReturnTo());
       const [deviceRequest, availableProjects, projectCreationContext] = await Promise.all([
         loadDeviceRequest(code),
@@ -290,6 +300,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
           const created = await provisionFirstProject({
             user,
             organizationId: selectedOrganization()?.id,
+            organizationName: createsOrganization() ? organizationName().trim() : undefined,
             name: proposal.name,
             slug: proposal.slug,
             repositoryUrl: proposal.repositoryUrl,
@@ -303,7 +314,9 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
             publicRef: created.publicRef,
             name: proposal.name,
             slug: proposal.slug,
-            organizationName: user.name?.trim() || user.email || "Personal workspace",
+            organizationName: createsOrganization()
+              ? organizationName().trim()
+              : selectedOrganization()?.name || user.name?.trim() || user.email || "Personal workspace",
             organizationSlug: created.organizationSlug,
             repositoryUrl: proposal.repositoryUrl,
           };
@@ -400,6 +413,19 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
                   {` · ${proposal().executionMode} mode`}
                 </p>
                 <p class="note">This creates a new project; it will not reuse an existing repository binding. To change these details, deny this request and rerun <span class="mono">dongo project create</span> with project options.</p>
+                <Show when={createsOrganization()}>
+                  <div class="field-group">
+                    <label class="field-label" for="device-organization-name">Organization name</label>
+                    <input
+                      class="input"
+                      id="device-organization-name"
+                      required
+                      value={organizationName()}
+                      onInput={(event) => { setOrganizationName(event.currentTarget.value); setError(""); }}
+                    />
+                    <p class="note">Organization address: <span class="mono">{organizationSlugify(organizationName())}</span>. dongo adds a unique suffix only when needed.</p>
+                  </div>
+                </Show>
                 <div class="parallel-option" data-enabled={allowParallelWork()}>
                   <div class="parallel-option__status" aria-live="polite">{allowParallelWork() ? "Parallel work enabled" : "Single-agent"}</div>
                   <label class="parallel-option__toggle" for="device-parallel-work">

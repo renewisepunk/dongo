@@ -140,6 +140,7 @@ const onboardingDependencies = {
   },
   async createFirstProject(input: {
     organizationId?: string;
+    organizationName?: string;
     name: string;
     slug: string;
     repositoryUrl?: string;
@@ -160,7 +161,9 @@ const onboardingDependencies = {
       created: true,
       resourceProvisioned: true as const,
       organizationId: input.organizationId ?? "organization-fixture",
-      organizationSlug: input.organizationId ? "fixture-studio" : "fixture-owner-serfixture",
+      organizationSlug: input.organizationId
+        ? "fixture-studio"
+        : input.organizationName?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "personal-workspace",
     };
   },
 };
@@ -247,6 +250,7 @@ const deviceDependencies = {
   async createFirstProject(input: {
     user: { id: string; name?: string; email?: string };
     organizationId?: string;
+    organizationName?: string;
     name: string;
     slug: string;
     repositoryUrl?: string;
@@ -264,7 +268,9 @@ const deviceDependencies = {
       created: true,
       resourceProvisioned: true as const,
       organizationId: "organization-fixture",
-      organizationSlug: "fixture-owner-serfixture",
+      organizationSlug: input.organizationName
+        ? input.organizationName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+        : "fixture-studio",
     };
   },
   async selectAuthorizationProject(publicRef: string, returnTo: string) {
@@ -645,9 +651,13 @@ const settingsDependencies = {
       },
       async updateOrganization(name: string) {
         if (name === "Fail safely") throw new Error("fixture organization detail must stay hidden");
+        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
         administration.organization.name = name;
+        administration.organization.slug = slug;
         project.organizationName = name;
-        document.documentElement.dataset.fixtureOrganizationUpdate = name;
+        project.organizationSlug = slug;
+        document.documentElement.dataset.fixtureOrganizationUpdate = JSON.stringify({ name, slug });
+        return { name, slug };
       },
       async revokeInstallation(installationId: string) {
         if (oauthScenario() === "mutation-error") throw new Error("fixture revoke detail must stay hidden");

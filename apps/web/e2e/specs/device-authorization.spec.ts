@@ -83,6 +83,9 @@ test("creates the CLI-proposed first project and approves the same terminal requ
   await page.goto(requestPath);
   await expect(page.getByText("New: dongo", { exact: true })).toBeVisible();
   await expect(page.getByText("CLI project proposal", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Organization name")).toHaveValue("Fixture Owner");
+  await page.getByLabel("Organization name").fill("Fixture Labs");
+  await expect(page.getByText("fixture-labs", { exact: true })).toBeVisible();
   await expect(page.getByText("https://github.com/renewisepunk/dongo", { exact: true })).toBeHidden();
   await expect(page.getByText("Create “dongo” as this account’s first project and bind this terminal to it.")).toBeVisible();
   await page.getByLabel("Allow parallel work").check();
@@ -94,6 +97,7 @@ test("creates the CLI-proposed first project and approves the same terminal requ
     "data-fixture-device-created-project",
     JSON.stringify({
       user: { id: "user-fixture", name: "Fixture Owner", email: "fixture@example.test" },
+      organizationName: "Fixture Labs",
       name: "dongo",
       slug: "dongo",
       repositoryUrl: "https://github.com/renewisepunk/dongo",

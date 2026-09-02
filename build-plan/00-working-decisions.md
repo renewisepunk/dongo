@@ -299,6 +299,22 @@ are idempotent, audited without account email or content, and never delete data.
 Historical Work counts are migrated in bounded 1,001-row steps and stored as an
 exact value or a safe 1,000-item lower bound before release acceptance.
 
+### D-28 — Owner-controlled organization names and canonical slugs
+
+Decided: first-project onboarding asks for the organization name instead of
+silently binding it to the account profile. Convex derives the canonical slug
+from that validated name inside the organization mutation. The readable slug is
+used when available; a deterministic identity suffix is added only on a global
+collision. Client-provided legacy slugs remain accepted for compatibility but
+are not used by the new onboarding path.
+
+An owner rename changes the organization name and slug atomically, records the
+prior and new slug in the organization event, and navigates the browser to the
+new canonical route. The organization ID, memberships, project IDs, project
+slugs, public project references, grants, and tenant authorization remain
+unchanged. Members cannot rename an organization. Existing bookmarks containing
+the old organization slug are not redirected in this release.
+
 ### D-21 — Human Ideas backlog
 
 Decided: Ideas are a dedicated human-only project backlog, not Intake, Work, or

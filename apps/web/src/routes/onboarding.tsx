@@ -10,13 +10,13 @@ import {
   getProjectCreationContext,
   type ProjectCreationContext,
 } from "../lib/authorization-client";
-import { personalOrganizationSlug, safeReturnTo } from "../lib/auth-flow";
+import { safeReturnTo } from "../lib/auth-flow";
 import { dongoPublicOrigin } from "../lib/auth-config";
 import {
   DEFAULT_PARALLEL_RUN_LIMIT,
   parallelExecutionPolicy,
 } from "../lib/parallel-execution";
-import { slugify } from "../lib/slug";
+import { organizationSlugify, slugify } from "../lib/slug";
 import { upgradePath } from "../lib/plans";
 
 type ExecutionMode = "manual" | "autonomous";
@@ -38,8 +38,8 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams<{ returnTo?: string; organization?: string }>();
   const [name, setName] = createSignal("");
+  const [organizationName, setOrganizationName] = createSignal("");
   const [repositoryUrl, setRepositoryUrl] = createSignal("");
-  const [organizationSlug, setOrganizationSlug] = createSignal("workspace");
   const [mode, setMode] = createSignal<ExecutionMode>("manual");
   const [allowParallelWork, setAllowParallelWork] = createSignal(false);
   const [maxConcurrentRuns, setMaxConcurrentRuns] = createSignal(DEFAULT_PARALLEL_RUN_LIMIT);
@@ -51,6 +51,7 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
   const [creationContext, setCreationContext] = createSignal<ProjectCreationContext>();
   const [selectedOrganizationId, setSelectedOrganizationId] = createSignal("");
   const slug = createMemo(() => slugify(name()));
+  const proposedOrganizationSlug = createMemo(() => organizationSlugify(organizationName()));
   const loadHumanSession = props.dependencies?.humanSession ?? humanSession;
   const provisionFirstProject = props.dependencies?.createFirstProject ?? createFirstProject;
   const loadProjectCreationContext = props.dependencies?.getProjectCreationContext ?? getProjectCreationContext;
@@ -60,7 +61,7 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
     return organizations.find((organization) => organization.id === selectedOrganizationId()) ?? organizations[0];
   });
   const projectUrlOrganizationSlug = createMemo(() =>
-    selectedOrganization()?.slug ?? organizationSlug(),
+    selectedOrganization()?.slug ?? proposedOrganizationSlug(),
   );
   const existingProject = createMemo(() => {
     const projects = creationContext()?.projects ?? [];
@@ -68,6 +69,9 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
     return projects.find((project) => project.organizationSlug === organization?.slug) ?? projects[0];
   });
   const isFirstProject = createMemo(() => (creationContext()?.projects.length ?? 0) === 0);
+  const createsOrganization = createMemo(() =>
+    !contextLoading() && (creationContext()?.organizations.length ?? 0) === 0,
+  );
   const hasOrganizationsWithoutOwnership = createMemo(() =>
     !isFirstProject() && (creationContext()?.organizations.length ?? 0) === 0,
   );
@@ -103,11 +107,9 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
       const session = await loadHumanSession();
       if (!session) return;
       setAccount(session.user);
-      setOrganizationSlug(personalOrganizationSlug({
-        name: session.user.name,
-        email: session.user.email,
-        userId: session.user.id,
-      }));
+      setOrganizationName(
+        session.user.name?.trim() || session.user.email?.split("@")[0] || "Personal workspace",
+      );
       const context = await loadProjectCreationContext();
       setCreationContext(context);
       const preferred = context.organizations.find(
@@ -126,6 +128,15 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
     const projectName = name().trim();
     if (!projectName || !slug()) {
       setError("Enter a project name.");
+      return;
+    }
+    const newOrganizationName = organizationName().trim();
+    if (createsOrganization() && !newOrganizationName) {
+      setError("Enter an organization name.");
+      return;
+    }
+    if (createsOrganization() && !proposedOrganizationSlug()) {
+      setError("Use at least one letter or number in the organization name.");
       return;
     }
     let normalizedRepositoryUrl: string | undefined;
@@ -148,6 +159,7 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
       const project = await provisionFirstProject({
         user: { id: session.user.id, name: session.user.name, email: session.user.email },
         organizationId: selectedOrganization()?.id,
+        organizationName: createsOrganization() ? newOrganizationName : undefined,
         name: projectName,
         slug: slug(),
         repositoryUrl: normalizedRepositoryUrl,
@@ -245,6 +257,20 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
         </Show>
 
         <Show when={!contextLoading() && !planLimitReached() && !hasOrganizationsWithoutOwnership()}>
+        <Show when={createsOrganization()}>
+          <div class="field-group">
+            <label class="field-label" for="organization-name">Organization name</label>
+            <input
+              class="input"
+              id="organization-name"
+              required
+              value={organizationName()}
+              onInput={(event) => { setOrganizationName(event.currentTarget.value); setError(""); }}
+              placeholder="Acme Studio"
+            />
+            <p class="note">dongo creates the organization address from this name and adds a unique suffix only when needed.</p>
+          </div>
+        </Show>
         <div class="field-group">
           <label class="field-label" for="project-name">Project name</label>
           <input

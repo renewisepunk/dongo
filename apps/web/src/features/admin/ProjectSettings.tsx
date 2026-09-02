@@ -19,6 +19,7 @@ import {
   DEFAULT_PARALLEL_RUN_LIMIT,
   parallelExecutionPolicy,
 } from "../../lib/parallel-execution";
+import { organizationSlugify } from "../../lib/slug";
 import "./admin.css";
 
 type ProjectSettingsConnection = {
@@ -42,7 +43,7 @@ type ProjectSettingsConnection = {
       requiresIsolatedWorkspaces: true;
     };
   }) => Promise<void>;
-  updateOrganization: (name: string) => Promise<void>;
+  updateOrganization: (name: string) => Promise<{ name: string; slug: string }>;
   revokeInstallation: (installationId: string) => Promise<void>;
   revokeRunner: (registrationId: string) => Promise<RunnerRegistration>;
   createServiceCredential: (input: {
@@ -202,6 +203,12 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   );
 
   const owner = createMemo(() => administration()?.membershipRole === "owner");
+  const organizationSlugPreview = createMemo(() => {
+    const current = administration()?.organization;
+    return current && current.name === organizationName().trim()
+      ? current.slug
+      : organizationSlugify(organizationName());
+  });
   const planAction = createMemo(() => {
     const admin = administration();
     if (!admin) return undefined;
@@ -353,14 +360,22 @@ export function ProjectSettings(props: ProjectSettingsProps) {
       setError("Enter an organization name.");
       return;
     }
+    if (!organizationSlugPreview()) {
+      setError("Use at least one letter or number in the organization name.");
+      return;
+    }
     setSavingOrganization(true);
     setError("");
     setStatus("");
     try {
-      await connection.updateOrganization(name);
+      const updated = await connection.updateOrganization(name);
       setProject({ ...connection.project });
       await refreshAdministration();
       setStatus("Organization settings saved.");
+      navigate(
+        `/app/${encodeURIComponent(updated.slug)}/${encodeURIComponent(connection.project.slug)}/settings?tab=Members`,
+        { replace: true },
+      );
     } catch {
       setError("Organization settings could not be saved. Try again.");
     } finally {
@@ -749,7 +764,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
               <div class="settings-title-group"><div class="eyebrow">Organization</div><h1 class="settings-title">Members</h1><p class="auth-lede">People with access to {admin().organization.name}.</p></div>
               <form class="settings-section" onSubmit={saveOrganization}>
                 <div class="settings-grid">
-                  <div class="field-group"><label class="field-label" for="organization-name">Organization name</label><input class="input" id="organization-name" value={organizationName()} disabled={!owner()} onInput={(event) => setOrganizationName(event.currentTarget.value)} /></div>
+                  <div class="field-group"><label class="field-label" for="organization-name">Organization name</label><input class="input" id="organization-name" value={organizationName()} disabled={!owner()} onInput={(event) => setOrganizationName(event.currentTarget.value)} /><p class="note">Saving changes the organization address to <span class="mono">{organizationSlugPreview()}</span>; dongo adds a unique suffix only when needed.</p></div>
                   <div class="field-group"><label class="field-label" for="organization-slug">Organization slug</label><input class="input mono" id="organization-slug" value={admin().organization.slug} disabled /></div>
                 </div>
                 <Show when={owner()}><button class="button" type="submit" disabled={savingOrganization()} style={{ "align-self": "flex-start" }}>{savingOrganization() ? "Saving…" : "Save organization"}</button></Show>

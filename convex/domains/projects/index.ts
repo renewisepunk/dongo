@@ -5,6 +5,7 @@ import {
   internalQuery,
   mutation,
   query,
+  type MutationCtx,
   type QueryCtx,
 } from "../../_generated/server";
 import {
@@ -136,6 +137,51 @@ function normalizeSlug(value: string): string {
   return slug;
 }
 
+function organizationSlugBase(name: string): string {
+  const base = name
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)
+    .replace(/-+$/g, "");
+  if (!base) {
+    fail("validation", "Organization name must include a letter or number");
+  }
+  return base;
+}
+
+function suffixedOrganizationSlug(base: string, seed: string): string {
+  const suffix = seed.toLowerCase().replace(/[^a-z0-9]/g, "").slice(-32);
+  if (!suffix) fail("validation", "Organization slug could not be generated");
+  const boundedBase = base.slice(0, Math.max(1, 79 - suffix.length)).replace(/-+$/g, "");
+  return `${boundedBase}-${suffix}`;
+}
+
+async function derivedOrganizationSlug(
+  ctx: MutationCtx,
+  name: string,
+  seed: string,
+  currentOrganizationId?: Id<"organizations">,
+): Promise<string> {
+  const base = organizationSlugBase(name);
+  const existing = await ctx.db
+    .query("organizations")
+    .withIndex("by_slug", (query) => query.eq("slug", base))
+    .unique();
+  if (!existing || existing._id === currentOrganizationId) return base;
+
+  const candidate = suffixedOrganizationSlug(base, seed);
+  const collision = await ctx.db
+    .query("organizations")
+    .withIndex("by_slug", (query) => query.eq("slug", candidate))
+    .unique();
+  if (collision && collision._id !== currentOrganizationId) {
+    fail("validation", "A unique organization slug could not be generated");
+  }
+  return candidate;
+}
+
 function normalizePrefix(value: string): string {
   const prefix = value.trim().toUpperCase();
   if (!/^[A-Z][A-Z0-9]{1,7}$/.test(prefix)) {
@@ -164,7 +210,7 @@ function normalizeRepositoryUrl(value: string | undefined): string | undefined {
 }
 
 export const createPersonalOrganization = mutation({
-  args: { name: v.string(), slug: v.string() },
+  args: { name: v.string(), slug: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const profile = await requireCurrentProfile(ctx);
     const existingMembership = await ctx.db
@@ -175,7 +221,9 @@ export const createPersonalOrganization = mutation({
       return { organizationId: existingMembership.organizationId, created: false };
     }
     const name = requireString(args.name, "name", 240);
-    const slug = normalizeSlug(args.slug);
+    const slug = args.slug === undefined
+      ? await derivedOrganizationSlug(ctx, name, String(profile._id))
+      : normalizeSlug(args.slug);
     if (
       await ctx.db
         .query("organizations")
@@ -590,18 +638,24 @@ export const updateOrganization = mutation({
     const organization = await ctx.db.get(principal.project!.organizationId);
     if (!organization) fail("not_found", "Organization or project not found");
     const name = requireString(args.name, "name", 240);
-    if (organization.name === name) return { name };
+    if (organization.name === name) return { name, slug: organization.slug };
+    const slug = await derivedOrganizationSlug(
+      ctx,
+      name,
+      String(organization._id),
+      organization._id,
+    );
     const now = Date.now();
-    await ctx.db.patch(organization._id, { name, updatedAt: now });
+    await ctx.db.patch(organization._id, { name, slug, updatedAt: now });
     await appendEvent(ctx, {
       organizationId: organization._id,
       projectId: principal.project!._id,
       actorId: principal.actor._id,
       type: "organization.updated",
-      data: { name },
+      data: { name, slug, previousSlug: organization.slug },
       createdAt: now,
     });
-    return { name };
+    return { name, slug };
   },
 });
 
