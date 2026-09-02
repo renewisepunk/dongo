@@ -116,6 +116,18 @@ to stop and refetch; it must never continue by guessing.
 
 ## Recovery and rollback
 
+- To stop all new queue creation immediately, set the Convex environment switch
+  to `false` for the affected environment. Missing or `true` enables queueing;
+  any other configured value fails closed. This does not start, cancel, or alter
+  existing jobs.
+
+  ```sh
+  npx convex env set --deployment dev DONGO_RUNNER_QUEUE_ENABLED false
+  npx convex env set --prod DONGO_RUNNER_QUEUE_ENABLED false
+  ```
+
+  Re-enable an accepted environment by setting the same value to `true`. Confirm
+  the target deployment shown by the CLI before applying either command.
 - For a stuck pre-start job, cancel it in the web app and inspect local runner
   status. Do not edit Convex state manually.
 - For a compromised computer or token, revoke the runner or its parent

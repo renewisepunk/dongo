@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { convexTest } from "convex-test";
 import type { Id } from "../_generated/dataModel";
 import { api, internal } from "../_generated/api";
@@ -12,7 +12,31 @@ beforeEach(() => {
   process.env.DONGO_INTERNAL_GATEWAY_SECRET = gatewaySecret;
 });
 
+afterEach(() => {
+  delete process.env.DONGO_RUNNER_QUEUE_ENABLED;
+});
+
 describe("local runner delivery", () => {
+  it("fails closed when runner queue creation is disabled", async () => {
+    const fixture = await runnerFixture();
+    const token = runnerToken("q", "s");
+    await register(fixture, token, "Paused Mac");
+    const work = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Do not queue this work",
+      kind: "task",
+      idempotencyKey: "runner-work-disabled",
+    });
+    process.env.DONGO_RUNNER_QUEUE_ENABLED = "false";
+
+    await expect(fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: work.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-enqueue-disabled",
+    })).rejects.toThrow(/temporarily unavailable/u);
+  });
+
   it("exposes registration through the signed transport without echoing its secret", async () => {
     const fixture = await runnerFixture();
     const token = runnerToken("k", "m");

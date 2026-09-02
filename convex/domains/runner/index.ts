@@ -127,6 +127,13 @@ function normalizedHarnesses(values: Array<"codex" | "claude">) {
   return [...new Set(values)].sort() as Array<"claude" | "codex">;
 }
 
+function requireRunnerQueueEnabled() {
+  const configured = process.env.DONGO_RUNNER_QUEUE_ENABLED;
+  if (configured !== undefined && configured.trim().toLowerCase() !== "true") {
+    fail("invalid_transition", "Local runner queueing is temporarily unavailable");
+  }
+}
+
 function registrationDto(registration: Doc<"runnerRegistrations">) {
   return {
     id: registration._id,
@@ -661,6 +668,7 @@ export const enqueue = mutation({
   },
   handler: async (ctx, args) => {
     const principal = await requireHumanProject(ctx, args.projectId);
+    requireRunnerQueueEnabled();
     const work = await ctx.db.get(args.workItemId);
     if (!work || work.projectId !== args.projectId) fail("not_found", "Work item not found");
     const now = Date.now();
