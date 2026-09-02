@@ -128,6 +128,24 @@ describe("platform administration", () => {
     )).toBe(false);
   });
 
+  it("maps each organization to the people who own it", async () => {
+    const { admin } = await setupOrganization();
+    const dashboard = await loadDashboard(admin);
+    const organization = dashboard.organizations[0];
+    expect(organization.members).toMatchObject({ count: 1, truncated: false });
+    expect(organization.members.people).toEqual([
+      expect.objectContaining({
+        name: superAdminIdentity.name,
+        email: superAdminIdentity.email,
+        role: "owner",
+      }),
+    ]);
+    expect(objectContainsKey(
+      dashboard,
+      new Set(["title", "description", "body", "attachments", "attachmentIds"]),
+    )).toBe(false);
+  });
+
   it("keeps account and organization row 26 reachable through bounded cursors", async () => {
     const { admin, organization } = await setupOrganization();
     const adminProfile = await admin.query(api.domains.identity.index.current, {});

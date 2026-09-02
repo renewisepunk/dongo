@@ -894,7 +894,14 @@ const platformDashboard: PlatformDashboard = {
     updatedAt: Date.now() - 60_000,
     projectCapacityRevision: 2,
     workCapacityRevision: 3,
-    members: { count: 2, truncated: false },
+    members: {
+      count: 2,
+      truncated: false,
+      people: [
+        { profileId: "profile-owner", name: "Fixture Owner", email: "owner@fixture.test", role: "owner" as const, joinedAt: Date.now() - 86_400_000 },
+        { profileId: "profile-member", name: "Fixture Member", email: "member@fixture.test", role: "member" as const, joinedAt: Date.now() - 43_200_000 },
+      ],
+    },
     projects: { active: 2, activeTruncated: false, total: 2, truncated: false, limit: 4, source: "operator_override" },
     workItems: {
       total: 42,

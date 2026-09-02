@@ -18,6 +18,14 @@ export type PlatformAccountUsage = {
   };
 };
 
+export type PlatformOrganizationMember = {
+  profileId: string;
+  name: string;
+  email?: string;
+  role: "owner" | "member";
+  joinedAt: number;
+};
+
 export type PlatformOrganizationUsage = {
   organizationId: string;
   name: string;
@@ -27,7 +35,11 @@ export type PlatformOrganizationUsage = {
   updatedAt: number;
   projectCapacityRevision: number;
   workCapacityRevision: number;
-  members: { count: number; truncated: boolean };
+  members: {
+    count: number;
+    truncated: boolean;
+    people: PlatformOrganizationMember[];
+  };
   projects: {
     active: number;
     activeTruncated: boolean;

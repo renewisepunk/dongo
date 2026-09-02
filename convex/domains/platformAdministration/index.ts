@@ -80,6 +80,25 @@ async function organizationUsage(
       .withIndex("by_organization", (q) => q.eq("organizationId", organization._id))
       .take(MAX_ADMIN_ROWS + 1),
   ]);
+  const memberRows = await Promise.all(
+    memberships.slice(0, MAX_ADMIN_ROWS).map(async (membership) => {
+      const profile = await ctx.db.get(membership.profileId);
+      if (profile === null) return undefined;
+      return {
+        profileId: profile._id,
+        name: profile.name,
+        email: profile.email,
+        role: membership.role,
+        joinedAt: membership.createdAt,
+      };
+    }),
+  );
+  const people = memberRows
+    .filter((row): row is NonNullable<typeof row> => row !== undefined)
+    .sort((left, right) => {
+      if (left.role !== right.role) return left.role === "owner" ? -1 : 1;
+      return left.joinedAt - right.joinedAt;
+    });
   const activeProjectCount = Math.min(activeProjects.length, 100);
   const projectLimit = activeProjectLimit(
     organization.plan,
@@ -101,6 +120,7 @@ async function organizationUsage(
     members: {
       count: Math.min(memberships.length, MAX_ADMIN_ROWS),
       truncated: memberships.length > MAX_ADMIN_ROWS,
+      people,
     },
     projects: {
       active: activeProjectCount,
