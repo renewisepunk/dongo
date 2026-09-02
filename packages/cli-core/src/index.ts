@@ -13,6 +13,8 @@ export { markerPath, readProjectMarker, writeProjectMarker } from "./marker.ts";
 export type * from "./marker.ts";
 export { credentialProfile, findRepositoryRoot, repositoryName } from "./repository.ts";
 export { sanitizedChildEnvironment } from "./process-environment.ts";
+export { CodexRunnerAdapter, createRunnerAdapterResolver } from "./runner-adapters.ts";
+export type * from "./runner-adapters.ts";
 export {
   createRunnerStore,
   generateRunnerToken,

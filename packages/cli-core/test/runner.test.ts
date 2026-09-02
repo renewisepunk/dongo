@@ -10,6 +10,7 @@ import { MemorySecretStore } from "../src/secret-store.ts";
 import {
   generateRunnerToken,
   LocalRunnerManager,
+  type RunnerAdapterResolver,
   type RunnerHarnessAdapter,
 } from "../src/runner.ts";
 import type {
@@ -160,6 +161,32 @@ test("a lost terminal response is replayed from owner-only local state", async (
   assert.equal(api.job.state, "completed");
 });
 
+test("a restarted runner resumes only when its adapter has the exact local session", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  api.job = runnerJob("running", 4);
+  api.onTerminal = () => controller.abort();
+  let executions = 0;
+  const adapter: RunnerHarnessAdapter = {
+    harness: "codex",
+    canResume: async ({ jobId, registrationId, repositoryRoot }) =>
+      jobId === "job-1" && registrationId === "registration-1" && repositoryRoot === fixture.repository,
+    execute: async () => {
+      executions += 1;
+      return { outcome: "completed", sessionReferencePresent: true };
+    },
+  };
+  const manager = fixture.manager(api, new FakeService(), {
+    adapter: () => adapter,
+    sleep: async () => undefined,
+  });
+  await manager.install({ label: "Resume Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  await manager.run(controller.signal);
+  assert.equal(executions, 1);
+  assert.deepEqual(api.transitions.map(({ state }) => state), ["running", "running", "completed"]);
+});
+
 test("runner token format is fixed and contains full local entropy", () => {
   const values = new Set(Array.from({ length: 20 }, generateRunnerToken));
   assert.equal(values.size, 20);
@@ -293,7 +320,7 @@ async function runnerFixture(context: TestContext) {
     manager(
       api: FakeRunnerApi,
       service: FakeService,
-      options: { adapter?: () => RunnerHarnessAdapter; sleep?: () => Promise<void> } = {},
+      options: { adapter?: RunnerAdapterResolver; sleep?: () => Promise<void> } = {},
     ) {
       return new LocalRunnerManager({
         api,
@@ -306,7 +333,11 @@ async function runnerFixture(context: TestContext) {
         runtime: { nodePath, cliPath },
         configDirectory: root,
         random: () => 0.5,
-        ...options,
+        adapter: options.adapter ?? ((harness) => ({
+          harness,
+          execute: async () => ({ outcome: "completed" as const }),
+        })),
+        sleep: options.sleep,
       });
     },
   };

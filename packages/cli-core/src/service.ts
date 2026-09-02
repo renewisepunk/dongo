@@ -27,6 +27,7 @@ import { configureIntegration } from "./integrations.ts";
 import type { IntegrationHost, IntegrationResult } from "./integrations.ts";
 import type { ProjectMarker } from "./marker.ts";
 import { readProjectMarker, writeProjectMarker } from "./marker.ts";
+import { createRunnerAdapterResolver } from "./runner-adapters.ts";
 import {
   createRunnerStore,
   LocalRunnerManager,
@@ -517,9 +518,10 @@ export class CoreService {
         exitCode: 4,
       });
     }
+    const runnerStore = this.#providedStore ?? createRunnerStore(this.#configDirectory);
     return new LocalRunnerManager({
       api: this.#client(context.environment.apiBaseUrl, context.manager),
-      store: this.#providedStore ?? createRunnerStore(this.#configDirectory),
+      store: runnerStore,
       service: this.#runnerServiceController ?? new LocalRunnerServiceController(),
       repositoryRoot: context.repositoryRoot,
       projectRef: context.marker.publicProjectRef,
@@ -531,7 +533,7 @@ export class CoreService {
       },
       configDirectory: this.#configDirectory,
       now: this.#now,
-      adapter: this.#runnerAdapter,
+      adapter: this.#runnerAdapter ?? createRunnerAdapterResolver({ store: runnerStore }),
     });
   }
 

@@ -73,8 +73,16 @@ export interface RunnerHarnessResult {
 
 export interface RunnerHarnessAdapter {
   readonly harness: RunnerHarness;
+  validate?(): Promise<void>;
+  canResume?(input: {
+    repositoryRoot: string;
+    registrationId: string;
+    jobId: string;
+  }): Promise<boolean>;
   execute(input: {
     repositoryRoot: string;
+    registrationId: string;
+    jobId: string;
     workIdentifier: string;
     signal: AbortSignal;
     log: (chunk: string) => Promise<void>;
@@ -166,6 +174,17 @@ export class LocalRunnerManager {
     const label = input.label.trim();
     if (!label || label.length > 120) {
       throw new CliCoreError({ code: "validation", message: "Runner label must be between 1 and 120 characters.", exitCode: 2 });
+    }
+    for (const harness of harnesses) {
+      const adapter = this.#adapter?.(harness);
+      if (!adapter || adapter.harness !== harness) {
+        throw new CliCoreError({
+          code: "harness_unavailable",
+          message: `${harness} is not available in this dongo runner build.`,
+          exitCode: 4,
+        });
+      }
+      await adapter.validate?.();
     }
     const token = generateRunnerToken();
     const idempotencyKey = randomUUID();
@@ -372,18 +391,14 @@ export class LocalRunnerManager {
       await this.#updateJob(config, job, "cancelled", { safeCode: "cancelled_before_start" }, signal);
       return;
     }
-    if (job.state === "running" || job.state === "blocked") {
+    const recovering = job.state === "running" || job.state === "blocked";
+    if (recovering) {
       const pending = await this.#readPendingResult(config, job);
       if (pending) {
         await this.#updateJob(config, job, pending.outcome, pending, signal);
         await this.#store.delete(resultKey(config.projectRef, job.id));
-      } else {
-        await this.#updateJob(config, job, "failed", {
-          safeCode: "runner_restarted",
-          safeSummary: "The local runner restarted before it could confirm the harness outcome.",
-        }, signal);
+        return;
       }
-      return;
     }
     if (job.state === "delivered" && config.approvalMode === "ask") {
       job = await this.#updateJob(config, job, "awaiting_local_approval", {}, signal);
@@ -395,12 +410,23 @@ export class LocalRunnerManager {
     if (job.state === "delivered") {
       job = await this.#updateJob(config, job, "starting", {}, signal);
     }
-    if (job.state !== "starting") return;
+    if (job.state !== "starting" && !recovering) return;
     const adapter = this.#adapter?.(job.harness);
     if (!adapter || adapter.harness !== job.harness) {
       await this.#updateJob(config, job, "failed", {
         safeCode: "harness_unavailable",
         safeSummary: `${job.harness} is not available on this runner.`,
+      }, signal);
+      return;
+    }
+    if (recovering && !(await adapter.canResume?.({
+      repositoryRoot: config.repositoryRoot,
+      registrationId: config.registrationId,
+      jobId: job.id,
+    }))) {
+      await this.#updateJob(config, job, "failed", {
+        safeCode: "runner_restarted",
+        safeSummary: "The local runner restarted without a supported harness session to resume.",
       }, signal);
       return;
     }
@@ -412,6 +438,8 @@ export class LocalRunnerManager {
     await this.#writeState(this.#state(config, "running", current));
     const execution = adapter.execute({
       repositoryRoot: config.repositoryRoot,
+      registrationId: config.registrationId,
+      jobId: current.id,
       workIdentifier: current.workIdentifier,
       signal: controller.signal,
       log: (chunk) => log.append(chunk),

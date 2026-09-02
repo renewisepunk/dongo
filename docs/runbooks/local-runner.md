@@ -27,6 +27,21 @@ systemd service. It does not use `sudo`, a system daemon, or a privileged path.
 Native Windows is out of scope for the first release; WSL follows the Linux
 user-service and Linux-filesystem security boundary.
 
+### Codex execution
+
+The Codex adapter resolves a locally executable `codex`, verifies it with
+`codex --version`, and starts non-interactive work in the exact approved
+repository with JSONL output and the `workspace-write` sandbox. It never uses
+approval or sandbox bypass flags. The only hosted value added to its fixed
+local prompt is the validated dongo Work identifier.
+
+The adapter records the stable `thread.started` identifier in owner-only local
+storage. After a runner restart it resumes only when that identifier matches
+the same registration, job, and canonical repository. Otherwise it reports a
+truthful restart failure instead of guessing or resuming the most recent task.
+Saved Codex authentication is resolved by Codex itself and is never copied into
+dongo status or logs.
+
 ## Approve, disable, and remove
 
 When status shows `awaiting_local_approval`, approve the exact local job:
