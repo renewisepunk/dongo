@@ -23,9 +23,10 @@ test("super admins can review privacy-safe usage and update bounded allowances",
   await expect(page.getByText("owner@example.test")).toHaveCount(0);
   await filter.fill("");
 
-  await page.getByRole("tab", { name: "Organization limits" }).click();
   await expect(page.getByRole("heading", { name: "Fixture Studio" })).toBeVisible();
   await expect(page.getByText("Not configured")).toBeVisible();
+  await expect(page.getByText("owner@fixture.test")).toBeVisible();
+  await expect(page.getByText("member@fixture.test")).toBeVisible();
   await page.getByLabel("Active projects").fill("6");
   await page.getByLabel("Total Work items").fill("400");
   await page.getByLabel("Audit reason").fill("Approved pilot capacity");
@@ -52,7 +53,6 @@ test("platform administration fails closed without exposing backend details", as
 test("platform administration remains usable at narrow mobile widths", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/admin");
-  await page.getByRole("tab", { name: "Organization limits" }).click();
   await expect(page.getByLabel("Active projects")).toBeVisible();
   await expect(page.getByLabel("Total Work items")).toBeVisible();
   const geometry = await page.evaluate(() => ({
@@ -87,7 +87,6 @@ test("older accounts and organizations remain reachable through bounded pages", 
   await page.getByRole("button", { name: "Load more accounts" }).click();
   await expect(page.getByText("older@example.test")).toBeVisible();
 
-  await page.getByRole("tab", { name: "Organization limits" }).click();
   await page.getByRole("button", { name: "Load more organizations" }).click();
   await expect(page.getByRole("heading", { name: "Older Studio" })).toBeVisible();
 });

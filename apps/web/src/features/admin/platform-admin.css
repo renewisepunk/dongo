@@ -51,28 +51,6 @@
   color: var(--text-muted);
 }
 
-.platform-admin__tabs {
-  display: flex;
-  gap: 0;
-  margin: 24px 0 16px;
-  border-bottom: 1px solid var(--line);
-}
-
-.platform-admin__tabs button {
-  min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  background: transparent;
-  color: var(--text-muted);
-}
-
-.platform-admin__tabs button[aria-selected="true"] {
-  border-color: var(--line);
-  background: var(--surface-1);
-  color: var(--amber);
-}
-
 .platform-admin__search {
   display: grid;
   width: min(440px, 100%);
@@ -83,6 +61,8 @@
 .platform-admin__search .input {
   height: 44px;
 }
+
+.platform-admin__body section + section { margin-top: 38px; }
 
 .platform-admin__section-heading {
   display: flex;
@@ -112,6 +92,39 @@
 .platform-admin__organization dt { color: var(--text-muted); font-size: 12px; }
 .platform-admin__organization dd { margin: 5px 0 0; font-family: ui-monospace, Menlo, monospace; }
 
+.platform-admin__members {
+  display: grid;
+  gap: 1px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.platform-admin__members li {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 12px;
+  padding: 9px 10px;
+  background: var(--surface-1);
+}
+
+.platform-admin__member-role { color: var(--amber); font-size: 12px; }
+.platform-admin__member-name { min-width: 0; overflow-wrap: anywhere; }
+
+.platform-admin__member-email {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+.platform-admin__member-note {
+  grid-template-columns: minmax(0, 1fr);
+  color: var(--text-muted);
+}
+
 .platform-admin__allowance-form {
   display: grid;
   grid-template-columns: minmax(140px, .7fr) minmax(140px, .7fr) minmax(220px, 1.6fr) auto;
@@ -121,7 +134,7 @@
 }
 
 .platform-admin__allowance-form label { min-width: 0; display: grid; gap: 6px; color: var(--text-muted); font-size: 12px; }
-.platform-admin__allowance-form input { width: 100%; min-width: 0; max-width: 100%; min-height: 44px; }
+.platform-admin__allowance-form .input { width: 100%; min-width: 0; max-width: 100%; height: 44px; }
 .platform-admin__allowance-form .button { min-height: 44px; }
 .platform-admin__allowance-form .form-error { grid-column: 1 / -1; margin: 0; }
 .platform-admin__error { padding: 20px; border: 1px solid var(--danger); }
@@ -131,10 +144,9 @@
   .platform-admin__header h1 { overflow-wrap: anywhere; }
   .platform-admin__header > .button { grid-column: 2; justify-self: start; }
   .platform-admin__body { width: min(100% - 24px, 1080px); padding-top: 22px; }
-  .platform-admin__tabs { overflow-x: auto; }
-  .platform-admin__tabs button { flex: 1 0 auto; }
   .platform-admin__section-heading { align-items: start; }
   .platform-admin__organization dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .platform-admin__members li { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .platform-admin__allowance-form { grid-template-columns: minmax(0, 1fr); }
 }
 

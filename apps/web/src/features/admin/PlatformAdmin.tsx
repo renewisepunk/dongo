@@ -81,6 +81,7 @@ function AllowanceEditor(props: {
       <label>
         <span>Active projects</span>
         <input
+          class="input"
           type="number"
           min="1"
           max="100"
@@ -94,6 +95,7 @@ function AllowanceEditor(props: {
       <label>
         <span>Total Work items</span>
         <input
+          class="input"
           type="number"
           min="1"
           max="1000"
@@ -107,6 +109,7 @@ function AllowanceEditor(props: {
       <label class="platform-admin__reason">
         <span>Audit reason</span>
         <input
+          class="input"
           required
           maxlength="500"
           value={reason()}
@@ -130,7 +133,6 @@ export function PlatformAdmin(props: PlatformAdminProps) {
   const [loadError, setLoadError] = createSignal("");
   const [loadingMore, setLoadingMore] = createSignal<"accounts" | "organizations">();
   const [status, setStatus] = createSignal("");
-  const [tab, setTab] = createSignal<"usage" | "limits">("usage");
   const [query, setQuery] = createSignal("");
   let connection: PlatformAdminConnection | undefined;
 
@@ -138,7 +140,12 @@ export function PlatformAdmin(props: PlatformAdminProps) {
     const needle = query().trim().toLowerCase();
     const rows = dashboard()?.organizations ?? [];
     return needle
-      ? rows.filter((row) => `${row.name} ${row.slug}`.toLowerCase().includes(needle))
+      ? rows.filter((row) => {
+        const people = row.members.people
+          .map((person) => `${person.name} ${person.email ?? ""}`)
+          .join(" ");
+        return `${row.name} ${row.slug} ${people}`.toLowerCase().includes(needle);
+      })
       : rows;
   });
 
@@ -263,10 +270,6 @@ export function PlatformAdmin(props: PlatformAdminProps) {
 
       <div class="platform-admin__body">
         <p class="platform-admin__lede">Private operational usage and allowance controls. Raw Work content, comments, attachments, and payment data are not shown.</p>
-        <div class="platform-admin__tabs" role="tablist" aria-label="Administration pages">
-          <button type="button" role="tab" aria-selected={tab() === "usage"} onClick={() => setTab("usage")}>Accounts & usage</button>
-          <button type="button" role="tab" aria-selected={tab() === "limits"} onClick={() => setTab("limits")}>Organization limits</button>
-        </div>
         <label class="platform-admin__search">
           <span class="field-label">Filter<span class="visually-hidden"> administration rows</span></span>
           <input
@@ -290,73 +293,84 @@ export function PlatformAdmin(props: PlatformAdminProps) {
 
         <Show when={!loading() && !loadError() && dashboard()}>{(data) => (
           <>
-            <Show when={tab() === "usage"}>
-              <section aria-labelledby="account-usage-heading">
-                <div class="platform-admin__section-heading">
-                  <div><span class="eyebrow">usage</span><h2 id="account-usage-heading">Accounts</h2></div>
-                  <span>{data().accounts.length}{data().accountsTruncated ? "+" : ""} accounts</span>
-                </div>
-                <div class="platform-admin__table-wrap">
-                  <table>
-                    <thead><tr><th scope="col">Account</th><th scope="col">Signed up</th><th scope="col">Last active</th><th scope="col">Created</th><th scope="col">Closed</th></tr></thead>
-                    <tbody>
-                      <For each={accounts()}>{(account) => (
-                        <tr>
-                          <th scope="row"><strong>{account.name}</strong><span>{account.email ?? "Email unavailable"}</span></th>
-                          <td>{dateTime(account.signedUpAt)}</td>
-                          <td>{dateTime(account.lastActiveAt)}</td>
-                          <td>{account.usage.workItemsCreated.toLocaleString()}</td>
-                          <td>{account.usage.workItemsClosed.toLocaleString()}</td>
-                        </tr>
-                      )}</For>
-                    </tbody>
-                  </table>
-                </div>
-                <Show when={data().accountCursor}>
-                  <button class="button button--quiet" type="button" disabled={Boolean(loadingMore())} onClick={() => void loadMoreAccounts()}>
-                    {loadingMore() === "accounts" ? "Loading…" : "Load more accounts"}
-                  </button>
-                </Show>
-                <p class="security-note">{data().privacy}</p>
-                <p class="security-note">Created and closed counts are attributed to the signed-in person who performed or authorized the work and begin when usage tracking is enabled.</p>
-              </section>
-            </Show>
+            <section aria-labelledby="account-usage-heading">
+              <div class="platform-admin__section-heading">
+                <div><span class="eyebrow">usage</span><h2 id="account-usage-heading">Accounts</h2></div>
+                <span>{data().accounts.length}{data().accountsTruncated ? "+" : ""} accounts</span>
+              </div>
+              <div class="platform-admin__table-wrap">
+                <table>
+                  <thead><tr><th scope="col">Account</th><th scope="col">Signed up</th><th scope="col">Last active</th><th scope="col">Created</th><th scope="col">Closed</th></tr></thead>
+                  <tbody>
+                    <For each={accounts()}>{(account) => (
+                      <tr>
+                        <th scope="row"><strong>{account.name}</strong><span>{account.email ?? "Email unavailable"}</span></th>
+                        <td>{dateTime(account.signedUpAt)}</td>
+                        <td>{dateTime(account.lastActiveAt)}</td>
+                        <td>{account.usage.workItemsCreated.toLocaleString()}</td>
+                        <td>{account.usage.workItemsClosed.toLocaleString()}</td>
+                      </tr>
+                    )}</For>
+                  </tbody>
+                </table>
+              </div>
+              <Show when={data().accountCursor}>
+                <button class="button button--quiet" type="button" disabled={Boolean(loadingMore())} onClick={() => void loadMoreAccounts()}>
+                  {loadingMore() === "accounts" ? "Loading…" : "Load more accounts"}
+                </button>
+              </Show>
+              <p class="security-note">{data().privacy}</p>
+              <p class="security-note">Created and closed counts are attributed to the signed-in person who performed or authorized the work and begin when usage tracking is enabled.</p>
+            </section>
 
-            <Show when={tab() === "limits"}>
-              <section aria-labelledby="organization-limits-heading">
-                <div class="platform-admin__section-heading">
-                  <div><span class="eyebrow">allowances</span><h2 id="organization-limits-heading">Organizations</h2></div>
-                  <span>{data().organizations.length}{data().organizationsTruncated ? "+" : ""} organizations</span>
-                </div>
-                <div class="platform-admin__organizations">
-                  <For each={organizations()}>{(organization) => (
-                    <article class="platform-admin__organization">
-                      <header>
-                        <div><h3>{organization.name}</h3><span class="mono">{organization.slug}</span></div>
-                        <span class="platform-admin__plan">{organization.plan === "free" ? "Free" : "Paid"}</span>
-                      </header>
-                      <dl>
-                        <div><dt>Members</dt><dd>{boundedCount(organization.members.count, organization.members.truncated)}</dd></div>
-                        <div><dt>Active projects</dt><dd>{boundedCount(organization.projects.active, organization.projects.activeTruncated)} / {organization.projects.limit ?? "∞"}</dd></div>
-                        <div><dt>Total Work</dt><dd>{organization.workItems.total === undefined ? "Counting…" : `${organization.workItems.total.toLocaleString()}${organization.workItems.totalIsExact ? "" : "+"}`} / {organization.workItems.limit ?? "∞"}</dd></div>
-                        <div><dt>Closed Work</dt><dd>{boundedCount(organization.workItems.closed, false)}</dd></div>
-                        <div><dt>Billing</dt><dd>Not configured</dd></div>
-                      </dl>
-                      <Show when={organization.workItems.trackedFrom}>
-                        <p class="security-note">Closed Work tracking started {dateTime(organization.workItems.trackedFrom!)}.</p>
+            <section aria-labelledby="organization-limits-heading">
+              <div class="platform-admin__section-heading">
+                <div><span class="eyebrow">allowances</span><h2 id="organization-limits-heading">Organizations</h2></div>
+                <span>{data().organizations.length}{data().organizationsTruncated ? "+" : ""} organizations</span>
+              </div>
+              <div class="platform-admin__organizations">
+                <For each={organizations()}>{(organization) => (
+                  <article class="platform-admin__organization">
+                    <header>
+                      <div><h3>{organization.name}</h3><span class="mono">{organization.slug}</span></div>
+                      <span class="platform-admin__plan">{organization.plan === "free" ? "Free" : "Paid"}</span>
+                    </header>
+                    <ul class="platform-admin__members">
+                      <For each={organization.members.people}>{(person) => (
+                        <li>
+                          <span class="platform-admin__member-role">{person.role === "owner" ? "Owner" : "Member"}</span>
+                          <span class="platform-admin__member-name">{person.name}</span>
+                          <span class="platform-admin__member-email">{person.email ?? "Email unavailable"}</span>
+                        </li>
+                      )}</For>
+                      <Show when={organization.members.people.length === 0}>
+                        <li class="platform-admin__member-note">No members recorded.</li>
                       </Show>
-                      <p class="security-note">Lower limits never delete projects or Work. New creation stays blocked until the organization is within its effective allowance.</p>
-                      <AllowanceEditor organization={organization} onSave={(input) => saveAllowances(organization, input)} />
-                    </article>
-                  )}</For>
-                </div>
-                <Show when={data().organizationCursor}>
-                  <button class="button button--quiet" type="button" disabled={Boolean(loadingMore())} onClick={() => void loadMoreOrganizations()}>
-                    {loadingMore() === "organizations" ? "Loading…" : "Load more organizations"}
-                  </button>
-                </Show>
-              </section>
-            </Show>
+                      <Show when={organization.members.truncated}>
+                        <li class="platform-admin__member-note">More members than shown.</li>
+                      </Show>
+                    </ul>
+                    <dl>
+                      <div><dt>Members</dt><dd>{boundedCount(organization.members.count, organization.members.truncated)}</dd></div>
+                      <div><dt>Active projects</dt><dd>{boundedCount(organization.projects.active, organization.projects.activeTruncated)} / {organization.projects.limit ?? "∞"}</dd></div>
+                      <div><dt>Total Work</dt><dd>{organization.workItems.total === undefined ? "Counting…" : `${organization.workItems.total.toLocaleString()}${organization.workItems.totalIsExact ? "" : "+"}`} / {organization.workItems.limit ?? "∞"}</dd></div>
+                      <div><dt>Closed Work</dt><dd>{boundedCount(organization.workItems.closed, false)}</dd></div>
+                      <div><dt>Billing</dt><dd>Not configured</dd></div>
+                    </dl>
+                    <Show when={organization.workItems.trackedFrom}>
+                      <p class="security-note">Closed Work tracking started {dateTime(organization.workItems.trackedFrom!)}.</p>
+                    </Show>
+                    <p class="security-note">Lower limits never delete projects or Work. New creation stays blocked until the organization is within its effective allowance.</p>
+                    <AllowanceEditor organization={organization} onSave={(input) => saveAllowances(organization, input)} />
+                  </article>
+                )}</For>
+              </div>
+              <Show when={data().organizationCursor}>
+                <button class="button button--quiet" type="button" disabled={Boolean(loadingMore())} onClick={() => void loadMoreOrganizations()}>
+                  {loadingMore() === "organizations" ? "Loading…" : "Load more organizations"}
+                </button>
+              </Show>
+            </section>
           </>
         )}</Show>
       </div>
