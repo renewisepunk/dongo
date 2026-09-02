@@ -42,6 +42,20 @@ truthful restart failure instead of guessing or resuming the most recent task.
 Saved Codex authentication is resolved by Codex itself and is never copied into
 dongo status or logs.
 
+### Claude Code execution
+
+The Claude Code adapter resolves a locally executable `claude`, verifies it
+with `claude --version`, and runs print mode with streaming JSON in the exact
+approved repository. It uses Claude Code's `acceptEdits` permission mode so
+repository edits can proceed while side-effecting commands retain Claude's
+configured permission policy. It never uses `--dangerously-skip-permissions`.
+
+The adapter persists a validated `session_id` only from Claude's documented
+initialization or result events. Restart recovery uses `--resume` only for the
+same registration, job, and canonical repository. Raw stream events and model
+output remain in the bounded owner-only local log; hosted status contains only
+fixed safe outcome text.
+
 ## Approve, disable, and remove
 
 When status shows `awaiting_local_approval`, approve the exact local job:

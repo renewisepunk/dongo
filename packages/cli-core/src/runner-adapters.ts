@@ -18,6 +18,7 @@ const PROCESS_STOP_GRACE_MS = 5_000;
 const VERSION_CHECK_TIMEOUT_MS = 5_000;
 const MAX_EVENT_LINE_BYTES = 128 * 1_024;
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const CLAUDE_SESSION_ID = /^[A-Za-z0-9_-]{8,128}$/u;
 
 type HarnessChild = ChildProcessByStdio<null, Readable, Readable>;
 interface HarnessSpawnOptions {
@@ -61,6 +62,8 @@ export interface CodexRunnerAdapterOptions {
   spawnProcess?: SpawnHarness;
 }
 
+export type ClaudeRunnerAdapterOptions = CodexRunnerAdapterOptions;
+
 export class CodexRunnerAdapter implements RunnerHarnessAdapter {
   readonly harness = "codex" as const;
   readonly #store: SecretStore;
@@ -96,13 +99,13 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
   }
 
   async canResume(input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">): Promise<boolean> {
-    return Boolean(await this.#readSession(input));
+    return Boolean(await readSession(this.#store, this.harness, input, SESSION_ID));
   }
 
   async execute(input: AdapterInput): Promise<RunnerHarnessResult> {
     assertWorkIdentifier(input.workIdentifier);
     const executable = await resolveExecutable("codex", this.#executablePath, this.#environmentPath);
-    const existing = await this.#readSession(input);
+    const existing = await readSession(this.#store, this.harness, input, SESSION_ID);
     const prompt = runnerPrompt(input.workIdentifier);
     const args = existing
       ? ["exec", "resume", "--json", existing.sessionId, prompt]
@@ -118,15 +121,7 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
       onJsonEvent: async (event) => {
         if (event.type !== "thread.started" || typeof event.thread_id !== "string" || !SESSION_ID.test(event.thread_id)) return;
         sessionReferencePresent = true;
-        await this.#store.set(sessionKey(this.harness, input.registrationId, input.jobId), JSON.stringify({
-          schemaVersion: 1,
-          harness: this.harness,
-          registrationId: input.registrationId,
-          jobId: input.jobId,
-          repositoryRoot: await realpath(input.repositoryRoot),
-          sessionId: event.thread_id,
-          updatedAt: new Date().toISOString(),
-        } satisfies SessionRecord));
+        await writeSession(this.#store, this.harness, input, event.thread_id);
       },
     });
     if (result.cancelled) {
@@ -153,25 +148,99 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
     };
   }
 
-  async #readSession(input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">): Promise<SessionRecord | undefined> {
-    const raw = await this.#store.get(sessionKey(this.harness, input.registrationId, input.jobId));
-    if (!raw) return undefined;
-    try {
-      const value = JSON.parse(raw) as Partial<SessionRecord>;
-      const repositoryRoot = await realpath(input.repositoryRoot);
-      if (
-        value.schemaVersion !== 1 ||
-        value.harness !== this.harness ||
-        value.registrationId !== input.registrationId ||
-        value.jobId !== input.jobId ||
-        value.repositoryRoot !== repositoryRoot ||
-        typeof value.sessionId !== "string" ||
-        !SESSION_ID.test(value.sessionId)
-      ) return undefined;
-      return value as SessionRecord;
-    } catch {
-      return undefined;
+}
+
+export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
+  readonly harness = "claude" as const;
+  readonly #store: SecretStore;
+  readonly #executablePath?: string;
+  readonly #environmentPath?: string;
+  readonly #spawn: SpawnHarness;
+
+  constructor(options: ClaudeRunnerAdapterOptions) {
+    this.#store = options.store;
+    this.#executablePath = options.executablePath;
+    this.#environmentPath = options.environmentPath;
+    this.#spawn = options.spawnProcess ?? ((executable, args, spawnOptions) =>
+      spawn(executable, args, spawnOptions));
+  }
+
+  async validate(): Promise<void> {
+    const executable = await resolveExecutable("claude", this.#executablePath, this.#environmentPath);
+    const result = await runHarnessProcess({
+      executable,
+      args: ["--version"],
+      repositoryRoot: process.cwd(),
+      signal: AbortSignal.timeout(VERSION_CHECK_TIMEOUT_MS),
+      log: async () => undefined,
+      spawnProcess: this.#spawn,
+    });
+    if (result.exitCode !== 0) {
+      throw new CliCoreError({
+        code: "harness_unavailable",
+        message: "The local Claude Code CLI could not be started. Install or repair Claude Code, then retry.",
+        exitCode: 4,
+      });
     }
+  }
+
+  async canResume(input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">): Promise<boolean> {
+    return Boolean(await readSession(this.#store, this.harness, input, CLAUDE_SESSION_ID));
+  }
+
+  async execute(input: AdapterInput): Promise<RunnerHarnessResult> {
+    assertWorkIdentifier(input.workIdentifier);
+    const executable = await resolveExecutable("claude", this.#executablePath, this.#environmentPath);
+    const existing = await readSession(this.#store, this.harness, input, CLAUDE_SESSION_ID);
+    const prompt = runnerPrompt(input.workIdentifier);
+    const args = [
+      "-p",
+      "--output-format",
+      "stream-json",
+      "--permission-mode",
+      "acceptEdits",
+      ...(existing ? ["--resume", existing.sessionId] : []),
+      prompt,
+    ];
+    let sessionReferencePresent = Boolean(existing);
+    const result = await runHarnessProcess({
+      executable,
+      args,
+      repositoryRoot: input.repositoryRoot,
+      signal: input.signal,
+      log: input.log,
+      spawnProcess: this.#spawn,
+      onJsonEvent: async (event) => {
+        const sessionId = event.session_id;
+        const isSessionEvent = event.type === "result" ||
+          (event.type === "system" && (event.subtype === "init" || event.subtype === "result"));
+        if (!isSessionEvent || typeof sessionId !== "string" || !CLAUDE_SESSION_ID.test(sessionId)) return;
+        sessionReferencePresent = true;
+        await writeSession(this.#store, this.harness, input, sessionId);
+      },
+    });
+    if (result.cancelled) {
+      return {
+        outcome: "failed",
+        safeCode: "cancelled",
+        safeSummary: "Claude Code was stopped after the dongo job was cancelled.",
+        sessionReferencePresent,
+      };
+    }
+    if (result.exitCode !== 0) {
+      return {
+        outcome: "failed",
+        safeCode: "claude_failed",
+        safeSummary: "Claude Code stopped before the queued work completed. Review the owner-only local runner log.",
+        sessionReferencePresent,
+      };
+    }
+    return {
+      outcome: "completed",
+      safeCode: "claude_completed",
+      safeSummary: "Claude Code finished the queued dongo work.",
+      sessionReferencePresent,
+    };
   }
 }
 
@@ -183,6 +252,10 @@ export function createRunnerAdapterResolver(options: {
     ["codex", new CodexRunnerAdapter({
       store: options.store,
       executablePath: options.executablePaths?.codex,
+    })],
+    ["claude", new ClaudeRunnerAdapter({
+      store: options.store,
+      executablePath: options.executablePaths?.claude,
     })],
   ]);
   return (harness) => adapters.get(harness);
@@ -229,6 +302,49 @@ function runnerPrompt(workIdentifier: string): string {
 
 function sessionKey(harness: RunnerHarness, registrationId: string, jobId: string): string {
   return `runner-session:${harness}:${registrationId}:${jobId}`;
+}
+
+async function writeSession(
+  store: SecretStore,
+  harness: RunnerHarness,
+  input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">,
+  sessionId: string,
+): Promise<void> {
+  await store.set(sessionKey(harness, input.registrationId, input.jobId), JSON.stringify({
+    schemaVersion: 1,
+    harness,
+    registrationId: input.registrationId,
+    jobId: input.jobId,
+    repositoryRoot: await realpath(input.repositoryRoot),
+    sessionId,
+    updatedAt: new Date().toISOString(),
+  } satisfies SessionRecord));
+}
+
+async function readSession(
+  store: SecretStore,
+  harness: RunnerHarness,
+  input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">,
+  validSessionId: RegExp,
+): Promise<SessionRecord | undefined> {
+  const raw = await store.get(sessionKey(harness, input.registrationId, input.jobId));
+  if (!raw) return undefined;
+  try {
+    const value = JSON.parse(raw) as Partial<SessionRecord>;
+    const repositoryRoot = await realpath(input.repositoryRoot);
+    if (
+      value.schemaVersion !== 1 ||
+      value.harness !== harness ||
+      value.registrationId !== input.registrationId ||
+      value.jobId !== input.jobId ||
+      value.repositoryRoot !== repositoryRoot ||
+      typeof value.sessionId !== "string" ||
+      !validSessionId.test(value.sessionId)
+    ) return undefined;
+    return value as SessionRecord;
+  } catch {
+    return undefined;
+  }
 }
 
 async function runHarnessProcess(options: {
