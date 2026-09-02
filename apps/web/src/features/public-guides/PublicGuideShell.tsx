@@ -3,7 +3,7 @@ import type { ParentProps } from "solid-js";
 import { Brand } from "../../components/Brand";
 import "./public-guides.css";
 
-export type PublicGuidePage = "get-started" | "help" | "security";
+export type PublicGuidePage = "get-started" | "help" | "security" | "changelog";
 
 export type PublicGuideShellProps = ParentProps<{
   page: PublicGuidePage;
@@ -20,6 +20,7 @@ export function PublicGuideShell(props: PublicGuideShellProps) {
             <A href="/get-started" aria-current={props.page === "get-started" ? "page" : undefined}>Get started</A>
             <A href="/help" aria-current={props.page === "help" ? "page" : undefined}>Help</A>
             <A href="/security" aria-current={props.page === "security" ? "page" : undefined}>Security</A>
+            <A href="/changelog" aria-current={props.page === "changelog" ? "page" : undefined}>Changelog</A>
           </nav>
           <div class="public-guide-header__actions">
             <A class="public-guide-sign-in" href="/login">Sign in</A>
@@ -40,6 +41,7 @@ export function PublicGuideShell(props: PublicGuideShellProps) {
             <A href="/get-started">Get started</A>
             <A href="/help">Help</A>
             <A href="/security">Security</A>
+            <A href="/changelog">Changelog</A>
             <A href="/login">Sign in</A>
             <a href="https://github.com/renewisepunk/dongo">Source</a>
           </nav>

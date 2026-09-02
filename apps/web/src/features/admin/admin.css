@@ -340,3 +340,11 @@
   .member-add-actions { align-items: stretch; flex-direction: column; }
   .member-add-actions__submit { width: 100%; }
 }
+
+.changelog-publisher__status { color: var(--amber); }
+.changelog-publisher__list { display: grid; gap: 1px; margin: 14px 0 0; padding: 0; list-style: none; background: var(--line); border: 1px solid var(--line); }
+.changelog-publisher__item { display: grid; gap: 10px; padding: 14px; background: var(--surface-1); }
+.changelog-publisher__work { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
+.changelog-publisher__work .mono { color: var(--text-muted); }
+.changelog-publisher__badge { padding: 2px 7px; border: 1px solid var(--line); color: var(--amber); font-size: 12px; }
+.changelog-publisher__actions { display: flex; flex-wrap: wrap; gap: 10px; }

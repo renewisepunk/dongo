@@ -1,14 +1,17 @@
 import { Route, Router } from "@solidjs/router";
 import { MetaProvider } from "@solidjs/meta";
+import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { Overview, type OverviewConnection } from "../../src/features/overview/Overview";
 import { HelpGuide } from "../../src/features/help/HelpGuide";
 import { GetStartedGuide } from "../../src/features/public-guides/GetStartedGuide";
 import { PublicHelpGuide } from "../../src/features/public-guides/PublicHelpGuide";
+import { PublicChangelog } from "../../src/features/public-guides/PublicChangelog";
 import { SecurityOverview } from "../../src/features/security/SecurityOverview";
 import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
 import { UpgradePlan } from "../../src/features/admin/UpgradePlan";
 import { PlatformAdmin } from "../../src/features/admin/PlatformAdmin";
+import { ChangelogPublisher, type PublishableWorkRow } from "../../src/features/admin/ChangelogPublisher";
 import type {
   PlatformAdminConnection,
   PlatformDashboard,
@@ -1021,6 +1024,62 @@ function FixtureOpen() {
   );
 }
 
+function FixtureChangelogPublisher() {
+  const [rows, setRows] = createSignal<PublishableWorkRow[]>([
+    { workItemId: "work-1", identifier: "FIX-1", title: "Completed and unpublished", completedAt: Date.UTC(2026, 2, 19) },
+    {
+      workItemId: "work-2",
+      identifier: "FIX-2",
+      title: "Completed and already published",
+      completedAt: Date.UTC(2026, 1, 27),
+      published: {
+        entryId: "entry-2",
+        title: "Published headline",
+        summary: "Published summary.",
+        publishedAt: Date.UTC(2026, 1, 27),
+      },
+    },
+  ]);
+  return (
+    <ChangelogPublisher
+      projectId="project-fixture"
+      load={async () => rows()}
+      publish={async (input) => {
+        setRows((current) => current.map((row) => row.workItemId === input.workItemId
+          ? { ...row, published: { entryId: `entry-${row.workItemId}`, title: input.title, summary: input.summary, publishedAt: Date.now() } }
+          : row));
+      }}
+      unpublish={async (input) => {
+        setRows((current) => current.map((row) => row.published?.entryId === input.entryId
+          ? { ...row, published: undefined }
+          : row));
+      }}
+    />
+  );
+}
+
+function FixtureChangelog() {
+  const scenario = new URLSearchParams(window.location.search).get("scenario");
+  return (
+    <PublicChangelog
+      load={async () => scenario === "changelog-empty" ? [] : [
+        {
+          entryId: "entry-newer",
+          title: "Owners can name their organization",
+          summary: "Pick the name during setup and rename it later without breaking links.",
+          publishedAt: Date.UTC(2026, 2, 19),
+        },
+        {
+          entryId: "entry-older",
+          title: "Administration shows who owns what",
+          summary: "Every organization now lists its people beside its allowances.",
+          publishedAt: Date.UTC(2026, 1, 27),
+        },
+      ]}
+    />
+  );
+}
+
 function FixtureIndex() {
   return (
     <IndexRoute
@@ -1052,6 +1111,8 @@ render(
         <Route path="/get-started" component={GetStartedGuide} />
         <Route path="/help" component={PublicHelpGuide} />
         <Route path="/security" component={SecurityOverview} />
+        <Route path="/changelog" component={FixtureChangelog} />
+        <Route path="/changelog-publisher" component={FixtureChangelogPublisher} />
         <Route path="/login" component={FixtureLogin} />
         <Route path="/auth/code" component={FixtureEmailCode} />
         <Route path="/auth/callback" component={FixtureAuthCallback} />

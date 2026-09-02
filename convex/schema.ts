@@ -684,6 +684,19 @@ export default defineSchema({
     .index("by_work_created", ["workItemId", "createdAt"])
     .index("by_run", ["runId"]),
 
+  changelogEntries: defineTable({
+    projectId: v.id("projects"),
+    workItemId: v.id("workItems"),
+    title: v.string(),
+    summary: v.string(),
+    publishedAt: v.number(),
+    publishedByProfileId: v.id("humanProfiles"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project_published", ["projectId", "publishedAt"])
+    .index("by_project_work", ["projectId", "workItemId"]),
+
   events: defineTable({
     organizationId: v.id("organizations"),
     projectId: v.optional(v.id("projects")),

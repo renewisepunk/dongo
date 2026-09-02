@@ -190,6 +190,7 @@ export function MarketingHome() {
             <A href="/help">Help</A>
             <A href="/changelog">Changelog</A>
             <A href="/security">Security</A>
+            <A href="/changelog">Changelog</A>
             <a href="https://github.com/renewisepunk/dongo" rel="external">Source</a>
           </nav>
         </div>

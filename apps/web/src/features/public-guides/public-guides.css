@@ -517,3 +517,44 @@
   .public-guide-page * { scroll-behavior: auto !important; }
   .agent-brief__status i[data-state="active"] { animation: none; }
 }
+
+.changelog { display: grid; gap: 42px; }
+.changelog-note { margin: 0; color: var(--text-muted); }
+
+.changelog-month__label {
+  margin: 0 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.changelog-entries { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
+
+.changelog-entry {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 18px;
+  padding: 16px 0;
+}
+
+.changelog-entry + .changelog-entry { border-top: 1px solid var(--line); }
+
+.changelog-entry__date {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding-top: 3px;
+}
+
+.changelog-entry__body { min-width: 0; }
+.changelog-entry__body h3 { margin: 0 0 6px; font-size: 17px; }
+.changelog-entry__body p { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
+
+@media (max-width: 720px) {
+  .changelog-entry { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .changelog-entry__date { padding-top: 0; }
+}

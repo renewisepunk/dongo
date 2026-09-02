@@ -2,6 +2,7 @@ import { A, useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
 import { SignOutButton } from "../../components/SignOutButton";
+import { ChangelogPublisher } from "./ChangelogPublisher";
 import { dongoPublicOrigin } from "../../lib/auth-config";
 import {
   ProjectDataConnection,
@@ -647,6 +648,9 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 </div>
                 <Show when={owner()}><button class="button button--primary" type="submit" disabled={savingProject()} style={{ "align-self": "flex-start" }}>{savingProject() ? "Saving…" : "Save project"}</button></Show>
               </form>
+              <Show when={owner() && project()}>{(info) => (
+                <ChangelogPublisher projectId={info().id} />
+              )}</Show>
               <Show when={owner() && !admin().project.archivedAt}>
                 <section class="settings-section danger-zone">
                   <div class="settings-section__title">Archive project</div>
