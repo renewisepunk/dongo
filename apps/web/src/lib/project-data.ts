@@ -7,6 +7,7 @@ import type {
   Attention,
   ConversationEntry,
   Intake,
+  OwnerAttention,
   WorkItem,
   WorkRelationshipSummary,
 } from "../features/overview/model";
@@ -376,6 +377,8 @@ type RunDoc = {
 
 type AttentionDoc = {
   _id: string;
+  workItemId?: string;
+  intakeId?: string;
   requestedByActorId: string;
   kind: "review" | "decision" | "question" | "blocked";
   title: string;
@@ -386,6 +389,7 @@ type AttentionDoc = {
   createdAt: number;
   selectedOption?: string;
   resolutionCommentId?: string;
+  resolutionBody?: string;
   resolutionKind?: "responded" | "resolved" | "cancelled";
 };
 
@@ -469,6 +473,7 @@ export type ProjectOverview = {
   projectName: string;
   work: WorkItem[];
   intakes: Intake[];
+  ownerAttention?: OwnerAttention[];
 };
 
 export type HostCapability = "supported" | "unsupported" | "undisclosed";
@@ -925,6 +930,25 @@ export function mapOverviewSnapshot(snapshot: OverviewSnapshot): ProjectOverview
       },
     } satisfies WorkItem];
   });
+  const ownerAttention = snapshot.needsYou.flatMap(({ request, work, actor }) => {
+    if (work) return [];
+    return [{
+      id: request._id,
+      intakeId: request.intakeId,
+      agent: actorDisplayIdentity(actor),
+      age: relativeTime(request.createdAt, now),
+      unseen: request.status === "open",
+      attention: {
+        id: request._id,
+        kind: attentionKind(request.kind),
+        title: request.title,
+        body: request.body || "Your agent needs your input.",
+        important: request.urgency === "important",
+        options: request.options,
+        status: request.status,
+      },
+    } satisfies OwnerAttention];
+  });
   const working = snapshot.working.map(({ work, run, actor }) => ({
     ...baseWork(work, "working", now),
     agent: actorDisplayIdentity(actor),
@@ -961,6 +985,7 @@ export function mapOverviewSnapshot(snapshot: OverviewSnapshot): ProjectOverview
     projectName: snapshot.project.name,
     work: [...needs, ...working, ...ready, ...done],
     intakes,
+    ownerAttention,
   };
 }
 

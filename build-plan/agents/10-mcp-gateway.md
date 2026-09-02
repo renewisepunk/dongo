@@ -73,6 +73,7 @@ dongo_renew_claim
 dongo_finish_work
 dongo_add_comment
 dongo_request_attention
+dongo_request_owner_attention
 dongo_get_attention
 dongo_resolve_attention
 dongo_get_attachment

@@ -110,7 +110,8 @@ export type ConversationEntry = {
 
 export type Attention = {
   id: Id<"attentionRequests">;
-  workItemId: Id<"workItems">;
+  workItemId?: Id<"workItems">;
+  intakeId?: Id<"intakes">;
   kind: AttentionKind;
   title: string;
   body: string;

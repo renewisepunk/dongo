@@ -595,16 +595,25 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           if (attentionOptions.length === 1) {
             throw new CliCoreError({ code: "validation", message: "Provide either zero or at least two --option values.", exitCode: 2 });
           }
-          data = await service.execute("request_attention", {
+          const workItemId = option(parsed, "work-id");
+          const common = {
             idempotencyKey: commandMutationKey(),
-            workItemId: requiredOption(parsed, "work-id"),
-            expectedRevision: integerOption(parsed, "revision", 0, true) ?? 0,
             kind: kind as OperationInput<"request_attention">["kind"],
             title: requiredOption(parsed, "title"),
             body: requiredOption(parsed, "body"),
             important: parsed.important || undefined,
             options: attentionOptions.length > 0 ? attentionOptions : undefined,
-          }, dependencies.signal);
+          };
+          data = workItemId
+            ? await service.execute("request_attention", {
+                ...common,
+                workItemId,
+                expectedRevision: integerOption(parsed, "revision", 0, true) ?? 0,
+              }, dependencies.signal)
+            : await service.execute("request_owner_attention", {
+                ...common,
+                intakeId: option(parsed, "intake-id"),
+              }, dependencies.signal);
         } else {
           const body = option(parsed, "body");
           const selectedOption = option(parsed, "selected-option");

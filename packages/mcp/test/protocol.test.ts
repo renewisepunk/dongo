@@ -84,9 +84,12 @@ for (const era of ["modern", "legacy"] as const) {
     const { client, fixture } = await connectClient(era);
     try {
       const listed = await client.listTools();
-      assert.equal(listed.tools.length, 19);
+      assert.equal(listed.tools.length, 20);
       assert.ok(
         listed.tools.some((tool) => tool.name === "dongo_session_start"),
+      );
+      assert.ok(
+        listed.tools.some((tool) => tool.name === "dongo_request_owner_attention"),
       );
       assert.match(client.getInstructions() ?? "", /dongo_session_start/);
       assert.doesNotMatch(

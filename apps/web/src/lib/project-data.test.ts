@@ -241,21 +241,39 @@ describe("live project overview mapping", () => {
     const snapshot: OverviewSnapshot = {
       project: { _id: "project-1", name: "dongo", publicRef: "dongo-ref" },
       generatedAt: now,
-      needsYou: [{
-        work: attentionWork,
-        actor: { _id: "actor-1", type: "agent", name: "dongo CLI", agentType: "cli" },
-        request: {
-          _id: "attention-1",
-          requestedByActorId: "actor-1",
-          kind: "decision",
-          title: "Opaque or JWT",
-          body: "Choose the production token format.",
-          options: ["Opaque", "JWT"],
-          urgency: "important",
-          status: "open",
-          createdAt: now - 30_000,
+      needsYou: [
+        {
+          work: attentionWork,
+          actor: { _id: "actor-1", type: "agent", name: "dongo CLI", agentType: "cli" },
+          request: {
+            _id: "attention-1",
+            workItemId: "work-attention",
+            requestedByActorId: "actor-1",
+            kind: "decision",
+            title: "Opaque or JWT",
+            body: "Choose the production token format.",
+            options: ["Opaque", "JWT"],
+            urgency: "important",
+            status: "open",
+            createdAt: now - 30_000,
+          },
         },
-      }],
+        {
+          work: null,
+          actor: { _id: "actor-2", type: "agent", name: "Codex", agentType: "codex" },
+          request: {
+            _id: "attention-owner",
+            intakeId: "intake-1",
+            requestedByActorId: "actor-2",
+            kind: "question",
+            title: "What should this Intake cover?",
+            body: "Choose the durable boundary.",
+            urgency: "normal",
+            status: "open",
+            createdAt: now - 20_000,
+          },
+        },
+      ],
       working: [],
       ready: [{ work: ready, effectiveState: "ready", staleClaim: false }],
       inbox: [{
@@ -294,6 +312,16 @@ describe("live project overview mapping", () => {
       attachmentCount: 0,
     })]);
     expect(result.work.some((item) => item.identifier === "DONGO-2")).toBe(false);
+    expect(result.ownerAttention).toEqual([expect.objectContaining({
+      id: "attention-owner",
+      intakeId: "intake-1",
+      agent: "Agent",
+      unseen: true,
+      attention: expect.objectContaining({
+        kind: "Question",
+        title: "What should this Intake cover?",
+      }),
+    })]);
   });
 
   it("maps a direct Intake detail with attachments and Work links", () => {

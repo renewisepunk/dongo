@@ -147,7 +147,7 @@ test("every command provides specific human and machine-readable help", async ()
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.2.1\n");
+  assert.equal(human.values().stdout, "dongo 0.2.2\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -155,7 +155,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.2.1" },
+    data: { version: "0.2.2" },
   });
   assert.equal(json.values().stderr, "");
 });
@@ -182,7 +182,7 @@ test("online commands expose a consent-first CLI update advisory to agents", asy
   const advisory = {
     available: true as const,
     package: "@wisepunk/dongo" as const,
-    currentVersion: "0.2.1",
+    currentVersion: "0.2.2",
     latestVersion: "0.3.0",
     consentRequired: true as const,
     prompt: "A newer dongo CLI is available. Ask the user whether they want to install it before running the command.",
@@ -211,17 +211,17 @@ test("the update checker accepts only a newer stable version from the fixed pack
     status: 200,
     headers: { "content-type": "application/json" },
   });
-  assert.equal(await checkForCliUpdate("0.2.1", { fetch: response({ version: "0.2.1" }) }), undefined);
-  assert.equal(await checkForCliUpdate("0.2.1", { fetch: response({ version: "latest; rm -rf" }) }), undefined);
-  assert.equal(await checkForCliUpdate("0.2.1", { fetch: async () => { throw new Error("offline"); } }), undefined);
-  assert.deepEqual(await checkForCliUpdate("0.2.1", { fetch: response({ version: "0.2.2" }) }), {
+  assert.equal(await checkForCliUpdate("0.2.2", { fetch: response({ version: "0.2.2" }) }), undefined);
+  assert.equal(await checkForCliUpdate("0.2.2", { fetch: response({ version: "latest; rm -rf" }) }), undefined);
+  assert.equal(await checkForCliUpdate("0.2.2", { fetch: async () => { throw new Error("offline"); } }), undefined);
+  assert.deepEqual(await checkForCliUpdate("0.2.2", { fetch: response({ version: "0.2.3" }) }), {
     available: true,
     package: "@wisepunk/dongo",
-    currentVersion: "0.2.1",
-    latestVersion: "0.2.2",
+    currentVersion: "0.2.2",
+    latestVersion: "0.2.3",
     consentRequired: true,
     prompt: "A newer dongo CLI is available. Ask the user whether they want to install it before running the command.",
-    installCommand: "npm install --global @wisepunk/dongo@0.2.2",
+    installCommand: "npm install --global @wisepunk/dongo@0.2.3",
   });
 
   const startedAt = Date.now();
@@ -410,6 +410,7 @@ test("CLI routes every remaining v1 operation with stable JSON and reusable muta
     { operation: "finish_work", argv: ["work", "finish", "--work-id", "work_1", "--revision", "4", "--outcome", "Done"] },
     { operation: "add_comment", argv: ["comment", "add", "--work-id", "work_1", "--body", "Context"] },
     { operation: "request_attention", argv: ["attention", "request", "--work-id", "work_1", "--revision", "5", "--kind", "decision", "--title", "Choose", "--body", "Pick", "--option", "A", "--option", "B"] },
+    { operation: "request_owner_attention", argv: ["attention", "request", "--intake-id", "intake_1", "--kind", "question", "--title", "Clarify", "--body", "What should change?"] },
     { operation: "get_attention", argv: ["attention", "get", "--attention-id", "attention_1"] },
     { operation: "resolve_attention", argv: ["attention", "resolve", "--attention-id", "attention_1", "--selected-option", "A"] },
     { operation: "get_updates", argv: ["updates", "get", "--cursor", "7"] },
@@ -841,12 +842,12 @@ test("validation reports all argument problems with the expected command schema"
   assert.deepEqual(envelope.error.details.schema.command, "attention request");
   assert.deepEqual(envelope.error.details.issues, [
     "--timeout-seconds is not valid for attention request.",
-    "--work-id is required.",
     "--revision must be an integer in at least 0.",
     "--kind must be one of: review, decision, question, blocked.",
     "--title is required.",
     "--body is required.",
     "Provide either zero or at least two --option values.",
+    "Provide --work-id and --revision together, or omit both for owner Attention.",
   ]);
   assert.equal(stream.values().stderr, "");
 });

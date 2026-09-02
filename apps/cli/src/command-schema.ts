@@ -162,8 +162,17 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
   "attention request": {
     command: "attention request",
     summary: "Request a human review, decision, answer, or unblock.",
-    usage: "dongo attention request --work-id ID --revision N --kind KIND --title TEXT --body TEXT [options]",
-    options: [workId, revision, { name: "kind", description: "Attention kind.", required: true, allowed: ["review", "decision", "question", "blocked"] }, { name: "title", description: "Short request title.", required: true }, { name: "body", description: "Request details.", required: true }, { name: "option", description: "Choice offered to the human; provide zero or at least two.", repeatable: true }, idempotency],
+    usage: "dongo attention request [--work-id ID --revision N | --intake-id ID] --kind KIND --title TEXT --body TEXT [options]",
+    options: [
+      { ...workId, required: false, description: "Active WorkItem ID; omit for owner Attention." },
+      { ...revision, required: false, description: "Expected WorkItem revision; required with --work-id." },
+      { ...intakeId, required: false, description: "Optional Intake associated with owner Attention." },
+      { name: "kind", description: "Attention kind.", required: true, allowed: ["review", "decision", "question", "blocked"] },
+      { name: "title", description: "Short request title.", required: true },
+      { name: "body", description: "Request details.", required: true },
+      { name: "option", description: "Choice offered to the human; provide zero or at least two.", repeatable: true },
+      idempotency,
+    ],
     flags: [{ name: "important", description: "Mark the request important." }],
   },
   "attention get": { command: "attention get", summary: "Get one Attention request and its resolution.", usage: "dongo attention get --attention-id ID", options: [attentionId] },
@@ -382,6 +391,17 @@ export function validateCommand(parsed: ParsedArgs): { name: string; schema: Com
   }
   if (name === "attention request" && parsed.values.option?.length === 1) {
     issues.push("Provide either zero or at least two --option values.");
+  }
+  if (name === "attention request") {
+    const hasWork = Boolean(parsed.values["work-id"]?.[0]);
+    const hasRevision = Boolean(parsed.values.revision?.[0]);
+    const hasIntake = Boolean(parsed.values["intake-id"]?.[0]);
+    if (hasWork !== hasRevision) {
+      issues.push("Provide --work-id and --revision together, or omit both for owner Attention.");
+    }
+    if (hasWork && hasIntake) {
+      issues.push("--intake-id cannot be combined with --work-id.");
+    }
   }
   if (name === "attention resolve" && !parsed.values.body?.[0] && !parsed.values["selected-option"]?.[0] && !parsed.resolveWithoutResponse) {
     issues.push("Provide --body, --selected-option, or --resolve-without-response.");

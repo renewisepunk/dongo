@@ -528,7 +528,8 @@ export default defineSchema({
   attentionRequests: defineTable({
     organizationId: v.id("organizations"),
     projectId: v.id("projects"),
-    workItemId: v.id("workItems"),
+    workItemId: v.optional(v.id("workItems")),
+    intakeId: v.optional(v.id("intakes")),
     runId: v.optional(v.id("runs")),
     requestedByActorId: v.id("actors"),
     requestedFromProfileId: v.id("humanProfiles"),
@@ -543,6 +544,7 @@ export default defineSchema({
     resolvedAt: v.optional(v.number()),
     resolvedByActorId: v.optional(v.id("actors")),
     resolutionCommentId: v.optional(v.id("comments")),
+    resolutionBody: v.optional(v.string()),
     selectedOption: v.optional(v.string()),
     resolutionKind: v.optional(
       v.union(v.literal("responded"), v.literal("resolved"), v.literal("cancelled")),

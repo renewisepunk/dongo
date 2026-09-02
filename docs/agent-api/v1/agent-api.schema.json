@@ -467,6 +467,11 @@
           "minLength": 1,
           "maxLength": 256
         },
+        "intakeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
         "kind": {
           "type": "string",
           "enum": [
@@ -548,7 +553,6 @@
       },
       "required": [
         "id",
-        "workItemId",
         "kind",
         "title",
         "body",
@@ -2509,6 +2513,85 @@
         }
       }
     },
+    "RequestOwnerAttentionInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "intakeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "review",
+            "decision",
+            "question",
+            "blocked"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 100000
+        },
+        "important": {
+          "type": "boolean"
+        },
+        "options": {
+          "minItems": 2,
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "kind",
+        "title",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "RequestOwnerAttentionSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/Attention"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
     "GetAttentionInput": {
       "type": "object",
       "properties": {
@@ -3378,6 +3461,27 @@
       },
       "successResponse": {
         "$ref": "#/$defs/RequestAttentionSuccessResponse"
+      }
+    },
+    "request_owner_attention": {
+      "method": "POST",
+      "path": "/api/agent/v1/request_owner_attention",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "mcpExposed": true,
+      "input": {
+        "$ref": "#/$defs/RequestOwnerAttentionInput"
+      },
+      "output": {
+        "$ref": "#/$defs/Attention"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/RequestOwnerAttentionSuccessResponse"
       }
     },
     "get_attention": {

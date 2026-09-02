@@ -829,6 +829,59 @@
         }
       }
     },
+    "/api/agent/v1/request_owner_attention": {
+      "post": {
+        "operationId": "request_owner_attention",
+        "summary": "dongo request owner attention",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOwnerAttentionSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestOwnerAttentionInput"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/v1/get_attention": {
       "get": {
         "operationId": "get_attention",
@@ -1783,6 +1836,11 @@
             "minLength": 1,
             "maxLength": 256
           },
+          "intakeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
           "kind": {
             "type": "string",
             "enum": [
@@ -1864,7 +1922,6 @@
         },
         "required": [
           "id",
-          "workItemId",
           "kind",
           "title",
           "body",
@@ -3800,6 +3857,85 @@
         "additionalProperties": false
       },
       "RequestAttentionSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Attention"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "RequestOwnerAttentionInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "intakeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "review",
+              "decision",
+              "question",
+              "blocked"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "important": {
+            "type": "boolean"
+          },
+          "options": {
+            "minItems": 2,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "kind",
+          "title",
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "RequestOwnerAttentionSuccessResponse": {
         "type": "object",
         "additionalProperties": false,
         "required": [

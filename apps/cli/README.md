@@ -42,7 +42,7 @@ Build and install the self-contained package archive so the command does not dep
 
 ```sh
 npm pack --workspace @wisepunk/dongo
-npm install --global ./wisepunk-dongo-0.2.1.tgz
+npm install --global ./wisepunk-dongo-0.2.2.tgz
 dongo --version
 dongo --help
 ```
@@ -89,6 +89,13 @@ dongo runner approve --job-id ID
 dongo runner disable
 dongo runner remove
 ```
+
+`dongo attention request` uses the active Work lifecycle when `--work-id` and
+`--revision` are supplied; that request pauses only the matching active Run.
+Omit both to ask the authorizing owner a durable project-level question, or add
+`--intake-id` to associate that owner Attention with untriaged Intake. The
+general form requires no Work claim or Run and remains available after the
+current CLI session exits.
 
 Add `--json` to receive one JSON object on stdout. Progress and the one complete browser approval link are written to stderr. The normal flow opens that link, waits for browser approval, stores the resulting credential, writes a non-secret project marker, and returns control to the terminal. `--no-browser` supports SSH/headless sessions by printing the same complete link while polling continues; no code or token needs to be copied into the CLI.
 

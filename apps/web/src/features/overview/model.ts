@@ -11,6 +11,15 @@ export type Attention = {
   status: "open" | "seen" | "resolved";
 };
 
+export type OwnerAttention = {
+  id: string;
+  intakeId?: string;
+  agent?: string;
+  age?: string;
+  unseen: boolean;
+  attention: Attention;
+};
+
 export type Artifact = {
   kind: "commit" | "pr" | "preview" | "file" | "report";
   label: string;

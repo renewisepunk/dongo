@@ -28,12 +28,12 @@ export type AgentReleaseDelivery = Readonly<{
  */
 export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   schemaVersion: 1,
-  sequence: 1,
-  id: "dongo-cli-0.2.1",
-  title: "dongo CLI 0.2.1 is available",
+  sequence: 2,
+  id: "dongo-cli-0.2.2",
+  title: "dongo CLI 0.2.2 is available",
   changes: [
-    "Production releases now publish and verify the matching public CLI automatically.",
-    "Already-connected Codex and Claude agents learn about the release on their next successful dongo call.",
+    "Agents can ask the owner durable project-level or Intake-related questions without an active Work Run.",
+    "General owner Attention appears in Needs You and survives the requesting agent session.",
   ],
   hostedMcp: {
     status: "already_current",
@@ -41,9 +41,9 @@ export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   },
   cli: {
     packageName: "@wisepunk/dongo",
-    version: "0.2.1",
+    version: "0.2.2",
     checkCommand: "dongo --version",
-    installCommand: "npm install --global @wisepunk/dongo@0.2.1",
+    installCommand: "npm install --global @wisepunk/dongo@0.2.2",
     consentRequired: true,
   },
 } satisfies AgentReleaseNotice);
