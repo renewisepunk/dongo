@@ -106,14 +106,33 @@ function ideaFields(idea: IdeaDetail | undefined) {
   };
 }
 
+function captureDraftBody(draft: StoredIdeaDraft | undefined): string {
+  if (!draft) return "";
+  return [draft.text, draft.context, draft.links]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function pastedFiles(clipboard: DataTransfer | null): File[] {
+  if (!clipboard) return [];
+  const itemFiles = [...clipboard.items].flatMap((item) => {
+    const file = item.kind === "file" ? item.getAsFile() : null;
+    return file ? [file] : [];
+  });
+  return itemFiles.length > 0 ? itemFiles : [...clipboard.files];
+}
+
 export function IdeaEditor(props: IdeaEditorProps) {
   const initial = ideaFields(props.idea);
   const initialDraftKey = ideaDraftKey(props.projectId, props.idea?._id);
   const initialDraft = storedDraft(initialDraftKey);
   const [title, setTitle] = createSignal(initialDraft?.title ?? initial.title);
-  const [text, setText] = createSignal(initialDraft?.text ?? initial.text);
-  const [context, setContext] = createSignal(initialDraft?.context ?? initial.context);
-  const [links, setLinks] = createSignal(initialDraft?.links ?? initial.links);
+  const [text, setText] = createSignal(props.idea
+    ? initialDraft?.text ?? initial.text
+    : captureDraftBody(initialDraft));
+  const [context, setContext] = createSignal(props.idea ? initialDraft?.context ?? initial.context : "");
+  const [links, setLinks] = createSignal(props.idea ? initialDraft?.links ?? initial.links : "");
   const [baseTitle, setBaseTitle] = createSignal(initial.title);
   const [baseText, setBaseText] = createSignal(initial.text);
   const [baseContext, setBaseContext] = createSignal(initial.context);
@@ -130,7 +149,10 @@ export function IdeaEditor(props: IdeaEditorProps) {
   const [message, setMessage] = createSignal(initialDraft ? "Draft restored for this Idea." : "");
   const [saveKey, setSaveKey] = createSignal(crypto.randomUUID());
   const [saveFingerprint, setSaveFingerprint] = createSignal("");
+  const [draggingFiles, setDraggingFiles] = createSignal(false);
   const controllers = new Map<string, AbortController>();
+  let fileDragDepth = 0;
+  let captureInput: HTMLTextAreaElement | undefined;
   let activeDraftKey = initialDraftKey;
   let activeIdeaId = props.idea?._id;
   let lastIncomingRevision = props.idea?.revision ?? 0;
@@ -153,6 +175,7 @@ export function IdeaEditor(props: IdeaEditorProps) {
     links() !== baseLinks() ||
     attachments().length > 0,
   );
+  const hasCreateTitle = createMemo(() => title().trim().length > 0);
 
   const revokePreview = (attachment: DraftAttachment) => {
     if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
@@ -182,9 +205,9 @@ export function IdeaEditor(props: IdeaEditorProps) {
     setBaseLinks(base.links);
     setBaseRevision(nextIdea?.revision ?? 0);
     setTitle(saved?.title ?? base.title);
-    setText(saved?.text ?? base.text);
-    setContext(saved?.context ?? base.context);
-    setLinks(saved?.links ?? base.links);
+    setText(nextIdea ? saved?.text ?? base.text : captureDraftBody(saved));
+    setContext(nextIdea ? saved?.context ?? base.context : "");
+    setLinks(nextIdea ? saved?.links ?? base.links : "");
     setAttachments((saved?.attachments ?? []).map((attachment) => ({
       localId: crypto.randomUUID(),
       ...attachment,
@@ -231,10 +254,7 @@ export function IdeaEditor(props: IdeaEditorProps) {
 
   createEffect(() => {
     const draft: StoredIdeaDraft = {
-      title: title(),
-      text: text(),
-      context: context(),
-      links: links(),
+      title: title(), text: text(), context: context(), links: links(),
       attachments: persistedAttachments(),
     };
     if (dirty()) writeLocalDraft(activeDraftKey, JSON.stringify(draft));
@@ -283,6 +303,7 @@ export function IdeaEditor(props: IdeaEditorProps) {
   };
 
   const addFiles = (files: File[]) => {
+    if (files.length === 0) return;
     const existingCount = props.idea?.attachmentCount ?? 0;
     const remaining = MAX_INTAKE_ATTACHMENTS - existingCount - attachments().length;
     if (remaining <= 0) {
@@ -306,8 +327,52 @@ export function IdeaEditor(props: IdeaEditorProps) {
       } satisfies DraftAttachment;
     });
     setAttachments((items) => [...items, ...accepted]);
+    markEdited();
     for (const attachment of accepted) if (!attachment.error) void upload(attachment.localId);
     if (files.length > remaining) props.announce(`Only the first ${remaining} files were added`);
+  };
+
+  const attachPastedFiles = (event: ClipboardEvent) => {
+    const files = pastedFiles(event.clipboardData);
+    if (files.length === 0) return;
+    event.preventDefault();
+    addFiles(files);
+    props.announce(`${files.length} pasted file${files.length === 1 ? "" : "s"} added`);
+  };
+
+  const carriesFiles = (transfer: DataTransfer | null) =>
+    [...(transfer?.types ?? [])].includes("Files");
+
+  const enterFileDrop = (event: DragEvent) => {
+    if (!carriesFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    fileDragDepth += 1;
+    setDraggingFiles(true);
+  };
+
+  const continueFileDrop = (event: DragEvent) => {
+    if (!carriesFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    setDraggingFiles(true);
+  };
+
+  const leaveFileDrop = (event: DragEvent) => {
+    if (!draggingFiles()) return;
+    event.preventDefault();
+    fileDragDepth = Math.max(0, fileDragDepth - 1);
+    if (fileDragDepth === 0 || event.relatedTarget === null) {
+      fileDragDepth = 0;
+      setDraggingFiles(false);
+    }
+  };
+
+  const dropFiles = (event: DragEvent) => {
+    if (!carriesFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    fileDragDepth = 0;
+    setDraggingFiles(false);
+    addFiles([...(event.dataTransfer?.files ?? [])]);
   };
 
   const removeAttachment = async (localId: string) => {
@@ -362,24 +427,31 @@ export function IdeaEditor(props: IdeaEditorProps) {
   };
 
   const save = async () => {
-    if (!editable() || status() === "saving" || uploadPending() || uploadFailed() || !dirty()) return;
+    if (
+      !editable() || status() === "saving" || uploadPending() || uploadFailed() ||
+      !dirty() || (!props.idea && !hasCreateTitle())
+    ) return;
     const normalizedTitle = title().trim();
     if (!normalizedTitle) {
       setStatus("error");
       setMessage("Give this Idea a title.");
       return;
     }
-    const parsedLinks = parseIntakeLinks(links());
-    if (parsedLinks.error) {
-      setStatus("error");
-      setMessage(parsedLinks.error);
-      return;
+    let normalizedLinks: string[] = [];
+    if (props.idea) {
+      const parsed = parseIntakeLinks(links());
+      if (parsed.error) {
+        setStatus("error");
+        setMessage(parsed.error);
+        return;
+      }
+      normalizedLinks = parsed.links;
     }
     const values = {
       title: normalizedTitle,
       text: text().trim(),
-      context: context().trim(),
-      links: parsedLinks.links,
+      context: props.idea ? context().trim() : "",
+      links: normalizedLinks,
     };
     const payload = props.idea
       ? {
@@ -437,35 +509,105 @@ export function IdeaEditor(props: IdeaEditorProps) {
     }
   };
 
+  const submitOnShortcut = (event: KeyboardEvent) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
+      void save();
+    }
+  };
+
   onCleanup(() => {
     for (const controller of controllers.values()) controller.abort();
     for (const attachment of attachments()) revokePreview(attachment);
   });
 
   return (
-    <div class="idea-editor" data-mode={props.idea ? "edit" : "create"}>
-      <label class="idea-editor__field">
-        <span>Title</span>
-        <input class="input" data-idea-title value={title()} maxlength="240" disabled={!editable() || status() === "saving"} onInput={(event) => { setTitle(event.currentTarget.value); markEdited(); }} placeholder="A possible direction…" />
-      </label>
-      <label class="idea-editor__field">
-        <span>Idea <span class="meta">· Markdown supported</span></span>
-        <textarea class="textarea" value={text()} rows={6} disabled={!editable() || status() === "saving"} onInput={(event) => { setText(event.currentTarget.value); markEdited(); }} placeholder="Explore the thought without turning it into agent work yet…" />
-      </label>
-      <Show when={text().trim()}>
-        <details class="idea-editor__preview">
-          <summary>Preview formatted Idea</summary>
-          <MarkdownContent source={text()} />
-        </details>
+    <form
+      class="idea-editor"
+      data-mode={props.idea ? "edit" : "create"}
+      data-dragging={draggingFiles()}
+      aria-busy={status() === "saving"}
+      onSubmit={(event) => { event.preventDefault(); void save(); }}
+      onDragEnter={enterFileDrop}
+      onDragOver={continueFileDrop}
+      onDragLeave={leaveFileDrop}
+      onDrop={dropFiles}
+    >
+      <Show when={!props.idea} fallback={
+        <>
+          <label class="idea-editor__field">
+            <span>Title</span>
+            <input class="input" data-idea-title value={title()} maxlength="240" disabled={!editable() || status() === "saving"} onInput={(event) => { setTitle(event.currentTarget.value); markEdited(); }} placeholder="A possible direction…" />
+          </label>
+          <label class="idea-editor__field">
+            <span>Idea <span class="meta">· Markdown supported</span></span>
+            <textarea class="textarea" value={text()} rows={6} disabled={!editable() || status() === "saving"} aria-keyshortcuts="Control+Enter Meta+Enter" onInput={(event) => { setText(event.currentTarget.value); markEdited(); }} onPaste={attachPastedFiles} onKeyDown={submitOnShortcut} placeholder="Explore the thought without turning it into agent work yet…" />
+          </label>
+          <Show when={text().trim()}>
+            <details class="idea-editor__preview">
+              <summary>Preview formatted Idea</summary>
+              <MarkdownContent source={text()} />
+            </details>
+          </Show>
+          <label class="idea-editor__field">
+            <span>Context</span>
+            <textarea class="textarea" value={context()} rows={3} disabled={!editable() || status() === "saving"} onInput={(event) => { setContext(event.currentTarget.value); markEdited(); }} placeholder="Background, constraints, questions, or what would make this worth pursuing…" />
+          </label>
+          <label class="idea-editor__field">
+            <span>Links <span class="meta">· one per line</span></span>
+            <textarea class="textarea" value={links()} rows={2} disabled={!editable() || status() === "saving"} onInput={(event) => { setLinks(event.currentTarget.value); markEdited(); }} placeholder="https://…" />
+          </label>
+        </>
+      }>
+        <label class="idea-editor__field">
+          <span>Title</span>
+          <input
+            class="input"
+            data-idea-title
+            autofocus
+            required
+            aria-required="true"
+            value={title()}
+            maxlength="240"
+            disabled={!editable() || status() === "saving"}
+            onInput={(event) => { setTitle(event.currentTarget.value); markEdited(); }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.metaKey && !event.ctrlKey) {
+                event.preventDefault();
+                captureInput?.focus();
+                return;
+              }
+              submitOnShortcut(event);
+            }}
+            placeholder="A possible direction…"
+          />
+        </label>
+        <label class="idea-editor__field idea-editor__capture">
+          <span>Idea <span class="meta">· Markdown supported</span></span>
+          <textarea
+            ref={captureInput}
+            class="textarea"
+            data-idea-capture
+            value={text()}
+            rows={10}
+            disabled={!editable() || status() === "saving"}
+            aria-describedby="idea-capture-hint"
+            aria-keyshortcuts="Control+Enter Meta+Enter"
+            onInput={(event) => { setText(event.currentTarget.value); markEdited(); }}
+            onPaste={attachPastedFiles}
+            onKeyDown={submitOnShortcut}
+            placeholder="Write or paste your idea…"
+          />
+        </label>
+        <p class="idea-editor__capture-hint" id="idea-capture-hint">Paste images or drop files here · Ctrl/⌘ + Enter to capture</p>
       </Show>
-      <label class="idea-editor__field">
-        <span>Context</span>
-        <textarea class="textarea" value={context()} rows={3} disabled={!editable() || status() === "saving"} onInput={(event) => { setContext(event.currentTarget.value); markEdited(); }} placeholder="Background, constraints, questions, or what would make this worth pursuing…" />
-      </label>
-      <label class="idea-editor__field">
-        <span>Links <span class="meta">· one per line</span></span>
-        <textarea class="textarea" value={links()} rows={2} disabled={!editable() || status() === "saving"} onInput={(event) => { setLinks(event.currentTarget.value); markEdited(); }} placeholder="https://…" />
-      </label>
+
+      <Show when={draggingFiles()}>
+        <div class="idea-editor__drop-target" role="status" aria-live="polite">
+          <span aria-hidden="true">+</span>
+          <strong>Drop to attach</strong>
+        </div>
+      </Show>
 
       <Show when={attachments().length > 0}>
         <div class="attachment-tray" aria-label="New Idea attachments">
@@ -510,7 +652,7 @@ export function IdeaEditor(props: IdeaEditorProps) {
         <span class="idea-editor__status" data-status={status()} role={status() === "error" || status() === "conflict" ? "alert" : "status"} aria-live="polite">
           {message() || (dirty() ? "Draft saved on this device." : "No unsaved changes.")}
         </span>
-        <button class="button button--primary" type="button" disabled={!editable() || !dirty() || status() === "saving" || uploadPending() || uploadFailed() || status() === "conflict"} onClick={() => void save()}>
+        <button class="button button--primary" type="submit" disabled={!editable() || !dirty() || (!props.idea && !hasCreateTitle()) || status() === "saving" || uploadPending() || uploadFailed() || status() === "conflict"}>
           {status() === "saving" ? (props.idea ? "Saving…" : "Capturing…") : (props.idea ? "Save changes" : "Capture idea")}
         </button>
       </div>
@@ -521,6 +663,6 @@ export function IdeaEditor(props: IdeaEditorProps) {
         </div>
       </Show>
       <Show when={!editable()}><p class="note">This Idea is historical and read-only.</p></Show>
-    </div>
+    </form>
   );
 }

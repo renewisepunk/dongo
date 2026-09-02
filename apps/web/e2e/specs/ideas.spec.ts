@@ -30,15 +30,21 @@ test("keeps Ideas distinct from agent execution and query-backs selection", asyn
   await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
 });
 
-test("captures rich Idea content and a finalized attachment", async ({ page }) => {
+test("captures an Idea with only a title, one main field, and an attachment", async ({ page }) => {
   await page.getByRole("button", { name: "Capture idea" }).click();
   const detail = page.getByRole("complementary", { name: "Capture idea" });
-  await detail.getByLabel("Title").fill("Release evidence library");
-  await detail.getByRole("textbox", { name: "Idea · Markdown supported", exact: true }).fill("## A durable index\n\nCollect evidence without scheduling work.");
-  await detail.getByText("Preview formatted Idea").click();
-  await expect(detail.getByRole("heading", { name: "A durable index" })).toBeVisible();
-  await detail.getByLabel("Context").fill("Useful after several releases have accumulated.");
-  await detail.getByLabel(/Links/).fill("https://example.test/evidence");
+  await expect(detail.getByRole("textbox")).toHaveCount(2);
+  await expect(detail.getByLabel("Context")).toHaveCount(0);
+  await expect(detail.getByLabel(/Links/)).toHaveCount(0);
+  const title = detail.getByLabel("Title");
+  const idea = detail.getByRole("textbox", { name: "Idea · Markdown supported", exact: true });
+  await expect(title).toHaveAttribute("required", "");
+  await title.focus();
+  await title.press("Enter");
+  await expect(idea).toBeFocused();
+  await expect(page).toHaveURL(/idea=new$/);
+  await title.fill("Release evidence library");
+  await idea.fill("Collect evidence without scheduling work.");
   await detail.getByLabel("Choose files to add to Idea").setInputFiles({
     name: "evidence-map.txt",
     mimeType: "text/plain",
@@ -52,11 +58,73 @@ test("captures rich Idea content and a finalized attachment", async ({ page }) =
   const payload = await page.evaluate(() => JSON.parse(document.documentElement.dataset.fixtureIdeaCreated ?? "{}"));
   expect(payload).toMatchObject({
     title: "Release evidence library",
-    text: "## A durable index\n\nCollect evidence without scheduling work.",
-    context: "Useful after several releases have accumulated.",
-    links: ["https://example.test/evidence"],
+    text: "Collect evidence without scheduling work.",
+    context: "",
+    links: [],
   });
   expect(payload.attachmentIds).toHaveLength(1);
+});
+
+test("pastes an image and captures with the keyboard shortcut", async ({ page }) => {
+  await page.getByRole("button", { name: "Capture idea" }).click();
+  const detail = page.getByRole("complementary", { name: "Capture idea" });
+  const input = detail.getByRole("textbox", { name: "Idea · Markdown supported", exact: true });
+  await detail.getByLabel("Title").fill("Pasted image idea");
+  await input.evaluate((composer) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["image bytes"], "pasted-idea.png", { type: "image/png" }));
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: transfer });
+    composer.dispatchEvent(event);
+  });
+  await expect(detail.getByText("pasted-idea.png", { exact: true })).toBeVisible();
+  await expect(detail.getByText("ready to save")).toBeVisible();
+  await input.fill("Keep the visual reference with the thought.");
+  await input.press("Control+Enter");
+
+  await expect(page).toHaveURL(/idea=idea-created-/);
+  const payload = await page.evaluate(() => JSON.parse(document.documentElement.dataset.fixtureIdeaCreated ?? "{}"));
+  expect(payload).toMatchObject({ title: "Pasted image idea", text: "Keep the visual reference with the thought." });
+  expect(payload.attachmentIds).toHaveLength(1);
+});
+
+test("drops a file while preserving the required explicit title", async ({ page }) => {
+  await page.getByRole("button", { name: "Capture idea" }).click();
+  const detail = page.getByRole("complementary", { name: "Capture idea" });
+  const editor = detail.locator(".idea-editor");
+  const dataTransfer = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["dropped evidence"], "dropped-idea.txt", { type: "text/plain" }));
+    return transfer;
+  });
+  await editor.dispatchEvent("dragenter", { dataTransfer });
+  await expect(detail.getByText("Drop to attach", { exact: true })).toBeVisible();
+  await editor.dispatchEvent("drop", { dataTransfer });
+  await expect(detail.getByText("dropped-idea.txt", { exact: true })).toBeVisible();
+  await expect(detail.getByText("ready to save")).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Capture idea" })).toBeDisabled();
+  await detail.getByLabel("Title").fill("Review the dropped evidence");
+  await detail.getByRole("button", { name: "Capture idea" }).click();
+
+  const payload = await page.evaluate(() => JSON.parse(document.documentElement.dataset.fixtureIdeaCreated ?? "{}"));
+  expect(payload).toMatchObject({ title: "Review the dropped evidence", text: "" });
+  expect(payload.attachmentIds).toHaveLength(1);
+});
+
+test("keeps submission blocked until an invalid attachment is removed", async ({ page }) => {
+  await page.getByRole("button", { name: "Capture idea" }).click();
+  const detail = page.getByRole("complementary", { name: "Capture idea" });
+  await detail.getByLabel("Title").fill("Recover from a file error");
+  await detail.getByRole("textbox", { name: "Idea · Markdown supported", exact: true }).fill("Recover from a file error");
+  await detail.getByLabel("Choose files to add to Idea").setInputFiles({
+    name: "empty.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from(""),
+  });
+  await expect(detail.getByText("This file is empty.")).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Capture idea" })).toBeDisabled();
+  await detail.getByRole("button", { name: "Remove empty.txt" }).click();
+  await expect(detail.getByRole("button", { name: "Capture idea" })).toBeEnabled();
 });
 
 test("preserves an unsaved draft per Idea while switching", async ({ page }) => {
@@ -148,5 +216,12 @@ test("stacks the selected Idea on a narrow viewport without horizontal overflow"
   await ideaRow(page, "idea-editorial").click();
   await expect(page.getByRole("complementary", { name: "Editorial release notes" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Open Ideas" })).toBeHidden();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+  await page.getByRole("button", { name: "Close Idea" }).click();
+  await page.getByRole("button", { name: "Capture idea" }).click();
+  const capture = page.getByRole("complementary", { name: "Capture idea" });
+  await expect(capture.getByRole("textbox")).toHaveCount(2);
+  await expect(capture.getByRole("button", { name: "Capture idea" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });

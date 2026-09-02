@@ -526,20 +526,23 @@ retry rather than overwriting.
 
 ### Screen 9B — Capture or edit Idea
 
-The editor contains:
+Capture is deliberately reduced to a required **Title** and one large **Idea**
+input. The Idea field accepts typed or pasted Markdown, and the same surface
+accepts pasted images, dropped files, or files chosen with **Add files**.
+Context and links default empty, preserving the structured Idea contract without
+asking the person to classify a new thought. **Capture idea** stays unavailable
+without a title, while an upload is pending, or while a file needs retry/removal.
+Ctrl/Command+Enter submits when ready.
 
-- required **Title**;
-- optional **Idea** text with Markdown support and formatted preview;
-- optional **Context**;
-- **Links**, normalized HTTP(S) URLs;
-- finalized attachments with upload progress, retry, and additive attachment
-  behavior;
-- primary **Capture idea** for create or **Save changes** for edit.
+Editing an existing open Idea retains the structured **Title**, **Idea**,
+**Context**, and normalized HTTP(S) **Links** fields, Markdown preview, and
+additive attachments. Its primary action remains **Save changes**.
 
 An Idea may contain up to 100 links and 20 finalized attachments. Existing
 attachments remain associated; removal is outside this slice. Attribution
-shows the creating member and latest editing member. Local text/context/link
-drafts are scoped to the Idea; the editor may say “Draft saved on this device.”
+shows the creating member and latest editing member. Local capture or structured
+edit drafts are scoped to the Idea; the editor may say “Draft saved on this
+device.”
 Uploads remain visible until finalized or retried.
 
 Only Open Ideas are editable. Clean live updates replace the displayed state.

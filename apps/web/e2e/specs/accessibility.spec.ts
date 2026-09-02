@@ -58,4 +58,9 @@ test("keeps the Ideas index and editor free of detectable WCAG A/AA violations",
   await page.locator('[data-idea-id="idea-editorial"] .idea-row__select').click();
   await expect(page.getByRole("complementary", { name: "Editorial release notes" })).toBeVisible();
   await expectWcagConformance(page);
+
+  await page.getByRole("button", { name: "Close Idea" }).click();
+  await page.getByRole("button", { name: "Capture idea" }).click();
+  await expect(page.getByRole("complementary", { name: "Capture idea" })).toBeVisible();
+  await expectWcagConformance(page);
 });

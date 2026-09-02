@@ -37,9 +37,10 @@ Implement the prototype's hierarchy and states for:
 - agent connection/authorization;
 - empty and populated Overview;
 - Add Something composer and attachment states;
-- dedicated human Ideas route with Capture/Edit, Open manual ordering,
-  Archived/Promoted filters, Archive/Restore, and deliberate one-to-one
-  promotion to Intake; Ideas never appear in agent-facing Overview or search;
+- dedicated human Ideas route with Title plus one main text/paste/drop/file
+  Capture field, structured Edit, Open manual ordering, Archived/Promoted filters,
+  Archive/Restore, and deliberate one-to-one promotion to Intake; Ideas never
+  appear in agent-facing Overview or search;
 - composer image paste plus the full-viewport desktop file drop zone;
 - Needs You, Working, Ready, Inbox, and Recently Done;
 - Inbox and Ready/Working/Needs You/Done detail; unprocessed Inbox detail adds
