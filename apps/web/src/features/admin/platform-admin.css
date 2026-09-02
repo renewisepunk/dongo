@@ -85,6 +85,7 @@
   color: var(--text-muted);
 }
 
+.platform-admin__section-heading > * { min-width: 0; }
 .platform-admin__section-heading h2 { color: var(--text); }
 .platform-admin__table-wrap { overflow-x: auto; border: 1px solid var(--line); }
 .platform-admin table { width: 100%; border-collapse: collapse; min-width: 720px; }
@@ -93,12 +94,13 @@
 .platform-admin tbody th span { display: block; margin-top: 3px; color: var(--text-muted); font-weight: 400; }
 
 .platform-admin__organizations { display: grid; gap: 16px; }
-.platform-admin__organization { padding: 18px; border: 1px solid var(--line); background: var(--surface-0); }
+.platform-admin__organization { min-width: 0; padding: 18px; border: 1px solid var(--line); background: var(--surface-0); }
 .platform-admin__organization > header { display: flex; justify-content: space-between; gap: 16px; }
-.platform-admin__organization > header .mono { color: var(--text-muted); }
+.platform-admin__organization > header > div { min-width: 0; }
+.platform-admin__organization > header .mono { overflow-wrap: anywhere; color: var(--text-muted); }
 .platform-admin__plan { align-self: start; padding: 4px 8px; border: 1px solid var(--line); color: var(--amber); }
 .platform-admin__organization dl { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; margin: 18px 0; background: var(--line); border: 1px solid var(--line); }
-.platform-admin__organization dl div { padding: 10px; background: var(--surface-1); }
+.platform-admin__organization dl div { min-width: 0; padding: 10px; background: var(--surface-1); }
 .platform-admin__organization dt { color: var(--text-muted); font-size: 12px; }
 .platform-admin__organization dd { margin: 5px 0 0; font-family: ui-monospace, Menlo, monospace; }
 
@@ -110,8 +112,8 @@
   margin-top: 18px;
 }
 
-.platform-admin__allowance-form label { display: grid; gap: 6px; color: var(--text-muted); font-size: 12px; }
-.platform-admin__allowance-form input { width: 100%; min-height: 44px; }
+.platform-admin__allowance-form label { min-width: 0; display: grid; gap: 6px; color: var(--text-muted); font-size: 12px; }
+.platform-admin__allowance-form input { width: 100%; min-width: 0; max-width: 100%; min-height: 44px; }
 .platform-admin__allowance-form .button { min-height: 44px; }
 .platform-admin__allowance-form .form-error { grid-column: 1 / -1; margin: 0; }
 .platform-admin__error { padding: 20px; border: 1px solid var(--danger); }
@@ -125,7 +127,7 @@
   .platform-admin__tabs button { flex: 1 0 auto; }
   .platform-admin__section-heading { align-items: start; }
   .platform-admin__organization dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .platform-admin__allowance-form { grid-template-columns: 1fr; }
+  .platform-admin__allowance-form { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

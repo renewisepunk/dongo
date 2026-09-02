@@ -41,7 +41,21 @@ test("platform administration remains usable at narrow mobile widths", async ({ 
   await page.getByRole("tab", { name: "Organization limits" }).click();
   await expect(page.getByLabel("Active projects")).toBeVisible();
   await expect(page.getByLabel("Total Work items")).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  const geometry = await page.evaluate(() => ({
+    viewportWidth: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+    overflow: [...document.querySelectorAll("*")].flatMap((element) => {
+      const rect = element.getBoundingClientRect();
+      if (rect.left >= 0 && rect.right <= window.innerWidth) return [];
+      return [{
+        element: `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}${typeof element.className === "string" && element.className ? `.${element.className.trim().replace(/\s+/g, ".")}` : ""}`,
+        left: Math.round(rect.left * 100) / 100,
+        right: Math.round(rect.right * 100) / 100,
+        width: Math.round(rect.width * 100) / 100,
+      }];
+    }),
+  }));
+  expect(geometry.scrollWidth, JSON.stringify(geometry)).toBeLessThanOrEqual(geometry.viewportWidth);
 });
 
 test("only super admins receive the platform administration navigation item", async ({ page }) => {
