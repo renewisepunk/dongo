@@ -13,6 +13,7 @@ additional remote-only capability branches. Old branches are preserved.
 | dong048 | `8e0dce4` (outcome referred to earlier `e3f4e01`) | `e0428e5` | Owner-curated changelog was tested locally, not pushed, deployment left to coordinator. |
 | dong049 | `82af151` | `7e96daa` | Agent marks were tested locally and not pushed. No release evidence. |
 | dong059 | `350a2b5` | `b7484fd` | New completion correction; deliberately kept Working during integration and release. |
+| dong059 help follow-up | `bfd5b95` | `0c81c00` | Human and JSON CLI help carry the same completion preconditions. |
 
 Each original Done item received a truthful comment that its label was premature
 and that recovery is pending under dong060. The original outcomes and history
@@ -70,6 +71,14 @@ in the development test project. The agent marks remain original geometric
 stand-ins, not vendor logos. Unrelated idle-agent color Intake is out of scope.
 
 ## Release status at candidate preparation
+
+After the interrupted host's lease expired, the continuing coordinator reclaimed
+the existing dong060 item rather than sharing its abandoned Run or creating
+duplicate Work. PR #1 at `913634b` passed all four CI jobs. Before final acceptance,
+`3edca52` refreshed the tracked repository instruction block through the shared
+integration generator while preserving the existing MCP connection settings.
+The CLI help follow-up changes the unpublished 0.2.4 payload; its reviewed digest
+was recomputed before the final gate run. Neither update constitutes a live release.
 
 Implementation is ready for full gates; integration/release is pending. Focused
 checks passed: 18 changelog/admin domain tests, 74 web unit tests, web typechecks,
