@@ -64,7 +64,7 @@ import type { AttachmentSummary, Intake, OwnerAttention, WorkItem } from "./mode
 import { CommentComposer } from "./CommentComposer";
 import { IntakeEditor } from "./IntakeEditor";
 import { ConcurrentActivity } from "./ConcurrentActivity";
-import { closureReasonLabel, IssueCloseForm } from "./IssueCloseForm";
+import { closureReasonLabel, IssueActionsMenu } from "./IssueCloseForm";
 import "./overview.css";
 
 export type OverviewConnection = Pick<
@@ -3123,6 +3123,13 @@ function WorkDetail(props: WorkDetailProps) {
         </button>
         <div class="detail__head-spacer" />
         <Show when={props.peek}><span class="detail__peek">peek · esc closes</span></Show>
+        <Show when={props.item.canonicalState !== "done" && props.item.canonicalState !== "cancelled"}>
+          <IssueActionsMenu
+            allowCompleted={props.item.canonicalState === "ready"}
+            active={props.item.canonicalState === "working"}
+            onConfirm={props.onCloseIssue}
+          />
+        </Show>
       </div>
       <div class="detail__scroll">
         <div class="detail__title-group">
@@ -3246,14 +3253,6 @@ function WorkDetail(props: WorkDetailProps) {
               <Show when={props.item.closureNote}><p class="note">{props.item.closureNote}</p></Show>
             </div>
           </section>
-        </Show>
-
-        <Show when={props.item.canonicalState !== "done" && props.item.canonicalState !== "cancelled"}>
-          <IssueCloseForm
-            allowCompleted={props.item.canonicalState === "ready"}
-            active={props.item.canonicalState === "working"}
-            onConfirm={props.onCloseIssue}
-          />
         </Show>
 
         <Show when={props.item.parentWork}>{(parent) => (
@@ -3585,6 +3584,9 @@ function IntakeDetail(props: IntakeDetailProps) {
           <span class="detail-close-desktop">✕&nbsp; close</span><span class="detail-close-mobile">←&nbsp; back</span>
         </button>
         <div class="detail__head-spacer" /><span class="detail__identifier">inbox</span>
+        <Show when={props.intake.status === "waiting" || props.intake.status === "triaging"}>
+          <IssueActionsMenu allowCompleted={false} active={props.intake.status === "triaging"} onConfirm={props.onCloseIssue} />
+        </Show>
       </div>
       <div class="detail__scroll">
         <div class="detail__title-group">
@@ -3631,9 +3633,6 @@ function IntakeDetail(props: IntakeDetailProps) {
               <Show when={props.intake.closureNote}><p class="note">{props.intake.closureNote}</p></Show>
             </div>
           </section>
-        </Show>
-        <Show when={props.intake.status === "waiting" || props.intake.status === "triaging"}>
-          <IssueCloseForm allowCompleted={false} active={props.intake.status === "triaging"} onConfirm={props.onCloseIssue} />
         </Show>
         <Show when={linked().length}>
           <section class="detail-section">

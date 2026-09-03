@@ -318,7 +318,24 @@ test("queues and cancels Ready work through a truthful live runner state", async
 test("closes Ready work as completed while preserving its outcome", async ({ page }) => {
   await page.locator('[data-work-id="work-ready-a"]').click();
   const detail = workDetail(page, "Verify fixture search");
-  await detail.getByRole("button", { name: "Set issue outcome", exact: true }).click();
+  const actions = detail.getByRole("button", { name: "Issue actions", exact: true });
+  await expect(actions).toHaveAttribute("aria-haspopup", "menu");
+  await expect(actions).toHaveAttribute("aria-expanded", "false");
+  expect(await actions.evaluate((element) => element.closest(".detail__head") !== null)).toBe(true);
+  await expect(detail.getByText("issue actions", { exact: true })).toHaveCount(0);
+
+  await actions.focus();
+  await page.keyboard.press("ArrowDown");
+  const menu = detail.getByRole("menu", { name: "Issue actions" });
+  const closeIssue = menu.getByRole("menuitem", { name: "Close issue" });
+  await expect(closeIssue).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(actions).toBeFocused();
+  await expect(actions).toHaveAttribute("aria-expanded", "false");
+
+  await actions.click();
+  await closeIssue.click();
+  await expect(detail.getByRole("form", { name: "Close this issue" })).toBeVisible();
   await detail.getByLabel("Completed").check();
   await detail.getByLabel("Note optional").fill("Verified manually.");
   await detail.getByRole("button", { name: "Mark done" }).click();
@@ -331,13 +348,60 @@ test("dismisses Inbox Intake without deleting its durable detail", async ({ page
   const row = page.locator('[data-nav-kind="intake"][data-nav-id="intake-waiting"]');
   await row.click();
   const detail = workDetail(page, "Investigate the fixture login screen");
-  await detail.getByRole("button", { name: "Set issue outcome", exact: true }).click();
+  const actions = detail.getByRole("button", { name: "Issue actions", exact: true });
+  await actions.click();
+  await detail.getByRole("menuitem", { name: "Close issue" }).click();
   await detail.getByLabel("Incorrect or added by mistake").check();
   await detail.getByLabel("Note optional").fill("Filed against the wrong project.");
   await detail.getByRole("button", { name: "Close issue", exact: true }).click();
   await expect(detail.getByText("Incorrect or added by mistake", { exact: true })).toBeVisible();
   await expect(row).toBeHidden();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.fixtureClosedIntake)).toContain('"reason":"incorrect"');
+});
+
+test("keeps active Work completion agent-owned in the header menu flow", async ({ page }) => {
+  await page.locator('[data-work-id="work-working"]').click();
+  const detail = workDetail(page, "Harden attachment delivery");
+  await detail.getByRole("button", { name: "Issue actions", exact: true }).click();
+  await detail.getByRole("menuitem", { name: "Close issue" }).click();
+
+  await expect(detail.getByText("Closing this issue cancels its active agent run.")).toBeVisible();
+  await expect(detail.getByLabel("Completed")).toHaveCount(0);
+  await expect(detail.getByLabel("No longer relevant")).toBeFocused();
+});
+
+test("restores focus when the issue outcome form is dismissed", async ({ page }) => {
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  const detail = workDetail(page, "Verify fixture search");
+  const actions = detail.getByRole("button", { name: "Issue actions", exact: true });
+
+  await actions.click();
+  await detail.getByRole("menuitem", { name: "Close issue" }).click();
+  await expect(detail.getByLabel("Completed")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(actions).toBeFocused();
+  await expect(detail.getByRole("form", { name: "Close this issue" })).toHaveCount(0);
+
+  await actions.click();
+  await detail.getByRole("menuitem", { name: "Close issue" }).click();
+  await detail.getByRole("button", { name: "Keep open" }).click();
+  await expect(actions).toBeFocused();
+});
+
+test("keeps the issue actions popover inside the mobile viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 402, height: 812 });
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  const detail = workDetail(page, "Verify fixture search");
+  await detail.getByRole("button", { name: "Issue actions", exact: true }).click();
+  await detail.getByRole("menuitem", { name: "Close issue" }).click();
+
+  const form = detail.getByRole("form", { name: "Close this issue" });
+  await expect(form).toBeVisible();
+  const box = await form.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(402);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(812);
 });
 
 test("switches projects through an accessible keyboard menu", async ({ page }) => {
