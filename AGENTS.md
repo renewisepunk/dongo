@@ -22,7 +22,7 @@ Convex is authoritative for domain state. `packages/contracts` is the canonical 
 
 Use Node.js 24 for repository work and npm workspaces. During development, run the narrowest relevant workspace tests; before handoff, run `npm run verify:no-secrets`, `npm run check`, `npm test`, and `npm run build`. Regenerate changed contract artifacts with `npm run generate:contracts` and verify them with `npm run verify:contracts`.
 
-Development infrastructure is private to this repository. The released CLI and external users always use `dongo.so` and must never be offered an environment selector. Use `npm run deploy:dev:plan` and `npm run deploy:dev` for coherent development releases. Production deployment requires an accepted candidate and the production runbook; preview it with `npm run deploy:production:plan` before `npm run deploy:production`.
+Development infrastructure is private to this repository. The released CLI and external users always use `dongo.so` and must never be offered an environment selector. Use `npm run deploy:dev:plan` and `npm run deploy:dev` for coherent development releases. Production deployment requires an accepted candidate and the production runbook; preview it with `npm run deploy:production:plan` before `npm run deploy:production`. When the public CLI needs publishing, follow the runbook's owner-only `NPM_ACCESS_TOKEN` procedure instead of relying on `npm login`.
 
 ## Commit and release completion
 

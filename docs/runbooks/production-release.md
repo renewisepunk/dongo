@@ -42,6 +42,54 @@ The temporary secret files are owner-only, overwritten, and removed before the c
 
 Google-to-OTP migration is same-email only. Keep `account.accountLinking` explicit: the provider and existing local account must both report verified email ownership, different-email linking is disabled, and no provider is force-trusted. After the first live migration, confirm the production user table still has one matching user and that the Google provider row references that existing user without printing provider tokens or account identifiers.
 
+## npm publisher authorization
+
+Keep the npm granular access token only as `NPM_ACCESS_TOKEN` in the ignored
+repository `.env`. The token must have read-write access to `@wisepunk/dongo`
+and be permitted to publish under the npm account's current two-factor policy.
+Never commit it, paste it into a command, write its resolved value to an npm
+configuration file, or include it in release evidence.
+
+Do not assume `npm login` selected this token. `npm login` can replace the active
+credential in `~/.npmrc` with a different token that requires an interactive
+WebAuthn approval. When the CLI release plan reports `action: "publish"`, use an
+owner-only temporary npm configuration whose token remains a literal environment
+placeholder. This makes the release use `NPM_ACCESS_TOKEN` regardless of the
+credential currently stored by npm:
+
+```sh
+set -eu
+chmod 600 .env
+release_npm_config="$(mktemp "${TMPDIR:-/tmp}/dongo-npmrc.XXXXXX")"
+chmod 600 "$release_npm_config"
+trap 'unset NPM_ACCESS_TOKEN; rm -f "$release_npm_config"' EXIT HUP INT TERM
+
+{
+  printf '%s\n' 'registry=https://registry.npmjs.org/'
+  printf '%s\n' '//registry.npmjs.org/:_authToken=${NPM_ACCESS_TOKEN}'
+} > "$release_npm_config"
+
+NPM_ACCESS_TOKEN="$(
+  node --env-file=.env --eval \
+    'if (!process.env.NPM_ACCESS_TOKEN) process.exit(2); process.stdout.write(process.env.NPM_ACCESS_TOKEN)'
+)"
+export NPM_ACCESS_TOKEN
+
+NPM_CONFIG_USERCONFIG="$release_npm_config" \
+  node scripts/release-cli.mjs --preflight
+NPM_CONFIG_USERCONFIG="$release_npm_config" \
+  npm run deploy:production
+```
+
+Do not enable shell tracing while running this block. The Node subprocess reads
+the local `.env` without executing it and returns only `NPM_ACCESS_TOKEN`; other
+local credentials are not exported into the release environment. The trap
+unsets the token and deletes the temporary npm configuration on success,
+failure, or interruption. If authorization fails, verify the token's package and
+organization scope, expiry, and two-factor setting in npm before replacing the
+ignored `.env` value. Never weaken the release preflight or publish a separately
+packed archive to work around an authorization failure.
+
 ## Preflight
 
 ```sh
