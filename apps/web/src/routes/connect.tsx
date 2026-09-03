@@ -130,6 +130,9 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
     if (host() === "AGENTS.md") {
       return "Read AGENTS.md and set up dongo for this repository in this current agent session. Apply the repository configuration, complete browser approval only if required, restart only when necessary, and verify the connection before doing work.";
     }
+    if (host() === "Codex") {
+      return "Set up dongo for this repository in this current Codex session. If the CLI is not connected, run dongo connect --agent-host codex so one browser action explicitly approves both clients. Then apply the project-scoped configuration, complete Codex login, restart only if necessary, and verify with dongo_session_start. Keep using this repository session.";
+    }
     return `Set up dongo for this repository in this current ${host()} session. In order: 1) apply the project-scoped configuration; 2) approve the project-scoped server only if required; 3) complete login only if required; 4) restart ${host()} only when necessary; 5) verify the connection with dongo_session_start. Keep using this repository session.`;
   });
 
@@ -259,7 +262,7 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
 
         <div class="authorization-card">
           <div class="instruction__label">setup sequence</div>
-          <p class="connection-card__body">The CLI connection is required. MCP is optional; use these five host steps only when you want direct dongo tools in the selected agent.</p>
+          <p class="connection-card__body">The CLI connection is required. MCP is optional. Codex can share the explicit browser approval, but every host keeps its own credential.</p>
           <ol class="connection-card__body" aria-label="Setup sequence">
             <li>Apply the configuration.</li>
             <li>Approve the project-scoped server only if required.</li>

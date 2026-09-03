@@ -74,6 +74,8 @@ export interface ConnectOptions {
   executionMode?: "manual" | "autonomous";
   /** Explicitly propose creating a new project instead of matching an existing one. */
   createProject?: boolean;
+  /** Include one supported MCP host in the browser's single setup approval. */
+  agentHost?: "codex";
   events?: DeviceAuthorizationEvents;
   signal?: AbortSignal;
 }
@@ -219,6 +221,7 @@ export class CoreService {
         executionMode: options.executionMode ?? "manual",
         projectRef,
         projectAction: options.createProject ? "create" : undefined,
+        agentHost: options.agentHost,
       },
       events: options.events,
       signal: options.signal,

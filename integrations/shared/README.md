@@ -6,7 +6,7 @@ An installer must parse and merge the target configuration, preserve unrelated k
 
 Upgrade replaces only dongo-owned keys and the exact managed block. When this repository is rebound to another project, the installer removes a stale server entry only when its generated name, same-origin dongo project endpoint, transport shape, and absence of custom settings prove that dongo created it; ambiguous or customized entries are preserved. The command reports every replaced server name so the user can separately log out or revoke its host grant. Uninstall removes only the current generated entries. `codex mcp logout` or `claude mcp logout` clears host-local OAuth material, while project installation revocation is a separate server-side action. Removing configuration does not revoke a grant, and revoking a grant does not edit local files.
 
-Every host and dongo project receives a distinct endpoint, server name, grant family, and installation Actor. Never reuse the dongo CLI grant for Codex, Claude, or another MCP host. No hook or local process is required: the hosted server does not shell out to the CLI.
+Every host and dongo project receives a distinct endpoint, server name, grant family, and installation Actor. One explicit device screen may record consent for both the CLI and fixed Codex client, but it never reuses the CLI grant. No hook or local process is required: the hosted server does not shell out to the CLI.
 
 Use the canonical Work identifier for agent output, copy, search, links, and
 snapshot/export paths. It matches `[a-z]{4}[0-9]{3}` with no separator, such as
@@ -18,7 +18,8 @@ not synthesize or prefer them. Sequence `999` is valid; on the non-retryable
 Keep account, repository, and host state separate. A signed-in browser account
 may authorize more than one repository without signing in again. Each repository
 still needs its own explicit project binding through `dongo connect`, and each
-optional MCP host needs its own project-scoped approval. An active-project plan
+optional MCP host needs project-scoped consent. Codex consent may be included by
+an explicit `--agent-host codex` setup intent; other hosts approve separately. An active-project plan
 limit is not an authentication failure: preserve the session and offer upgrade,
 archive, or an exact existing-project binding instead of logging out or retrying
 OAuth.

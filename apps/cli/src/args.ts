@@ -52,6 +52,7 @@ const VALUE_OPTIONS = new Set([
   "work-id",
   "latest-update",
   "execution-mode",
+  "agent-host",
   "parallel-capability",
   "worktree-capability",
   "workspace-kind",

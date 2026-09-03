@@ -5,12 +5,14 @@
 Expected flow:
 
 ```sh
-dongo connect
+dongo connect --agent-host codex # when Codex MCP should be approved in the same step
 dongo auth status --json
 dongo doctor --json
 ```
 
 The terminal opens one `verification_uri_complete` link, displays a comparison code, and polls. The browser must show the same code, dongo CLI client, intended account, project, API resource, and requested scopes. Approval is not connection: the terminal reports success only after secure credential storage, repository marker creation, and doctor checks pass.
+
+`--agent-host codex` is explicit combined consent, not shared authentication. The browser must name both dongo CLI and Codex and show the additional project-scoped host access before approval. The authorization Worker accepts preauthorization only when the single-use signed human assertion, active project, user, unexpired pending CLI device code, CLI client, and exact API resource all match. Codex remains a fixed public native OAuth client with S256 PKCE and `http://127.0.0.1/callback`; it performs its own code exchange, stores its own credential, and creates an independently revocable installation. Without the flag, Codex uses its normal separate consent screen.
 
 For SSH/headless use, add `--no-browser` and open the printed complete link on a trusted browser. Never send the code or link to another person and never substitute a copied bearer token.
 
@@ -23,8 +25,9 @@ For SSH/headless use, add `--no-browser` and open the printed complete link on a
   project-scoped CLI installation. A healthy binding in another repository does
   not bind this one.
 - Codex, Claude Code, and generic MCP connections are optional, project-scoped
-  host installations. Each has its own approval and credential; none replaces
-  the repository binding or reuses its CLI credential.
+  host installations. Each has its own credential; none replaces the repository
+  binding or reuses its CLI credential. One explicit combined screen may record
+  both CLI and Codex consent, but the resulting grants stay separate.
 
 For an unbound additional repository, run `dongo connect` from that repository
 and let the approval page reuse the existing account session. Do not run

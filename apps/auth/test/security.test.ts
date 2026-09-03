@@ -27,6 +27,13 @@ import {
 } from "../src/grant-binding";
 import { authFromEmail, renderOtpEmail } from "../src/otp-email";
 import { createAuthorizationServer, oauthClientLabel } from "../src/auth";
+import { preauthorizeCodexHost } from "../src/bridge-plugin";
+import {
+  CODEX_OAUTH_CALLBACK,
+  CODEX_OAUTH_CLIENT_ID,
+  ensureFirstPartyClient,
+  firstPartyClientDiscovery,
+} from "../src/first-party-clients";
 import type { AuthWorkerEnv } from "../src/env";
 
 describe("authorization boundary security", () => {
@@ -58,6 +65,103 @@ describe("authorization boundary security", () => {
     const server = createAuthorizationServer(env);
     await expect(server.$context).resolves.toBeDefined();
     database.close();
+  });
+
+  it("registers Codex as a fixed public PKCE client without weakening legacy CLI records", async () => {
+    const records = new Map<string, Record<string, unknown>>();
+    records.set("dongo-cli", {
+      clientId: "dongo-cli",
+      clientDiscoveryId: "dongo-static-cli",
+    });
+    const adapter = {
+      async findOne<T>(input: { where: Array<{ field: string; value: unknown }> }) {
+        return (records.get(String(input.where[0]?.value)) ?? null) as T | null;
+      },
+      async create<T>(input: { data: Record<string, unknown> }) {
+        records.set(String(input.data.clientId), input.data);
+        return input.data as T;
+      },
+    };
+
+    await expect(ensureFirstPartyClient(adapter, "dongo-cli"))
+      .resolves.toMatchObject({ clientDiscoveryId: "dongo-static-cli" });
+    await expect(ensureFirstPartyClient(adapter, CODEX_OAUTH_CLIENT_ID))
+      .resolves.toMatchObject({
+        clientId: CODEX_OAUTH_CLIENT_ID,
+        clientDiscoveryId: "dongo-first-party",
+        applicationType: "native",
+        tokenEndpointAuthMethod: "none",
+        requirePKCE: true,
+        redirectUris: [CODEX_OAUTH_CALLBACK],
+        grantTypes: ["authorization_code", "refresh_token"],
+      });
+    const discovery = firstPartyClientDiscovery() as {
+      matches(clientId: string): boolean;
+    };
+    expect(discovery.matches(CODEX_OAUTH_CLIENT_ID)).toBe(true);
+  });
+
+  it("records Codex consent only for the matching pending CLI device request", async () => {
+    const created: Array<{ model: string; data: Record<string, unknown> }> = [];
+    const deviceCode = {
+      id: "device_1",
+      userId: "profile_1",
+      status: "pending",
+      expiresAt: new Date("2026-09-03T12:01:00.000Z"),
+      oauthClientId: "dongo-cli",
+      resources: ["https://dev.dongo.so/api/agent/v1"],
+    };
+    const adapter = {
+      async findOne<T>(input: {
+        model: string;
+        where: Array<{ field: string; value: unknown }>;
+      }) {
+        if (input.model === "deviceCode") return deviceCode as T;
+        return null;
+      },
+      async create<T>(input: { model: string; data: Record<string, unknown> }) {
+        created.push(input);
+        return input.data as T;
+      },
+      async update<T>() {
+        throw new Error("unexpected update");
+      },
+    };
+    const valid = {
+      adapter,
+      userId: "profile_1",
+      projectRef: "project_1",
+      userCode: "DV9KPQLH",
+      apiResource: "https://dev.dongo.so/api/agent/v1",
+      mcpResource: "https://dev.dongo.so/p/project_1/mcp",
+      now: new Date("2026-09-03T12:00:00.000Z"),
+    };
+
+    await expect(preauthorizeCodexHost({
+      ...valid,
+      userId: "profile_other",
+    })).rejects.toThrow("invalid or no longer pending");
+    expect(created).toHaveLength(0);
+
+    await expect(preauthorizeCodexHost(valid)).resolves.toBeUndefined();
+    expect(created).toHaveLength(2);
+    expect(created[0]).toMatchObject({
+      model: "oauthClient",
+      data: {
+        clientId: "dongo-codex",
+        requirePKCE: true,
+        tokenEndpointAuthMethod: "none",
+      },
+    });
+    expect(created[1]).toMatchObject({
+      model: "oauthConsent",
+      data: {
+        clientId: "dongo-codex",
+        userId: "profile_1",
+        referenceId: "dongo-consent:project_1",
+        resources: ["https://dev.dongo.so/p/project_1/mcp"],
+      },
+    });
   });
 
   it("labels OAuth installations from validated metadata or the client registry", async () => {

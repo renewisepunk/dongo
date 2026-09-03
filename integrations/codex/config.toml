@@ -1,2 +1,4 @@
 [mcp_servers.dongo-{{shortProjectRef}}]
 url = "{{origin}}/p/{{publicProjectRef}}/mcp"
+oauth.client_id = "dongo-codex"
+oauth.callback_url = "http://127.0.0.1/callback"

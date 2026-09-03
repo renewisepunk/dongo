@@ -56,6 +56,7 @@ import {
   getProjectCreationContext,
   getOAuthClientSummary,
   listAuthorizableProjects,
+  preauthorizeMcpHost,
 } from "./authorization-client";
 
 afterEach(() => {
@@ -193,6 +194,36 @@ describe("isolated authorization worker client", () => {
     });
     vi.stubGlobal("fetch", fetch);
     await decideDeviceRequest("DV9KPQLH", true);
+  });
+
+  it("preauthorizes Codex only for the signed project and pending CLI code", async () => {
+    const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("https://dev.dongo.so/api/auth/dongo/preauthorize-host");
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        assertion: "signed-human-bridge-assertion-with-safe-length",
+        userCode: "DV9KPQLH",
+        host: "codex",
+      });
+      return Response.json({
+        ok: true,
+        host: "codex",
+        clientId: "dongo-codex",
+        projectRef: "project_1",
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await preauthorizeMcpHost({
+      projectRef: "project_1",
+      userCode: "DV9KPQLH",
+      host: "codex",
+      returnTo: "/device?user_code=DV9KPQLH&agent_host=codex",
+    });
+    expect(convexCalls).toContain(
+      'mintAssertion:{"projectRef":"project_1","returnTo":"/device?user_code=DV9KPQLH&agent_host=codex"}',
+    );
+    expect(fetch).toHaveBeenCalledOnce();
   });
 
   it("sends consent through the provider and strips unsigned query injection", async () => {

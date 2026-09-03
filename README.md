@@ -119,7 +119,7 @@ cannot reload MCP servers dynamically may need one restart.
 ```sh
 npm install --global @wisepunk/dongo
 dongo --version
-dongo connect
+dongo connect --agent-host codex
 dongo doctor
 ```
 
@@ -130,7 +130,7 @@ scoped package and its repository/integrity metadata with
 unscoped lookalike or bypass a host security policy. A host-required approval is
 an expected user confirmation, not a setup failure.
 
-`dongo connect` always connects to the live service at `dongo.so` and opens a browser for project approval. Authentication stays outside the repository, which receives only a non-secret connection marker. SSH and headless environments can use `--no-browser`. Development infrastructure is private to dongo's own source-level test harnesses and is not selectable from the installed CLI.
+`dongo connect` always connects to the live service at `dongo.so` and opens a browser for project approval. `--agent-host codex` makes that one screen explicitly approve both the CLI and Codex; each still receives a separate project-scoped credential. Authentication stays outside the repository, which receives only a non-secret connection marker and public OAuth client settings. SSH and headless environments can use `--no-browser`. Development infrastructure is private to dongo's own source-level test harnesses and is not selectable from the installed CLI.
 
 ## Manual MCP setup
 
@@ -148,7 +148,7 @@ dongo integrate claude
 dongo integrate generic
 ```
 
-Use `--apply` only after reviewing the managed configuration. dongo adds the project connection without copying CLI authentication into Codex, Claude, or another host. Each host authorizes its own connection.
+Use `--apply` only after reviewing the managed configuration. dongo adds the project connection without copying CLI authentication into Codex, Claude, or another host. Codex can reuse the explicit combined consent from `dongo connect --agent-host codex`, but it still performs its own PKCE token exchange and owns an independently revocable credential. Other hosts authorize separately.
 
 The onboarding skill performs that preview and validated apply as one setup
 flow. The preview names the exact MCP configuration and `AGENTS.md` or

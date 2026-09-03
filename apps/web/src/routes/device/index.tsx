@@ -11,6 +11,7 @@ import {
   getProjectCreationContext,
   getDeviceRequest,
   listAuthorizableProjects,
+  preauthorizeMcpHost,
   selectAuthorizationProject,
   type AuthorizableProject,
   type DeviceRequest,
@@ -102,6 +103,7 @@ export type DeviceAuthorizationRouteDependencies = {
   getProjectCreationContext: typeof getProjectCreationContext;
   createFirstProject: typeof createFirstProject;
   selectAuthorizationProject: typeof selectAuthorizationProject;
+  preauthorizeMcpHost: typeof preauthorizeMcpHost;
   decideDeviceRequest: typeof decideDeviceRequest;
 };
 
@@ -119,6 +121,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
     repository_url?: string;
     execution_mode?: string;
     project_action?: string;
+    agent_host?: string;
   }>();
   const initialCode = normalizeUserCode(searchParams.user_code ?? "");
   const [userCode, setUserCode] = createSignal(initialCode);
@@ -140,9 +143,11 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
   const loadProjectCreationContext = props.dependencies?.getProjectCreationContext ?? getProjectCreationContext;
   const provisionFirstProject = props.dependencies?.createFirstProject ?? createFirstProject;
   const chooseProject = props.dependencies?.selectAuthorizationProject ?? selectAuthorizationProject;
+  const authorizeHost = props.dependencies?.preauthorizeMcpHost ?? preauthorizeMcpHost;
   const saveDecision = props.dependencies?.decideDeviceRequest ?? decideDeviceRequest;
   const currentReturnTo = () => `${location.pathname}${location.search}`;
   const createIntent = createMemo(() => searchParams.project_action === "create");
+  const agentHost = createMemo(() => searchParams.agent_host === "codex" ? "codex" as const : undefined);
   const selectedOrganization = createMemo(() => {
     const organizations = creationContext()?.organizations ?? [];
     return organizations.find((organization) => organization.id === selectedOrganizationId()) ?? organizations[0];
@@ -324,6 +329,14 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
         }
         if (!approvedProject) throw new AuthorizationFlowError("invalid", "The project binding is incomplete.");
         await chooseProject(approvedProject.publicRef, currentReturnTo());
+        if (agentHost()) {
+          await authorizeHost({
+            projectRef: approvedProject.publicRef,
+            userCode: userCode(),
+            host: agentHost()!,
+            returnTo: currentReturnTo(),
+          });
+        }
       }
       await saveDecision(userCode(), accept);
       setState(accept ? "approved" : "denied");
@@ -366,8 +379,8 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
         <div class="auth-stack">
           <div class="title-group">
             <div class="eyebrow eyebrow--amber">Authorize terminal</div>
-            <h1 class="auth-title">Authorize dongo CLI</h1>
-            <p class="auth-lede">Confirm this is the terminal and project you intended to authorize.</p>
+            <h1 class="auth-title">Authorize dongo CLI{agentHost() === "codex" ? " + Codex" : ""}</h1>
+            <p class="auth-lede">Confirm this is the terminal, agent host, and project you intended to authorize.</p>
           </div>
           <div class="field-group">
             <div class="field-label">Comparison code</div>
@@ -395,6 +408,9 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
               <Show when={wantsProjectCreation() && projectProposal()}>{(proposal) => (
                 <li>Create “{proposal().name}” as {projects().length === 0 ? "this account’s first project" : "another project"} and bind this terminal to it.</li>
               )}</Show>
+              <Show when={agentHost() === "codex"}>
+                <li>Authorize Codex for the same project so its separate secure login completes without another dongo approval.</li>
+              </Show>
               <For each={loaded().scopes}>{(scope) => <li>{scopeCopy[scope] || scope}</li>}</For>
             </ul>
           </div>
@@ -496,7 +512,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
           <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
           <p class="note" id="device-warning">Approve only if this code matches a terminal in your possession. Do not approve a code sent in a message.</p>
           <div class="consent-actions">
-            <button class="button button--primary button--full" type="button" disabled={!canApprove()} onClick={() => void decide(true)}>{wantsProjectCreation() && projectProposal() ? "Create & approve" : "Approve"}</button>
+            <button class="button button--primary button--full" type="button" disabled={!canApprove()} onClick={() => void decide(true)}>{wantsProjectCreation() && projectProposal() ? `Create & approve${agentHost() === "codex" ? " both" : ""}` : `Approve${agentHost() === "codex" ? " both" : ""}`}</button>
             <button class="button button--quiet" type="button" onClick={() => void decide(false)}>Deny</button>
           </div>
         </div>
@@ -509,7 +525,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
               <span style={{ color: state() === "approved" ? "var(--green)" : "var(--danger)" }}>{state() === "approved" ? "✓" : "✕"}</span>
               <span>{state() === "approved" ? "Approved — you can close this window" : "Authorization denied"}</span>
             </div>
-            <p class="auth-lede">{state() === "approved" ? "dongo is approved. Return to your terminal while it finishes secure storage and its connection check; only the terminal will report Connected." : "No token was issued. You can close this page or restart dongo connect."}</p>
+            <p class="auth-lede">{state() === "approved" ? `${agentHost() === "codex" ? "dongo CLI and Codex are" : "dongo is"} approved for this project. Return to your terminal while it finishes secure storage and its connection check; only the terminal will report Connected.` : "No token was issued. You can close this page or restart dongo connect."}</p>
           </div>
           <p class="security-note">This page never displays access or refresh tokens.</p>
         </div>

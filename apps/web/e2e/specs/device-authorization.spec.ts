@@ -33,6 +33,33 @@ test("reviews and approves the exact terminal and project without technical reso
   );
 });
 
+test("shows and records one explicit CLI and Codex approval", async ({ page }) => {
+  const requestPath = "/device?user_code=ABCD-EFGH&project_ref=companion-project&project_name=Companion&agent_host=codex";
+  await page.goto(requestPath);
+
+  await expect(page.getByRole("heading", { name: "Authorize dongo CLI + Codex" })).toBeVisible();
+  await expect(page.getByText(
+    "Authorize Codex for the same project so its separate secure login completes without another dongo approval.",
+    { exact: true },
+  )).toBeVisible();
+  await page.getByRole("button", { name: "Approve both" }).click();
+
+  await expect(page.getByText("Approved — you can close this window", { exact: true })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-fixture-device-host",
+    JSON.stringify({
+      projectRef: "companion-project",
+      userCode: "ABCDEFGH",
+      host: "codex",
+      returnTo: requestPath,
+    }),
+  );
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-fixture-device-decision",
+    JSON.stringify({ userCode: "ABCDEFGH", accept: true }),
+  );
+});
+
 test("matches the agent proposal by repository and fails closed when context is ambiguous", async ({ page }) => {
   await page.goto("/device?user_code=ABCD-EFGH&project_name=dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo.git");
   await expect(page.getByText("Fixture Studio / dongo", { exact: true })).toBeVisible();

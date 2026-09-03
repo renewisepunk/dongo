@@ -42,6 +42,7 @@ export interface FirstProjectProposal {
   executionMode: "manual" | "autonomous";
   projectRef?: string;
   projectAction?: "create";
+  agentHost?: "codex";
 }
 
 export interface DeviceAuthorizationOptions {
@@ -186,6 +187,7 @@ export class DeviceAuthorizationClient {
     url.searchParams.set("execution_mode", proposal.executionMode);
     if (proposal.projectRef) url.searchParams.set("project_ref", proposal.projectRef);
     if (proposal.projectAction) url.searchParams.set("project_action", proposal.projectAction);
+    if (proposal.agentHost) url.searchParams.set("agent_host", proposal.agentHost);
     return url.toString();
   }
 

@@ -241,6 +241,7 @@ Agent 10 maps each operation to a namespaced tool such as `dongo_session_start`,
 ```text
 dongo CLI
   -> OAuth Device Authorization (browser approval, terminal polling)
+  -> optional named Codex preauthorization in the same explicit approval
   -> /api/agent/v1
   -> shared operation handlers
 
@@ -267,9 +268,10 @@ The MCP gateway targets protocol revision `2026-07-28` using the official TypeSc
 - Fetch client metadata only from allowed HTTPS origins with SSRF protections, response-size/time limits, redirect limits, and no private-network access; validate every redirect URI exactly before issuing a code.
 - Require authorization code plus S256 PKCE for MCP clients.
 - Register the dongo CLI as a public native client using Device Authorization and refresh-token grants; it has no client secret.
+- Register Codex's first-party setup as the fixed public native client `dongo-codex`, with the exact `http://127.0.0.1/callback` redirect and mandatory S256 PKCE. `dongo connect --agent-host codex` may preauthorize that client only for the exact signed human, selected project, pending CLI request, MCP resource, and bounded scopes shown on the combined approval page.
 - Bind access tokens to their exact API or MCP audience, validate issuer/audience/expiry/scopes on every request, and rotate refresh tokens.
 - Start with `dongo:work:read`, `dongo:work:write`, and `dongo:attachments:read`; reserve `offline_access` for clients that need refresh tokens. Each operation declares and enforces its required scopes.
-- Use separate grants/token families for CLI, Codex, Claude, generic clients, CI/service credentials, and environments.
+- Use separate grants/token families for CLI, Codex, Claude, generic clients, CI/service credentials, and environments, even when one explicit screen records consent for both CLI and Codex.
 - A grant selects exactly one project for V1. The project comes from validated grant context, never from a trusted tool argument.
 - Model each grant as a durable installation Actor with human authorizer, client identity, machine label when available, creation/last-use timestamps, scopes, and revocation state.
 

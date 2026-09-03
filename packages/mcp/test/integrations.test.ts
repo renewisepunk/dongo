@@ -12,7 +12,7 @@ async function integrationFile(path: string): Promise<string> {
   return readFile(new URL(path, integrationsRoot), "utf8");
 }
 
-test("checked-in host configs are URL-only and contain no static credentials", async () => {
+test("checked-in host configs contain no static credentials", async () => {
   for (const path of [
     "codex/config.toml",
     "claude-code/mcp.json",
@@ -74,10 +74,12 @@ test("renderer creates distinct non-secret project host assets", () => {
     publicProjectRef: "project_uvwxyz",
     shortProjectRef: "uvwxyz",
   });
-  assert.equal(first.integrationVersion, "0.1.11");
+  assert.equal(first.integrationVersion, "0.1.12");
   assert.notEqual(first.serverName, second.serverName);
   assert.notEqual(first.endpoint, second.endpoint);
   assert.match(first.codexConfigToml, /https:\/\/dev\.dongo\.so\/p\/project_abcdef\/mcp/);
+  assert.match(first.codexConfigToml, /oauth\.client_id = "dongo-codex"/u);
+  assert.match(first.codexConfigToml, /oauth\.callback_url = "http:\/\/127\.0\.0\.1\/callback"/u);
   assert.doesNotMatch(
     `${first.codexConfigToml}${first.claudeProjectConfig}${first.genericMcpConfig}`,
     /authorization|bearer|token|secret|header/i,

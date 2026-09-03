@@ -52,23 +52,25 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
   connect: {
     command: "connect",
     summary: "Authorize this repository and connect it to a dongo project.",
-    usage: "dongo connect [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]",
+    usage: "dongo connect [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--agent-host codex] [--no-browser]",
     options: [
       { name: "project-ref", description: "Bind to an existing project reference." },
       { name: "project-name", description: "Name proposed if approval creates a project." },
       { name: "repository-url", description: "Repository URL proposed if approval creates a project." },
       { name: "execution-mode", description: "Initial project execution mode.", allowed: ["manual", "autonomous"] },
+      { name: "agent-host", description: "Authorize one MCP host in the same browser approval.", allowed: ["codex"] },
     ],
     flags: [{ name: "no-browser", description: "Print the approval link without opening a browser." }],
   },
   "project create": {
     command: "project create",
     summary: "Create a new project and bind this repository to it.",
-    usage: "dongo project create --name NAME [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]",
+    usage: "dongo project create --name NAME [--repository-url URL] [--execution-mode manual|autonomous] [--agent-host codex] [--no-browser]",
     options: [
       { name: "name", description: "New project name.", required: true },
       { name: "repository-url", description: "Repository URL; inferred from Git when omitted." },
       { name: "execution-mode", description: "Initial project execution mode.", allowed: ["manual", "autonomous"] },
+      { name: "agent-host", description: "Authorize one MCP host in the same browser approval.", allowed: ["codex"] },
     ],
     flags: [{ name: "no-browser", description: "Print the approval link without opening a browser." }],
   },

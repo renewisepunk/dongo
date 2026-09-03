@@ -3,22 +3,23 @@
 Preferred interactive setup after substituting the trusted project values:
 
 ```sh
-codex mcp add dongo-{{shortProjectRef}} --url {{origin}}/p/{{publicProjectRef}}/mcp --oauth-resource {{origin}}/p/{{publicProjectRef}}/mcp --oauth-client-registration auto
-codex mcp login dongo-{{shortProjectRef}} --scopes dongo:work:read,dongo:work:write,dongo:attachments:read --oauth-client-registration auto
+dongo connect --agent-host codex
+dongo integrate codex --apply
+codex mcp login dongo-{{shortProjectRef}} --scopes dongo:work:read,dongo:work:write,dongo:attachments:read
 ```
 
-Alternatively, merge `config.toml` into a trusted user or project Codex configuration and run only the login command. Do not add `bearer_token_env_var` or copy a dongo CLI credential. Codex owns this OAuth grant and its secure storage.
+The first command presents one explicit dongo CLI + Codex approval. The checked-in `config.toml` then supplies Codex's fixed public native client ID and loopback callback; login still performs S256 PKCE and stores Codex's separate credential, but no second dongo approval is needed. Alternatively, omit `--agent-host codex` and complete the normal Codex consent during login. Do not add `bearer_token_env_var` or copy a dongo CLI credential. Codex owns this OAuth grant and its secure storage.
 
 `dongo integrate codex` previews both `.codex/config.toml` and the dongo-owned
 managed block in `AGENTS.md`. After validating the preview, `--apply` writes
 both changes atomically per file while preserving unrelated configuration and
 instructions.
 
-The Codex MCP connection is optional and project-scoped. A browser account that
-is already signed in can approve this additional host connection without
-repeating account login. Do not confuse that account session with the current
-repository's separate `dongo connect` binding, and do not use a Codex approval
-to repair an active-project plan limit.
+The Codex MCP connection is optional and project-scoped. Combined approval does
+not combine credentials: CLI and Codex tokens remain separate and independently
+revocable. Do not confuse the browser account session with the current
+repository's binding, and do not use a Codex approval to repair an active-project
+plan limit.
 
 Answered Attention arrives on the next explicit pull. A host that remains active
 may call `dongo_get_attention` immediately and then after 5, 10, 20, and at most

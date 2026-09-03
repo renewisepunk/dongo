@@ -4,7 +4,7 @@ const PROJECT_REF = /^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/;
 const SHORT_REF = /^[A-Za-z0-9][A-Za-z0-9_-]{1,31}$/;
 
 export interface DongoManagedIntegrationBundle {
-  readonly integrationVersion: "0.1.11";
+  readonly integrationVersion: "0.1.12";
   readonly serverName: string;
   readonly endpoint: string;
   readonly managedInstructionBlock: string;
@@ -66,11 +66,11 @@ export function renderDongoManagedIntegrationBundle(input: {
   )}\n`;
 
   return Object.freeze({
-    integrationVersion: "0.1.11",
+    integrationVersion: "0.1.12",
     serverName,
     endpoint,
     managedInstructionBlock: managedInstructionBlock(),
-    codexConfigToml: `[mcp_servers.${serverName}]\nurl = "${endpoint}"\n`,
+    codexConfigToml: `[mcp_servers.${serverName}]\nurl = "${endpoint}"\noauth.client_id = "dongo-codex"\noauth.callback_url = "http://127.0.0.1/callback"\n`,
     claudeProjectConfig,
     genericMcpConfig,
   });

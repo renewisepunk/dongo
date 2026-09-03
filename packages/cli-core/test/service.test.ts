@@ -78,12 +78,13 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
     projectName: "dongo CLI",
     repositoryUrl: "git@github.com:renewisepunk/dongo.git",
     executionMode: "autonomous",
+    agentHost: "codex",
   });
   assert.equal(connected.project.publicRef, "pub_dongo");
   assert.equal(opened.length, 1);
   assert.equal(
     opened[0],
-    "http://localhost:8787/device?user_code=ABCD-EFGH&project_name=dongo+CLI&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo&execution_mode=autonomous",
+    "http://localhost:8787/device?user_code=ABCD-EFGH&project_name=dongo+CLI&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo&execution_mode=autonomous&agent_host=codex",
   );
   const marker = await readFile(path.join(repositoryRoot, ".agent-work", "project.json"), "utf8");
   assert.doesNotMatch(marker, /access-secret|refresh-secret|device-secret|ABCD-EFGH/);

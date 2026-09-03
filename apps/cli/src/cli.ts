@@ -307,12 +307,17 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         if (executionMode !== undefined && executionMode !== "manual" && executionMode !== "autonomous") {
           throw new CliCoreError({ code: "validation", message: "--execution-mode must be manual or autonomous.", exitCode: 2 });
         }
+        const agentHost = option(parsed, "agent-host");
+        if (agentHost !== undefined && agentHost !== "codex") {
+          throw new CliCoreError({ code: "validation", message: "--agent-host currently supports codex.", exitCode: 2 });
+        }
         data = await service.connect({
           noBrowser: parsed.noBrowser,
           projectRef: option(parsed, "project-ref"),
           projectName: option(parsed, "project-name"),
           repositoryUrl: option(parsed, "repository-url"),
           executionMode,
+          agentHost,
           signal: dependencies.signal,
           events: {
             onVerification: ({ verificationUriComplete, userCode, expiresAt, browserOpened, projectProposal }) => {
@@ -345,11 +350,16 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           });
         }
         const newProjectName = requiredOption(parsed, "name");
+        const projectAgentHost = option(parsed, "agent-host");
+        if (projectAgentHost !== undefined && projectAgentHost !== "codex") {
+          throw new CliCoreError({ code: "validation", message: "--agent-host currently supports codex.", exitCode: 2 });
+        }
         data = await service.createProject({
           noBrowser: parsed.noBrowser,
           projectName: newProjectName,
           repositoryUrl: option(parsed, "repository-url"),
           executionMode: projectExecutionMode,
+          agentHost: projectAgentHost,
           signal: dependencies.signal,
           events: {
             onVerification: ({ verificationUriComplete, userCode, expiresAt, browserOpened, projectProposal }) => {

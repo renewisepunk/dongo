@@ -276,6 +276,14 @@ const deviceDependencies = {
   async selectAuthorizationProject(publicRef: string, returnTo: string) {
     document.documentElement.dataset.fixtureDeviceProject = JSON.stringify({ publicRef, returnTo });
   },
+  async preauthorizeMcpHost(input: {
+    projectRef: string;
+    userCode: string;
+    host: "codex";
+    returnTo: string;
+  }) {
+    document.documentElement.dataset.fixtureDeviceHost = JSON.stringify(input);
+  },
   async decideDeviceRequest(userCode: string, accept: boolean) {
     document.documentElement.dataset.fixtureDeviceDecision = JSON.stringify({ userCode, accept });
   },

@@ -297,6 +297,7 @@ test("connect forwards an explicit project proposal", async () => {
     "--project-name", "dongo",
     "--repository-url", "https://github.com/renewisepunk/dongo",
     "--execution-mode", "manual",
+    "--agent-host", "codex",
     "--json",
   ], {
     output: stream.output,
@@ -313,11 +314,21 @@ test("connect forwards an explicit project proposal", async () => {
   assert.equal(received?.projectRef, "project_dongo");
   assert.equal(received?.repositoryUrl, "https://github.com/renewisepunk/dongo");
   assert.equal(received?.executionMode, "manual");
+  assert.equal(received?.agentHost, "codex");
 });
 
 test("connect rejects an unsupported execution mode", async () => {
   const stream = capture();
   assert.equal(await runCli(["connect", "--execution-mode", "reckless", "--json"], {
+    output: stream.output,
+    serviceFactory: () => fakeService as never,
+  }), 2);
+  assert.equal(JSON.parse(stream.values().stdout).error.code, "validation");
+});
+
+test("connect rejects an unsupported combined-approval host", async () => {
+  const stream = capture();
+  assert.equal(await runCli(["connect", "--agent-host", "claude", "--json"], {
     output: stream.output,
     serviceFactory: () => fakeService as never,
   }), 2);
@@ -332,6 +343,7 @@ test("project create carries explicit creation intent and explains the free-plan
     "--name", "Another project",
     "--repository-url", "https://github.com/example/another",
     "--execution-mode", "autonomous",
+    "--agent-host", "codex",
     "--no-browser",
     "--json",
   ], {
@@ -359,6 +371,7 @@ test("project create carries explicit creation intent and explains the free-plan
   assert.equal(received?.projectName, "Another project");
   assert.equal(received?.repositoryUrl, "https://github.com/example/another");
   assert.equal(received?.executionMode, "autonomous");
+  assert.equal(received?.agentHost, "codex");
   assert.equal(received?.noBrowser, true);
   assert.equal(JSON.parse(stream.values().stdout).command, "project create");
   assert.match(stream.values().stderr, /standard Free allowance is one active project/i);

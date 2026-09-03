@@ -4,7 +4,6 @@ import {
   oauthDeviceAuthorization,
   oauthProvider,
   type OAuthProviderExtension,
-  type SchemaClient,
 } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import { dongoHumanBridge } from "./bridge-plugin";
@@ -26,51 +25,7 @@ import {
 import {
   createMetadataFetcher,
 } from "./security";
-
-const AGENT_SCOPES = [
-  "dongo:work:read",
-  "dongo:work:write",
-  "dongo:attachments:read",
-  "offline_access",
-] as const;
-
-function staticCliDiscovery(): OAuthProviderExtension["clientDiscovery"] {
-  return {
-    id: "dongo-static-cli",
-    matches: (clientId) => clientId === "dongo-cli",
-    async resolve(ctx, _clientId, existing) {
-      if (existing?.clientDiscoveryId === "dongo-static-cli") return existing;
-      if (existing) return null;
-      const now = new Date();
-      const client = {
-        clientId: "dongo-cli",
-        clientDiscoveryId: "dongo-static-cli",
-        disabled: false,
-        scopes: [...AGENT_SCOPES],
-        clientCredentialsScopes: [],
-        createdAt: now,
-        updatedAt: now,
-        name: "dongo CLI",
-        uri: "https://dongo.so",
-        redirectUris: [],
-        tokenEndpointAuthMethod: "none",
-        grantTypes: [DEVICE_CODE_GRANT_TYPE, "refresh_token"],
-        responseTypes: [],
-        applicationType: "native",
-        requirePKCE: true,
-        skipConsent: false,
-        enableEndSession: false,
-        subjectType: "public",
-        metadata: JSON.stringify({ official: true }),
-      } as unknown as SchemaClient;
-      const created = await ctx.context.adapter.create({
-        model: "oauthClient",
-        data: client,
-      });
-      return created as unknown as SchemaClient;
-    },
-  };
-}
+import { AGENT_SCOPES, firstPartyClientDiscovery } from "./first-party-clients";
 
 function exactResource(value: unknown): string[] {
   const resources = typeof value === "string"
@@ -296,7 +251,7 @@ export function createAuthorizationServer(
   claudeLoopbackRedirect?: string,
 ) {
   const metadataSuffixes = parseSuffixes(env.CIMD_ALLOWED_HOST_SUFFIXES);
-  const staticClient = staticCliDiscovery();
+  const staticClient = firstPartyClientDiscovery();
   const pinning = tokenPinning(env);
   return betterAuth({
     appName: "dongo",

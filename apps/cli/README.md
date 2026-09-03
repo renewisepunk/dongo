@@ -67,8 +67,8 @@ gate. An unchanged package is verified against npm and skipped.
 ## Commands
 
 ```text
-dongo connect [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
-dongo project create --name NAME [--repository-url URL] [--execution-mode manual|autonomous] [--no-browser]
+dongo connect [--project-ref REF] [--project-name NAME] [--repository-url URL] [--execution-mode manual|autonomous] [--agent-host codex] [--no-browser]
+dongo project create --name NAME [--repository-url URL] [--execution-mode manual|autonomous] [--agent-host codex] [--no-browser]
 dongo ci setup
 dongo auth status
 dongo auth logout
@@ -98,6 +98,8 @@ general form requires no Work claim or Run and remains available after the
 current CLI session exits.
 
 Add `--json` to receive one JSON object on stdout. Progress and the one complete browser approval link are written to stderr. The normal flow opens that link, waits for browser approval, stores the resulting credential, writes a non-secret project marker, and returns control to the terminal. `--no-browser` supports SSH/headless sessions by printing the same complete link while polling continues; no code or token needs to be copied into the CLI.
+
+Add `--agent-host codex` when the same owner action should explicitly approve the CLI and Codex for the selected project. The page names both clients and their access. Codex still completes its own PKCE login, stores a separate credential, and remains independently revocable; the CLI credential is never copied into Codex. Other hosts and connections without this flag retain their own approval.
 
 Use `dongo project create --name NAME` when this repository should have a new
 project instead of binding an existing one. The command carries explicit
@@ -192,7 +194,7 @@ All v1 mutations accept `--idempotency-key KEY`. If omitted, the CLI creates one
 
 `dongo sync` writes only dongo-managed Markdown plus `.agent-work/manifest.json`. Writes are atomic and deterministic, signed artifact URLs are omitted, stale files are removed only when they retain the dongo-managed header, and the CLI performs no Git action.
 
-Host integration commands render a project-specific URL-only MCP entry plus the checked-in managed instruction block. Preview is the default and exposes only dongo-owned snippets, never unrelated existing file contents. `--apply` is the explicit consent to merge: unrelated JSON/TOML keys and prose are preserved, malformed markers and conflicting server ownership stop without overwrite, and symlink targets are refused. Codex and Claude receive a host-native OAuth login command; CLI credentials are never copied or passed to a host. Local host logout/removal and server-side installation revocation remain separate actions.
+Host integration commands render a project-specific non-secret MCP entry plus the checked-in managed instruction block. Codex configuration includes only the fixed public client ID and loopback callback, never a credential. Preview is the default and exposes only dongo-owned snippets, never unrelated existing file contents. `--apply` is the explicit consent to merge: unrelated JSON/TOML keys and prose are preserved, exact legacy URL-only Codex tables are upgraded, malformed markers and conflicting server ownership stop without overwrite, and symlink targets are refused. Codex and Claude receive a host-native OAuth login command; CLI credentials are never copied or passed to a host. Local host logout/removal and server-side installation revocation remain separate actions.
 
 ### Claude Code setup order
 

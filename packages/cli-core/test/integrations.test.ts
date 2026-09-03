@@ -72,11 +72,38 @@ test("Codex apply preserves unrelated TOML and prose and is idempotent", async (
   const agents = await readFile(path.join(root, "AGENTS.md"), "utf8");
   assert.match(config, /model = "gpt"/);
   assert.match(config, /\[mcp_servers\.dongo-abcdef\]/);
+  assert.match(config, /oauth\.client_id = "dongo-codex"/u);
+  assert.match(config, /oauth\.callback_url = "http:\/\/127\.0\.0\.1\/callback"/u);
+  assert.doesNotMatch(config, /token|secret|authorization|header/iu);
   assert.match(agents, /# Existing guidance/);
   assert.equal(agents.split("<!-- dongo-managed:v1:start -->").length - 1, 1);
 
   const second = await configureIntegration(input(root, "codex", true));
   assert.equal(second.files.every((file) => !file.changed), true);
+});
+
+test("Codex apply upgrades the exact legacy URL-only project table", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "dongo-integrate-codex-upgrade-"));
+  await mkdir(path.join(root, ".codex"));
+  await import("node:fs/promises").then((fs) =>
+    fs.writeFile(
+      path.join(root, ".codex", "config.toml"),
+      [
+        "model = \"gpt\"",
+        "",
+        "[mcp_servers.dongo-abcdef]",
+        'url = "https://dev.dongo.so/p/project_abcdef/mcp"',
+        "",
+      ].join("\n"),
+    ),
+  );
+
+  const applied = await configureIntegration(input(root, "codex", true));
+  assert.equal(applied.files.find((file) => file.path === ".codex/config.toml")?.changed, true);
+  const config = await readFile(path.join(root, ".codex", "config.toml"), "utf8");
+  assert.equal(config.match(/\[mcp_servers\.dongo-abcdef\]/gu)?.length, 1);
+  assert.match(config, /oauth\.client_id = "dongo-codex"/u);
+  assert.match(config, /oauth\.callback_url = "http:\/\/127\.0\.0\.1\/callback"/u);
 });
 
 test("Codex apply replaces only an exact stale dongo project table", async () => {
@@ -132,6 +159,29 @@ test("Codex production apply replaces an exact stale development dongo project t
   assert.doesNotMatch(config, /dongo-oldproject/u);
   assert.match(config, /mcp_servers\.dongo-abcdef/u);
   assert.match(config, /https:\/\/dongo\.so\/p\/project_abcdef\/mcp/u);
+});
+
+test("Codex apply replaces a stale managed table with pre-registered OAuth settings", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "dongo-integrate-codex-oauth-replace-"));
+  await mkdir(path.join(root, ".codex"));
+  await import("node:fs/promises").then((fs) =>
+    fs.writeFile(
+      path.join(root, ".codex", "config.toml"),
+      [
+        "[mcp_servers.dongo-oldproject]",
+        'url = "https://dev.dongo.so/p/oldproject/mcp"',
+        'oauth.client_id = "dongo-codex"',
+        'oauth.callback_url = "http://127.0.0.1/callback"',
+        "",
+      ].join("\n"),
+    ),
+  );
+
+  const applied = await configureIntegration(input(root, "codex", true));
+  assert.deepEqual(applied.replacedServers, ["dongo-oldproject"]);
+  const config = await readFile(path.join(root, ".codex", "config.toml"), "utf8");
+  assert.doesNotMatch(config, /dongo-oldproject/u);
+  assert.match(config, /mcp_servers\.dongo-abcdef/u);
 });
 
 test("Claude JSON merge preserves unrelated servers and conflicting ownership changes nothing", async () => {

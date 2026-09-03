@@ -377,6 +377,31 @@ export async function selectAuthorizationProject(projectRef: string, returnTo: s
   });
 }
 
+export async function preauthorizeMcpHost(input: {
+  projectRef: string;
+  userCode: string;
+  host: "codex";
+  returnTo: string;
+}): Promise<void> {
+  const minted = await mintAssertion({
+    projectRef: input.projectRef,
+    returnTo: input.returnTo,
+  });
+  await workerRequest<{
+    ok: boolean;
+    host: "codex";
+    clientId: string;
+    projectRef: string;
+  }>("/dongo/preauthorize-host", {
+    method: "POST",
+    body: JSON.stringify({
+      assertion: minted.assertion,
+      userCode: input.userCode,
+      host: input.host,
+    }),
+  });
+}
+
 export async function getDeviceRequest(userCode: string): Promise<DeviceRequest> {
   const result = await workerRequest<{
     user_code: string;

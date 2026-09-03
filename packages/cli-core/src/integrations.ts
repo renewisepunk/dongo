@@ -90,7 +90,9 @@ function integrationLifecycle(
         id: "approve_project_server",
         title: "Approve the project-scoped server, if required.",
         status: "conditional",
-        instruction: `Approve the project-scoped dongo server only if ${hostLabel} asks you to trust it.`,
+        instruction: host === "codex"
+          ? "No second dongo approval is needed when the CLI connection included --agent-host codex. Otherwise approve this project once when Codex asks."
+          : `Approve the project-scoped dongo server only if ${hostLabel} asks you to trust it.`,
       },
       {
         order: 3,
@@ -261,7 +263,12 @@ function removeStaleManagedToml(
     const end = tables[index + 1]?.index ?? existing.length;
     const block = existing.slice(start, end).trim();
     const lines = block.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
-    const urlMatch = lines.length === 2 ? /^url\s*=\s*"([^"\r\n]+)"$/u.exec(lines[1] ?? "") : null;
+    const managedShape = lines.length === 2 || (
+      lines.length === 4
+      && lines[2] === 'oauth.client_id = "dongo-codex"'
+      && lines[3] === 'oauth.callback_url = "http://127.0.0.1/callback"'
+    );
+    const urlMatch = managedShape ? /^url\s*=\s*"([^"\r\n]+)"$/u.exec(lines[1] ?? "") : null;
     if (
       urlMatch?.[1]
       && isExactManagedEndpoint(candidateName, { type: "http", url: urlMatch[1] }, productOrigin)
@@ -303,6 +310,19 @@ function mergeToml(
   const end = next?.index ?? existing.length;
   const current = existing.slice(start, end).trim();
   if (current === desired.trim()) return { content: existing, replacedServers: replacement.replacedServers };
+  const desiredUrl = /^url\s*=\s*"([^"\r\n]+)"$/mu.exec(desired)?.[1];
+  const legacyManaged = current.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+  if (
+    desiredUrl
+    && legacyManaged.length === 2
+    && legacyManaged[0] === header
+    && legacyManaged[1] === `url = "${desiredUrl}"`
+  ) {
+    return {
+      content: `${existing.slice(0, start)}${desired.trim()}${existing.slice(end)}`,
+      replacedServers: replacement.replacedServers,
+    };
+  }
   throw new CliCoreError({
     code: "conflict",
     message: `Codex server ${serverName} already exists with different settings; no file was changed.`,
@@ -434,7 +454,7 @@ export async function configureIntegration(input: {
 
   const loginCommand =
     input.host === "codex"
-      ? `codex mcp login ${bundle.serverName} --scopes dongo:work:read,dongo:work:write,dongo:attachments:read --oauth-client-registration auto`
+      ? `codex mcp login ${bundle.serverName} --scopes dongo:work:read,dongo:work:write,dongo:attachments:read`
       : input.host === "claude"
         ? `claude mcp login ${bundle.serverName}`
         : undefined;

@@ -115,18 +115,18 @@ The prototype predates the accepted OAuth plan and displays a pairing code. Keep
 
 ### CLI
 
-1. The instruction asks the host to install dongo or run `dongo connect`.
+1. The instruction asks the host to install dongo or run `dongo connect`. For Codex-first setup it uses `dongo connect --agent-host codex` so the owner can approve both named clients once.
 2. The CLI detects the current repository and prepares a first-project proposal (name, safe repository URL when available, Manual/Autonomous mode), then requests an OAuth Device Authorization Grant and opens `verification_uri_complete` with that visible non-secret proposal.
 3. The CLI selects an existing project from its explicit reference, the repository marker, repository URL, unique name/slug, or sole-project context. The browser route shows that fixed, non-editable binding alongside the requesting client, account, requested scopes, exact resource, short comparison code, and Approve/Deny actions. Ambiguity disables approval instead of presenting a project picker.
-4. If no project exists, the primary action is “Create & approve.” It creates the proposed first project through the authenticated human identity, binds its stable public reference to the pending grant, and then approves. A missing or invalid proposal leaves approval disabled and offers the web fallback.
-5. After approval the browser says “Approved — you can close this window,” and asks the user to return to the terminal while it finishes. It never displays access or refresh tokens, and the issued token is still project-bound.
+4. If no project exists, the primary action is “Create & approve.” It creates the proposed first project through the authenticated human identity, binds its stable public reference to the pending grant, and then approves. A missing or invalid proposal leaves approval disabled and offers the web fallback. With explicit Codex intent, the labels become “Authorize dongo CLI + Codex” and “Create & approve both,” and the scope list names the separate Codex access.
+5. After approval the browser says “Approved — you can close this window,” and asks the user to return to the terminal while it finishes. It never displays access or refresh tokens, and each issued token remains project-bound.
 6. The connection status updates when the CLI has stored credentials, written the non-secret project marker, and passed its connection check.
 
 The complete URL is the normal one-link path. The short code exists for terminal/browser comparison and SSH recovery; users do not normally copy or enter it.
 
 ### MCP hosts
 
-Codex, Claude Code, and generic MCP hosts use their own OAuth authorization-code flow with S256 PKCE against the project-specific MCP resource. Their grants and token families are separate from the CLI installation. The UI may reuse the same consent visual language, but it must accurately name the host and scopes.
+Codex, Claude Code, and generic MCP hosts use their own OAuth authorization-code flow with S256 PKCE against the project-specific MCP resource. Their grants and token families are separate from the CLI installation. Codex may reuse consent recorded by the explicit combined CLI approval, but it still exchanges and stores its own token. The UI must accurately name every approved client and scope; no other host is silently included.
 
 ### Removed prototype behavior
 
