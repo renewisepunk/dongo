@@ -142,7 +142,16 @@ function operationFromPath(pathname: string): DongoOperationName | undefined {
   return name as DongoOperationName;
 }
 
-function parseQuery(url: URL): JsonRecord {
+const INTEGER_QUERY_FIELDS: Partial<
+  Record<DongoOperationName, ReadonlySet<string>>
+> = {
+  get_updates: new Set(["cursor", "waitSeconds"]),
+};
+
+function parseQuery(
+  url: URL,
+  operation: DongoOperationName,
+): JsonRecord {
   if (new TextEncoder().encode(url.search).byteLength > MAX_QUERY_BYTES) {
     throw new ApiBoundaryError("validation", "Query string is too large", 413);
   }
@@ -155,7 +164,13 @@ function parseQuery(url: URL): JsonRecord {
         400,
       );
     }
-    input[key] = value;
+    const integerFields = INTEGER_QUERY_FIELDS[operation];
+    const numericValue = Number(value);
+    input[key] = integerFields?.has(key) &&
+        /^(?:0|[1-9]\d*)$/u.test(value) &&
+        Number.isSafeInteger(numericValue)
+      ? numericValue
+      : value;
   }
   return input;
 }
@@ -206,7 +221,7 @@ async function validatedInput(
   const specification = operationRegistry[operation];
   let candidate: unknown;
   if (specification.method === "GET") {
-    candidate = parseQuery(url);
+    candidate = parseQuery(url, operation);
   } else {
     if (url.search !== "") {
       throw new ApiBoundaryError(

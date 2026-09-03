@@ -28,8 +28,15 @@ restart itself.
 
 New Intake becomes visible when Codex starts or resumes and calls
 `dongo_session_start` or otherwise explicitly pulls current dongo state. dongo
-does not wake or restart Codex, and the web app exposes no agent-notification
-action.
+does not wake or restart that Codex conversation, and the web app exposes no
+action that injects a notification into it.
+
+The optional local runner is a separate path. Installed from the exact connected
+repository in automatic mode and selected by an owner for Inbox pickup, it may
+launch a new repository-scoped Codex job while that computer is awake. It does
+not inject into or restart an existing Codex conversation. A runner registered
+for another repository does not apply, and automatic jobs wait while the
+registered checkout contains uncommitted files.
 
 When the owner asks Codex to process multiple independent Intake or Work items,
 do not apply the one-active-WorkItem rule to the whole effort. If session start

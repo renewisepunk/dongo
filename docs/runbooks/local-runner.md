@@ -9,13 +9,36 @@ variables, repository path, model credential, or arbitrary prompt.
 
 ## Install and inspect
 
-From the connected repository, install one or both supported harnesses:
+First give each selected harness its own project-scoped dongo connection and
+prove it from that harness. The runner credential and the agent's MCP credential
+are deliberately separate; never copy the CLI credential into an agent or a
+temporary agent configuration directory.
+
+```sh
+dongo integrate codex --apply
+codex mcp login <the project-scoped server printed by dongo> --scopes dongo:work:read,dongo:work:write,dongo:attachments:read
+
+# Or for Claude Code:
+dongo integrate claude --apply
+claude mcp login <the project-scoped server printed by dongo>
+```
+
+From Codex or Claude Code, call `dongo_session_start` and confirm that it returns
+the intended project. Then, from the connected repository, install one or both
+supported harnesses:
 
 ```sh
 dongo runner install --harness codex
 dongo runner install --harness codex --harness claude
 dongo runner status
 ```
+
+The registration is bound to that exact canonical repository root, not merely
+to its Git remote or dongo project. Run installation and status commands from
+the checkout that will execute jobs. A runner installed in another checkout or
+repository does not cover this one. For automatic mode, use a dedicated clean
+checkout or worktree when the normal checkout regularly contains unrelated
+uncommitted work.
 
 Ask-before-run is the default. A user may explicitly opt one local repository
 into automatic starts with `--approval automatic`, or change an existing runner

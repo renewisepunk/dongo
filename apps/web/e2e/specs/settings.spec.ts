@@ -106,6 +106,9 @@ test("opts into automatic Inbox processing on one trusted runner and supports re
   await expect(page.getByText("online · waiting for work", { exact: true })).toBeVisible();
   await expect(page.getByText("Inbox pickup is off.", { exact: false })).toBeVisible();
   await expect(page.getByText(/dongo does not wake a sleeping or powered-off computer/)).toBeVisible();
+  await expect(page.getByText("dongo integrate codex --apply", { exact: true })).toBeVisible();
+  await expect(page.getByText("dongo integrate claude --apply", { exact: true })).toBeVisible();
+  await expect(page.getByText(/never copy the dongo CLI credential into an agent/)).toBeVisible();
   await expect(page.getByText("dongo runner install --harness codex", { exact: true })).toBeVisible();
   await expect(page.getByText("dongo runner install --harness claude", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Process current and future Inbox with Codex" }).click();

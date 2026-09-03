@@ -750,10 +750,11 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                   <ol class="runner-steps">
                     <li>Open this connected repository on the computer that should run the work.</li>
                     <li>Install and sign in to Codex and/or Claude Code locally.</li>
+                    <li>Connect the selected agent to this project: run <code>dongo integrate codex --apply</code> or <code>dongo integrate claude --apply</code>, complete the printed login, and verify <code>dongo_session_start</code> from that agent.</li>
                     <li>Run <code>dongo runner install --harness codex</code>, <code>dongo runner install --harness claude</code>, or include both <code>--harness</code> options.</li>
                     <li>Confirm <code>dongo runner status</code> shows the service waiting.</li>
                   </ol>
-                  <p class="security-note">Local approval is required for every job by default. Use <code>dongo runner configure --approval automatic</code> only when this exact repository and computer are deliberately trusted. Then turn on Inbox pickup below. Automatic starts refuse a repository with uncommitted files. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects.</p>
+                  <p class="security-note">The agent connection and runner use separate credentials; never copy the dongo CLI credential into an agent. Local approval is required for every job by default. Use <code>dongo runner configure --approval automatic</code> only when this exact repository and computer are deliberately trusted. Then turn on Inbox pickup below. Automatic starts refuse a repository with uncommitted files. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects.</p>
                 </section>
                 <section class="settings-section">
                   <div class="settings-section__title">Registered computers</div>

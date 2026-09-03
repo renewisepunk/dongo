@@ -542,6 +542,46 @@ describe("CLI REST gateway", () => {
     ]);
   });
 
+  it("decodes bounded update cursor fields before contract validation", async () => {
+    const executor = new FakeExecutor();
+    const worker = createDongoApiGateway({
+      resource: RESOURCE,
+      allowedHostnames: ["dev.dongo.so"],
+      tokenVerifier: new FakeVerifier(principal()),
+      operationExecutor: executor,
+      rateLimiter: allowedRateLimiter(),
+    });
+    const accepted = await worker.fetch(new Request(
+      "https://dev.dongo.so/api/agent/v1/get_updates?cursor=7&waitSeconds=20",
+      { headers: { authorization: "Bearer opaque-access-token" } },
+    ));
+    expect(accepted.status).toBe(200);
+    expect(executor.calls).toEqual([{
+      operation: "get_updates",
+      input: { cursor: 7, waitSeconds: 20 },
+    }]);
+
+    for (const query of [
+      "cursor=-1&waitSeconds=0",
+      "cursor=1.5&waitSeconds=0",
+      "cursor=01&waitSeconds=0",
+      "cursor=9007199254740992&waitSeconds=0",
+      "cursor=1&waitSeconds=21",
+      "cursor=1&cursor=2&waitSeconds=0",
+    ]) {
+      const rejected = await worker.fetch(new Request(
+        `https://dev.dongo.so/api/agent/v1/get_updates?${query}`,
+        { headers: { authorization: "Bearer opaque-access-token" } },
+      ));
+      expect(rejected.status).toBe(400);
+      await expect(rejected.json()).resolves.toMatchObject({
+        ok: false,
+        error: { code: "validation" },
+      });
+    }
+    expect(executor.calls).toHaveLength(1);
+  });
+
   it("preserves enriched Intake fields in the existing API response", async () => {
     const intake = {
       id: "intake-1",
