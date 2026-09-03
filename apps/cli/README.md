@@ -42,7 +42,7 @@ Build and install the self-contained package archive so the command does not dep
 
 ```sh
 npm pack --workspace @wisepunk/dongo
-npm install --global ./wisepunk-dongo-0.2.4.tgz
+npm install --global ./wisepunk-dongo-0.2.5.tgz
 dongo --version
 dongo --help
 ```
@@ -171,6 +171,12 @@ redacted local health, `dongo runner approve --job-id ID` to approve one waiting
 job on this computer, and `dongo runner remove` to stop the service, revoke its
 subordinate credential, and remove local configuration. macOS launchd and Linux
 user systemd are supported; native Windows is not part of the initial release.
+
+Runner commands explain their normal results in plain language: what this
+computer can do, whether approval is required, whether work is waiting, and the
+next useful action. Internal registration IDs, timestamps, repository paths,
+and service details stay out of the default display. Agents, scripts, and
+diagnostics can use `--json` for the complete stable result.
 
 `dongo --version` (or `dongo -V`) prints the installed package version. Combining it with `--json` returns the same version in the stable command envelope without accessing repository or credential state.
 

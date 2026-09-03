@@ -9,6 +9,14 @@ import { commandName, renderHelp, validateCommand } from "./command-schema.ts";
 import { renderIntegrationOutput } from "./integration-output.ts";
 import type { OutputWriter } from "./output.ts";
 import { errorResult, processOutput, writeJson } from "./output.ts";
+import {
+  renderRunnerApproveOutput,
+  renderRunnerDisableOutput,
+  renderRunnerInstallOutput,
+  renderRunnerRemoveOutput,
+  renderRunnerRunOutput,
+  renderRunnerStatusOutput,
+} from "./runner-output.ts";
 import { checkForCliUpdate } from "./update.ts";
 import type { CliUpdateAdvisory } from "./update.ts";
 
@@ -702,24 +710,33 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           if (approval !== undefined && approval !== "ask" && approval !== "automatic") {
             throw new CliCoreError({ code: "validation", message: "--approval must be ask or automatic.", exitCode: 2 });
           }
-          data = await service.runnerInstall({
+          const result = await service.runnerInstall({
             label: option(parsed, "label") ?? "This computer",
             harnesses: [...new Set(harnesses)] as Array<"codex" | "claude">,
             approvalMode: approval as "ask" | "automatic" | undefined,
           });
+          data = result;
+          if (!parsed.json) humanOutput = renderRunnerInstallOutput(result);
         } else if (action === "status") {
-          data = await service.runnerStatus();
+          const result = await service.runnerStatus();
+          data = result;
+          if (!parsed.json) humanOutput = renderRunnerStatusOutput(result);
         } else if (action === "approve") {
-          data = await service.runnerApprove(requiredOption(parsed, "job-id"));
+          const result = await service.runnerApprove(requiredOption(parsed, "job-id"));
+          data = result;
+          if (!parsed.json) humanOutput = renderRunnerApproveOutput(result);
         } else if (action === "disable") {
           data = await service.runnerDisable();
+          if (!parsed.json) humanOutput = renderRunnerDisableOutput();
         } else if (action === "remove") {
           data = await service.runnerRemove();
+          if (!parsed.json) humanOutput = renderRunnerRemoveOutput();
         } else {
           data = await service.runnerRun(
             requiredOption(parsed, "project-ref"),
             dependencies.signal,
           );
+          if (!parsed.json) humanOutput = renderRunnerRunOutput();
         }
         break;
       }
