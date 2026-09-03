@@ -259,6 +259,23 @@ function runnerJobLabel(state: RunnerJobState): string {
   }
 }
 
+function readyRunnerJobLabel(job: RunnerJob): string {
+  const agent = job.harness === "claude" ? "Claude Code" : "Codex";
+  switch (job.state) {
+    case "queued": return `Queued for ${agent}`;
+    case "delivered": return `Sent to ${agent}`;
+    case "awaiting_local_approval": return `${agent} needs approval`;
+    case "starting":
+    case "running": return `${agent} is starting`;
+    case "blocked": return `${agent} is waiting`;
+    case "cancel_requested": return `Stopping ${agent}`;
+    case "cancelled": return "Local run cancelled";
+    case "failed": return "Local run failed";
+    case "completed": return "Local run completed";
+    case "expired": return "Local run expired";
+  }
+}
+
 export function Overview(props: OverviewProps) {
   const navigate = useNavigate();
   const [routeParams, setRouteParams] = useSearchParams<{
@@ -2364,6 +2381,9 @@ export function Overview(props: OverviewProps) {
                   >
                     <span class="ready-row__position">{String(index() + 1).padStart(2, "0")}</span>
                     <span class="work-row__title">{item.title}</span>
+                    <Show when={runnerSnapshot().jobs.find((job) => job.kind === "work" && job.workItemId === item.id)}>{(job) => (
+                      <span class="ready-row__runner mono" data-state={job().state}>{readyRunnerJobLabel(job())}</span>
+                    )}</Show>
                     <span class="work-row__identifier mono">{item.identifier}</span>
                   </a>
                 </div>

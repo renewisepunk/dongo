@@ -1012,6 +1012,19 @@
   font-size: 12px;
 }
 
+.ready-row__runner {
+  flex: none;
+  color: var(--amber-bright);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.ready-row__runner[data-state="failed"],
+.ready-row__runner[data-state="expired"] { color: var(--danger); }
+
+.ready-row__runner[data-state="cancelled"],
+.ready-row__runner[data-state="completed"] { color: var(--text-dim); }
+
 .view-all {
   display: inline-flex;
   min-height: 36px;
@@ -1368,6 +1381,12 @@
 @media (max-width: 520px) {
   .runner-work-actions { width: 100%; }
   .runner-work-actions .button { width: 100%; }
+  .ready-row__open { flex-wrap: wrap; }
+  .ready-row__runner {
+    width: calc(100% - 34px);
+    order: 4;
+    margin-left: 34px;
+  }
 }
 
 .intake-editor {
@@ -2352,6 +2371,8 @@
     width: 18px;
     font-size: 10px;
   }
+
+  .app-page[data-detail-open="true"] .ready-row__runner { display: none; }
 
   .app-page[data-detail-open="true"] .detail {
     position: static;
