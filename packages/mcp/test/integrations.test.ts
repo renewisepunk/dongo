@@ -49,10 +49,14 @@ test("all host instruction blocks exactly match canonical server instructions", 
   assert.match(DONGO_MCP_INSTRUCTIONS, /dongo_get_attention immediately, then after 5, 10, 20/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /stopping after five minutes/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /stopped local agent does not wake itself/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /optional local runner/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /does not inject into, interrupt, or restart this conversation/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /another repository's runner does not apply/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /automatic starts wait while that checkout has uncommitted files/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /Humans may enrich waiting or claimed Intake/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /save preserves the claim but advances the Intake revision/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /review the current text, context, links, and finalized attachments/u);
-  assert.match(DONGO_MCP_INSTRUCTIONS, /@wisepunk\/dongo@0\.2\.6/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /@wisepunk\/dongo@0\.2\.7/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /ask whether they want to install it/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /Never install automatically/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /next eligible successful tool result/u);

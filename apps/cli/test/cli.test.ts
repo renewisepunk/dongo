@@ -168,7 +168,7 @@ test("finish help exposes host-verified integration and release preconditions wi
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.2.6\n");
+  assert.equal(human.values().stdout, "dongo 0.2.7\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -176,7 +176,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.2.6" },
+    data: { version: "0.2.7" },
   });
   assert.equal(json.values().stderr, "");
 });
@@ -726,6 +726,41 @@ test("updates wait keeps a bounded waiter visible and resumes from the returned 
     attempts: 2,
     elapsedSeconds: 20,
   });
+  assert.equal(stream.values().stderr, "");
+});
+
+test("updates get sends numeric cursor fields through the CLI service boundary", async () => {
+  const stream = capture();
+  const received: Array<{ operation: string; input: Record<string, unknown> }> = [];
+  const exitCode = await runCli([
+    "updates",
+    "get",
+    "--cursor",
+    "7",
+    "--json",
+  ], {
+    output: stream.output,
+    serviceFactory: () => ({
+      ...fakeService,
+      execute: async (operation: string, input: Record<string, unknown>) => {
+        received.push({ operation, input });
+        return {
+          cursor: 7,
+          updates: [],
+          hasMore: false,
+          wait: { status: "timed_out", requestedSeconds: 0, elapsedMilliseconds: 0 },
+          delivery: { mechanism: "bounded_pull", stoppedAgentsRestarted: false },
+          serverTime: 3,
+        };
+      },
+    }) as never,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(received, [{
+    operation: "get_updates",
+    input: { cursor: 7, waitSeconds: 0 },
+  }]);
   assert.equal(stream.values().stderr, "");
 });
 

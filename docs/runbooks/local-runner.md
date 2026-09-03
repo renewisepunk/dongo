@@ -17,6 +17,13 @@ dongo runner install --harness codex --harness claude
 dongo runner status
 ```
 
+The registration is bound to that exact canonical repository root, not merely
+to its Git remote or dongo project. Run installation and status commands from
+the checkout that will execute jobs. A runner installed in another checkout or
+repository does not cover this one. For automatic mode, use a dedicated clean
+checkout or worktree when the normal checkout regularly contains unrelated
+uncommitted work.
+
 Ask-before-run is the default. A user may explicitly opt one local repository
 into automatic starts with `--approval automatic`, or change an existing runner
 in place with `dongo runner configure --approval automatic`. The selection is kept in the
