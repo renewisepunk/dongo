@@ -9,7 +9,23 @@ variables, repository path, model credential, or arbitrary prompt.
 
 ## Install and inspect
 
-From the connected repository, install one or both supported harnesses:
+First give each selected harness its own project-scoped dongo connection and
+prove it from that harness. The runner credential and the agent's MCP credential
+are deliberately separate; never copy the CLI credential into an agent or a
+temporary agent configuration directory.
+
+```sh
+dongo integrate codex --apply
+codex mcp login <the project-scoped server printed by dongo> --scopes dongo:work:read,dongo:work:write,dongo:attachments:read
+
+# Or for Claude Code:
+dongo integrate claude --apply
+claude mcp login <the project-scoped server printed by dongo>
+```
+
+From Codex or Claude Code, call `dongo_session_start` and confirm that it returns
+the intended project. Then, from the connected repository, install one or both
+supported harnesses:
 
 ```sh
 dongo runner install --harness codex

@@ -163,7 +163,10 @@ Every installed CLI connection targets the live service at `https://dongo.so`. T
 The local runner is optional. `dongo runner install` registers this computer for
 the connected repository and starts an unprivileged login-scoped user service.
 It opens no inbound port and accepts only durable dongo jobs for the exact local
-project binding. Ask-before-run is the default; `--approval automatic` is an
+project binding. Before installing it, run `dongo integrate codex --apply` and/or
+`dongo integrate claude --apply`, complete the host's printed login, and prove
+`dongo_session_start` from that agent. The runner and agent use separate
+credentials; never copy the CLI credential into an agent configuration. Ask-before-run is the default; `--approval automatic` is an
 explicit opt-in for this repository only and starts only from a clean checkout.
 An existing runner can change this local choice without replacing its credential
 with `dongo runner configure --approval ask|automatic`. Inbox pickup remains a
