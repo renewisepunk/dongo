@@ -109,7 +109,7 @@ describe("owner-curated changelog", () => {
       { projectId: project.projectId },
     );
     expect(publishable.rows).toEqual([
-      expect.objectContaining({ identifier: "CHG-1" }),
+      expect.objectContaining({ identifier: "chan001" }),
     ]);
     expect(publishable.rows[0].published).toBeUndefined();
 
@@ -134,6 +134,22 @@ describe("owner-curated changelog", () => {
     // the internal Work title never reaches the public surface
     expect(JSON.stringify(after)).not.toContain("Private internal Work title");
     expect(JSON.stringify(after)).not.toContain("CHG-1");
+    expect(JSON.stringify(after)).not.toContain("chan001");
+  });
+
+  it("shows canonical identifiers for legacy Work without rewriting stored aliases", async () => {
+    const { root, owner, project, doneWorkItemId } = await setup();
+    await root.run(async (ctx) => {
+      await ctx.db.patch(project.projectId, { compactIdentifierPrefix: "ship" });
+      await ctx.db.patch(doneWorkItemId, { number: 999, identifier: "CHG-999" });
+    });
+
+    const page = await owner.query(api.domains.changelog.index.publishableWork, {
+      projectId: project.projectId,
+    });
+    expect(page.rows[0].identifier).toBe("ship999");
+    const stored = await root.run(async (ctx) => await ctx.db.get(doneWorkItemId));
+    expect(stored?.identifier).toBe("CHG-999");
   });
 
   it("refuses publication from outside the project and for unfinished Work", async () => {

@@ -6,6 +6,8 @@ edit a public headline and summary, and deliberately publish, update, or
 unpublish an entry. **Load older completed Work** keeps older public entries
 manageable. The public query returns only the reviewed title, summary, date, and
 entry ID; it never returns Work identifiers, goals, outcomes, comments, or files.
+The owner editor displays canonical Work identifiers through the shared Work
+formatter, including for older records that retain legacy lookup aliases.
 
 The marketing `/changelog` page selects the environment's own project through
 `VITE_DONGO_SITE_PROJECT_REF`. The production default is `en8dgh2y-dongo`; the

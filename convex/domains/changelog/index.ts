@@ -5,6 +5,7 @@ import { requireHumanProject } from "../../lib/authz";
 import { appendEvent } from "../../lib/events";
 import { assertExpectedRevision, fail, requireString } from "../../lib/errors";
 import { runIdempotent } from "../../lib/idempotency";
+import { displayWorkIdentifier } from "../work/identifiers";
 
 const MAX_TITLE_LENGTH = 240;
 const MAX_SUMMARY_LENGTH = 2_000;
@@ -25,7 +26,7 @@ function publishedEntryDto(entry: Doc<"changelogEntries">) {
 export const publishableWork = query({
   args: { projectId: v.id("projects"), cursor: v.optional(v.union(v.string(), v.null())) },
   handler: async (ctx, args) => {
-    await requireHumanProject(ctx, args.projectId, { owner: true });
+    const principal = await requireHumanProject(ctx, args.projectId, { owner: true });
     const completed = await ctx.db
       .query("workItems")
       .withIndex("by_project_state_updated", (q) =>
@@ -41,7 +42,7 @@ export const publishableWork = query({
         return {
           workItemId: item._id,
           revision: item.changelogRevision ?? 0,
-          identifier: item.identifier,
+          identifier: displayWorkIdentifier(principal.project!, item),
           title: item.title,
           completedAt: item.completedAt,
           published: entry
