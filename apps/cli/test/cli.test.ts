@@ -144,6 +144,27 @@ test("every command provides specific human and machine-readable help", async ()
   }
 });
 
+test("finish help exposes host-verified integration and release preconditions without a service call", async () => {
+  const human = capture();
+  const json = capture();
+  let serviceCalls = 0;
+  const serviceFactory = () => {
+    serviceCalls += 1;
+    return fakeService as never;
+  };
+  assert.equal(await runCli(["work", "finish", "--help"], { output: human.output, serviceFactory }), 0);
+  assert.equal(await runCli(["work", "finish", "--help", "--json"], { output: json.output, serviceFactory }), 0);
+  const schema = JSON.parse(json.values().stdout).data.schema;
+  assert.match(schema.summary, /repository changes require host-verified shared-target integration/u);
+  assert.match(schema.summary, /required release acceptance/u);
+  assert.match(schema.summary, /explicitly local-only/u);
+  assert.ok(human.values().stdout.includes(schema.summary));
+  assert.ok(human.values().stdout.includes(schema.options.find((option: { name: string }) => option.name === "outcome").description));
+  assert.equal(human.values().stderr, "");
+  assert.equal(json.values().stderr, "");
+  assert.equal(serviceCalls, 0);
+});
+
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);

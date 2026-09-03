@@ -156,9 +156,9 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
   "work renew": { command: "work renew", summary: "Renew the active WorkItem claim.", usage: "dongo work renew --work-id ID --revision N [--lease-seconds N]", options: [workId, revision, lease, idempotency] },
   "work finish": {
     command: "work finish",
-    summary: "Finish a WorkItem after implementation and verification.",
+    summary: "Finish verified Work; repository changes require host-verified shared-target integration and any required release acceptance (unless explicitly local-only).",
     usage: "dongo work finish --work-id ID --revision N --outcome TEXT [--artifact JSON ...]",
-    options: [workId, revision, { name: "outcome", description: "Verified final outcome.", required: true }, { ...artifact, repeatable: true }, idempotency],
+    options: [workId, revision, { name: "outcome", description: "Exact integrated revision and verified outcome, or explicit limited scope.", required: true }, { ...artifact, repeatable: true }, idempotency],
   },
   "comment add": { command: "comment add", summary: "Add a comment to a WorkItem.", usage: "dongo comment add --work-id ID --body TEXT", options: [workId, { name: "body", description: "Comment body.", required: true }, idempotency] },
   "attention request": {
