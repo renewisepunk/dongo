@@ -168,7 +168,7 @@ test("finish help exposes host-verified integration and release preconditions wi
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.2.4\n");
+  assert.equal(human.values().stdout, "dongo 0.2.5\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -176,7 +176,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.2.4" },
+    data: { version: "0.2.5" },
   });
   assert.equal(json.values().stderr, "");
 });
@@ -823,6 +823,172 @@ test("runner commands expose explicit local policy and stable JSON", async () =>
     "--json",
   ], { output: approval.output, serviceFactory: () => service as never }), 0);
   assert.deepEqual(calls[1], { method: "approve", input: "job-1" });
+});
+
+test("runner commands explain outcomes without dumping implementation details", async () => {
+  const installResult = {
+    registration: {
+      id: "registration_internal",
+      projectId: "project_internal",
+      installationId: "installation_internal",
+      label: "This computer",
+      platform: "darwin",
+      version: "0.1.0",
+      harnesses: ["codex"],
+      approvalMode: "ask",
+      status: "active",
+      createdAt: 1_788_458_887_950,
+      updatedAt: 1_788_458_887_950,
+    },
+    service: {
+      serviceName: "so.dongo.runner.internal",
+      servicePath: "/Users/person/Library/LaunchAgents/so.dongo.runner.internal.plist",
+    },
+    repositoryRoot: "/Users/Workspace/dongo",
+    approvalMode: "ask",
+    harnesses: ["codex"],
+  };
+  const waitingStatus = {
+    installed: true,
+    enabled: true,
+    projectRef: "project_internal",
+    registrationId: "registration_internal",
+    repositoryRoot: "/Users/Workspace/dongo",
+    harnesses: ["codex"],
+    approvalMode: "ask",
+    servicePlatform: "darwin",
+    state: {
+      schemaVersion: 1,
+      status: "awaiting_local_approval",
+      projectRef: "project_internal",
+      registrationId: "registration_internal",
+      version: "0.1.0",
+      currentJob: {
+        id: "job_actionable",
+        kind: "work",
+        workIdentifier: "dong062",
+        harness: "codex",
+        state: "delivered",
+        revision: 1,
+      },
+      updatedAt: "2026-09-03T18:00:00.000Z",
+    },
+  };
+  const service = {
+    ...fakeService,
+    runnerInstall: async () => installResult,
+    runnerStatus: async () => waitingStatus,
+    runnerApprove: async (jobId: string) => ({
+      approved: true,
+      jobId,
+      kind: "work",
+      workIdentifier: "dong062",
+      intakeId: undefined,
+    }),
+    runnerDisable: async () => ({
+      disabled: true,
+      service: { serviceName: "so.dongo.runner.internal", servicePath: "/Users/person/internal.plist" },
+    }),
+    runnerRemove: async () => ({
+      removed: true,
+      registrationId: "registration_internal",
+      service: { serviceName: "so.dongo.runner.internal", servicePath: "/Users/person/internal.plist" },
+    }),
+    runnerRun: async () => ({ stopped: true }),
+  };
+
+  const install = capture();
+  assert.equal(await runCli(["runner", "install", "--harness", "codex"], {
+    output: install.output,
+    serviceFactory: () => service as never,
+  }), 0);
+  assert.equal(install.values().stdout, [
+    "dongo runner is ready.",
+    "",
+    "You can now send issues from dongo to this computer and have Codex work on them in this repository—even after you close this terminal.",
+    "You’ll be asked on this computer before an agent starts working.",
+    "If this computer is offline, the issue waits until it comes back.",
+    "",
+    "Check it anytime: dongo runner status",
+    "",
+  ].join("\n"));
+  assert.doesNotMatch(install.values().stdout, /registration_internal|project_internal|\/Users\/|1788458887950|so\.dongo/u);
+
+  const status = capture();
+  assert.equal(await runCli(["runner", "status"], {
+    output: status.output,
+    serviceFactory: () => service as never,
+  }), 0);
+  assert.match(status.values().stdout, /^dongo runner is on\./u);
+  assert.match(status.values().stdout, /A job for dong062 is waiting for your approval\./u);
+  assert.match(status.values().stdout, /dongo runner approve --job-id job_actionable/u);
+  assert.doesNotMatch(status.values().stdout, /registration_internal|project_internal|\/Users\/|2026-09-03/u);
+
+  const approve = capture();
+  assert.equal(await runCli(["runner", "approve", "--job-id", "job_actionable"], {
+    output: approve.output,
+    serviceFactory: () => service as never,
+  }), 0);
+  assert.equal(approve.values().stdout, "Job approved.\nAn agent can now start working on dong062 on this computer.\n");
+
+  const disable = capture();
+  assert.equal(await runCli(["runner", "disable"], {
+    output: disable.output,
+    serviceFactory: () => service as never,
+  }), 0);
+  assert.match(disable.values().stdout, /^dongo runner is paused\./u);
+  assert.doesNotMatch(disable.values().stdout, /so\.dongo|\/Users\//u);
+
+  const remove = capture();
+  assert.equal(await runCli(["runner", "remove"], {
+    output: remove.output,
+    serviceFactory: () => service as never,
+  }), 0);
+  assert.match(remove.values().stdout, /^dongo runner was removed\./u);
+  assert.match(remove.values().stdout, /runner access was revoked/u);
+  assert.doesNotMatch(remove.values().stdout, /registration_internal|so\.dongo|\/Users\//u);
+
+  const foreground = capture();
+  assert.equal(await runCli(["runner", "run", "--project-ref", "project_internal"], {
+    output: foreground.output,
+    serviceFactory: () => service as never,
+  }), 0);
+  assert.equal(foreground.values().stdout, "dongo runner stopped.\n");
+
+  const json = capture();
+  assert.equal(await runCli(["runner", "install", "--harness", "codex", "--json"], {
+    output: json.output,
+    serviceFactory: () => service as never,
+  }), 0);
+  assert.deepEqual(JSON.parse(json.values().stdout), {
+    ok: true,
+    command: "runner install",
+    data: installResult,
+  });
+});
+
+test("runner status explains how to set up an unconfigured repository", async () => {
+  const stream = capture();
+  assert.equal(await runCli(["runner", "status"], {
+    output: stream.output,
+    serviceFactory: () => ({
+      ...fakeService,
+      runnerStatus: async () => ({
+        installed: false,
+        enabled: false,
+        projectRef: "project_internal",
+        harnesses: [],
+        servicePlatform: "darwin",
+      }),
+    }) as never,
+  }), 0);
+  assert.equal(stream.values().stdout, [
+    "No dongo runner is set up for this repository.",
+    "",
+    "Set one up to let this computer work on dongo issues, even after you close the terminal.",
+    "Start with: dongo runner install --help",
+    "",
+  ].join("\n"));
 });
 
 test("integration human output gives the ordered setup sequence without raw configuration details", async () => {
