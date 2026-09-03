@@ -25,7 +25,11 @@ import {
 import {
   createMetadataFetcher,
 } from "./security";
-import { AGENT_SCOPES, firstPartyClientDiscovery } from "./first-party-clients";
+import {
+  AGENT_SCOPES,
+  cliClientDiscovery,
+  firstPartyClientDiscovery,
+} from "./first-party-clients";
 
 function exactResource(value: unknown): string[] {
   const resources = typeof value === "string"
@@ -251,7 +255,8 @@ export function createAuthorizationServer(
   claudeLoopbackRedirect?: string,
 ) {
   const metadataSuffixes = parseSuffixes(env.CIMD_ALLOWED_HOST_SUFFIXES);
-  const staticClient = firstPartyClientDiscovery();
+  const cliClient = cliClientDiscovery();
+  const codexClient = firstPartyClientDiscovery();
   const pinning = tokenPinning(env);
   return betterAuth({
     appName: "dongo",
@@ -365,7 +370,8 @@ export function createAuthorizationServer(
           },
         },
         extensions: [
-          { clientDiscovery: staticClient },
+          { clientDiscovery: cliClient },
+          { clientDiscovery: codexClient },
           { claims: pinning.claims },
         ],
       }),

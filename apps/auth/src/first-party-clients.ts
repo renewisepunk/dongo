@@ -27,7 +27,10 @@ function firstPartyClient(clientId: "dongo-cli" | typeof CODEX_OAUTH_CLIENT_ID):
   const cli = clientId === "dongo-cli";
   return {
     clientId,
-    clientDiscoveryId: "dongo-first-party",
+    // Keep the CLI on its original discovery ID. Better Auth binds an existing
+    // client record to the extension that created it, so changing this ID would
+    // make already-provisioned CLI clients fail discovery as invalid_client.
+    clientDiscoveryId: cli ? "dongo-static-cli" : "dongo-first-party",
     disabled: false,
     scopes: [...AGENT_SCOPES],
     clientCredentialsScopes: [],
@@ -72,14 +75,23 @@ export async function ensureFirstPartyClient(
 export function firstPartyClientDiscovery(): OAuthProviderExtension["clientDiscovery"] {
   return {
     id: "dongo-first-party",
-    matches: (clientId) =>
-      clientId === "dongo-cli" || clientId === CODEX_OAUTH_CLIENT_ID,
+    matches: (clientId) => clientId === CODEX_OAUTH_CLIENT_ID,
     async resolve(ctx, clientId, existing) {
-      if (clientId !== "dongo-cli" && clientId !== CODEX_OAUTH_CLIENT_ID) return null;
-      if (
-        existing?.clientDiscoveryId === "dongo-first-party"
-        || (clientId === "dongo-cli" && existing?.clientDiscoveryId === "dongo-static-cli")
-      ) return existing;
+      if (clientId !== CODEX_OAUTH_CLIENT_ID) return null;
+      if (existing?.clientDiscoveryId === "dongo-first-party") return existing;
+      if (existing) return null;
+      return await ensureFirstPartyClient(ctx.context.adapter, clientId);
+    },
+  };
+}
+
+export function cliClientDiscovery(): OAuthProviderExtension["clientDiscovery"] {
+  return {
+    id: "dongo-static-cli",
+    matches: (clientId) => clientId === "dongo-cli",
+    async resolve(ctx, clientId, existing) {
+      if (clientId !== "dongo-cli") return null;
+      if (existing?.clientDiscoveryId === "dongo-static-cli") return existing;
       if (existing) return null;
       return await ensureFirstPartyClient(ctx.context.adapter, clientId);
     },

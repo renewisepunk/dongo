@@ -31,6 +31,7 @@ import { preauthorizeCodexHost } from "../src/bridge-plugin";
 import {
   CODEX_OAUTH_CALLBACK,
   CODEX_OAUTH_CLIENT_ID,
+  cliClientDiscovery,
   ensureFirstPartyClient,
   firstPartyClientDiscovery,
 } from "../src/first-party-clients";
@@ -95,10 +96,15 @@ describe("authorization boundary security", () => {
         redirectUris: [CODEX_OAUTH_CALLBACK],
         grantTypes: ["authorization_code", "refresh_token"],
       });
-    const discovery = firstPartyClientDiscovery() as {
+    const codexDiscovery = firstPartyClientDiscovery() as {
       matches(clientId: string): boolean;
     };
-    expect(discovery.matches(CODEX_OAUTH_CLIENT_ID)).toBe(true);
+    const cliDiscovery = cliClientDiscovery() as {
+      matches(clientId: string): boolean;
+    };
+    expect(codexDiscovery.matches(CODEX_OAUTH_CLIENT_ID)).toBe(true);
+    expect(codexDiscovery.matches("dongo-cli")).toBe(false);
+    expect(cliDiscovery.matches("dongo-cli")).toBe(true);
   });
 
   it("records Codex consent only for the matching pending CLI device request", async () => {
