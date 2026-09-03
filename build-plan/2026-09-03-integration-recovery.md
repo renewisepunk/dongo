@@ -57,7 +57,7 @@ new dong059/dong060 worktrees are this recovery, not pre-existing stranded work.
 stale-resurrection coverage, exact bounded publication lookup, feature adapter
 separation, truthful failure states, environment-specific site bindings, and
 duplicate-link removal. `10a8626` adds 50-row owner pagination so older public
-entries remain editable and unpublishable through the supported UI.
+entries remain editable and removable from the public page through the supported UI.
 
 The admin membership query now selects owners before truncation, including
 later-added owners. Per organization it reads at most 26 memberships per role
