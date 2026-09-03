@@ -104,22 +104,35 @@ test("opts into automatic Inbox processing on one trusted runner and supports re
   await expect(page.getByRole("heading", { name: "Local runner" })).toBeVisible();
   await expect(page.getByText("Fixture Mac", { exact: true })).toBeVisible();
   await expect(page.getByText("online · waiting for work", { exact: true })).toBeVisible();
+  await expect(page.getByText("Inbox pickup is off.", { exact: false })).toBeVisible();
   await expect(page.getByText(/dongo does not wake a sleeping or powered-off computer/)).toBeVisible();
   await expect(page.getByText("dongo runner install --harness codex", { exact: true })).toBeVisible();
   await expect(page.getByText("dongo runner install --harness claude", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Automatically process Inbox with Codex" }).click();
-  await expect(page.getByRole("status")).toContainText("New Inbox Intake will be processed automatically with Codex");
+  await page.getByRole("button", { name: "Process current and future Inbox with Codex" }).click();
+  await expect(page.getByRole("status")).toContainText("Codex will process new Inbox items automatically");
+  await expect(page.getByRole("status")).toContainText("3 waiting items were queued too");
   expect(JSON.parse(
     await page.locator("html").getAttribute("data-fixture-automatic-intake") ?? "null",
   )).toEqual({
     expectedRevision: 0,
     registrationId: "runner-settings-fixture",
     harness: "codex",
+    includeExisting: true,
   });
   await page.getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByRole("status")).toContainText("Local runner access revoked");
   await expect(page.locator("html")).toHaveAttribute("data-fixture-revoked-runner", "runner-settings-fixture");
+});
+
+test("does not present an ask-mode runner as ready for Inbox pickup", async ({ page }) => {
+  await page.goto("/app/fixture-studio/dongo/settings?tab=Local%20runner&scenario=runner-ask");
+  await expect(page.getByText("Inbox pickup is off.", { exact: false })).toBeVisible();
+  await expect(page.getByText(/New Inbox items will wait here until an agent checks manually/)).toBeVisible();
+  await expect(
+    page.getByRole("paragraph").filter({ hasText: "Local approval is required" }).getByRole("code"),
+  ).toHaveText("dongo runner configure --approval automatic");
+  await expect(page.getByRole("button", { name: /Process current and future Inbox/ })).toBeHidden();
 });
 
 test("updates organization membership and confirms removal", async ({ page }) => {

@@ -490,6 +490,10 @@ export class CoreService {
     return await (await this.#runnerManager()).approve(jobId);
   }
 
+  async runnerConfigureApproval(approvalMode: RunnerApprovalMode) {
+    return await (await this.#runnerManager()).configureApproval(approvalMode);
+  }
+
   async runnerDisable() {
     return await (await this.#runnerManager()).disable();
   }

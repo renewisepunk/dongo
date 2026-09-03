@@ -965,6 +965,7 @@ export const configureAutomaticIntake = mutation({
     expectedRevision: v.number(),
     registrationId: v.optional(v.id("runnerRegistrations")),
     harness: v.optional(harnessValidator),
+    includeExisting: v.optional(v.boolean()),
     idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
@@ -973,6 +974,9 @@ export const configureAutomaticIntake = mutation({
     const enabling = args.registrationId !== undefined || args.harness !== undefined;
     if ((args.registrationId === undefined) !== (args.harness === undefined)) {
       fail("validation", "Automatic Intake requires both a runner and a harness");
+    }
+    if (!enabling && args.includeExisting) {
+      fail("validation", "Existing Inbox Intake can be queued only while enabling automatic processing");
     }
     if (!Number.isInteger(args.expectedRevision) || args.expectedRevision < 0) {
       fail("validation", "expectedRevision must be a non-negative integer");
@@ -988,6 +992,7 @@ export const configureAutomaticIntake = mutation({
         expectedRevision: args.expectedRevision,
         registrationId: args.registrationId,
         harness: args.harness,
+        includeExisting: args.includeExisting ?? false,
       },
       now,
     }, async () => {
@@ -1043,7 +1048,29 @@ export const configureAutomaticIntake = mutation({
           : {},
         createdAt: now,
       });
-      return automaticIntakePolicyDto({ ...project, ...patch });
+      let queuedExistingCount = 0;
+      let hasMoreExisting = false;
+      if (enabling && args.includeExisting) {
+        const existingInbox = await ctx.db.query("intakes")
+          .withIndex("by_project_status_created", (q) =>
+            q.eq("projectId", project._id).eq("status", "new"))
+          .take(101);
+        hasMoreExisting = existingInbox.length > 100;
+        for (const intake of existingInbox.slice(0, 100)) {
+          const queued = await enqueueAutomaticIntake(ctx, {
+            projectId: project._id,
+            intakeId: intake._id,
+            requestedByActorId: principal.actor._id,
+            now,
+          });
+          if (queued) queuedExistingCount += 1;
+        }
+      }
+      return {
+        ...automaticIntakePolicyDto({ ...project, ...patch }),
+        queuedExistingCount,
+        hasMoreExisting,
+      };
     });
   },
 });

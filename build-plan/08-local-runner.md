@@ -46,7 +46,8 @@ Excluded:
 
 - identify the authorized project and WorkItem from server state;
 - identify one newly created Intake when the project owner has enabled the
-  exact automatic Intake policy;
+  exact automatic Intake policy, plus current unclaimed Intake only when the
+  owner explicitly includes the waiting Inbox during activation;
 - accept a human request to queue that Ready WorkItem for `codex` or `claude`;
 - select an eligible online registration or leave the job durably unassigned;
 - grant one revision-aware execution lease;
@@ -191,8 +192,10 @@ seconds with jitter. Successful empty waits do not invoke a model and reopen
 without an artificial delay. This reuses the deployed API boundary, survives
 edge restarts, and keeps Convex authoritative without adding socket-local state.
 
-An automatic Intake job is created transactionally only for Intake created
-after the owner opt-in. It is pinned to the selected registration, so another
+An automatic Intake job is created transactionally for new Intake after the
+owner opt-in. During activation, the owner may explicitly include the bounded
+current unclaimed Inbox; already-queued or claimed items are not duplicated.
+It is pinned to the selected registration, so another
 runner cannot reserve it. Offline delivery remains durable and never implies
 that dongo can wake a sleeping or powered-off computer. Revocation, a reported
 approval-mode downgrade, or loss of the selected harness disables the policy

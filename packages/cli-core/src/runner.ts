@@ -341,6 +341,61 @@ export class LocalRunnerManager {
     };
   }
 
+  async configureApproval(approvalMode: RunnerApprovalMode) {
+    const config = await this.#readConfig(true);
+    const state = await this.#readState();
+    if (state?.currentJob) {
+      throw new CliCoreError({
+        code: "runner_busy",
+        message: "Wait for the current runner job to finish before changing automatic-start approval.",
+        exitCode: 6,
+      });
+    }
+    if (config.approvalMode === approvalMode) {
+      return {
+        changed: false,
+        approvalMode,
+        previousApprovalMode: config.approvalMode,
+        harnesses: config.harnesses,
+      };
+    }
+
+    const now = new Date(this.#now()).toISOString();
+    const updated = { ...config, approvalMode, updatedAt: now };
+    await this.#service.disable(this.#projectRef);
+    await this.#writeConfig(updated);
+    try {
+      const service = await this.#service.install({
+        projectRef: this.#projectRef,
+        repositoryRoot: config.repositoryRoot,
+        ...this.#runtime,
+      });
+      await this.#writeState({
+        schemaVersion: 1,
+        status: "starting",
+        projectRef: this.#projectRef,
+        registrationId: config.registrationId,
+        version: config.version,
+        updatedAt: now,
+      });
+      return {
+        changed: true,
+        approvalMode,
+        previousApprovalMode: config.approvalMode,
+        harnesses: config.harnesses,
+        service,
+      };
+    } catch (error) {
+      await this.#writeConfig(config);
+      await this.#service.install({
+        projectRef: this.#projectRef,
+        repositoryRoot: config.repositoryRoot,
+        ...this.#runtime,
+      }).catch(() => undefined);
+      throw error;
+    }
+  }
+
   async disable() {
     const config = await this.#readConfig(true);
     const service = await this.#service.disable(this.#projectRef);

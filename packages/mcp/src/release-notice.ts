@@ -28,12 +28,12 @@ export type AgentReleaseDelivery = Readonly<{
  */
 export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   schemaVersion: 1,
-  sequence: 5,
-  id: "dongo-cli-0.2.5",
-  title: "dongo CLI 0.2.5 is available",
+  sequence: 6,
+  id: "dongo-cli-0.2.6",
+  title: "dongo CLI 0.2.6 is available",
   changes: [
-    "Local runner commands now explain their results in plain language instead of dumping internal registration, service, path, and timestamp details.",
-    "Runner setup and status say what this computer can do, how approval and offline waiting work, and what useful action comes next; --json remains complete for agents and scripts.",
+    "Local runners can switch between per-job approval and trusted automatic starts in place, without revoking and reinstalling their registration.",
+    "Project settings now says clearly when Inbox pickup is off, and owner activation explicitly queues current unclaimed Inbox items as well as future Intake.",
   ],
   hostedMcp: {
     status: "already_current",
@@ -41,9 +41,9 @@ export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   },
   cli: {
     packageName: "@wisepunk/dongo",
-    version: "0.2.5",
+    version: "0.2.6",
     checkCommand: "dongo --version",
-    installCommand: "npm install --global @wisepunk/dongo@0.2.5",
+    installCommand: "npm install --global @wisepunk/dongo@0.2.6",
     consentRequired: true,
   },
 } satisfies AgentReleaseNotice);

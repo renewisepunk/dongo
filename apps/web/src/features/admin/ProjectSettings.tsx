@@ -52,7 +52,8 @@ type ProjectSettingsConnection = {
     expectedRevision: number;
     registrationId?: string;
     harness?: RunnerHarness;
-  }) => Promise<RunnerSnapshot["automaticIntake"]>;
+    includeExisting?: boolean;
+  }) => Promise<RunnerSnapshot["automaticIntake"] & { queuedExistingCount: number; hasMoreExisting: boolean }>;
   createServiceCredential: (input: {
     label: string;
     scopes: string[];
@@ -422,17 +423,18 @@ export function ProjectSettings(props: ProjectSettingsProps) {
     }
   };
 
-  const configureAutomaticIntake = async (registrationId?: string, harness?: RunnerHarness) => {
+  const configureAutomaticIntake = async (registrationId?: string, harness?: RunnerHarness, includeExisting = false) => {
     if (!connection || configuringAutomaticIntake()) return;
     setConfiguringAutomaticIntake(true);
     setError("");
     try {
-      await connection.configureAutomaticIntake({
+      const result = await connection.configureAutomaticIntake({
         expectedRevision: runners().automaticIntake.revision,
         ...(registrationId && harness ? { registrationId, harness } : {}),
+        ...(includeExisting ? { includeExisting: true } : {}),
       });
       setStatus(registrationId && harness
-        ? `New Inbox Intake will be processed automatically with ${harness === "claude" ? "Claude Code" : "Codex"} on the selected computer.`
+        ? `${harness === "claude" ? "Claude Code" : "Codex"} will process new Inbox items automatically on this computer.${result.queuedExistingCount > 0 ? ` ${result.queuedExistingCount} waiting ${result.queuedExistingCount === 1 ? "item was" : "items were"} queued too.` : ""}${result.hasMoreExisting ? " More are still waiting; choose Process waiting Inbox now again." : ""}`
         : "Automatic Inbox processing is off.");
     } catch {
       setError("Automatic Inbox processing could not be changed. Refresh and try again.");
@@ -751,10 +753,16 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                     <li>Run <code>dongo runner install --harness codex</code>, <code>dongo runner install --harness claude</code>, or include both <code>--harness</code> options.</li>
                     <li>Confirm <code>dongo runner status</code> shows the service waiting.</li>
                   </ol>
-                  <p class="security-note">Local approval is required for every job by default. Add <code>--approval automatic</code> only when this exact repository and computer are deliberately trusted. Automatic Inbox processing remains off until an owner enables it below. Automatic starts refuse a repository with uncommitted files. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects.</p>
+                  <p class="security-note">Local approval is required for every job by default. Use <code>dongo runner configure --approval automatic</code> only when this exact repository and computer are deliberately trusted. Then turn on Inbox pickup below. Automatic starts refuse a repository with uncommitted files. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects.</p>
                 </section>
                 <section class="settings-section">
                   <div class="settings-section__title">Registered computers</div>
+                  <div class="security-note" data-inbox-pickup={runners().automaticIntake.enabled ? "on" : "off"}>
+                    <strong>Inbox pickup is {runners().automaticIntake.enabled ? "on" : "off"}.</strong>{" "}
+                    {runners().automaticIntake.enabled
+                      ? "New Inbox items are routed to the selected computer."
+                      : "New Inbox items will wait here until an agent checks manually. Turning pickup on includes items already waiting."}
+                  </div>
                   <p class="note">Every registration below is scoped to {project()?.name}{project()?.repositoryUrl ? ` · ${project()!.repositoryUrl}` : ""}. The local repository path remains private to that computer.</p>
                   <div class="installation-list">
                     <For each={runners().registrations}>{(runner) => (
@@ -766,17 +774,19 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                         <div class="installation-row__meta" data-runner-presence={runnerPresence(runner).startsWith("online") ? "online" : "offline"}>{runnerPresence(runner)}</div>
                         <Show when={runner.status !== "revoked"} fallback={<span class="installation-row__meta">revoked</span>}>
                           <div class="installation-row__actions">
-                            <Show when={runner.approvalMode === "automatic"} fallback={<span class="installation-row__meta">Reinstall with <code>--approval automatic</code> to enable automatic Inbox processing.</span>}>
+                            <Show when={runner.approvalMode === "automatic"} fallback={<span class="installation-row__meta">Run <code>dongo runner configure --approval automatic</code> on this computer to allow Inbox pickup.</span>}>
                               <Show
                                 when={runners().automaticIntake.enabled && runners().automaticIntake.registrationId === runner.id}
                                 fallback={<For each={runner.harnesses}>{(harness) => (
-                                  <button class="button button--quiet" type="button" disabled={configuringAutomaticIntake()} onClick={() => void configureAutomaticIntake(runner.id, harness)}>
-                                    Automatically process Inbox with {harness === "claude" ? "Claude Code" : "Codex"}
+                                  <button class="button" type="button" disabled={configuringAutomaticIntake()} onClick={() => void configureAutomaticIntake(runner.id, harness, true)}>
+                                    Process current and future Inbox with {harness === "claude" ? "Claude Code" : "Codex"}
                                   </button>
                                 )}</For>}
                               >
-                                <button class="button button--quiet button--danger" type="button" disabled={configuringAutomaticIntake()} onClick={() => void configureAutomaticIntake()}>
-                                  {configuringAutomaticIntake() ? "Turning off…" : "Turn off automatic Inbox"}
+                                <button class="button button--quiet" type="button" disabled={configuringAutomaticIntake()} onClick={() => void configureAutomaticIntake(runner.id, runners().automaticIntake.harness ?? runner.harnesses[0], true)}>
+                                  Process waiting Inbox now
+                                </button><button class="button button--quiet button--danger" type="button" disabled={configuringAutomaticIntake()} onClick={() => void configureAutomaticIntake()}>
+                                  {configuringAutomaticIntake() ? "Turning off…" : "Turn off Inbox pickup"}
                                 </button>
                               </Show>
                             </Show>

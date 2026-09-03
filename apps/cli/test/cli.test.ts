@@ -168,7 +168,7 @@ test("finish help exposes host-verified integration and release preconditions wi
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.2.5\n");
+  assert.equal(human.values().stdout, "dongo 0.2.6\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -176,7 +176,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.2.5" },
+    data: { version: "0.2.6" },
   });
   assert.equal(json.values().stderr, "");
 });
@@ -789,6 +789,10 @@ test("runner commands expose explicit local policy and stable JSON", async () =>
       calls.push({ method: "approve", input: jobId });
       return { approved: true, jobId };
     },
+    runnerConfigureApproval: async (approvalMode: string) => {
+      calls.push({ method: "configure", input: approvalMode });
+      return { changed: true, approvalMode, previousApprovalMode: "ask", harnesses: ["codex"] };
+    },
   };
   const install = capture();
   assert.equal(await runCli([
@@ -823,6 +827,17 @@ test("runner commands expose explicit local policy and stable JSON", async () =>
     "--json",
   ], { output: approval.output, serviceFactory: () => service as never }), 0);
   assert.deepEqual(calls[1], { method: "approve", input: "job-1" });
+
+  const configure = capture();
+  assert.equal(await runCli([
+    "runner",
+    "configure",
+    "--approval",
+    "automatic",
+    "--json",
+  ], { output: configure.output, serviceFactory: () => service as never }), 0);
+  assert.deepEqual(calls[2], { method: "configure", input: "automatic" });
+  assert.equal(JSON.parse(configure.values().stdout).command, "runner configure");
 });
 
 test("runner commands explain outcomes without dumping implementation details", async () => {
@@ -885,6 +900,12 @@ test("runner commands explain outcomes without dumping implementation details", 
       workIdentifier: "dong062",
       intakeId: undefined,
     }),
+    runnerConfigureApproval: async (approvalMode: "ask" | "automatic") => ({
+      changed: true,
+      approvalMode,
+      previousApprovalMode: approvalMode === "automatic" ? "ask" as const : "automatic" as const,
+      harnesses: ["codex" as const],
+    }),
     runnerDisable: async () => ({
       disabled: true,
       service: { serviceName: "so.dongo.runner.internal", servicePath: "/Users/person/internal.plist" },
@@ -905,8 +926,9 @@ test("runner commands explain outcomes without dumping implementation details", 
   assert.equal(install.values().stdout, [
     "dongo runner is ready.",
     "",
-    "You can now send issues from dongo to this computer and have Codex work on them in this repository—even after you close this terminal.",
+    "This computer can now run queued dongo work with Codex in this repository—even after you close this terminal.",
     "You’ll be asked on this computer before an agent starts working.",
+    "New Inbox items are not routed here automatically. To enable that, first run: dongo runner configure --approval automatic",
     "If this computer is offline, the issue waits until it comes back.",
     "",
     "Check it anytime: dongo runner status",
@@ -923,6 +945,20 @@ test("runner commands explain outcomes without dumping implementation details", 
   assert.match(status.values().stdout, /A job for dong062 is waiting for your approval\./u);
   assert.match(status.values().stdout, /dongo runner approve --job-id job_actionable/u);
   assert.doesNotMatch(status.values().stdout, /registration_internal|project_internal|\/Users\/|2026-09-03/u);
+  assert.match(status.values().stdout, /New Inbox items are not routed here automatically/u);
+
+  const configure = capture();
+  assert.equal(await runCli(["runner", "configure", "--approval", "automatic"], {
+    output: configure.output,
+    serviceFactory: () => service as never,
+  }), 0);
+  assert.equal(configure.values().stdout, [
+    "Automatic starts are allowed for this repository.",
+    "",
+    "Codex can now start without a separate approval when this repository is clean.",
+    "To receive Inbox items, return to Project settings → Local runner and turn on automatic Inbox processing.",
+    "",
+  ].join("\n"));
 
   const approve = capture();
   assert.equal(await runCli(["runner", "approve", "--job-id", "job_actionable"], {
