@@ -1,10 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
-import type { QueryCtx } from "../../_generated/server";
 import { requireHumanProject } from "../../lib/authz";
 import { appendEvent } from "../../lib/events";
-import { fail, requireString } from "../../lib/errors";
+import { assertExpectedRevision, fail, requireString } from "../../lib/errors";
+import { runIdempotent } from "../../lib/idempotency";
 
 const MAX_TITLE_LENGTH = 240;
 const MAX_SUMMARY_LENGTH = 2_000;
@@ -20,17 +20,6 @@ function publishedEntryDto(entry: Doc<"changelogEntries">) {
   };
 }
 
-async function publishedByWorkItem(
-  ctx: QueryCtx,
-  projectId: Doc<"projects">["_id"],
-) {
-  const entries = await ctx.db
-    .query("changelogEntries")
-    .withIndex("by_project_published", (q) => q.eq("projectId", projectId))
-    .take(MAX_PUBLISHED_ROWS);
-  return new Map(entries.map((entry) => [entry.workItemId, entry]));
-}
-
 // Owner-only. Lists completed Work so an owner can choose what to publish.
 // Nothing here is public; publishing is a separate, explicit step.
 export const publishableWork = query({
@@ -43,13 +32,15 @@ export const publishableWork = query({
         q.eq("projectId", args.projectId).eq("state", "done"),
       )
       .order("desc")
-      .take(MAX_PUBLISHABLE_ROWS);
-    const published = await publishedByWorkItem(ctx, args.projectId);
+      .take(MAX_PUBLISHABLE_ROWS + 1);
     return {
-      rows: completed.map((item) => {
-        const entry = published.get(item._id);
+      rows: await Promise.all(completed.slice(0, MAX_PUBLISHABLE_ROWS).map(async (item) => {
+        const entry = await ctx.db.query("changelogEntries")
+          .withIndex("by_project_work", (q) => q.eq("projectId", args.projectId).eq("workItemId", item._id))
+          .unique();
         return {
           workItemId: item._id,
+          revision: item.changelogRevision ?? 0,
           identifier: item.identifier,
           title: item.title,
           completedAt: item.completedAt,
@@ -62,8 +53,8 @@ export const publishableWork = query({
             }
             : undefined,
         };
-      }),
-      truncated: completed.length === MAX_PUBLISHABLE_ROWS,
+      })),
+      truncated: completed.length > MAX_PUBLISHABLE_ROWS,
     };
   },
 });
@@ -76,6 +67,8 @@ export const publishEntry = mutation({
     workItemId: v.id("workItems"),
     title: v.string(),
     summary: v.string(),
+    expectedRevision: v.number(),
+    idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
     const principal = await requireHumanProject(ctx, args.projectId, {
@@ -83,6 +76,16 @@ export const publishEntry = mutation({
     });
     const title = requireString(args.title, "title", MAX_TITLE_LENGTH);
     const summary = requireString(args.summary, "summary", MAX_SUMMARY_LENGTH);
+    const now = Date.now();
+    return await runIdempotent(ctx, {
+      organizationId: principal.project!.organizationId,
+      projectId: args.projectId,
+      principalKey: principal.principalKey,
+      operation: "changelog.publish",
+      key: args.idempotencyKey,
+      payload: args,
+      now,
+    }, async () => {
     const workItem = await ctx.db.get(args.workItemId);
     if (!workItem || workItem.projectId !== args.projectId) {
       fail("not_found", "Work not found in this project");
@@ -90,7 +93,9 @@ export const publishEntry = mutation({
     if (workItem!.state !== "done") {
       fail("invalid_transition", "Only completed Work can be published");
     }
-    const now = Date.now();
+    assertExpectedRevision(workItem!.changelogRevision ?? 0, args.expectedRevision);
+    const revision = args.expectedRevision + 1;
+    await ctx.db.patch(workItem!._id, { changelogRevision: revision });
     const existing = await ctx.db
       .query("changelogEntries")
       .withIndex("by_project_work", (q) =>
@@ -107,7 +112,7 @@ export const publishEntry = mutation({
         type: "changelog.entry_updated",
         createdAt: now,
       });
-      return { entryId: existing._id, publishedAt: existing.publishedAt };
+      return { entryId: existing._id, publishedAt: existing.publishedAt, revision };
     }
     const entryId = await ctx.db.insert("changelogEntries", {
       projectId: args.projectId,
@@ -127,7 +132,8 @@ export const publishEntry = mutation({
       type: "changelog.entry_published",
       createdAt: now,
     });
-    return { entryId, publishedAt: now };
+    return { entryId, publishedAt: now, revision };
+    });
   },
 });
 
@@ -136,15 +142,32 @@ export const unpublishEntry = mutation({
   args: {
     projectId: v.id("projects"),
     entryId: v.id("changelogEntries"),
+    expectedRevision: v.number(),
+    idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
     const principal = await requireHumanProject(ctx, args.projectId, {
       owner: true,
     });
+    const now = Date.now();
+    return await runIdempotent(ctx, {
+      organizationId: principal.project!.organizationId,
+      projectId: args.projectId,
+      principalKey: principal.principalKey,
+      operation: "changelog.unpublish",
+      key: args.idempotencyKey,
+      payload: args,
+      now,
+    }, async () => {
     const entry = await ctx.db.get(args.entryId);
     if (!entry || entry.projectId !== args.projectId) {
       fail("not_found", "Changelog entry not found in this project");
     }
+    const workItem = await ctx.db.get(entry!.workItemId);
+    if (!workItem || workItem.projectId !== args.projectId) fail("not_found", "Work not found in this project");
+    assertExpectedRevision(workItem.changelogRevision ?? 0, args.expectedRevision);
+    const revision = args.expectedRevision + 1;
+    await ctx.db.patch(workItem._id, { changelogRevision: revision });
     await ctx.db.delete(args.entryId);
     await appendEvent(ctx, {
       organizationId: principal.project!.organizationId,
@@ -152,9 +175,10 @@ export const unpublishEntry = mutation({
       workItemId: entry!.workItemId,
       actorId: principal.actor._id,
       type: "changelog.entry_unpublished",
-      createdAt: Date.now(),
+      createdAt: now,
     });
-    return { entryId: args.entryId };
+    return { entryId: args.entryId, revision };
+    });
   },
 });
 

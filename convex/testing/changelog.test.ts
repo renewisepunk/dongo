@@ -117,6 +117,7 @@ describe("owner-curated changelog", () => {
       projectId: project.projectId,
       workItemId: doneWorkItemId,
       title: "Faster admin",
+      expectedRevision: 0, idempotencyKey: crypto.randomUUID(),
       summary: "Owner-authored wording, not the Work title.",
     });
 
@@ -147,6 +148,7 @@ describe("owner-curated changelog", () => {
       projectId: project.projectId,
       workItemId: doneWorkItemId,
       title: "Not mine",
+      expectedRevision: 0, idempotencyKey: crypto.randomUUID(),
       summary: "Should never publish.",
     })).rejects.toThrow();
 
@@ -154,6 +156,7 @@ describe("owner-curated changelog", () => {
       projectId: project.projectId,
       workItemId: openWorkItemId,
       title: "Too early",
+      expectedRevision: 0, idempotencyKey: crypto.randomUUID(),
       summary: "Work is not finished.",
     })).rejects.toThrow();
   });
@@ -167,6 +170,7 @@ describe("owner-curated changelog", () => {
         projectId: project.projectId,
         workItemId: doneWorkItemId,
         title: "Shipped",
+        expectedRevision: 0, idempotencyKey: crypto.randomUUID(),
         summary: "Visible for now.",
       },
     );
@@ -178,6 +182,7 @@ describe("owner-curated changelog", () => {
     await owner.mutation(api.domains.changelog.index.unpublishEntry, {
       projectId: project.projectId,
       entryId: published.entryId,
+      expectedRevision: published.revision, idempotencyKey: crypto.randomUUID(),
     });
 
     expect((await root.query(
@@ -192,12 +197,14 @@ describe("owner-curated changelog", () => {
       projectId: project.projectId,
       workItemId: doneWorkItemId,
       title: "First wording",
+      expectedRevision: 0, idempotencyKey: crypto.randomUUID(),
       summary: "Initial.",
     });
     const second = await owner.mutation(api.domains.changelog.index.publishEntry, {
       projectId: project.projectId,
       workItemId: doneWorkItemId,
       title: "Revised wording",
+      expectedRevision: first.revision, idempotencyKey: crypto.randomUUID(),
       summary: "Corrected.",
     });
     expect(second.entryId).toEqual(first.entryId);
@@ -208,5 +215,55 @@ describe("owner-curated changelog", () => {
     expect(entries).toEqual([
       expect.objectContaining({ title: "Revised wording", summary: "Corrected." }),
     ]);
+  });
+});
+
+describe("changelog concurrency and bounded reads", () => {
+  it("replays lost responses, rejects stale edits and unpublishes, and prevents stale resurrection", async () => {
+    const { root, owner, project, publicRef, doneWorkItemId } = await setup();
+    const input = { projectId: project.projectId, workItemId: doneWorkItemId,
+      title: "Reviewed", summary: "Safe wording.", expectedRevision: 0, idempotencyKey: crypto.randomUUID() };
+    const first = await owner.mutation(api.domains.changelog.index.publishEntry, input);
+    expect(await owner.mutation(api.domains.changelog.index.publishEntry, input)).toEqual(first);
+    await expect(owner.mutation(api.domains.changelog.index.publishEntry, { ...input, title: "Different" })).rejects.toThrow(/idempotency/);
+    await expect(owner.mutation(api.domains.changelog.index.publishEntry, { ...input, idempotencyKey: crypto.randomUUID() })).rejects.toThrow(/changed/);
+    const update = await owner.mutation(api.domains.changelog.index.publishEntry, { ...input,
+      expectedRevision: first.revision, idempotencyKey: crypto.randomUUID(), title: "Revised" });
+    await expect(owner.mutation(api.domains.changelog.index.unpublishEntry, {
+      projectId: project.projectId, entryId: first.entryId,
+      expectedRevision: first.revision, idempotencyKey: crypto.randomUUID(),
+    })).rejects.toThrow(/changed/);
+    const remove = { projectId: project.projectId, entryId: first.entryId,
+      expectedRevision: update.revision, idempotencyKey: crypto.randomUUID() };
+    const removed = await owner.mutation(api.domains.changelog.index.unpublishEntry, remove);
+    expect(await owner.mutation(api.domains.changelog.index.unpublishEntry, remove)).toEqual(removed);
+    await expect(owner.mutation(api.domains.changelog.index.publishEntry, { ...input, idempotencyKey: crypto.randomUUID() })).rejects.toThrow(/changed/);
+    expect((await root.query(api.domains.changelog.index.publishedEntries, { publicRef })).entries).toEqual([]);
+    const events = await root.run(async (ctx) => await ctx.db.query("events").collect());
+    expect(events.filter((event) => event.type.startsWith("changelog."))).toHaveLength(3);
+  });
+
+  it("finds publication for recent Work beyond 100 older publications", async () => {
+    const { root, owner, project, doneWorkItemId } = await setup();
+    await root.run(async (ctx) => {
+      const work = (await ctx.db.get(doneWorkItemId))!;
+      const profile = (await ctx.db.query("humanProfiles").collect())[0]!;
+      for (let index = 0; index < 101; index++) {
+        const { _id, _creationTime, ...data } = work;
+        const id = await ctx.db.insert("workItems", { ...data, number: index + 10,
+          identifier: `old${index}`, updatedAt: 0, completedAt: 0 });
+        await ctx.db.insert("changelogEntries", { projectId: project.projectId, workItemId: id,
+          title: "Old public entry", summary: "Reviewed", publishedAt: index,
+          publishedByProfileId: profile._id, createdAt: index, updatedAt: index });
+      }
+    });
+    await owner.mutation(api.domains.changelog.index.publishEntry, {
+      projectId: project.projectId, workItemId: doneWorkItemId, title: "Most recent", summary: "Reviewed",
+      expectedRevision: 0, idempotencyKey: crypto.randomUUID(),
+    });
+    const page = await owner.query(api.domains.changelog.index.publishableWork, { projectId: project.projectId });
+    expect(page.rows).toHaveLength(50);
+    expect(page.truncated).toBe(true);
+    expect(page.rows.find((row) => row.workItemId === doneWorkItemId)?.published?.title).toBe("Most recent");
   });
 });

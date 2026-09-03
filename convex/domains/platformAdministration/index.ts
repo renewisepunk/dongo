@@ -64,7 +64,7 @@ async function organizationUsage(
   ctx: QueryCtx | MutationCtx,
   organization: Doc<"organizations">,
 ) {
-  const [projects, activeProjects, memberships] = await Promise.all([
+  const [projects, activeProjects, owners, members] = await Promise.all([
     ctx.db
       .query("projects")
       .withIndex("by_organization", (q) => q.eq("organizationId", organization._id))
@@ -77,9 +77,16 @@ async function organizationUsage(
       .take(101),
     ctx.db
       .query("memberships")
-      .withIndex("by_organization", (q) => q.eq("organizationId", organization._id))
+      .withIndex("by_organization_role", (q) => q.eq("organizationId", organization._id).eq("role", "owner"))
+      .take(MAX_ADMIN_ROWS + 1),
+    ctx.db
+      .query("memberships")
+      .withIndex("by_organization_role", (q) => q.eq("organizationId", organization._id).eq("role", "member"))
       .take(MAX_ADMIN_ROWS + 1),
   ]);
+  // Select owners before truncation; a later owner must not be hidden behind
+  // older members. Both role scans and profile reads remain bounded.
+  const memberships = [...owners, ...members];
   const memberRows = await Promise.all(
     memberships.slice(0, MAX_ADMIN_ROWS).map(async (membership) => {
       const profile = await ctx.db.get(membership.profileId);

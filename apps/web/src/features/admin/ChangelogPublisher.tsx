@@ -1,82 +1,43 @@
 import { createResource, createSignal, For, Show } from "solid-js";
-import { ConvexClient } from "convex/browser";
-import { makeFunctionReference } from "convex/server";
-import { convexAccessToken } from "../../lib/auth-client";
-import { convexDeploymentUrl } from "../../lib/auth-config";
-
-export type PublishableWorkRow = {
-  workItemId: string;
-  identifier: string;
-  title: string;
-  completedAt?: number;
-  published?: {
-    entryId: string;
-    title: string;
-    summary: string;
-    publishedAt: number;
-  };
-};
+import {
+  loadPublishableWork, publishChangelogEntry, unpublishChangelogEntry,
+  type PublishableWorkRow, type PublishableWorkPage,
+  type PublishChangelogInput, type UnpublishChangelogInput,
+} from "../../lib/changelog-data";
+export type { PublishableWorkRow } from "../../lib/changelog-data";
 
 export type ChangelogPublisherProps = {
   projectId: string;
-  load?: (projectId: string) => Promise<PublishableWorkRow[]>;
-  publish?: (input: {
-    projectId: string;
-    workItemId: string;
-    title: string;
-    summary: string;
-  }) => Promise<void>;
-  unpublish?: (input: { projectId: string; entryId: string }) => Promise<void>;
+  load?: (projectId: string) => Promise<PublishableWorkPage>;
+  publish?: (input: PublishChangelogInput) => Promise<void>;
+  unpublish?: (input: UnpublishChangelogInput) => Promise<void>;
 };
 
-const publishableWorkReference = makeFunctionReference<
-  "query",
-  { projectId: string },
-  { rows: PublishableWorkRow[]; truncated: boolean }
->("domains/changelog/index:publishableWork");
-
-const publishEntryReference = makeFunctionReference<
-  "mutation",
-  { projectId: string; workItemId: string; title: string; summary: string },
-  { entryId: string; publishedAt: number }
->("domains/changelog/index:publishEntry");
-
-const unpublishEntryReference = makeFunctionReference<
-  "mutation",
-  { projectId: string; entryId: string },
-  { entryId: string }
->("domains/changelog/index:unpublishEntry");
-
-function authorizedClient(): ConvexClient {
-  const client = new ConvexClient(convexDeploymentUrl);
-  client.setAuth(async () => await convexAccessToken());
-  return client;
-}
-
-async function loadPublishableWork(projectId: string): Promise<PublishableWorkRow[]> {
-  const client = authorizedClient();
-  try {
-    const { rows } = await client.query(publishableWorkReference, { projectId });
-    return rows;
-  } finally {
-    void client.close();
-  }
-}
-
 export function ChangelogPublisher(props: ChangelogPublisherProps) {
-  const [reloadToken, setReloadToken] = createSignal(0);
   const [busy, setBusy] = createSignal<string>();
   const [status, setStatus] = createSignal("");
+  const [loadFailed, setLoadFailed] = createSignal(false);
   const [drafts, setDrafts] = createSignal<Record<string, { title: string; summary: string }>>({});
+  const pending = new Map<string, { payload: string; key: string }>();
+  const keyFor = (id: string, input: unknown) => {
+    const payload = JSON.stringify(input);
+    const previous = pending.get(id);
+    if (previous?.payload === payload) return previous.key;
+    const key = crypto.randomUUID();
+    pending.set(id, { payload, key });
+    return key;
+  };
 
-  const [rows, { refetch }] = createResource(
-    () => [props.projectId, reloadToken()] as const,
-    async ([projectId]) => {
+  const [page, { refetch }] = createResource(
+    () => props.projectId,
+    async (projectId) => {
+      setLoadFailed(false);
       try {
         return await (props.load ?? loadPublishableWork)(projectId);
       } catch {
+        setLoadFailed(true);
         setStatus("Completed Work could not be loaded.");
-        return [] as PublishableWorkRow[];
+        return { rows: [], truncated: false };
       }
     },
   );
@@ -100,32 +61,17 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
       return;
     }
     setBusy(row.workItemId);
+    const input = {
+      projectId: props.projectId, workItemId: row.workItemId,
+      title: draft.title.trim(), summary: draft.summary.trim(), expectedRevision: row.revision,
+    };
     try {
-      if (props.publish) {
-        await props.publish({
-          projectId: props.projectId,
-          workItemId: row.workItemId,
-          title: draft.title.trim(),
-          summary: draft.summary.trim(),
-        });
-      } else {
-        const client = authorizedClient();
-        try {
-          await client.mutation(publishEntryReference, {
-            projectId: props.projectId,
-            workItemId: row.workItemId,
-            title: draft.title.trim(),
-            summary: draft.summary.trim(),
-          });
-        } finally {
-          void client.close();
-        }
-      }
+      await (props.publish ?? publishChangelogEntry)({ ...input, idempotencyKey: keyFor(row.workItemId, input) });
+      pending.delete(row.workItemId);
       setStatus(`Published “${draft.title.trim()}”.`);
-      setReloadToken((value) => value + 1);
-      void refetch();
+      await refetch();
     } catch {
-      setStatus("That entry could not be published.");
+      setStatus("That entry could not be published. Your draft is preserved. Retry, or reload completed Work and review the latest entry before saving again.");
     } finally {
       setBusy(undefined);
     }
@@ -135,25 +81,14 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
     const entryId = row.published?.entryId;
     if (!entryId) return;
     setBusy(row.workItemId);
+    const input = { projectId: props.projectId, entryId, expectedRevision: row.revision };
     try {
-      if (props.unpublish) {
-        await props.unpublish({ projectId: props.projectId, entryId });
-      } else {
-        const client = authorizedClient();
-        try {
-          await client.mutation(unpublishEntryReference, {
-            projectId: props.projectId,
-            entryId,
-          });
-        } finally {
-          void client.close();
-        }
-      }
+      await (props.unpublish ?? unpublishChangelogEntry)({ ...input, idempotencyKey: keyFor(row.workItemId, input) });
+      pending.delete(row.workItemId);
       setStatus("Entry removed from the public changelog.");
-      setReloadToken((value) => value + 1);
-      void refetch();
+      await refetch();
     } catch {
-      setStatus("That entry could not be removed.");
+      setStatus("That entry could not be removed. Retry, or reload completed Work and review the latest entry before trying again.");
     } finally {
       setBusy(undefined);
     }
@@ -165,13 +100,17 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
       <p class="note">Completed Work stays private until you publish it. You write the headline and summary that appear publicly; the Work title is only a starting point.</p>
       <p class="visually-hidden" aria-live="polite">{status()}</p>
       <Show when={status()}><p class="note changelog-publisher__status">{status()}</p></Show>
+      <button class="button button--quiet" type="button" disabled={Boolean(busy()) || page.loading} onClick={() => void refetch()}>Reload completed Work</button>
+      <Show when={page()?.truncated}><p class="note">Showing the 50 most recently completed items. Older Work is not included in this view.</p></Show>
 
+      <Show when={!page.loading} fallback={<p class="note" role="status">Loading completed Work…</p>}>
+      <Show when={!loadFailed()}>
       <Show
-        when={(rows() ?? []).length > 0}
+        when={(page()?.rows ?? []).length > 0}
         fallback={<p class="note">No completed Work yet. Finish an item and it becomes publishable here.</p>}
       >
         <ul class="changelog-publisher__list">
-          <For each={rows()}>{(row) => (
+          <For each={page()?.rows}>{(row) => (
             <li class="changelog-publisher__item">
               <div class="changelog-publisher__work">
                 <span class="mono">{row.identifier}</span>
@@ -187,7 +126,7 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
                   id={`changelog-title-${row.workItemId}`}
                   maxlength="240"
                   value={draftFor(row).title}
-                  disabled={busy() === row.workItemId}
+                  disabled={Boolean(busy())}
                   onInput={(event) => setDraft(row, { title: event.currentTarget.value })}
                 />
               </div>
@@ -199,7 +138,7 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
                   rows="2"
                   maxlength="2000"
                   value={draftFor(row).summary}
-                  disabled={busy() === row.workItemId}
+                  disabled={Boolean(busy())}
                   onInput={(event) => setDraft(row, { summary: event.currentTarget.value })}
                 />
               </div>
@@ -207,7 +146,7 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
                 <button
                   class="button button--primary"
                   type="button"
-                  disabled={busy() === row.workItemId}
+                  disabled={Boolean(busy())}
                   onClick={() => void publish(row)}
                 >
                   {row.published ? "Update entry" : "Publish entry"}
@@ -216,7 +155,7 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
                   <button
                     class="button button--quiet"
                     type="button"
-                    disabled={busy() === row.workItemId}
+                    disabled={Boolean(busy())}
                     onClick={() => void unpublish(row)}
                   >
                     Unpublish
@@ -226,6 +165,8 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
             </li>
           )}</For>
         </ul>
+      </Show>
+      </Show>
       </Show>
     </section>
   );

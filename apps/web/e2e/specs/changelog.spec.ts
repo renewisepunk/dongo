@@ -37,3 +37,9 @@ test("the changelog remains readable at narrow mobile widths", async ({ page }) 
     document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test("a failed public changelog query is not shown as an empty changelog", async ({ page }) => {
+  await page.goto("/changelog?scenario=changelog-error");
+  await expect(page.getByRole("alert")).toHaveText("The changelog could not be loaded. Please try again later.");
+  await expect(page.getByText("Nothing has been published yet.")).toHaveCount(0);
+});

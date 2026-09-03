@@ -34,3 +34,22 @@ test("an owner can take a published entry back down", async ({ page }) => {
   await expect(published.locator(".changelog-publisher__badge")).toHaveCount(0);
   await expect(published.getByRole("button", { name: "Publish entry" })).toBeVisible();
 });
+
+test("publisher errors preserve drafts and never claim there is no completed Work", async ({ page }) => {
+  await page.goto("/changelog-publisher?scenario=changelog-error");
+  await expect(page.locator(".changelog-publisher__status")).toHaveText("Completed Work could not be loaded.");
+  await expect(page.getByText("No completed Work yet.")).toHaveCount(0);
+  await page.goto("/changelog-publisher?scenario=changelog-conflict");
+  const row = page.locator(".changelog-publisher__item").filter({ hasText: "FIX-1" });
+  await row.getByLabel("Public headline").fill("My preserved headline");
+  await row.getByLabel("Public summary").fill("My preserved summary");
+  await row.getByRole("button", { name: "Publish entry" }).click();
+  await expect(page.locator(".changelog-publisher__status")).toContainText("Your draft is preserved");
+  await expect(row.getByLabel("Public headline")).toHaveValue("My preserved headline");
+  await expect(row.locator(".changelog-publisher__badge")).toHaveCount(0);
+});
+
+test("publisher explains its bounded recent-Work window", async ({ page }) => {
+  await page.goto("/changelog-publisher?scenario=changelog-truncated");
+  await expect(page.getByText("Showing the 50 most recently completed items.")).toBeVisible();
+});

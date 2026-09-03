@@ -20,6 +20,7 @@ import type * as domains_attachments_actions from "../domains/attachments/action
 import type * as domains_attachments_index from "../domains/attachments/index.js";
 import type * as domains_attachments_summary from "../domains/attachments/summary.js";
 import type * as domains_attention_index from "../domains/attention/index.js";
+import type * as domains_changelog_index from "../domains/changelog/index.js";
 import type * as domains_comments_index from "../domains/comments/index.js";
 import type * as domains_events_index from "../domains/events/index.js";
 import type * as domains_human_summary from "../domains/human/summary.js";
@@ -85,6 +86,7 @@ declare const fullApi: ApiFromModules<{
   "domains/attachments/index": typeof domains_attachments_index;
   "domains/attachments/summary": typeof domains_attachments_summary;
   "domains/attention/index": typeof domains_attention_index;
+  "domains/changelog/index": typeof domains_changelog_index;
   "domains/comments/index": typeof domains_comments_index;
   "domains/events/index": typeof domains_events_index;
   "domains/human/summary": typeof domains_human_summary;

@@ -1,6 +1,45 @@
-import { ConvexHttpClient } from "convex/browser";
+import { ConvexClient, ConvexHttpClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
 import { convexDeploymentUrl } from "./auth-config";
+import { convexAccessToken } from "./auth-client";
+
+export type PublishableWorkRow = {
+  workItemId: string;
+  revision: number;
+  identifier: string;
+  title: string;
+  completedAt?: number;
+  published?: ChangelogEntry;
+};
+
+export type PublishableWorkPage = { rows: PublishableWorkRow[]; truncated: boolean };
+export type PublishChangelogInput = {
+  projectId: string; workItemId: string; title: string; summary: string;
+  expectedRevision: number; idempotencyKey: string;
+};
+export type UnpublishChangelogInput = {
+  projectId: string; entryId: string; expectedRevision: number; idempotencyKey: string;
+};
+
+const publishableWorkReference = makeFunctionReference<"query", { projectId: string }, PublishableWorkPage>("domains/changelog/index:publishableWork");
+const publishEntryReference = makeFunctionReference<"mutation", PublishChangelogInput, unknown>("domains/changelog/index:publishEntry");
+const unpublishEntryReference = makeFunctionReference<"mutation", UnpublishChangelogInput, unknown>("domains/changelog/index:unpublishEntry");
+
+async function withAuthorizedClient<T>(operation: (client: ConvexClient) => Promise<T>): Promise<T> {
+  const client = new ConvexClient(convexDeploymentUrl);
+  client.setAuth(async () => await convexAccessToken());
+  try { return await operation(client); } finally { await client.close(); }
+}
+
+export async function loadPublishableWork(projectId: string): Promise<PublishableWorkPage> {
+  return await withAuthorizedClient(async (client) => await client.query(publishableWorkReference, { projectId }));
+}
+export async function publishChangelogEntry(input: PublishChangelogInput): Promise<void> {
+  await withAuthorizedClient(async (client) => await client.mutation(publishEntryReference, input));
+}
+export async function unpublishChangelogEntry(input: UnpublishChangelogInput): Promise<void> {
+  await withAuthorizedClient(async (client) => await client.mutation(unpublishEntryReference, input));
+}
 
 export type ChangelogEntry = {
   entryId: string;

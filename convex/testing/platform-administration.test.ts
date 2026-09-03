@@ -146,6 +146,27 @@ describe("platform administration", () => {
     )).toBe(false);
   });
 
+  it("keeps later owners visible before truncating a large membership list", async () => {
+    const { root, admin, organization } = await setupOrganization();
+    await root.run(async (ctx) => {
+      for (let index = 0; index < 27; index++) {
+        const profileId = await ctx.db.insert("humanProfiles", {
+          authSubject: `late-owner-${index}`, name: index === 26 ? "Later Owner" : `Member ${index}`,
+          email: `member-${index}@example.test`, createdAt: index, updatedAt: index,
+        });
+        await ctx.db.insert("memberships", { organizationId: organization.organizationId,
+          profileId, role: index === 26 ? "owner" : "member", createdAt: index });
+      }
+    });
+    const dashboard = await loadDashboard(admin);
+    const members = dashboard.organizations[0].members;
+    expect(members.count).toBe(25);
+    expect(members.truncated).toBe(true);
+    expect(members.people).toHaveLength(25);
+    expect(members.people.some((person) => person.name === "Later Owner" && person.role === "owner")).toBe(true);
+    expect(members.people.slice(0, 2).map((person) => person.role)).toEqual(["owner", "owner"]);
+  });
+
   it("keeps account and organization row 26 reachable through bounded cursors", async () => {
     const { admin, organization } = await setupOrganization();
     const adminProfile = await admin.query(api.domains.identity.index.current, {});

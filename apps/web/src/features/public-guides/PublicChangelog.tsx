@@ -1,4 +1,4 @@
-import { createResource, For, Show } from "solid-js";
+import { createResource, createSignal, For, Show } from "solid-js";
 import { PublicGuideShell } from "./PublicGuideShell";
 import {
   entryDate,
@@ -12,10 +12,12 @@ export type PublicChangelogProps = {
 };
 
 export function PublicChangelog(props: PublicChangelogProps) {
+  const [failed, setFailed] = createSignal(false);
   const [entries] = createResource(async () => {
     try {
       return await (props.load ?? loadPublishedChangelog)();
     } catch {
+      setFailed(true);
       return [];
     }
   });
@@ -32,6 +34,7 @@ export function PublicChangelog(props: PublicChangelogProps) {
       </section>
 
       <Show when={!entries.loading} fallback={<p class="changelog-note" role="status">Loading the changelog…</p>}>
+        <Show when={!failed()} fallback={<p class="changelog-note" role="alert">The changelog could not be loaded. Please try again later.</p>}>
         <Show
           when={months().length > 0}
           fallback={<p class="changelog-note">Nothing has been published yet. Check back once the first entry goes out.</p>}
@@ -56,6 +59,7 @@ export function PublicChangelog(props: PublicChangelogProps) {
               </section>
             )}</For>
           </div>
+        </Show>
         </Show>
       </Show>
     </PublicGuideShell>

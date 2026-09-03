@@ -10,6 +10,7 @@ const publicDefaults = productionBuild
       environment: "production",
       googleAuthConfigured: "true",
       publicOrigin: "https://dongo.so",
+      siteProjectRef: "en8dgh2y-dongo",
     }
   : {
       convexUrl: "https://wandering-camel-662.convex.cloud",
@@ -17,6 +18,7 @@ const publicDefaults = productionBuild
       environment: "development",
       googleAuthConfigured: "true",
       publicOrigin: "https://dev.dongo.so",
+      siteProjectRef: "p58de816-dongo",
     };
 
 function stripBuildOnlyDevToolbarCss(): Plugin {
@@ -47,6 +49,7 @@ export default defineConfig(({ command }) => ({
     "import.meta.env.VITE_DONGO_ENVIRONMENT": JSON.stringify(process.env.VITE_DONGO_ENVIRONMENT ?? publicDefaults.environment),
     "import.meta.env.VITE_DONGO_GOOGLE_AUTH_CONFIGURED": JSON.stringify(process.env.VITE_DONGO_GOOGLE_AUTH_CONFIGURED ?? publicDefaults.googleAuthConfigured),
     "import.meta.env.VITE_DONGO_PUBLIC_ORIGIN": JSON.stringify(process.env.VITE_DONGO_PUBLIC_ORIGIN ?? publicDefaults.publicOrigin),
+    "import.meta.env.VITE_DONGO_SITE_PROJECT_REF": JSON.stringify(process.env.VITE_DONGO_SITE_PROJECT_REF ?? publicDefaults.siteProjectRef),
   },
   plugins: [
     cloudflare({ viteEnvironment: { name: "ssr" } }),

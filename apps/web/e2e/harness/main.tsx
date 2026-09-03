@@ -1026,9 +1026,10 @@ function FixtureOpen() {
 
 function FixtureChangelogPublisher() {
   const [rows, setRows] = createSignal<PublishableWorkRow[]>([
-    { workItemId: "work-1", identifier: "FIX-1", title: "Completed and unpublished", completedAt: Date.UTC(2026, 2, 19) },
+    { workItemId: "work-1", revision: 0, identifier: "FIX-1", title: "Completed and unpublished", completedAt: Date.UTC(2026, 2, 19) },
     {
       workItemId: "work-2",
+      revision: 1,
       identifier: "FIX-2",
       title: "Completed and already published",
       completedAt: Date.UTC(2026, 1, 27),
@@ -1043,15 +1044,19 @@ function FixtureChangelogPublisher() {
   return (
     <ChangelogPublisher
       projectId="project-fixture"
-      load={async () => rows()}
+      load={async () => {
+        if (oauthScenario() === "changelog-error") throw new Error("fixture load failure");
+        return { rows: rows(), truncated: oauthScenario() === "changelog-truncated" };
+      }}
       publish={async (input) => {
+        if (oauthScenario() === "changelog-conflict") throw new Error("fixture revision conflict");
         setRows((current) => current.map((row) => row.workItemId === input.workItemId
-          ? { ...row, published: { entryId: `entry-${row.workItemId}`, title: input.title, summary: input.summary, publishedAt: Date.now() } }
+          ? { ...row, revision: row.revision + 1, published: { entryId: `entry-${row.workItemId}`, title: input.title, summary: input.summary, publishedAt: Date.now() } }
           : row));
       }}
       unpublish={async (input) => {
         setRows((current) => current.map((row) => row.published?.entryId === input.entryId
-          ? { ...row, published: undefined }
+          ? { ...row, revision: row.revision + 1, published: undefined }
           : row));
       }}
     />
@@ -1062,7 +1067,9 @@ function FixtureChangelog() {
   const scenario = new URLSearchParams(window.location.search).get("scenario");
   return (
     <PublicChangelog
-      load={async () => scenario === "changelog-empty" ? [] : [
+      load={async () => {
+        if (scenario === "changelog-error") throw new Error("fixture load failure");
+        return scenario === "changelog-empty" ? [] : [
         {
           entryId: "entry-newer",
           title: "Owners can name their organization",
@@ -1075,7 +1082,7 @@ function FixtureChangelog() {
           summary: "Every organization now lists its people beside its allowances.",
           publishedAt: Date.UTC(2026, 1, 27),
         },
-      ]}
+      ]; }}
     />
   );
 }

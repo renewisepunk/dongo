@@ -105,6 +105,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_organization", ["organizationId"])
+    .index("by_organization_role", ["organizationId", "role"])
     .index("by_profile", ["profileId"])
     .index("by_organization_profile", ["organizationId", "profileId"]),
 
@@ -479,6 +480,7 @@ export default defineSchema({
     claimExpiresAt: v.optional(v.number()),
     parentId: v.optional(v.id("workItems")),
     revision: v.number(),
+    changelogRevision: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
     completedAt: v.optional(v.number()),
