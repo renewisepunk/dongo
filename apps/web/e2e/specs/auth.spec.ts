@@ -20,7 +20,7 @@ test("starts Google with only a safe same-origin callback", async ({ page }) => 
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await expect(page.locator("html")).toHaveAttribute(
     "data-fixture-google-callback",
-    "http://127.0.0.1:4174/auth/callback?returnTo=%2Fconnect%3Frequest%3Dfixture",
+    `${new URL(page.url()).origin}/auth/callback?returnTo=%2Fconnect%3Frequest%3Dfixture`,
   );
 });
 

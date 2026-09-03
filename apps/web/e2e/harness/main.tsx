@@ -555,6 +555,7 @@ function fixtureAdministration() {
 }
 
 const settingsDependencies = {
+  changelog: { load: async () => ({ rows: [], truncated: false }) },
   async connectForSettings(orgSlug: string, projectSlug: string) {
     document.documentElement.dataset.fixtureSettingsTarget = `${orgSlug}/${projectSlug}`;
     if (oauthScenario() === "load-error") {
