@@ -74,7 +74,7 @@ test("renderer creates distinct non-secret project host assets", () => {
     publicProjectRef: "project_uvwxyz",
     shortProjectRef: "uvwxyz",
   });
-  assert.equal(first.integrationVersion, "0.1.12");
+  assert.equal(first.integrationVersion, "0.1.13");
   assert.notEqual(first.serverName, second.serverName);
   assert.notEqual(first.endpoint, second.endpoint);
   assert.match(first.codexConfigToml, /https:\/\/dev\.dongo\.so\/p\/project_abcdef\/mcp/);

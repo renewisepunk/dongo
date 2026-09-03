@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import test from "node:test";
+import { DONGO_COMPLETION_INSTRUCTIONS } from "@dongo/mcp/managed-integrations";
 
 import { MemorySecretStore } from "../src/secret-store.ts";
 import { ClaudeRunnerAdapter, CodexRunnerAdapter } from "../src/runner-adapters.ts";
@@ -59,6 +60,7 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
     "-",
   ]);
   assert.match(executionCalls[0]?.input ?? "", /exact dongo WorkItem dong027/u);
+  assert.ok(executionCalls[0]?.input.includes(DONGO_COMPLETION_INSTRUCTIONS));
   assert.doesNotMatch(executionCalls[0]?.args.join(" ") ?? "", /dong027/u);
   assert.equal(executionCalls[0]?.args.some((value) => value.includes("dangerously")), false);
   assert.equal(await adapter.canResume(input), true);
@@ -72,6 +74,7 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
     "-",
   ]);
   assert.match(executionCalls[1]?.input ?? "", /exact dongo WorkItem dong027/u);
+  assert.ok(executionCalls[1]?.input.includes(DONGO_COMPLETION_INSTRUCTIONS));
   assert.equal(executionCalls[1]?.cwd, process.cwd());
   assert.doesNotMatch(JSON.stringify(first), /private model output/u);
   await adapter.discardRegistration(input.registrationId);
@@ -153,6 +156,7 @@ test("Claude Code adapter uses print mode and stdin, then resumes only its exact
   ]);
   assert.equal(executionCalls[0]?.args.some((value) => value.includes("dangerously")), false);
   assert.match(executionCalls[0]?.input ?? "", /exact dongo WorkItem dong028/u);
+  assert.ok(executionCalls[0]?.input.includes(DONGO_COMPLETION_INSTRUCTIONS));
   assert.doesNotMatch(executionCalls[0]?.args.join(" ") ?? "", /dong028/u);
   assert.equal(executionCalls[0]?.cwd, process.cwd());
   assert.equal(await adapter.canResume(input), true);
@@ -162,6 +166,7 @@ test("Claude Code adapter uses print mode and stdin, then resumes only its exact
   assert.ok(resumeIndex > 0);
   assert.equal(executionCalls[1]?.args[resumeIndex + 1], "claude_session_1234");
   assert.match(executionCalls[1]?.input ?? "", /exact dongo WorkItem dong028/u);
+  assert.ok(executionCalls[1]?.input.includes(DONGO_COMPLETION_INSTRUCTIONS));
   assert.doesNotMatch(JSON.stringify(first), /private Claude output/u);
 });
 

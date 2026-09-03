@@ -33,6 +33,10 @@ build-plan           architecture, journeys, agent plans, and release gates
 
 The original product requirements remain unchanged in [`dongo-prd.md`](dongo-prd.md). Implementation decisions and release evidence are additive documents under [`build-plan/`](build-plan/README.md).
 
+Repository Work is Done only after verified integration into the shared target
+and required release acceptance. A tested local branch or coordinator handoff
+remains unfinished. See the [completion evidence and handoff runbook](docs/runbooks/work-completion.md).
+
 ## Local verification
 
 Node.js 24 is used for repository development; the packed CLI supports Node.js 20 or newer.

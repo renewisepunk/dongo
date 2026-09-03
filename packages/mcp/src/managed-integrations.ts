@@ -1,10 +1,11 @@
 import { DONGO_MCP_INSTRUCTIONS } from "./instructions.ts";
+export { DONGO_COMPLETION_INSTRUCTIONS } from "./instructions.ts";
 
 const PROJECT_REF = /^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/;
 const SHORT_REF = /^[A-Za-z0-9][A-Za-z0-9_-]{1,31}$/;
 
 export interface DongoManagedIntegrationBundle {
-  readonly integrationVersion: "0.1.12";
+  readonly integrationVersion: "0.1.13";
   readonly serverName: string;
   readonly endpoint: string;
   readonly managedInstructionBlock: string;
@@ -66,7 +67,7 @@ export function renderDongoManagedIntegrationBundle(input: {
   )}\n`;
 
   return Object.freeze({
-    integrationVersion: "0.1.12",
+    integrationVersion: "0.1.13",
     serverName,
     endpoint,
     managedInstructionBlock: managedInstructionBlock(),

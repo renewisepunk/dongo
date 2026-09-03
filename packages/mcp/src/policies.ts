@@ -70,7 +70,7 @@ const PRESENTATION = {
   finish_work: {
     title: "Finish work",
     description:
-      "Atomically finish the active Run, release its claim, and record the final WorkItem outcome.",
+      "Atomically mark Work Done, finish its active Run, and release its claim. For repository changes, first verify integration into the intended shared target against fresh remote state and any required release acceptance. A local commit, feature-branch push, PR, or coordinator handoff is not Done. Record exact integrated revision and evidence; respect explicit local-only scope. The host verifies Git and deployment, not this remote service.",
   },
   add_comment: {
     title: "Add comment",
