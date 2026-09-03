@@ -11,6 +11,7 @@ import type { OutputWriter } from "./output.ts";
 import { errorResult, processOutput, writeJson } from "./output.ts";
 import {
   renderRunnerApproveOutput,
+  renderRunnerConfigureOutput,
   renderRunnerDisableOutput,
   renderRunnerInstallOutput,
   renderRunnerRemoveOutput,
@@ -47,6 +48,7 @@ export interface CliDependencies {
     | "runnerInstall"
     | "runnerStatus"
     | "runnerApprove"
+    | "runnerConfigureApproval"
     | "runnerDisable"
     | "runnerRemove"
     | "runnerRun"
@@ -697,8 +699,8 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
       case "runner": {
         const action = requireSubcommand(
           parsed,
-          ["install", "status", "approve", "disable", "remove", "run"],
-          "Usage: dongo runner install|status|approve|disable|remove|run [options]",
+          ["install", "configure", "status", "approve", "disable", "remove", "run"],
+          "Usage: dongo runner install|configure|status|approve|disable|remove|run [options]",
         );
         command = `runner ${action}`;
         if (action === "install") {
@@ -717,6 +719,14 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           });
           data = result;
           if (!parsed.json) humanOutput = renderRunnerInstallOutput(result);
+        } else if (action === "configure") {
+          const approval = requiredOption(parsed, "approval");
+          if (approval !== "ask" && approval !== "automatic") {
+            throw new CliCoreError({ code: "validation", message: "--approval must be ask or automatic.", exitCode: 2 });
+          }
+          const result = await service.runnerConfigureApproval(approval);
+          data = result;
+          if (!parsed.json) humanOutput = renderRunnerConfigureOutput(result);
         } else if (action === "status") {
           const result = await service.runnerStatus();
           data = result;

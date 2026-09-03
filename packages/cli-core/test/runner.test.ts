@@ -47,6 +47,32 @@ test("runner installation stores a one-time credential locally and exposes only 
   );
 });
 
+test("runner approval can be changed in place without replacing its credential", async (context) => {
+  const fixture = await runnerFixture(context);
+  const api = new FakeRunnerApi();
+  const service = new FakeService();
+  const manager = fixture.manager(api, service);
+  await manager.install({ label: "Trusted Mac", harnesses: ["codex"] });
+  const beforeToken = api.registrationToken;
+
+  const configured = await manager.configureApproval("automatic");
+
+  assert.equal(configured.changed, true);
+  assert.equal(configured.previousApprovalMode, "ask");
+  assert.equal(configured.approvalMode, "automatic");
+  assert.deepEqual(configured.harnesses, ["codex"]);
+  assert.equal(api.registrationToken, beforeToken);
+  assert.equal(service.disables, 1);
+  assert.equal(service.installs.length, 2);
+  assert.equal((await manager.status()).approvalMode, "automatic");
+  assert.equal((await manager.status()).state?.status, "starting");
+
+  const unchanged = await manager.configureApproval("automatic");
+  assert.equal(unchanged.changed, false);
+  assert.equal(service.disables, 1);
+  assert.equal(service.installs.length, 2);
+});
+
 test("ask mode requires exact local approval before executing a command-free job", async (context) => {
   const fixture = await runnerFixture(context);
   const controller = new AbortController();

@@ -18,15 +18,19 @@ dongo runner status
 ```
 
 Ask-before-run is the default. A user may explicitly opt one local repository
-into automatic starts with `--approval automatic`. The selection is kept in the
+into automatic starts with `--approval automatic`, or change an existing runner
+in place with `dongo runner configure --approval automatic`. The selection is kept in the
 owner-only local configuration and reported to the server for truthful status;
 the server cannot elevate an ask-mode runner to automatic execution.
 
 Automatic Inbox processing is a second, project-level opt-in and remains off
-after installation. An organization owner enables it from **Project settings →
-Local runner** by selecting one active automatic-mode computer and one installed
-harness. Only Intake created after that selection is queued. Existing Inbox
-items remain untouched. Each job is targeted to that exact registration and
+after installation. Runner status and settings must say this explicitly;
+generic online presence is not proof that Inbox items are routed. An organization
+owner enables it from **Project settings → Local runner** by selecting one active
+automatic-mode computer and one installed harness. That explicit action queues
+the bounded current unclaimed Inbox and all new Intake. A separate **Process
+waiting Inbox now** action safely retries unclaimed items that do not already
+have a live job. Each job is targeted to that exact registration and
 uses a fixed triage-only instruction; resulting Ready Work is a separate job
 and is automatically queued only when the project is in autonomous mode.
 
@@ -100,7 +104,7 @@ If remote revocation fails, dongo retains the local credential so removal can be
 retried safely.
 
 Disabling automatic Inbox processing in project settings stops future Intake
-jobs but does not alter existing Inbox items. Revoking the selected runner,
+jobs but does not cancel jobs already queued. Revoking the selected runner,
 changing it away from automatic approval, or removing the selected harness
 also disables the opt-in. dongo never silently transfers this trust to another
 computer.

@@ -4,6 +4,7 @@ import type { RunnerApprovalMode, RunnerHarness } from "@dongo/contracts";
 type RunnerInstallResult = Awaited<ReturnType<CoreService["runnerInstall"]>>;
 type RunnerStatusResult = Awaited<ReturnType<CoreService["runnerStatus"]>>;
 type RunnerApproveResult = Awaited<ReturnType<CoreService["runnerApprove"]>>;
+type RunnerConfigureResult = Awaited<ReturnType<CoreService["runnerConfigureApproval"]>>;
 
 function harnessLabel(harness: RunnerHarness): string {
   return harness === "codex" ? "Codex" : "Claude Code";
@@ -72,8 +73,11 @@ export function renderRunnerInstallOutput(result: RunnerInstallResult): string {
   return [
     "dongo runner is ready.",
     "",
-    `You can now send issues from dongo to this computer and have ${agentLabel(result.harnesses)} work on them in this repository—even after you close this terminal.`,
+    `This computer can now run queued dongo work with ${agentLabel(result.harnesses)} in this repository—even after you close this terminal.`,
     approvalExplanation(result.approvalMode),
+    result.approvalMode === "automatic"
+      ? "To receive new Inbox items automatically, finish setup in Project settings → Local runner."
+      : "New Inbox items are not routed here automatically. To enable that, first run: dongo runner configure --approval automatic",
     "If this computer is offline, the issue waits until it comes back.",
     "",
     "Check it anytime: dongo runner status",
@@ -96,6 +100,9 @@ export function renderRunnerStatusOutput(result: RunnerStatusResult): string {
     `This computer is set up to work on issues with ${agentLabel(result.harnesses)}.`,
     approvalExplanation(result.approvalMode),
     stateExplanation(result.state),
+    result.approvalMode === "automatic"
+      ? "Confirm Inbox routing in Project settings → Local runner."
+      : "New Inbox items are not routed here automatically. Enable local trust with: dongo runner configure --approval automatic",
   ].join("\n") + "\n";
 }
 
@@ -106,6 +113,26 @@ export function renderRunnerApproveOutput(result: RunnerApproveResult): string {
   return work
     ? `Job approved.\nAn agent can now start working on ${work} on this computer.\n`
     : "Job approved.\nAn agent can now start working on it on this computer.\n";
+}
+
+export function renderRunnerConfigureOutput(result: RunnerConfigureResult): string {
+  if (result.approvalMode === "automatic") {
+    return [
+      result.changed
+        ? "Automatic starts are allowed for this repository."
+        : "Automatic starts were already allowed for this repository.",
+      "",
+      `${agentLabel(result.harnesses)} can now start without a separate approval when this repository is clean.`,
+      "To receive Inbox items, return to Project settings → Local runner and turn on automatic Inbox processing.",
+    ].join("\n") + "\n";
+  }
+  return [
+    result.changed
+      ? "Local approval is now required before every runner job."
+      : "Local approval was already required before every runner job.",
+    "",
+    "Automatic Inbox processing is off for this computer.",
+  ].join("\n") + "\n";
 }
 
 export function renderRunnerDisableOutput(): string {

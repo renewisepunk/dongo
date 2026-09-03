@@ -222,6 +222,14 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
       { name: "label", description: "Human-readable name for this computer." },
     ],
   },
+  "runner configure": {
+    command: "runner configure",
+    summary: "Change whether this runner asks before starting work.",
+    usage: "dongo runner configure --approval ask|automatic",
+    options: [
+      { name: "approval", description: "Ask locally before every job, or trust this repository for automatic starts.", required: true, allowed: ["ask", "automatic"] },
+    ],
+  },
   "runner status": { command: "runner status", summary: "Show local runner health without exposing credentials.", usage: "dongo runner status", options: [] },
   "runner approve": { command: "runner approve", summary: "Approve one waiting job on this computer.", usage: "dongo runner approve --job-id ID", options: [{ name: "job-id", description: "Waiting runner job ID.", required: true }] },
   "runner disable": { command: "runner disable", summary: "Stop automatic login startup but retain the revocable registration.", usage: "dongo runner disable", options: [] },
@@ -242,7 +250,7 @@ const GROUPS: Record<string, { summary: string; subcommands: string[] }> = {
   updates: { summary: "Pull or wait for agent update signals.", subcommands: ["get", "wait"] },
   attachment: { summary: "Inspect or safely fetch attachments.", subcommands: ["get", "fetch"] },
   integrate: { summary: "Preview or apply a host integration.", subcommands: ["codex", "claude", "generic"] },
-  runner: { summary: "Install and operate the secure local runner.", subcommands: ["install", "status", "approve", "disable", "remove", "run"] },
+  runner: { summary: "Install and operate the secure local runner.", subcommands: ["install", "configure", "status", "approve", "disable", "remove", "run"] },
 };
 
 const COMMON_OPTIONS = [

@@ -634,7 +634,7 @@ const settingsDependencies = {
             platform: "darwin",
             version: "0.1.0",
             harnesses: ["codex", "claude"],
-            approvalMode: "automatic",
+            approvalMode: oauthScenario() === "runner-ask" ? "ask" : "automatic",
             status: "active",
             lastSeenAt: now,
             waitingUntil: now + 20_000,
@@ -651,6 +651,7 @@ const settingsDependencies = {
         expectedRevision: number;
         registrationId?: string;
         harness?: import("../../src/lib/project-data").RunnerHarness;
+        includeExisting?: boolean;
       }) {
         document.documentElement.dataset.fixtureAutomaticIntake = JSON.stringify(input);
         return {
@@ -659,6 +660,8 @@ const settingsDependencies = {
           registrationId: input.registrationId,
           harness: input.harness,
           configuredAt: Date.now(),
+          queuedExistingCount: input.includeExisting ? 3 : 0,
+          hasMoreExisting: false,
         };
       },
       async updateProject(input: {

@@ -42,7 +42,7 @@ Build and install the self-contained package archive so the command does not dep
 
 ```sh
 npm pack --workspace @wisepunk/dongo
-npm install --global ./wisepunk-dongo-0.2.5.tgz
+npm install --global ./wisepunk-dongo-0.2.6.tgz
 dongo --version
 dongo --help
 ```
@@ -84,6 +84,7 @@ dongo attachment get|fetch --attachment-id ID [--output PATH]
 dongo sync
 dongo integrate codex|claude|generic [--apply]
 dongo runner install --harness codex|claude [--harness ...] [--approval ask|automatic]
+dongo runner configure --approval ask|automatic
 dongo runner status
 dongo runner approve --job-id ID
 dongo runner disable
@@ -164,6 +165,10 @@ the connected repository and starts an unprivileged login-scoped user service.
 It opens no inbound port and accepts only durable dongo jobs for the exact local
 project binding. Ask-before-run is the default; `--approval automatic` is an
 explicit opt-in for this repository only and starts only from a clean checkout.
+An existing runner can change this local choice without replacing its credential
+with `dongo runner configure --approval ask|automatic`. Inbox pickup remains a
+separate owner action in **Project settings → Local runner**; turning it on
+explicitly queues current unclaimed Intake as well as future items.
 Installation records the exact supported Codex and/or Claude Code executable;
 a queued job cannot replace its path, flags, environment, or instruction. Use
 `dongo runner status` to inspect

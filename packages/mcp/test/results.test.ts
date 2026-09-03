@@ -48,7 +48,7 @@ test("release notices are additive, bounded, trusted, and consent-first", () => 
     assert.match(notice.text, /explicit user approval/u);
     assert.match(
       notice.text,
-      /npm install --global @wisepunk\/dongo@0\.2\.5/u,
+      /npm install --global @wisepunk\/dongo@0\.2\.6/u,
     );
     assert.ok(new TextEncoder().encode(notice.text).byteLength <= 1_024);
   }
@@ -56,7 +56,7 @@ test("release notices are additive, bounded, trusted, and consent-first", () => 
     schemaVersion: 1,
     id: CURRENT_AGENT_RELEASE_NOTICE.id,
     sequence: CURRENT_AGENT_RELEASE_NOTICE.sequence,
-    cliVersion: "0.2.5",
+    cliVersion: "0.2.6",
     consentRequired: true,
   });
 });

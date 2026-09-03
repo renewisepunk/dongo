@@ -383,6 +383,55 @@ describe("local runner delivery", () => {
     )).rejects.toThrow(/automatic approval/u);
   });
 
+  it("can explicitly queue the current Inbox when automatic processing is enabled", async () => {
+    const fixture = await runnerFixture();
+    const token = runnerToken("b", "f");
+    const registration = await register(fixture, token, "Backfill Mac", "automatic");
+    const first = await fixture.human.mutation(api.domains.intake.index.create, {
+      projectId: fixture.projectId,
+      text: "First waiting item.",
+      attachmentIds: [],
+      idempotencyKey: "runner-backfill-first",
+    });
+    const second = await fixture.human.mutation(api.domains.intake.index.create, {
+      projectId: fixture.projectId,
+      text: "Second waiting item.",
+      attachmentIds: [],
+      idempotencyKey: "runner-backfill-second",
+    });
+    const input = {
+      projectId: fixture.projectId,
+      expectedRevision: 0,
+      registrationId: registration.id,
+      harness: "codex" as const,
+      includeExisting: true,
+      idempotencyKey: "runner-backfill-enable",
+    };
+    const configured = await fixture.human.mutation(
+      api.domains.runner.index.configureAutomaticIntake,
+      input,
+    );
+    expect(configured).toMatchObject({ enabled: true, revision: 1, queuedExistingCount: 2, hasMoreExisting: false });
+    const replay = await fixture.human.mutation(
+      api.domains.runner.index.configureAutomaticIntake,
+      input,
+    );
+    expect(replay).toEqual(configured);
+    const snapshot = await fixture.human.query(api.domains.runner.index.listForHuman, {
+      projectId: fixture.projectId,
+    });
+    expect(snapshot.jobs).toHaveLength(2);
+    expect(snapshot.jobs.map((job) => job.intakeId)).toEqual(expect.arrayContaining([
+      first.intakeId,
+      second.intakeId,
+    ]));
+    expect(snapshot.jobs.every((job) =>
+      job.kind === "intake" &&
+      job.targetRegistrationId === registration.id &&
+      job.state === "queued"
+    )).toBe(true);
+  });
+
   it("rejects a stale execution lease and records a bounded failure", async () => {
     const fixture = await runnerFixture();
     const token = runnerToken("n", "p");

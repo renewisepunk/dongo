@@ -260,6 +260,11 @@ export type AutomaticIntakeRunnerPolicy = {
   configuredAt?: number;
 };
 
+export type AutomaticIntakeConfigurationResult = AutomaticIntakeRunnerPolicy & {
+  queuedExistingCount: number;
+  hasMoreExisting: boolean;
+};
+
 export type RunnerSnapshot = {
   registrations: RunnerRegistration[];
   jobs: RunnerJob[];
@@ -786,9 +791,10 @@ const configureAutomaticIntakeReference = makeFunctionReference<
     expectedRevision: number;
     registrationId?: string;
     harness?: RunnerHarness;
+    includeExisting?: boolean;
     idempotencyKey: string;
   },
-  AutomaticIntakeRunnerPolicy
+  AutomaticIntakeConfigurationResult
 >("domains/runner/index:configureAutomaticIntake");
 const revokeRunnerReference = makeFunctionReference<
   "mutation",
@@ -1864,7 +1870,8 @@ export class ProjectDataConnection {
     expectedRevision: number;
     registrationId?: string;
     harness?: RunnerHarness;
-  }): Promise<AutomaticIntakeRunnerPolicy> {
+    includeExisting?: boolean;
+  }): Promise<AutomaticIntakeConfigurationResult> {
     return await this.#client.mutation(configureAutomaticIntakeReference, {
       projectId: this.projectId,
       ...input,
