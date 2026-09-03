@@ -8,7 +8,7 @@ export type { PublishableWorkRow } from "../../lib/changelog-data";
 
 export type ChangelogPublisherProps = {
   projectId: string;
-  load?: (projectId: string) => Promise<PublishableWorkPage>;
+  load?: (projectId: string, cursor?: string) => Promise<PublishableWorkPage>;
   publish?: (input: PublishChangelogInput) => Promise<void>;
   unpublish?: (input: UnpublishChangelogInput) => Promise<void>;
 };
@@ -17,6 +17,8 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
   const [busy, setBusy] = createSignal<string>();
   const [status, setStatus] = createSignal("");
   const [loadFailed, setLoadFailed] = createSignal(false);
+  const [additionalRows, setAdditionalRows] = createSignal<PublishableWorkRow[]>([]);
+  const [nextCursor, setNextCursor] = createSignal<string>();
   const [drafts, setDrafts] = createSignal<Record<string, { title: string; summary: string }>>({});
   const pending = new Map<string, { payload: string; key: string }>();
   const keyFor = (id: string, input: unknown) => {
@@ -32,8 +34,12 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
     () => props.projectId,
     async (projectId) => {
       setLoadFailed(false);
+      setAdditionalRows([]);
+      setNextCursor(undefined);
       try {
-        return await (props.load ?? loadPublishableWork)(projectId);
+        const result = await (props.load ?? loadPublishableWork)(projectId);
+        setNextCursor(result.cursor);
+        return result;
       } catch {
         setLoadFailed(true);
         setStatus("Completed Work could not be loaded.");
@@ -41,6 +47,19 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
       }
     },
   );
+  const visibleRows = () => [...(page()?.rows ?? []), ...additionalRows()];
+  const loadMore = async () => {
+    const cursor = nextCursor();
+    if (!cursor || busy()) return;
+    setBusy("load-more");
+    try {
+      const result = await (props.load ?? loadPublishableWork)(props.projectId, cursor);
+      setAdditionalRows((current) => [...current, ...result.rows.filter((row) => !visibleRows().some((existing) => existing.workItemId === row.workItemId))]);
+      setNextCursor(result.cursor);
+    } catch {
+      setStatus("Older completed Work could not be loaded. Please retry.");
+    } finally { setBusy(undefined); }
+  };
 
   const draftFor = (row: PublishableWorkRow) =>
     drafts()[row.workItemId] ?? {
@@ -101,16 +120,16 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
       <p class="visually-hidden" aria-live="polite">{status()}</p>
       <Show when={status()}><p class="note changelog-publisher__status">{status()}</p></Show>
       <button class="button button--quiet" type="button" disabled={Boolean(busy()) || page.loading} onClick={() => void refetch()}>Reload completed Work</button>
-      <Show when={page()?.truncated}><p class="note">Showing the 50 most recently completed items. Older Work is not included in this view.</p></Show>
+      <Show when={nextCursor()}><p class="note">More completed Work is available. Load older items to manage their public entries.</p></Show>
 
       <Show when={!page.loading} fallback={<p class="note" role="status">Loading completed Work…</p>}>
       <Show when={!loadFailed()}>
       <Show
-        when={(page()?.rows ?? []).length > 0}
+        when={visibleRows().length > 0}
         fallback={<p class="note">No completed Work yet. Finish an item and it becomes publishable here.</p>}
       >
         <ul class="changelog-publisher__list">
-          <For each={page()?.rows}>{(row) => (
+          <For each={visibleRows()}>{(row) => (
             <li class="changelog-publisher__item">
               <div class="changelog-publisher__work">
                 <span class="mono">{row.identifier}</span>
@@ -165,6 +184,7 @@ export function ChangelogPublisher(props: ChangelogPublisherProps) {
             </li>
           )}</For>
         </ul>
+        <Show when={nextCursor()}><button class="button button--quiet" type="button" disabled={Boolean(busy())} onClick={() => void loadMore()}>Load older completed Work</button></Show>
       </Show>
       </Show>
       </Show>

@@ -23,7 +23,7 @@ function publishedEntryDto(entry: Doc<"changelogEntries">) {
 // Owner-only. Lists completed Work so an owner can choose what to publish.
 // Nothing here is public; publishing is a separate, explicit step.
 export const publishableWork = query({
-  args: { projectId: v.id("projects") },
+  args: { projectId: v.id("projects"), cursor: v.optional(v.union(v.string(), v.null())) },
   handler: async (ctx, args) => {
     await requireHumanProject(ctx, args.projectId, { owner: true });
     const completed = await ctx.db
@@ -32,9 +32,9 @@ export const publishableWork = query({
         q.eq("projectId", args.projectId).eq("state", "done"),
       )
       .order("desc")
-      .take(MAX_PUBLISHABLE_ROWS + 1);
+      .paginate({ cursor: args.cursor ?? null, numItems: MAX_PUBLISHABLE_ROWS });
     return {
-      rows: await Promise.all(completed.slice(0, MAX_PUBLISHABLE_ROWS).map(async (item) => {
+      rows: await Promise.all(completed.page.map(async (item) => {
         const entry = await ctx.db.query("changelogEntries")
           .withIndex("by_project_work", (q) => q.eq("projectId", args.projectId).eq("workItemId", item._id))
           .unique();
@@ -54,7 +54,8 @@ export const publishableWork = query({
             : undefined,
         };
       })),
-      truncated: completed.length > MAX_PUBLISHABLE_ROWS,
+      truncated: !completed.isDone,
+      cursor: completed.isDone ? undefined : completed.continueCursor,
     };
   },
 });

@@ -49,7 +49,13 @@ test("publisher errors preserve drafts and never claim there is no completed Wor
   await expect(row.locator(".changelog-publisher__badge")).toHaveCount(0);
 });
 
-test("publisher explains its bounded recent-Work window", async ({ page }) => {
+test("publisher keeps older public entries manageable through bounded pages", async ({ page }) => {
   await page.goto("/changelog-publisher?scenario=changelog-truncated");
-  await expect(page.getByText("Showing the 50 most recently completed items.")).toBeVisible();
+  await expect(page.getByText("More completed Work is available.")).toBeVisible();
+  await page.getByRole("button", { name: "Load older completed Work" }).click();
+  const older = page.locator(".changelog-publisher__item").filter({ hasText: "FIX-2" });
+  await expect(older.getByRole("button", { name: "Unpublish" })).toBeVisible();
+  await older.getByRole("button", { name: "Unpublish" }).click();
+  await page.getByRole("button", { name: "Load older completed Work" }).click();
+  await expect(older.locator(".changelog-publisher__badge")).toHaveCount(0);
 });

@@ -265,5 +265,14 @@ describe("changelog concurrency and bounded reads", () => {
     expect(page.rows).toHaveLength(50);
     expect(page.truncated).toBe(true);
     expect(page.rows.find((row) => row.workItemId === doneWorkItemId)?.published?.title).toBe("Most recent");
+    const older = await owner.query(api.domains.changelog.index.publishableWork, { projectId: project.projectId, cursor: page.cursor });
+    expect(older.rows).toHaveLength(50);
+    const olderPublished = older.rows.find((row) => row.published)!;
+    await owner.mutation(api.domains.changelog.index.unpublishEntry, {
+      projectId: project.projectId, entryId: olderPublished.published!.entryId,
+      expectedRevision: olderPublished.revision, idempotencyKey: crypto.randomUUID(),
+    });
+    const refreshed = await owner.query(api.domains.changelog.index.publishableWork, { projectId: project.projectId, cursor: page.cursor });
+    expect(refreshed.rows.find((row) => row.workItemId === olderPublished.workItemId)?.published).toBeUndefined();
   });
 });

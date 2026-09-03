@@ -12,7 +12,7 @@ export type PublishableWorkRow = {
   published?: ChangelogEntry;
 };
 
-export type PublishableWorkPage = { rows: PublishableWorkRow[]; truncated: boolean };
+export type PublishableWorkPage = { rows: PublishableWorkRow[]; truncated: boolean; cursor?: string };
 export type PublishChangelogInput = {
   projectId: string; workItemId: string; title: string; summary: string;
   expectedRevision: number; idempotencyKey: string;
@@ -21,7 +21,7 @@ export type UnpublishChangelogInput = {
   projectId: string; entryId: string; expectedRevision: number; idempotencyKey: string;
 };
 
-const publishableWorkReference = makeFunctionReference<"query", { projectId: string }, PublishableWorkPage>("domains/changelog/index:publishableWork");
+const publishableWorkReference = makeFunctionReference<"query", { projectId: string; cursor?: string }, PublishableWorkPage>("domains/changelog/index:publishableWork");
 const publishEntryReference = makeFunctionReference<"mutation", PublishChangelogInput, unknown>("domains/changelog/index:publishEntry");
 const unpublishEntryReference = makeFunctionReference<"mutation", UnpublishChangelogInput, unknown>("domains/changelog/index:unpublishEntry");
 
@@ -31,8 +31,8 @@ async function withAuthorizedClient<T>(operation: (client: ConvexClient) => Prom
   try { return await operation(client); } finally { await client.close(); }
 }
 
-export async function loadPublishableWork(projectId: string): Promise<PublishableWorkPage> {
-  return await withAuthorizedClient(async (client) => await client.query(publishableWorkReference, { projectId }));
+export async function loadPublishableWork(projectId: string, cursor?: string): Promise<PublishableWorkPage> {
+  return await withAuthorizedClient(async (client) => await client.query(publishableWorkReference, { projectId, cursor }));
 }
 export async function publishChangelogEntry(input: PublishChangelogInput): Promise<void> {
   await withAuthorizedClient(async (client) => await client.mutation(publishEntryReference, input));

@@ -1044,9 +1044,12 @@ function FixtureChangelogPublisher() {
   return (
     <ChangelogPublisher
       projectId="project-fixture"
-      load={async () => {
+      load={async (_projectId, cursor) => {
         if (oauthScenario() === "changelog-error") throw new Error("fixture load failure");
-        return { rows: rows(), truncated: oauthScenario() === "changelog-truncated" };
+        if (oauthScenario() === "changelog-truncated") {
+          return cursor ? { rows: rows().slice(1), truncated: false } : { rows: rows().slice(0, 1), truncated: true, cursor: "older" };
+        }
+        return { rows: rows(), truncated: false };
       }}
       publish={async (input) => {
         if (oauthScenario() === "changelog-conflict") throw new Error("fixture revision conflict");

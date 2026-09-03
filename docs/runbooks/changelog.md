@@ -1,10 +1,10 @@
 # Owner-curated changelog
 
 Completed Work is private by default. An organization owner can use **Public
-changelog** in project settings to review the 50 most recently completed items,
+changelog** in project settings to review completed items in bounded 50-row pages,
 edit a public headline and summary, and deliberately publish, update, or
-unpublish an entry. The bounded view explicitly reports when older items are
-omitted. The public query returns only the reviewed title, summary, date, and
+unpublish an entry. **Load older completed Work** keeps older public entries
+manageable. The public query returns only the reviewed title, summary, date, and
 entry ID; it never returns Work identifiers, goals, outcomes, comments, or files.
 
 The marketing `/changelog` page selects the environment's own project through
