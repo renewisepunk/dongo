@@ -965,6 +965,7 @@ export function mapOverviewSnapshot(snapshot: OverviewSnapshot): ProjectOverview
     return [{
       ...baseWork(work, "needs", now),
       agent: actorDisplayIdentity(actor),
+      agentType: actor?.agentType,
       unseen: request.status === "open",
       attention: {
         id: request._id,
@@ -983,6 +984,7 @@ export function mapOverviewSnapshot(snapshot: OverviewSnapshot): ProjectOverview
       id: request._id,
       intakeId: request.intakeId,
       agent: actorDisplayIdentity(actor),
+      agentType: actor?.agentType,
       age: relativeTime(request.createdAt, now),
       unseen: request.status === "open",
       attention: {
@@ -999,6 +1001,7 @@ export function mapOverviewSnapshot(snapshot: OverviewSnapshot): ProjectOverview
   const working = snapshot.working.map(({ work, run, actor }) => ({
     ...baseWork(work, "working", now),
     agent: actorDisplayIdentity(actor),
+    agentType: actor?.agentType,
     elapsed: run ? `active ${relativeTime(run.startedAt, now)}` : undefined,
     latest: run?.summary,
   }));

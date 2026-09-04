@@ -1,50 +1,48 @@
-import { Match, Switch } from "solid-js";
-import { agentIconKey } from "../lib/agent-icon";
-
-// Original geometric stand-ins, not vendor logo artwork. Replacing these with
-// official brand assets from each vendor's own brand page is a single-file
-// change and should follow that vendor's brand guidelines.
+import { createMemo, createSignal, Show } from "solid-js";
+import { agentIconDefinition, agentIconKey } from "../lib/agent-icon";
 
 export type AgentIconProps = {
   agentName?: string;
+  agentType?: string;
   class?: string;
 };
 
-// Decorative: the agent name is always rendered next to it, so the mark adds
-// no screen-reader output of its own.
 export function AgentIcon(props: AgentIconProps) {
-  const key = () => agentIconKey(props.agentName);
+  const definition = createMemo(() => agentIconDefinition(props.agentName, props.agentType));
+  const key = createMemo(() => agentIconKey(props.agentName, props.agentType));
+  const [failedImageUrl, setFailedImageUrl] = createSignal<string>();
+  const imageUrl = createMemo(() => {
+    const source = definition()?.imageUrl;
+    return source && source !== failedImageUrl() ? source : undefined;
+  });
+
   return (
     <span
       class={`agent-icon agent-icon--${key()}${props.class ? ` ${props.class}` : ""}`}
       data-agent-icon={key()}
+      data-agent-icon-state={imageUrl() ? "vendor" : "fallback"}
       aria-hidden="true"
     >
-      <Switch>
-        <Match when={key() === "claude"}>
-          <svg viewBox="0 0 16 16" width="16" height="16">
-            <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-              <line x1="8" y1="2.4" x2="8" y2="13.6" />
-              <line x1="2.4" y1="8" x2="13.6" y2="8" />
-              <line x1="4.05" y1="4.05" x2="11.95" y2="11.95" />
-              <line x1="11.95" y1="4.05" x2="4.05" y2="11.95" />
-            </g>
-          </svg>
-        </Match>
-        <Match when={key() === "codex"}>
-          <svg viewBox="0 0 16 16" width="16" height="16">
-            <g fill="none" stroke="currentColor" stroke-width="1.5">
-              <circle cx="6.2" cy="8" r="3.7" />
-              <circle cx="9.8" cy="8" r="3.7" />
-            </g>
-          </svg>
-        </Match>
-        <Match when={key() === "generic"}>
-          <svg viewBox="0 0 16 16" width="16" height="16">
+      <Show
+        when={imageUrl()}
+        fallback={
+          <svg viewBox="0 0 16 16">
             <circle cx="8" cy="8" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="M3.8 13c.9-1.5 2.3-2.3 4.2-2.3s3.3.8 4.2 2.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
           </svg>
-        </Match>
-      </Switch>
+        }
+      >
+        {(source) => (
+          <img
+            src={source()}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            referrerpolicy="no-referrer"
+            onError={() => setFailedImageUrl(source())}
+          />
+        )}
+      </Show>
     </span>
   );
 }

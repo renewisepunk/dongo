@@ -8,7 +8,7 @@ import {
   workspaceLabel,
 } from "../../lib/parallel-execution";
 import type { ProjectConcurrencySnapshot } from "../../lib/project-data";
-import { AgentIcon } from "../../components/AgentIcon";
+import { AgentIdentity } from "../../components/AgentIdentity";
 
 export type ConcurrentActivityProps = {
   snapshot?: ProjectConcurrencySnapshot;
@@ -69,8 +69,12 @@ export function ConcurrentActivity(props: ConcurrentActivityProps) {
                     <span class="agent-run-card__rail" aria-hidden="true" />
                     <span class="agent-run-card__topline">
                       <span class="agent-run-card__identity">
-                        <AgentIcon agentName={run.actor.displayName?.trim() || run.actor.name.trim()} />
-                        <span class="agent-run-card__agent">{lowercaseDongoBrand(run.actor.displayName?.trim() || run.actor.name.trim() || "Agent")}</span>
+                        <AgentIdentity
+                          agentName={run.actor.displayName?.trim() || run.actor.name.trim()}
+                          agentType={run.actor.agentType}
+                          label={lowercaseDongoBrand(run.actor.displayName?.trim() || run.actor.name.trim() || "Agent")}
+                          labelClass="agent-run-card__agent"
+                        />
                       </span>
                       <span class="agent-run-card__state"><span aria-hidden="true" />{run.state === "running" ? "Running" : "Waiting"}</span>
                     </span>

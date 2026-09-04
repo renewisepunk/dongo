@@ -2552,14 +2552,3 @@
   align-items: center;
   gap: 7px;
 }
-
-.agent-icon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-}
-
-.agent-icon--claude { color: var(--amber); }
-.agent-icon--codex { color: var(--text-soft); }
