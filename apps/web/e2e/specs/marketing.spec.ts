@@ -7,40 +7,36 @@ test("keeps the marketing homepage public when there is no human session", async
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-human-session-checked");
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-open-session-checked");
   await expect(page.locator("html")).toHaveAttribute("data-fixture-index-session-checked", "true");
-  await expect(page.getByRole("heading", { name: "Ideas become visible work." })).toBeVisible();
-  await expect(page.getByText("Capture an idea. Send it to Inbox when it is ready. Follow the work with agents.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Not every thought is ready for an agent." })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "People set direction. Agents move the work." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "dongo is Linear if it were built for agents, not humans." })).toBeVisible();
+  await expect(page.getByText("Stop following agent work across terminals and endless chats.")).toBeVisible();
+  await expect(page.getByText(/See what your agents are working on, what’s done, and when they need you/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "From one prompt to shipped work." })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in", exact: true }).first()).toHaveAttribute("href", "/login");
   await expect(page.getByRole("link", { name: /Open dongo/ })).toHaveAttribute("href", "/open");
   await expect(page.getByRole("link", { name: "Changelog" }).first()).toHaveAttribute("href", "/changelog");
   await expect(page.getByRole("link", { name: "Source" })).toHaveAttribute("rel", "external");
 });
 
-test("shows real product patterns across the Ideas, Overview, and Work screens", async ({ page }) => {
+test("shows the agent work loop in the hero and the complete workflow below it", async ({ page }) => {
   await page.goto("/");
 
-  const tour = page.getByRole("article", { name: "dongo product tour" });
-  const ideasTab = tour.getByRole("tab", { name: /Ideas/ });
-  const overviewTab = tour.getByRole("tab", { name: /Overview/ });
-  const workTab = tour.getByRole("tab", { name: /Work/ });
+  const visual = page.getByRole("figure", { name: /two agents active.*one decision waiting.*eight shipped/i });
+  await expect(visual).toBeVisible();
 
-  await expect(ideasTab).toHaveAttribute("aria-selected", "true");
-  await expect(tour.getByRole("tabpanel", { name: "Ideas screen" })).toBeVisible();
-  await expect(tour.getByText("Possible future work. Agents cannot see or claim Ideas.")).toBeVisible();
-
-  await overviewTab.click();
-  await expect(overviewTab).toHaveAttribute("aria-selected", "true");
-  const overviewScreen = tour.getByRole("tabpanel", { name: "Overview screen" });
-  await expect(overviewScreen).toBeVisible();
-  await expect(overviewScreen.getByText("Refresh the marketing site")).toBeVisible();
-  await expect(overviewScreen.getByText("Choose the release order")).toBeVisible();
-
-  await workTab.click();
-  await expect(workTab).toHaveAttribute("aria-selected", "true");
-  const workScreen = tour.getByRole("tabpanel", { name: "Work detail screen" });
-  await expect(workScreen).toBeVisible();
-  await expect(workScreen.getByText("Copy review requested")).toBeVisible();
+  const workflow = page.getByRole("heading", { name: "From one prompt to shipped work." }).locator("..");
+  for (const heading of [
+    "Install from the agent you already use.",
+    "Let the agent create the first focused issues.",
+    "Add new work from your phone or browser.",
+    "New Intake can start automatically.",
+    "Several agents can move separate issues at once.",
+    "Step in when human judgment is actually needed.",
+    "Follow the exact change all the way to production.",
+    "The same truth, on desktop or mobile.",
+  ]) {
+    await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+  }
+  await expect(workflow).toContainText("Set up dongo once.");
 });
 
 test("opens the app directly for a signed-in human", async ({ page }) => {
@@ -76,8 +72,8 @@ test("keeps the essential product story readable at a mobile viewport", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Ideas become visible work." })).toBeVisible();
-  await expect(page.getByRole("article", { name: "dongo product tour" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "People set direction. Agents move the work." })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Bring the next idea." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "dongo is Linear if it were built for agents, not humans." })).toBeVisible();
+  await expect(page.getByRole("figure", { name: /two agents active/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "From one prompt to shipped work." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Leave the terminals to your agents." })).toBeVisible();
 });
