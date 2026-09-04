@@ -185,7 +185,7 @@ test("runner removal disables startup, revokes remotely, and deletes local mater
   const removed = await manager.remove();
   assert.equal(removed.removed, true);
   assert.equal(api.revocations, 1);
-  assert.equal(service.disables, 2);
+  assert.equal(service.disables, 1);
   assert.equal(service.removes, 1);
   assert.equal((await manager.status()).installed, false);
   await assert.rejects(access(logDirectory), (error: NodeJS.ErrnoException) => error.code === "ENOENT");
@@ -203,6 +203,40 @@ test("runner removal cleans local material after the parent grant is inactive", 
   });
   assert.equal((await manager.remove()).removed, true);
   assert.equal((await manager.status()).installed, false);
+});
+
+test("runner removal preserves local material and remote registration when service stop fails", async (context) => {
+  const fixture = await runnerFixture(context);
+  const api = new FakeRunnerApi();
+  const service = new FakeService();
+  service.disableError = new Error("service stop failed");
+  const manager = fixture.manager(api, service);
+  await manager.install({ label: "Stop failure", harnesses: ["codex"] });
+  await assert.rejects(manager.remove(), /service stop failed/u);
+  assert.equal(api.revocations, 0);
+  assert.equal(service.removes, 0);
+  const status = await manager.status();
+  assert.equal(status.installed, true);
+  assert.equal(status.enabled, true);
+});
+
+test("terminal runner authorization loss disarms startup and leaves a stable disabled state", async (context) => {
+  const fixture = await runnerFixture(context);
+  const api = new FakeRunnerApi();
+  api.waitError = new DongoClientError({
+    code: "unauthorized",
+    message: "The runner registration was revoked.",
+    status: 401,
+  });
+  const service = new FakeService();
+  const manager = fixture.manager(api, service);
+  await manager.install({ label: "Revoked runner", harnesses: ["codex"] });
+  assert.deepEqual(await manager.run(), { stopped: true });
+  assert.equal(service.disarms, 1);
+  const status = await manager.status();
+  assert.equal(status.enabled, false);
+  assert.equal(status.state?.status, "disabled");
+  assert.equal(status.state?.lastErrorCode, "unauthorized");
 });
 
 test("transient service failures publish bounded recovery health before retrying", async (context) => {
@@ -364,6 +398,42 @@ test("restart fails closed when an active job's deterministic worktree is missin
   assert.equal(executions, 0);
   assert.equal(api.job.state, "failed");
   assert.equal(api.transitions.at(-1)?.safeCode, "worktree_setup_failed");
+});
+
+test("restart fails closed before harness launch when the saved Git common-directory grant does not match", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  api.job = runnerJob("running", 4);
+  api.onTerminal = () => controller.abort();
+  let checkedCommonDirectory = "";
+  let executions = 0;
+  const manager = fixture.manager(api, new FakeService(), {
+    adapter: () => ({
+      harness: "codex",
+      validate: async () => "/bin/sh",
+      canResume: async ({ gitCommonDirectory }) => {
+        checkedCommonDirectory = gitCommonDirectory;
+        return false;
+      },
+      execute: async () => {
+        executions += 1;
+        return { outcome: "completed" };
+      },
+    }),
+  });
+  await manager.install({ label: "Changed Git metadata", harnesses: ["codex"], approvalMode: "automatic" });
+  await new RunnerWorkspaceManager({
+    repositoryRoot: fixture.repository,
+    configDirectory: fixture.root,
+    projectRef: "project-ref",
+    environmentPath: process.env.PATH!,
+  }).prepare(api.job);
+  await manager.run(controller.signal);
+  assert.equal(checkedCommonDirectory, await realpath(path.join(fixture.repository, ".git")));
+  assert.equal(executions, 0);
+  assert.equal(api.job.state, "failed");
+  assert.equal(api.transitions.at(-1)?.safeCode, "runner_restarted");
 });
 
 test("a successful harness exit cannot complete a job until dongo Work is done", async (context) => {
@@ -685,8 +755,11 @@ class FakeService implements RunnerServiceController {
   readonly platform = "darwin" as const;
   readonly installs: RunnerServiceSpec[] = [];
   disables = 0;
+  disarms = 0;
   removes = 0;
   installError?: Error;
+  disableError?: Error;
+  disarmError?: Error;
 
   async install(spec: RunnerServiceSpec) {
     this.installs.push(spec);
@@ -695,13 +768,19 @@ class FakeService implements RunnerServiceController {
   }
 
   async disable() {
+    if (this.disableError) throw this.disableError;
     this.disables += 1;
+    return { servicePath: "/safe/service", serviceName: "safe-service" };
+  }
+
+  async disarm() {
+    if (this.disarmError) throw this.disarmError;
+    this.disarms += 1;
     return { servicePath: "/safe/service", serviceName: "safe-service" };
   }
 
   async remove() {
     this.removes += 1;
-    await this.disable();
     return { servicePath: "/safe/service", serviceName: "safe-service" };
   }
 }
@@ -724,6 +803,7 @@ class FakeRunnerApi {
   dropJobOnWait?: number;
   dropInspectedJob = false;
   waitFailures = 0;
+  waitError?: Error;
 
   async getWork(input: { workItemId?: string }): Promise<WorkItem> {
     return {
@@ -787,6 +867,7 @@ class FakeRunnerApi {
 
   async runnerWait(input?: { activeJobIds?: string[]; inspectJobId?: string }): Promise<RunnerWait> {
     this.waitCalls += 1;
+    if (this.waitError) throw this.waitError;
     if (this.waitFailures > 0) {
       this.waitFailures -= 1;
       throw new DongoClientError({

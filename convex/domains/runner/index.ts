@@ -136,7 +136,10 @@ async function reconcileTerminalRunnerWork(
     !run ||
     run.projectId !== job.projectId ||
     !["running", "waiting"].includes(run.status) ||
-    run.startedAt < (job.deliveredAt ?? job.requestedAt)
+    run.externalSessionId !== `dongo-runner-${job._id}` ||
+    run.startedAt < (job.deliveredAt ?? job.requestedAt) ||
+    job.terminalAt === undefined ||
+    run.startedAt >= job.terminalAt
   ) return;
 
   const cancelled = job.state === "cancelled";

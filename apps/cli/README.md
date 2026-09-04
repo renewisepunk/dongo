@@ -42,7 +42,7 @@ Build and install the self-contained package archive so the command does not dep
 
 ```sh
 npm pack --workspace @wisepunk/dongo
-npm install --global ./wisepunk-dongo-0.2.12.tgz
+npm install --global ./wisepunk-dongo-0.2.13.tgz
 dongo --version
 dongo --help
 ```
@@ -203,6 +203,10 @@ redacted local health, `dongo runner approve --job-id ID` to approve one waiting
 job on this computer, and `dongo runner remove` to stop the service, revoke its
 subordinate credential, and remove local configuration. macOS launchd and Linux
 user systemd are supported; native Windows is not part of the initial release.
+While enabled, the login-scoped service restarts after either a failing or clean
+unexpected process exit so queued work is not stranded. `dongo runner disable`
+and `dongo runner remove` first disable and stop the exact user service, which
+prevents intentional shutdown from entering a restart loop.
 
 On macOS, the installer uses a dedicated executable named `dongo` for the
 user-level LaunchAgent. macOS may therefore show a one-time **Background Items

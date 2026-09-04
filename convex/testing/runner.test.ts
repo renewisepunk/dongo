@@ -715,7 +715,7 @@ describe("local runner delivery", () => {
     const active = await fixture.root.mutation(internal.domains.work.index.start, {
       authorization: {
         ...fixture.authorization,
-        externalSessionId: "runner-process-exit-session",
+        externalSessionId: `dongo-runner-${queued.id}`,
       },
       workItemId: created.workItemId,
       expectedRevision: readyWork.revision,
@@ -725,6 +725,9 @@ describe("local runner delivery", () => {
         branch: "codex/process-exit",
       },
       idempotencyKey: "start-work-process-exit",
+    });
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(active.runId as Id<"runs">, { startedAt: running.deliveredAt! });
     });
 
     await fixture.root.mutation(internal.domains.runner.index.updateJob, {
@@ -786,7 +789,7 @@ describe("local runner delivery", () => {
     const active = await fixture.root.mutation(internal.domains.work.index.start, {
       authorization: {
         ...fixture.authorization,
-        externalSessionId: "runner-reconnect-exit-session",
+        externalSessionId: `dongo-runner-${queued.id}`,
       },
       workItemId: created.workItemId,
       expectedRevision: work.revision,
@@ -798,16 +801,21 @@ describe("local runner delivery", () => {
       idempotencyKey: "start-work-reconnect-exit",
     });
     await fixture.root.run(async (ctx) => {
+      const terminalAt = Date.now();
+      await ctx.db.patch(active.runId as Id<"runs">, {
+        startedAt: terminalAt - 1,
+      });
       await ctx.db.patch(queued.id as Id<"runnerJobs">, {
         state: "failed",
         revision: 3,
         registrationId: registration.id as Id<"runnerRegistrations">,
         safeCode: "harness_failed",
         safeSummary: "The process vanished while the runner was disconnected.",
-        terminalAt: Date.now(),
+        deliveredAt: terminalAt - 2,
+        terminalAt,
         reservationExpiresAt: undefined,
         leaseExpiresAt: undefined,
-        updatedAt: Date.now(),
+        updatedAt: terminalAt,
       });
     });
 
@@ -827,6 +835,67 @@ describe("local runner delivery", () => {
       status: "failed",
       failureCode: "harness_failed",
     });
+
+    const readyAgain = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(created.workItemId as Id<"workItems">));
+    if (!readyAgain) throw new Error("reconciled work fixture missing");
+    const laterJob = await fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: created.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-enqueue-after-terminal-reconcile",
+    });
+    await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    const laterStarting = await fixture.root.mutation(internal.domains.runner.index.updateJob, {
+      authorization: fixture.authorization,
+      registrationId: registration.id,
+      token,
+      jobId: laterJob.id,
+      expectedRevision: 2,
+      state: "starting",
+      idempotencyKey: "runner-later-starting-after-terminal-reconcile",
+    });
+    await fixture.root.mutation(internal.domains.runner.index.updateJob, {
+      authorization: fixture.authorization,
+      registrationId: registration.id,
+      token,
+      jobId: laterJob.id,
+      expectedRevision: laterStarting.revision,
+      state: "running",
+      idempotencyKey: "runner-later-running-after-terminal-reconcile",
+    });
+    const laterRun = await fixture.root.mutation(internal.domains.work.index.start, {
+      authorization: {
+        ...fixture.authorization,
+        externalSessionId: `dongo-runner-${laterJob.id}`,
+      },
+      workItemId: created.workItemId,
+      expectedRevision: readyAgain.revision,
+      workspace: {
+        kind: "worktree",
+        worktreeName: "reconnect-later-run",
+        branch: "codex/reconnect-later-run",
+      },
+      idempotencyKey: "start-work-after-terminal-reconcile",
+    });
+    await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [laterJob.id as Id<"runnerJobs">],
+      hostCapacity: 6,
+    });
+    const preserved = await fixture.root.run(async (ctx) => ({
+      work: await ctx.db.get(created.workItemId as Id<"workItems">),
+      run: await ctx.db.get(laterRun.runId as Id<"runs">),
+    }));
+    expect(preserved.work).toMatchObject({
+      state: "working",
+      claimedRunId: laterRun.runId,
+    });
+    expect(preserved.run).toMatchObject({ status: "running" });
   });
 
   it("requeues the latest lease-expired Work once when an automatic runner reconnects", async () => {
@@ -1273,13 +1342,14 @@ describe("local runner delivery", () => {
     const active = await fixture.root.mutation(internal.domains.work.index.start, {
       authorization: {
         ...fixture.authorization,
-        externalSessionId: "runner-exact-lifecycle-session",
+        externalSessionId: `dongo-runner-${queued.id}`,
       },
       workItemId: created.workItemId,
       expectedRevision: readyWork!.revision,
       idempotencyKey: "runner-exact-lifecycle-run",
     });
     await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(active.runId as Id<"runs">, { startedAt: running.deliveredAt! });
       await ctx.db.patch(queued.id as Id<"runnerJobs">, { leaseExpiresAt: 1 });
     });
 
@@ -1416,11 +1486,14 @@ describe("local runner delivery", () => {
     const active = await fixture.root.mutation(internal.domains.work.index.start, {
       authorization: {
         ...fixture.authorization,
-        externalSessionId: "runner-crash-session",
+        externalSessionId: `dongo-runner-${jobId}`,
       },
       workItemId: created.workItemId,
       expectedRevision: readyWork.revision,
       idempotencyKey: "start-work-crash-reconcile",
+    });
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(active.runId as Id<"runs">, { startedAt: requestedAt + 2_000 });
     });
 
     const result = await fixture.root.mutation(

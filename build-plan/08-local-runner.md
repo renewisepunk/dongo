@@ -268,7 +268,12 @@ silently gaining access.
 The adapter resolves `codex` locally and verifies a supported version. It passes
 the approved repository through `--cd`, selects `workspace-write` or a stricter
 locally configured sandbox, uses `--json`, and sends the fixed instruction on
-stdin. It never uses `--yolo`, `--dangerously-bypass-approvals-and-sandbox`,
+stdin. A linked worktree's canonical Git common directory is validated against
+the approved checkout as the same owner-controlled, non-symlinked repository
+metadata directory and passed as the sole `--add-dir`, so fetch, commit, and ref
+updates work without granting a parent directory. The saved session records
+that exact grant before it is eligible for resume. It never uses `--yolo`,
+`--dangerously-bypass-approvals-and-sandbox`,
 `--skip-git-repo-check`, or a server-provided `-c` override. JSONL events are
 parsed defensively with line and total-size limits. The adapter captures the
 exact session ID and uses `codex exec resume <id>` only for a later continuation

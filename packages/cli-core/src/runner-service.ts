@@ -20,6 +20,7 @@ export interface RunnerServiceSpec {
 export interface RunnerServiceController {
   readonly platform: RunnerServicePlatform;
   install(spec: RunnerServiceSpec): Promise<{ servicePath: string; serviceName: string }>;
+  disarm(projectRef: string): Promise<{ servicePath: string; serviceName: string }>;
   disable(projectRef: string): Promise<{ servicePath: string; serviceName: string }>;
   remove(projectRef: string): Promise<{ servicePath: string; serviceName: string }>;
 }
@@ -30,6 +31,7 @@ interface RunnerServicePaths {
   servicePath: string;
   serviceName: string;
   launcherPath?: string;
+  keepAlivePath?: string;
 }
 
 function safeSuffix(projectRef: string): string {
@@ -151,6 +153,7 @@ async function defaultRunCommand(command: string, args: string[]): Promise<void>
         code: "runner_service_failed",
         message: `The user service command exited with code ${code ?? "unknown"}.`,
         exitCode: 5,
+        details: { commandExitCode: code },
       }));
     });
   });
@@ -193,23 +196,58 @@ export class LocalRunnerServiceController implements RunnerServiceController {
   async disable(projectRef: string) {
     const service = this.#service(projectRef);
     if (this.platform === "darwin") {
-      await this.#runCommand("launchctl", ["disable", `gui/${process.getuid?.() ?? ""}/${service.serviceName}`])
-        .catch(() => undefined);
-      await this.#runCommand("launchctl", ["bootout", `gui/${process.getuid?.() ?? ""}/${service.serviceName}`])
-        .catch(() => undefined);
+      await this.disarm(projectRef);
+      try {
+        await this.#runCommand("launchctl", ["bootout", `gui/${process.getuid?.() ?? ""}/${service.serviceName}`]);
+      } catch (error) {
+        if (!isLaunchdNotLoaded(error)) {
+          await this.#restoreServiceKeepAlive(service).catch(() => undefined);
+          throw error;
+        }
+      }
     } else {
-      await this.#runCommand("systemctl", ["--user", "disable", "--now", service.serviceName])
-        .catch(() => undefined);
+      await this.disarm(projectRef);
+      try {
+        await this.#runCommand("systemctl", ["--user", "stop", service.serviceName]);
+      } catch (error) {
+        await this.#restoreServiceKeepAlive(service).catch(() => undefined);
+        throw error;
+      }
+    }
+    return publicService(service);
+  }
+
+  async disarm(projectRef: string) {
+    const service = this.#service(projectRef);
+    if (this.platform === "darwin") {
+      await this.#runCommand("launchctl", ["disable", `gui/${process.getuid?.() ?? ""}/${service.serviceName}`]);
+      try {
+        if (!service.keepAlivePath) throw new Error("Missing runner keepalive path");
+        await safeRemove(service.keepAlivePath);
+      } catch (error) {
+        await this.#runCommand("launchctl", ["enable", `gui/${process.getuid?.() ?? ""}/${service.serviceName}`])
+          .catch(() => undefined);
+        throw error;
+      }
+    } else {
+      await this.#runCommand("systemctl", ["--user", "disable", service.serviceName]);
+      try {
+        if (!service.keepAlivePath) throw new Error("Missing runner keepalive path");
+        await safeRemove(service.keepAlivePath);
+      } catch (error) {
+        await this.#runCommand("systemctl", ["--user", "enable", service.serviceName]).catch(() => undefined);
+        throw error;
+      }
     }
     return publicService(service);
   }
 
   async remove(projectRef: string) {
     const service = this.#service(projectRef);
-    await this.disable(projectRef);
     await safeRemove(service.servicePath);
     if (service.launcherPath) {
       await safeRemove(service.launcherPath);
+      if (service.keepAlivePath) await safeRemove(service.keepAlivePath);
       await safeRemoveEmptyDirectory(path.dirname(service.launcherPath));
     }
     if (this.platform === "linux") {
@@ -234,12 +272,39 @@ export class LocalRunnerServiceController implements RunnerServiceController {
           serviceName,
           "dongo",
         ),
+        keepAlivePath: path.join(
+          this.#homeDirectory,
+          "Library",
+          "Application Support",
+          "dongo",
+          "runner-services",
+          serviceName,
+          "enabled",
+        ),
       };
     }
     const serviceName = `dongo-runner-${suffix}.service`;
     return {
       serviceName,
       servicePath: path.join(this.#homeDirectory, ".config", "systemd", "user", serviceName),
+      launcherPath: path.join(
+        this.#homeDirectory,
+        ".local",
+        "share",
+        "dongo",
+        "runner-services",
+        serviceName,
+        "dongo",
+      ),
+      keepAlivePath: path.join(
+        this.#homeDirectory,
+        ".local",
+        "share",
+        "dongo",
+        "runner-services",
+        serviceName,
+        "enabled",
+      ),
     };
   }
 
@@ -249,7 +314,7 @@ export class LocalRunnerServiceController implements RunnerServiceController {
     if (uid === undefined) {
       throw new CliCoreError({ code: "runner_service_failed", message: "A user ID is required to install the macOS runner." });
     }
-    if (!service.launcherPath) {
+    if (!service.launcherPath || !service.keepAlivePath) {
       throw new CliCoreError({ code: "runner_service_failed", message: "The macOS runner launcher path is unavailable." });
     }
     const launcher = `#!/bin/sh
@@ -257,6 +322,7 @@ export class LocalRunnerServiceController implements RunnerServiceController {
 exec ${shellQuote(spec.nodePath)} ${shellQuote(spec.cliPath)} runner run --project-ref ${shellQuote(spec.projectRef)}
 `;
     await safeWrite(service.launcherPath, launcher, 0o700);
+    await safeWrite(service.keepAlivePath, "enabled\n");
     const contents = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -264,12 +330,17 @@ exec ${shellQuote(spec.nodePath)} ${shellQuote(spec.cliPath)} runner run --proje
 <key>Program</key><string>${xml(service.launcherPath)}</string>
 <key>ProgramArguments</key><array><string>${xml(service.launcherPath)}</string></array>
 <key>WorkingDirectory</key><string>${xml(spec.repositoryRoot)}</string>
-<key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+<key>RunAtLoad</key><true/>
+<key>KeepAlive</key><dict><key>PathState</key><dict><key>${xml(service.keepAlivePath)}</key><true/></dict></dict>
 <key>ProcessType</key><string>Background</string>
 </dict></plist>
 `;
     await safeWrite(service.servicePath, contents);
-    await this.#runCommand("launchctl", ["bootout", `gui/${uid}/${service.serviceName}`]).catch(() => undefined);
+    try {
+      await this.#runCommand("launchctl", ["bootout", `gui/${uid}/${service.serviceName}`]);
+    } catch (error) {
+      if (!isLaunchdNotLoaded(error)) throw error;
+    }
     await this.#runCommand("launchctl", ["enable", `gui/${uid}/${service.serviceName}`]);
     await this.#runCommand("launchctl", ["bootstrap", `gui/${uid}`, service.servicePath]);
     return publicService(service);
@@ -277,6 +348,20 @@ exec ${shellQuote(spec.nodePath)} ${shellQuote(spec.cliPath)} runner run --proje
 
   async #installSystemd(spec: RunnerServiceSpec) {
     const service = this.#service(spec.projectRef);
+    if (!service.launcherPath || !service.keepAlivePath) {
+      throw new CliCoreError({ code: "runner_service_failed", message: "The Linux runner launcher path is unavailable." });
+    }
+    const launcher = `#!/bin/sh
+# dongo local runner. Installed and removed by dongo runner commands.
+if [ ! -f ${shellQuote(service.keepAlivePath)} ]; then exit 0; fi
+${shellQuote(spec.nodePath)} ${shellQuote(spec.cliPath)} runner run --project-ref ${shellQuote(spec.projectRef)}
+status=$?
+if [ ! -f ${shellQuote(service.keepAlivePath)} ]; then exit 0; fi
+if [ "$status" -eq 0 ]; then exit 1; fi
+exit "$status"
+`;
+    await safeWrite(service.launcherPath, launcher, 0o700);
+    await safeWrite(service.keepAlivePath, "enabled\n");
     const contents = `[Unit]
 Description=dongo local runner
 After=network-online.target
@@ -284,7 +369,7 @@ After=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=${systemdQuote(spec.repositoryRoot)}
-ExecStart=${systemdQuote(spec.nodePath)} ${systemdQuote(spec.cliPath)} runner run --project-ref ${systemdQuote(spec.projectRef)}
+ExecStart=${systemdQuote(service.launcherPath)}
 Restart=on-failure
 RestartSec=10
 NoNewPrivileges=true
@@ -298,6 +383,22 @@ WantedBy=default.target
     await this.#runCommand("systemctl", ["--user", "enable", "--now", service.serviceName]);
     return publicService(service);
   }
+
+  async #restoreServiceKeepAlive(service: RunnerServicePaths) {
+    if (!service.keepAlivePath) return;
+    await safeWrite(service.keepAlivePath, "enabled\n");
+    if (this.platform === "darwin") {
+      await this.#runCommand("launchctl", ["enable", `gui/${process.getuid?.() ?? ""}/${service.serviceName}`]);
+    } else {
+      await this.#runCommand("systemctl", ["--user", "enable", service.serviceName]);
+    }
+  }
+}
+
+function isLaunchdNotLoaded(error: unknown): boolean {
+  return error instanceof CliCoreError &&
+    error.code === "runner_service_failed" &&
+    (error.details as { commandExitCode?: unknown } | undefined)?.commandExitCode === 3;
 }
 
 async function assertExecutableFile(target: string): Promise<void> {

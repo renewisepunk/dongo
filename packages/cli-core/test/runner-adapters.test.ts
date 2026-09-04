@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { PassThrough } from "node:stream";
 import test from "node:test";
 import { DONGO_COMPLETION_INSTRUCTIONS } from "@dongo/mcp/managed-integrations";
@@ -10,6 +14,7 @@ import {
   ClaudeRunnerAdapter,
   CodexRunnerAdapter,
   resolveGitHubCliChildEnvironment,
+  resolveValidatedGitCommonDirectory,
 } from "../src/runner-adapters.ts";
 
 const noCredentialEnvironment = async () => ({});
@@ -25,7 +30,7 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
       if (args[0] === "--version") {
         child.stdout.end("codex-cli 1.2.3\n");
       } else if (args[1] === "--help") {
-        child.stdout.end("--json --sandbox --cd resume\n");
+        child.stdout.end("--json --sandbox --cd --add-dir resume\n");
       } else {
         child.stdout.end([
           JSON.stringify({ type: "thread.started", thread_id: "0199a213-81c0-7800-8aa1-bbab2a035a53" }),
@@ -39,15 +44,21 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
     return child;
   };
   let credentialResolution = 0;
+  const store = new MemorySecretStore();
   const adapter = new CodexRunnerAdapter({
-    store: new MemorySecretStore(),
+    store,
     executablePath: "/bin/sh",
     spawnProcess: spawnProcess as never,
     resolveCredentialEnvironment: async () => ({ GH_TOKEN: `secret-${++credentialResolution}` }),
   });
   await adapter.validate();
+  const gitCommonDirectory = await resolveValidatedGitCommonDirectory({
+    trustedRepositoryRoot: process.cwd(),
+    jobRepositoryRoot: process.cwd(),
+  });
   const input = {
     repositoryRoot: process.cwd(),
+    gitCommonDirectory,
     registrationId: "registration-1",
     jobId: "job-1",
     kind: "work" as const,
@@ -69,6 +80,8 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
     "workspace-write",
     "--cd",
     process.cwd(),
+    "--add-dir",
+    gitCommonDirectory,
     "-",
   ]);
   assert.match(executionCalls[0]?.input ?? "", /exact dongo WorkItem dong027/u);
@@ -98,6 +111,11 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
   assert.equal(executionCalls[1]?.env.GH_TOKEN, "secret-2");
   assert.equal(credentialResolution, 2);
   assert.doesNotMatch(JSON.stringify(first), /private model output/u);
+  const sessionKey = "runner-session:codex:registration-1:job-1";
+  const changedGrant = JSON.parse((await store.get(sessionKey))!) as Record<string, unknown>;
+  changedGrant.gitCommonDirectory = path.join(path.dirname(gitCommonDirectory), "different-git-common");
+  await store.set(sessionKey, JSON.stringify(changedGrant));
+  assert.equal(await adapter.canResume(input), false);
   await adapter.discardRegistration(input.registrationId);
   assert.equal(await adapter.canResume(input), false);
 });
@@ -307,8 +325,13 @@ test("Claude Code adapter uses print mode and stdin, then resumes only its exact
     resolveCredentialEnvironment: noCredentialEnvironment,
   });
   await adapter.validate();
+  const gitCommonDirectory = await resolveValidatedGitCommonDirectory({
+    trustedRepositoryRoot: process.cwd(),
+    jobRepositoryRoot: process.cwd(),
+  });
   const input = {
     repositoryRoot: process.cwd(),
+    gitCommonDirectory,
     registrationId: "registration-2",
     jobId: "job-2",
     kind: "work" as const,
@@ -364,6 +387,10 @@ test("harness sessions cannot be resumed from a different repository", async () 
   });
   const input = {
     repositoryRoot: process.cwd(),
+    gitCommonDirectory: await resolveValidatedGitCommonDirectory({
+      trustedRepositoryRoot: process.cwd(),
+      jobRepositoryRoot: process.cwd(),
+    }),
     registrationId: "registration-3",
     jobId: "job-3",
     kind: "work" as const,
@@ -472,6 +499,52 @@ test("runner adapters use a fixed triage-only prompt for an Intake job", async (
   assert.doesNotMatch(execution?.args.join(" ") ?? "", /ks705f6/u);
 });
 
+test("Codex grants only the validated Git common directory used by an isolated linked worktree", async (context) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "dongo-runner-git-common-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const remote = path.join(root, "remote.git");
+  const repository = path.join(root, "repository");
+  const worktree = path.join(root, "worktree");
+  const unrelated = path.join(root, "unrelated");
+  await runGit(root, ["init", "--bare", "--quiet", remote]);
+  await mkdir(repository);
+  await runGit(repository, ["init", "--quiet"]);
+  await writeFile(path.join(repository, "README.md"), "trusted\n");
+  await runGit(repository, ["add", "README.md"]);
+  await runGit(repository, ["-c", "user.name=dongo tests", "-c", "user.email=tests@dongo.invalid", "commit", "--quiet", "-m", "trusted"]);
+  await runGit(repository, ["branch", "-M", "main"]);
+  await runGit(repository, ["remote", "add", "origin", remote]);
+  await runGit(repository, ["push", "--quiet", "-u", "origin", "main"]);
+  await runGit(repository, ["worktree", "add", "--quiet", "-b", "job", worktree, "main"]);
+
+  const gitCommonDirectory = await resolveValidatedGitCommonDirectory({
+    trustedRepositoryRoot: repository,
+    jobRepositoryRoot: worktree,
+  });
+  assert.equal(gitCommonDirectory, await realpath(path.join(repository, ".git")));
+  await writeFile(path.join(worktree, "job.txt"), "isolated\n");
+  await runGit(worktree, ["add", "job.txt"]);
+  await runGit(worktree, ["-c", "user.name=dongo tests", "-c", "user.email=tests@dongo.invalid", "commit", "--quiet", "-m", "job"]);
+  await runGit(worktree, ["fetch", "--quiet", "origin", "main"]);
+  await runGit(worktree, ["push", "--quiet", "origin", "job"]);
+  assert.match(await readGit(remote, ["rev-parse", "refs/heads/job"]), /^[0-9a-f]{40}$/u);
+
+  await mkdir(unrelated);
+  await runGit(unrelated, ["init", "--quiet"]);
+  await assert.rejects(resolveValidatedGitCommonDirectory({
+    trustedRepositoryRoot: repository,
+    jobRepositoryRoot: worktree,
+    gitCommonDirectory: path.join(unrelated, ".git"),
+  }), /does not match its approved Git metadata/u);
+  const symlinkedCommon = path.join(root, "git-common-link");
+  await symlink(gitCommonDirectory, symlinkedCommon);
+  await assert.rejects(resolveValidatedGitCommonDirectory({
+    trustedRepositoryRoot: repository,
+    jobRepositoryRoot: worktree,
+    gitCommonDirectory: symlinkedCommon,
+  }), /not owner-controlled/u);
+});
+
 test("GitHub CLI credentials are resolved from the repository host without entering arguments or durable state", async () => {
   const calls: Array<{ command: string; args: string[]; cwd: string }> = [];
   const environment = await resolveGitHubCliChildEnvironment({
@@ -534,4 +607,17 @@ function fakeChild() {
     return true;
   };
   return child;
+}
+
+async function runGit(cwd: string, args: string[]): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    execFile("git", ["-C", cwd, ...args], { encoding: "utf8" }, (error) => error ? reject(error) : resolve());
+  });
+}
+
+async function readGit(cwd: string, args: string[]): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    execFile("git", ["-C", cwd, ...args], { encoding: "utf8" }, (error, stdout) =>
+      error ? reject(error) : resolve(typeof stdout === "string" ? stdout.trim() : ""));
+  });
 }

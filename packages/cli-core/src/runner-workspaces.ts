@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 
 export interface RunnerWorkspace {
   repositoryRoot: string;
+  gitCommonDirectory: string;
   worktreeName: string;
   branch: string;
 }
@@ -64,8 +65,8 @@ export class RunnerWorkspaceManager {
         });
       }
       await assertOwnerDirectory(workspace.repositoryRoot);
-      await this.#assertReusable(workspace.repositoryRoot, workspace.branch);
-      return { ...workspace, repositoryRoot: await realpath(workspace.repositoryRoot) };
+      const gitCommonDirectory = await this.#assertReusable(workspace.repositoryRoot, workspace.branch);
+      return { ...workspace, repositoryRoot: await realpath(workspace.repositoryRoot), gitCommonDirectory };
     });
   }
 
@@ -80,8 +81,8 @@ export class RunnerWorkspaceManager {
       });
       if (existing) {
         await assertOwnerDirectory(repositoryRoot);
-        await this.#assertReusable(repositoryRoot, branch);
-        return { repositoryRoot: await realpath(repositoryRoot), worktreeName, branch };
+        const gitCommonDirectory = await this.#assertReusable(repositoryRoot, branch);
+        return { repositoryRoot: await realpath(repositoryRoot), gitCommonDirectory, worktreeName, branch };
       }
       const branchExists = await this.#git(
         this.#repositoryRoot,
@@ -93,12 +94,12 @@ export class RunnerWorkspaceManager {
         : ["worktree", "add", "-b", branch, repositoryRoot, "HEAD"];
       await this.#git(this.#repositoryRoot, args);
       await assertOwnerDirectory(repositoryRoot);
-      await this.#assertReusable(repositoryRoot, branch);
-      return { repositoryRoot: await realpath(repositoryRoot), worktreeName, branch };
+      const gitCommonDirectory = await this.#assertReusable(repositoryRoot, branch);
+      return { repositoryRoot: await realpath(repositoryRoot), gitCommonDirectory, worktreeName, branch };
     });
   }
 
-  #workspace(job: RunnerJob): RunnerWorkspace {
+  #workspace(job: RunnerJob): Omit<RunnerWorkspace, "gitCommonDirectory"> {
     const suffix = safeHash(job.id).slice(0, 12);
     const subject = job.kind === "work" && job.workIdentifier
       ? job.workIdentifier
@@ -133,18 +134,24 @@ export class RunnerWorkspaceManager {
     });
   }
 
-  async #assertReusable(repositoryRoot: string, branch: string) {
+  async #assertReusable(repositoryRoot: string, branch: string): Promise<string> {
     const [actualRoot, actualBranch, expectedCommon, actualCommon] = await Promise.all([
       this.#git(repositoryRoot, ["rev-parse", "--show-toplevel"]),
       this.#git(repositoryRoot, ["branch", "--show-current"]),
       this.#git(this.#repositoryRoot, ["rev-parse", "--path-format=absolute", "--git-common-dir"]),
       this.#git(repositoryRoot, ["rev-parse", "--path-format=absolute", "--git-common-dir"]),
     ]);
+    const expectedCommonPath = path.resolve(expectedCommon.stdout.trim());
+    const actualCommonPath = path.resolve(actualCommon.stdout.trim());
+    await Promise.all([
+      assertOwnerDirectory(expectedCommonPath),
+      assertOwnerDirectory(actualCommonPath),
+    ]);
     const [canonicalActualRoot, canonicalRepositoryRoot, canonicalExpectedCommon, canonicalActualCommon] = await Promise.all([
       realpath(actualRoot.stdout.trim()),
       realpath(repositoryRoot),
-      realpath(expectedCommon.stdout.trim()),
-      realpath(actualCommon.stdout.trim()),
+      realpath(expectedCommonPath),
+      realpath(actualCommonPath),
     ]);
     if (
       canonicalActualRoot !== canonicalRepositoryRoot ||
@@ -157,6 +164,7 @@ export class RunnerWorkspaceManager {
         exitCode: 4,
       });
     }
+    return canonicalExpectedCommon;
   }
 
   async #git(cwd: string, args: string[]): Promise<{ stdout: string; stderr: string }>;

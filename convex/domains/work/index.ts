@@ -550,11 +550,14 @@ export const concurrencyForHuman = query({
           const runnerJob = latestRunnerJobByWork.get(work._id);
           const matchingRunnerJob =
             runnerJob &&
-            runnerJob.requestedAt <= run.startedAt &&
+            run.externalSessionId === `dongo-runner-${runnerJob._id}` &&
+            (runnerJob.deliveredAt ?? runnerJob.requestedAt) <= run.startedAt &&
             runnerJob.registrationId !== undefined
               ? runnerJob
               : undefined;
           const processExited = matchingRunnerJob !== undefined &&
+            matchingRunnerJob.terminalAt !== undefined &&
+            run.startedAt < matchingRunnerJob.terminalAt &&
             ["cancelled", "failed", "completed", "expired"].includes(
               matchingRunnerJob.state,
             );

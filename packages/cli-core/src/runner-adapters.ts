@@ -1,6 +1,6 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { constants } from "node:fs";
-import { access, realpath, stat } from "node:fs/promises";
+import { access, lstat, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 import type { RunnerHarness, RunnerJobKind } from "@dongo/contracts";
@@ -64,6 +64,7 @@ export type RunCredentialProbe = (options: {
 
 interface AdapterInput {
   repositoryRoot: string;
+  gitCommonDirectory?: string;
   registrationId: string;
   jobId: string;
   kind: RunnerJobKind;
@@ -79,11 +80,12 @@ interface AdapterInput {
 }
 
 interface SessionRecord {
-  schemaVersion: 1;
+  schemaVersion: 2;
   harness: RunnerHarness;
   registrationId: string;
   jobId: string;
   repositoryRoot: string;
+  gitCommonDirectory?: string;
   sessionId: string;
   updatedAt: string;
 }
@@ -127,12 +129,12 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
       spawnProcess: this.#spawn,
       label: "Codex",
       helpArgs: ["exec", "--help"],
-      requiredHelp: ["--json", "--sandbox", "--cd", "resume"],
+      requiredHelp: ["--json", "--sandbox", "--cd", "--add-dir", "resume"],
     });
     return executable;
   }
 
-  async canResume(input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">): Promise<boolean> {
+  async canResume(input: Pick<AdapterInput, "repositoryRoot" | "gitCommonDirectory" | "registrationId" | "jobId"> & { gitCommonDirectory: string }): Promise<boolean> {
     return Boolean(await readSession(this.#store, this.harness, input, SESSION_ID));
   }
 
@@ -147,7 +149,14 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
   async execute(input: AdapterInput): Promise<RunnerHarnessResult> {
     assertRunnerTarget(input);
     const executable = await resolveExecutable("codex", this.#executablePath, this.#environmentPath);
-    const existing = await readSession(this.#store, this.harness, input, SESSION_ID);
+    const gitCommonDirectory = await resolveValidatedGitCommonDirectory({
+      trustedRepositoryRoot: input.trustedRepositoryRoot ?? input.repositoryRoot,
+      jobRepositoryRoot: input.repositoryRoot,
+      gitCommonDirectory: input.gitCommonDirectory,
+      environmentPath: this.#environmentPath,
+    });
+    const sessionInput = { ...input, gitCommonDirectory };
+    const existing = await readSession(this.#store, this.harness, sessionInput, SESSION_ID);
     const prompt = runnerPrompt(input);
     const credentialEnvironment = await this.#resolveCredentialEnvironment({
       repositoryRoot: input.repositoryRoot,
@@ -171,7 +180,10 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
     const secretValues = childSecretValues(childEnvironment, deployment.secretValues);
     const args = existing
       ? ["exec", "resume", "--json", existing.sessionId, "-"]
-      : ["exec", "--json", "--sandbox", "workspace-write", "--cd", input.repositoryRoot, "-"];
+      : [
+        "exec", "--json", "--sandbox", "workspace-write", "--cd", input.repositoryRoot,
+        "--add-dir", gitCommonDirectory, "-",
+      ];
     let sessionReferencePresent = Boolean(existing);
     let result: Awaited<ReturnType<typeof runHarnessProcess>>;
     try {
@@ -189,7 +201,7 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
         onJsonEvent: async (event) => {
           if (event.type !== "thread.started" || typeof event.thread_id !== "string" || !SESSION_ID.test(event.thread_id)) return;
           sessionReferencePresent = true;
-          await writeSession(this.#store, this.harness, input, event.thread_id);
+          await writeSession(this.#store, this.harness, sessionInput, event.thread_id);
         },
       });
     } finally {
@@ -254,7 +266,7 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
     return executable;
   }
 
-  async canResume(input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">): Promise<boolean> {
+  async canResume(input: Pick<AdapterInput, "repositoryRoot" | "gitCommonDirectory" | "registrationId" | "jobId"> & { gitCommonDirectory: string }): Promise<boolean> {
     return Boolean(await readSession(this.#store, this.harness, input, CLAUDE_SESSION_ID));
   }
 
@@ -269,7 +281,14 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
   async execute(input: AdapterInput): Promise<RunnerHarnessResult> {
     assertRunnerTarget(input);
     const executable = await resolveExecutable("claude", this.#executablePath, this.#environmentPath);
-    const existing = await readSession(this.#store, this.harness, input, CLAUDE_SESSION_ID);
+    const gitCommonDirectory = await resolveValidatedGitCommonDirectory({
+      trustedRepositoryRoot: input.trustedRepositoryRoot ?? input.repositoryRoot,
+      jobRepositoryRoot: input.repositoryRoot,
+      gitCommonDirectory: input.gitCommonDirectory,
+      environmentPath: this.#environmentPath,
+    });
+    const sessionInput = { ...input, gitCommonDirectory };
+    const existing = await readSession(this.#store, this.harness, sessionInput, CLAUDE_SESSION_ID);
     const credentialEnvironment = await this.#resolveCredentialEnvironment({
       repositoryRoot: input.repositoryRoot,
       environmentPath: this.#environmentPath,
@@ -318,7 +337,7 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
             (event.type === "system" && (event.subtype === "init" || event.subtype === "result"));
           if (!isSessionEvent || typeof sessionId !== "string" || !CLAUDE_SESSION_ID.test(sessionId)) return;
           sessionReferencePresent = true;
-          await writeSession(this.#store, this.harness, input, sessionId);
+          await writeSession(this.#store, this.harness, sessionInput, sessionId);
         },
       });
     } finally {
@@ -460,6 +479,77 @@ async function runCredentialProbe(options: {
   });
 }
 
+export async function resolveValidatedGitCommonDirectory(options: {
+  trustedRepositoryRoot: string;
+  jobRepositoryRoot: string;
+  gitCommonDirectory?: string;
+  environmentPath?: string;
+}): Promise<string> {
+  const [trustedCommon, jobCommon] = await Promise.all([
+    readGitCommonDirectory(options.trustedRepositoryRoot, options.environmentPath),
+    readGitCommonDirectory(options.jobRepositoryRoot, options.environmentPath),
+  ]);
+  const declaredCommon = path.resolve(options.gitCommonDirectory ?? jobCommon);
+  const candidates = [trustedCommon, jobCommon, declaredCommon];
+  for (const candidate of candidates) {
+    let info;
+    try {
+      info = await lstat(candidate);
+    } catch {
+      throw new CliCoreError({
+        code: "unsafe_repository",
+        message: "The runner Git metadata directory is unavailable.",
+        exitCode: 4,
+      });
+    }
+    if (
+      !info.isDirectory() ||
+      info.isSymbolicLink() ||
+      (typeof process.getuid === "function" && info.uid !== process.getuid())
+    ) {
+      throw new CliCoreError({
+        code: "unsafe_repository",
+        message: "The runner Git metadata directory is not owner-controlled.",
+        exitCode: 4,
+      });
+    }
+  }
+  const [canonicalTrusted, canonicalJob, canonicalDeclared] = await Promise.all(
+    candidates.map(async (candidate) => await realpath(candidate)),
+  );
+  if (canonicalTrusted !== canonicalJob || canonicalTrusted !== canonicalDeclared) {
+    throw new CliCoreError({
+      code: "unsafe_repository",
+      message: "The runner worktree does not match its approved Git metadata directory.",
+      exitCode: 4,
+    });
+  }
+  return canonicalTrusted;
+}
+
+async function readGitCommonDirectory(repositoryRoot: string, environmentPath?: string): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    execFile("git", ["-C", repositoryRoot, "rev-parse", "--path-format=absolute", "--git-common-dir"], {
+      env: sanitizedChildEnvironment(environmentPath ? { PATH: environmentPath } : {}),
+      encoding: "utf8",
+      maxBuffer: GITHUB_CREDENTIAL_PROBE_MAX_BYTES,
+      timeout: VERSION_CHECK_TIMEOUT_MS,
+      windowsHide: true,
+    }, (error, stdout) => {
+      const value = typeof stdout === "string" ? stdout.trim() : "";
+      if (error || !path.isAbsolute(value)) {
+        reject(new CliCoreError({
+          code: "unsafe_repository",
+          message: "The runner could not validate its Git metadata directory.",
+          exitCode: 4,
+        }));
+      } else {
+        resolve(path.resolve(value));
+      }
+    });
+  });
+}
+
 async function validateHarness(options: {
   executable: string;
   environmentPath?: string;
@@ -561,7 +651,7 @@ function sessionKey(harness: RunnerHarness, registrationId: string, jobId: strin
 async function writeSession(
   store: SecretStore,
   harness: RunnerHarness,
-  input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">,
+  input: Pick<AdapterInput, "repositoryRoot" | "gitCommonDirectory" | "registrationId" | "jobId"> & { gitCommonDirectory: string },
   sessionId: string,
 ): Promise<void> {
   await withSessionIndexLock(store, harness, input.registrationId, async () => {
@@ -570,11 +660,12 @@ async function writeSession(
       await store.set(sessionIndexKey(harness, input.registrationId), JSON.stringify([...index, input.jobId]));
     }
     await store.set(sessionKey(harness, input.registrationId, input.jobId), JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       harness,
       registrationId: input.registrationId,
       jobId: input.jobId,
       repositoryRoot: await realpath(input.repositoryRoot),
+      gitCommonDirectory: input.gitCommonDirectory,
       sessionId,
       updatedAt: new Date().toISOString(),
     } satisfies SessionRecord));
@@ -664,7 +755,7 @@ async function withSessionIndexLock<T>(
 async function readSession(
   store: SecretStore,
   harness: RunnerHarness,
-  input: Pick<AdapterInput, "repositoryRoot" | "registrationId" | "jobId">,
+  input: Pick<AdapterInput, "repositoryRoot" | "gitCommonDirectory" | "registrationId" | "jobId"> & { gitCommonDirectory: string },
   validSessionId: RegExp,
 ): Promise<SessionRecord | undefined> {
   const raw = await store.get(sessionKey(harness, input.registrationId, input.jobId));
@@ -673,11 +764,12 @@ async function readSession(
     const value = JSON.parse(raw) as Partial<SessionRecord>;
     const repositoryRoot = await realpath(input.repositoryRoot);
     if (
-      value.schemaVersion !== 1 ||
+      value.schemaVersion !== 2 ||
       value.harness !== harness ||
       value.registrationId !== input.registrationId ||
       value.jobId !== input.jobId ||
       value.repositoryRoot !== repositoryRoot ||
+      value.gitCommonDirectory !== input.gitCommonDirectory ||
       typeof value.sessionId !== "string" ||
       !validSessionId.test(value.sessionId)
     ) return undefined;
