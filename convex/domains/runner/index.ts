@@ -734,6 +734,7 @@ export const reserve = internalMutation({
     harnesses: v.array(harnessValidator),
     approvalMode: approvalModeValidator,
     activeJobIds: v.optional(v.array(v.id("runnerJobs"))),
+    hostCapacity: v.optional(v.number()),
     inspectJobId: v.optional(v.id("runnerJobs")),
   },
   handler: async (ctx, args) => {
@@ -747,6 +748,15 @@ export const reserve = internalMutation({
     }
     if (args.activeJobIds && args.activeJobIds.length > 8) {
       fail("validation", "activeJobIds cannot contain more than 8 jobs");
+    }
+    if (
+      args.hostCapacity !== undefined &&
+      (!Number.isInteger(args.hostCapacity) || args.hostCapacity < 1 || args.hostCapacity > 8)
+    ) {
+      fail("validation", "hostCapacity must be an integer between 1 and 8");
+    }
+    if (args.hostCapacity !== undefined && args.activeJobIds === undefined) {
+      fail("validation", "hostCapacity requires activeJobIds");
     }
     if (args.inspectJobId !== undefined && args.waitSeconds !== 0) {
       fail("validation", "inspectJobId requires waitSeconds 0");
@@ -853,6 +863,10 @@ export const reserve = internalMutation({
     if (active) return { registration: registrationDto({ ...registration, platform: args.platform, version: args.version.trim(), harnesses, approvalMode: args.approvalMode, lastSeenAt: now, waitingUntil: args.waitSeconds > 0 ? now + args.waitSeconds * 1_000 : undefined, updatedAt: now }), job: await jobDto(ctx, active) };
 
     const policy = parallelExecutionPolicy(principal.project);
+    const hostCapacity = args.activeJobIds === undefined ? 1 : (args.hostCapacity ?? 8);
+    if (refreshedAssigned.length >= Math.min(policy.maxConcurrentRuns, hostCapacity)) {
+      return { registration: registrationDto({ ...registration, platform: args.platform, version: args.version.trim(), harnesses, approvalMode: args.approvalMode, lastSeenAt: now, waitingUntil: args.waitSeconds > 0 ? now + args.waitSeconds * 1_000 : undefined, updatedAt: now }) };
+    }
     let projectActiveJobs = await activeRunnerJobsForProject(ctx, principal.project._id);
     for (const stale of projectActiveJobs) {
       const leaseExpired = ["starting", "running", "blocked"].includes(stale.state) &&
@@ -881,11 +895,18 @@ export const reserve = internalMutation({
       );
     }
     projectActiveJobs = await activeRunnerJobsForProject(ctx, principal.project._id);
-    if (projectActiveJobs.length >= policy.maxConcurrentRuns) {
+    const occupiedWorkItems = await activeRunWorkItemIds(ctx, principal.project._id, now);
+    const runnerWorkItems = new Set(
+      projectActiveJobs
+        .filter((job) => job.kind === "work" && job.workItemId)
+        .map((job) => job.workItemId!),
+    );
+    const activeIntakeJobs = projectActiveJobs.filter((job) => job.kind === "intake").length;
+    const projectOccupancy = new Set([...occupiedWorkItems, ...runnerWorkItems]).size + activeIntakeJobs;
+    if (projectOccupancy >= policy.maxConcurrentRuns) {
       return { registration: registrationDto({ ...registration, platform: args.platform, version: args.version.trim(), harnesses, approvalMode: args.approvalMode, lastSeenAt: now, waitingUntil: args.waitSeconds > 0 ? now + args.waitSeconds * 1_000 : undefined, updatedAt: now }) };
     }
 
-    const occupiedWorkItems = await activeRunWorkItemIds(ctx, principal.project._id, now);
     for (const activeJob of projectActiveJobs) {
       if (activeJob.kind !== "intake" && activeJob.workItemId) {
         occupiedWorkItems.add(activeJob.workItemId);

@@ -37,17 +37,43 @@ export class RunnerWorkspaceManager {
     this.#environmentPath = input.environmentPath;
   }
 
+  async preflight(): Promise<void> {
+    await this.#serialized(async () => {
+      await mkdir(this.#directory, { recursive: true, mode: 0o700 });
+      await assertOwnerDirectory(this.#directory);
+      await Promise.all([
+        this.#git(this.#repositoryRoot, ["rev-parse", "--show-toplevel"]),
+        this.#git(this.#repositoryRoot, ["rev-parse", "--verify", "HEAD^{commit}"]),
+        this.#git(this.#repositoryRoot, ["worktree", "list", "--porcelain"]),
+      ]);
+    });
+  }
+
+  async recover(job: RunnerJob): Promise<RunnerWorkspace> {
+    return await this.#serialized(async () => {
+      const workspace = this.#workspace(job);
+      const existing = await lstat(workspace.repositoryRoot).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return undefined;
+        throw error;
+      });
+      if (!existing) {
+        throw new CliCoreError({
+          code: "runner_workspace_missing",
+          message: "The runner cannot resume this job because its isolated worktree is missing.",
+          exitCode: 4,
+        });
+      }
+      await assertOwnerDirectory(workspace.repositoryRoot);
+      await this.#assertReusable(workspace.repositoryRoot, workspace.branch);
+      return { ...workspace, repositoryRoot: await realpath(workspace.repositoryRoot) };
+    });
+  }
+
   async prepare(job: RunnerJob): Promise<RunnerWorkspace> {
     return await this.#serialized(async () => {
       await mkdir(this.#directory, { recursive: true, mode: 0o700 });
       await assertOwnerDirectory(this.#directory);
-      const suffix = safeHash(job.id).slice(0, 12);
-      const subject = job.kind === "work" && job.workIdentifier
-        ? job.workIdentifier
-        : "intake";
-      const worktreeName = `${subject}-${suffix.slice(0, 8)}`;
-      const branch = `codex/dongo-runner-${subject}-${suffix}`;
-      const repositoryRoot = path.join(this.#directory, safeHash(job.id));
+      const { repositoryRoot, worktreeName, branch } = this.#workspace(job);
       const existing = await lstat(repositoryRoot).catch((error: NodeJS.ErrnoException) => {
         if (error.code === "ENOENT") return undefined;
         throw error;
@@ -70,6 +96,18 @@ export class RunnerWorkspaceManager {
       await this.#assertReusable(repositoryRoot, branch);
       return { repositoryRoot: await realpath(repositoryRoot), worktreeName, branch };
     });
+  }
+
+  #workspace(job: RunnerJob): RunnerWorkspace {
+    const suffix = safeHash(job.id).slice(0, 12);
+    const subject = job.kind === "work" && job.workIdentifier
+      ? job.workIdentifier
+      : "intake";
+    return {
+      repositoryRoot: path.join(this.#directory, safeHash(job.id)),
+      worktreeName: `${subject}-${suffix.slice(0, 8)}`,
+      branch: `codex/dongo-runner-${subject}-${suffix}`,
+    };
   }
 
   async cleanup(workspace: RunnerWorkspace): Promise<boolean> {

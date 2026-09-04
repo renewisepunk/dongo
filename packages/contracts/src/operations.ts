@@ -100,7 +100,7 @@ export type OperationMap = {
   runner_register: { input: MutationInput & { token: string; label: string; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic" }; output: RunnerRegistration };
   runner_rotate: { input: MutationInput & { registrationId: string; token: string; replacementToken: string }; output: RunnerRegistration };
   runner_revoke: { input: MutationInput & { registrationId: string; token: string }; output: RunnerRegistration };
-  runner_wait: { input: MutationInput & { registrationId: string; token: string; waitSeconds?: number; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic"; activeJobIds?: string[]; inspectJobId?: string }; output: RunnerWait };
+  runner_wait: { input: MutationInput & { registrationId: string; token: string; waitSeconds?: number; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic"; activeJobIds?: string[]; hostCapacity?: number; inspectJobId?: string }; output: RunnerWait };
   runner_update_job: { input: MutationInput & { registrationId: string; token: string; jobId: string; expectedRevision: number; state: RunnerJob["state"]; leaseSeconds?: number; safeCode?: string; safeMessage?: string; safeSummary?: string; sessionReferencePresent?: boolean }; output: RunnerJob };
 };
 
@@ -362,6 +362,7 @@ export const operationRegistry = {
       harnesses: z.array(runnerHarnessSchema).min(1).max(2),
       approvalMode: runnerApprovalModeSchema,
       activeJobIds: z.array(identifier).max(8).optional(),
+      hostCapacity: z.number().int().min(1).max(8).optional(),
       inspectJobId: identifier.optional(),
     }).strict().superRefine((input, context) => {
       if (input.activeJobIds !== undefined && input.inspectJobId !== undefined) {

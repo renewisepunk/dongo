@@ -787,6 +787,7 @@ async function dispatchAgentOperation(
             harnesses: input.harnesses as Array<"codex" | "claude">,
             approvalMode: stringField(input, "approvalMode") as "ask" | "automatic",
             activeJobIds: input.activeJobIds as Array<Id<"runnerJobs">> | undefined,
+            hostCapacity: input.hostCapacity as number | undefined,
             inspectJobId,
           });
           if (result.job || waitSeconds === 0 || inspectJobId) break;

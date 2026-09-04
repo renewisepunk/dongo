@@ -29,6 +29,7 @@ const VALUE_OPTIONS = new Set([
   "harness",
   "approval",
   "browser-review",
+  "max-concurrent-jobs",
   "job-id",
   "label",
   "initial-comment",

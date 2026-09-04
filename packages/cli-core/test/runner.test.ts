@@ -16,6 +16,7 @@ import {
   type RunnerAdapterResolver,
   type RunnerHarnessAdapter,
 } from "../src/runner.ts";
+import { RunnerWorkspaceManager } from "../src/runner-workspaces.ts";
 import type {
   RunnerServiceController,
   RunnerServiceSpec,
@@ -34,6 +35,7 @@ test("runner installation stores a one-time credential locally and exposes only 
   });
   assert.equal(installed.approvalMode, "ask");
   assert.equal(installed.browserReviewMode, "disabled");
+  assert.equal(installed.maxConcurrentJobs, 6);
   assert.deepEqual(installed.harnesses, ["claude", "codex"]);
   assert.equal(service.installs.length, 1);
   assert.match(api.registrationToken ?? "", /^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$/u);
@@ -178,6 +180,27 @@ test("runner removal cleans local material after the parent grant is inactive", 
   assert.equal((await manager.status()).installed, false);
 });
 
+test("transient service failures publish bounded recovery health before retrying", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  api.waitFailures = 1;
+  let recoveringState: Awaited<ReturnType<LocalRunnerManager["status"]>>["state"];
+  let manager: LocalRunnerManager;
+  manager = fixture.manager(api, new FakeService(), {
+    sleep: async () => {
+      recoveringState = (await manager.status()).state;
+      controller.abort();
+    },
+  });
+  await manager.install({ label: "Recovery Mac", harnesses: ["codex"] });
+  await manager.run(controller.signal);
+  assert.equal(recoveringState?.status, "recovering");
+  assert.equal(recoveringState?.lastErrorCode, "temporarily_unavailable");
+  assert.equal(recoveringState?.consecutiveFailures, 1);
+  assert.match(recoveringState?.nextRetryAt ?? "", /^\d{4}-\d{2}-\d{2}T/u);
+});
+
 test("a failed service install retains a disabled credential when rollback is unconfirmed", async (context) => {
   const fixture = await runnerFixture(context);
   const api = new FakeRunnerApi();
@@ -282,9 +305,40 @@ test("a restarted runner resumes only when its adapter has the exact local sessi
     sleep: async () => undefined,
   });
   await manager.install({ label: "Resume Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  await new RunnerWorkspaceManager({
+    repositoryRoot: fixture.repository,
+    configDirectory: fixture.root,
+    projectRef: "project-ref",
+    environmentPath: process.env.PATH!,
+  }).prepare(api.job);
   await manager.run(controller.signal);
   assert.equal(executions, 1);
   assert.deepEqual(api.transitions.map(({ state }) => state), ["running", "running", "completed"]);
+});
+
+test("restart fails closed when an active job's deterministic worktree is missing", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  api.job = runnerJob("running", 4);
+  api.onTerminal = () => controller.abort();
+  let executions = 0;
+  const manager = fixture.manager(api, new FakeService(), {
+    adapter: () => ({
+      harness: "codex",
+      validate: async () => "/bin/sh",
+      canResume: async () => true,
+      execute: async () => {
+        executions += 1;
+        return { outcome: "completed" };
+      },
+    }),
+  });
+  await manager.install({ label: "Missing workspace Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  await manager.run(controller.signal);
+  assert.equal(executions, 0);
+  assert.equal(api.job.state, "failed");
+  assert.equal(api.transitions.at(-1)?.safeCode, "worktree_setup_failed");
 });
 
 test("a successful harness exit cannot complete a job until dongo Work is done", async (context) => {
@@ -333,13 +387,15 @@ test("automatic mode isolates work from changes in the registered checkout", asy
   assert.equal(api.job.state, "completed");
 });
 
-test("the runner executes distinct queued jobs concurrently in isolated worktrees", async (context) => {
+test("a clean runner fills all six slots concurrently in isolated worktrees", async (context) => {
   const fixture = await runnerFixture(context);
   const controller = new AbortController();
-  const api = new ParallelRunnerApi([
-    { ...runnerJob("delivered", 2), id: "job-1", workItemId: "work-1", workIdentifier: "dong026" } as RunnerJob,
-    { ...runnerJob("delivered", 2), id: "job-2", workItemId: "work-2", workIdentifier: "dong027" } as RunnerJob,
-  ], () => controller.abort());
+  const api = new ParallelRunnerApi(Array.from({ length: 6 }, (_, index) => ({
+    ...runnerJob("delivered", 2),
+    id: `job-${index + 1}`,
+    workItemId: `work-${index + 1}`,
+    workIdentifier: `dong${String(index + 26).padStart(3, "0")}`,
+  } as RunnerJob)), () => controller.abort());
   const roots = new Set<string>();
   const branches = new Set<string>();
   let release!: () => void;
@@ -351,7 +407,7 @@ test("the runner executes distinct queued jobs concurrently in isolated worktree
       execute: async ({ repositoryRoot, branch }) => {
         roots.add(repositoryRoot);
         branches.add(branch);
-        if (roots.size === 2) release();
+        if (roots.size === 6) release();
         await bothStarted;
         return { outcome: "completed", sessionReferencePresent: true };
       },
@@ -359,10 +415,54 @@ test("the runner executes distinct queued jobs concurrently in isolated worktree
   });
   await manager.install({ label: "Parallel Mac", harnesses: ["codex"], approvalMode: "automatic" });
   await manager.run(controller.signal);
-  assert.equal(roots.size, 2);
-  assert.equal(branches.size, 2);
+  assert.equal(roots.size, 6);
+  assert.equal(branches.size, 6);
   assert.equal([...roots].every((root) => root !== fixture.repository && root.includes("runner-worktrees")), true);
-  assert.deepEqual([...api.jobs.values()].map((job) => job.state), ["completed", "completed"]);
+  assert.deepEqual([...api.jobs.values()].map((job) => job.state), Array(6).fill("completed"));
+  assert.equal(api.waitInputs.every(({ waitSeconds }) => waitSeconds === 20), true);
+  assert.equal(api.waitInputs.every(({ hostCapacity }) => hostCapacity === 6), true);
+});
+
+test("a restarted runner reconciles and resumes six exact worktree sessions", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const jobs = Array.from({ length: 6 }, (_, index) => ({
+    ...runnerJob("running", 4),
+    id: `restart-job-${index + 1}`,
+    workItemId: `work-${index + 1}`,
+    workIdentifier: `dong${String(index + 40).padStart(3, "0")}`,
+  } as RunnerJob));
+  const api = new ParallelRunnerApi(jobs, () => controller.abort());
+  const resumed = new Set<string>();
+  let release!: () => void;
+  const allResumed = new Promise<void>((resolve) => { release = resolve; });
+  const manager = fixture.manager(api as never, new FakeService(), {
+    adapter: () => ({
+      harness: "codex",
+      validate: async () => "/bin/sh",
+      canResume: async ({ jobId, repositoryRoot }) => {
+        assert.match(repositoryRoot, /runner-worktrees/u);
+        return jobs.some((job) => job.id === jobId);
+      },
+      execute: async ({ jobId }) => {
+        resumed.add(jobId);
+        if (resumed.size === 6) release();
+        await allResumed;
+        return { outcome: "completed", sessionReferencePresent: true };
+      },
+    }),
+  });
+  await manager.install({ label: "Restart Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  const workspaces = new RunnerWorkspaceManager({
+    repositoryRoot: fixture.repository,
+    configDirectory: fixture.root,
+    projectRef: "project-ref",
+    environmentPath: process.env.PATH!,
+  });
+  await Promise.all(jobs.map((job) => workspaces.prepare(job)));
+  await manager.run(controller.signal);
+  assert.equal(resumed.size, 6);
+  assert.deepEqual([...api.jobs.values()].map((job) => job.state), Array(6).fill("completed"));
 });
 
 test("losing the runner lease stops the harness before the manager retries", async (context) => {
@@ -598,6 +698,7 @@ class FakeRunnerApi {
   waitCalls = 0;
   dropJobOnWait?: number;
   dropInspectedJob = false;
+  waitFailures = 0;
 
   async getWork(input: { workItemId?: string }): Promise<WorkItem> {
     return {
@@ -661,6 +762,15 @@ class FakeRunnerApi {
 
   async runnerWait(input?: { activeJobIds?: string[]; inspectJobId?: string }): Promise<RunnerWait> {
     this.waitCalls += 1;
+    if (this.waitFailures > 0) {
+      this.waitFailures -= 1;
+      throw new DongoClientError({
+        code: "temporarily_unavailable",
+        message: "The runner service is temporarily unavailable.",
+        status: 503,
+        retryable: true,
+      });
+    }
     if (
       this.waitCalls === this.dropJobOnWait ||
       (this.dropInspectedJob && input?.inspectJobId === this.job?.id) ||
@@ -701,6 +811,7 @@ class ParallelRunnerApi {
   readonly jobs: Map<string, RunnerJob>;
   readonly #onComplete: () => void;
   completed = 0;
+  readonly waitInputs: Array<{ waitSeconds?: number; hostCapacity?: number }> = [];
 
   constructor(jobs: RunnerJob[], onComplete: () => void) {
     this.jobs = new Map(jobs.map((job) => [job.id, job]));
@@ -708,8 +819,9 @@ class ParallelRunnerApi {
   }
 
   async getWork(input: { workItemId?: string }): Promise<WorkItem> {
+    const index = Number(input.workItemId?.split("-").at(-1) ?? 1);
     return {
-      id: input.workItemId!, projectId: "project-1", identifier: input.workItemId === "work-1" ? "dong026" : "dong027",
+      id: input.workItemId!, projectId: "project-1", identifier: `dong${String(index + 25).padStart(3, "0")}`,
       sequence: 26, title: "Parallel work", goal: "Complete it", state: "done", orderKey: "a", revision: 1,
       sourceIntakeIds: [], artifacts: [], conversation: [], createdAt: 1, updatedAt: 1,
     } as unknown as WorkItem;
@@ -721,7 +833,10 @@ class ParallelRunnerApi {
   }
   async runnerRotate() { return registration({ label: "Parallel", platform: "darwin", version: "0.1.0", harnesses: ["codex"], approvalMode: "automatic" }); }
   async runnerRevoke() { return registration({ label: "Parallel", platform: "darwin", version: "0.1.0", harnesses: ["codex"], approvalMode: "automatic" }); }
-  async runnerWait(input: { activeJobIds?: string[]; inspectJobId?: string }): Promise<RunnerWait> {
+  async runnerWait(input: { activeJobIds?: string[]; hostCapacity?: number; inspectJobId?: string; waitSeconds?: number }): Promise<RunnerWait> {
+    if (!input.inspectJobId) {
+      this.waitInputs.push({ waitSeconds: input.waitSeconds, hostCapacity: input.hostCapacity });
+    }
     const job = input.inspectJobId
       ? this.jobs.get(input.inspectJobId)
       : [...this.jobs.values()].find((candidate) =>

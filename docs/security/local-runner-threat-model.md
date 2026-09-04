@@ -79,6 +79,10 @@ gate has passed.
   artifacts for credentials, session IDs, paths, and process output;
 - install, reboot, disable, remove, and repair on clean macOS and Linux users
   without elevated privileges.
+- on a clean installation, reserve six independent jobs into six deterministic
+  worktrees, restart the dispatcher, prove exact per-job session reconciliation,
+  release one slot, and prove bounded refill without exceeding either host or
+  project capacity.
 
 Any failed or ambiguous invariant blocks development acceptance and production
 promotion.

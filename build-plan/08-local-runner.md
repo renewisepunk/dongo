@@ -199,7 +199,9 @@ The first release uses authenticated long polling rather than a permanent
 WebSocket. `runner_wait` checks immediately, then waits for at most 20 seconds
 using bounded server intervals. The local loop immediately drains returned work
 and backs off after transport failure through 1, 2, 5, 10, and at most 30
-seconds with jitter. Successful empty waits do not invoke a model and reopen
+seconds with jitter. While backing off it reports `recovering`, the bounded
+failure count, safe code, and next retry time locally; it advances `lastSeenAt`
+only after a successful service response. Successful empty waits do not invoke a model and reopen
 without an artificial delay. This reuses the deployed API boundary, survives
 edge restarts, and keeps Convex authoritative without adding socket-local state.
 
@@ -227,6 +229,9 @@ Each registration has an owner-only local record containing:
 - approval mode, defaulting to `ask`;
 - browser self-review mode, defaulting to `disabled` and limited to local
   `read_only` authorization for Work jobs;
+- a local concurrent-job limit from 1 through 8, defaulting to 6; every parallel
+  wait reports that host bound and the server reserves only up to the smaller of
+  it and the project safety cap;
 - the owner-only parent directory used for isolated runner worktrees;
 - the active job set, including each bounded worktree and branch label;
 - the last exact harness session ID created for each runner job, when available.
@@ -315,8 +320,10 @@ raw process logs are not server data.
 
 - Two enqueue requests for the same eligible WorkItem return one active job.
 - Upgraded runners declare their active job IDs and atomically refill available
-  capacity up to the project `maxConcurrentRuns` policy. Older runners omit that
-  field and retain the original one-job-at-a-time behavior.
+  capacity up to the smaller of their local host limit and the project
+  `maxConcurrentRuns` policy. Older runners omit the active-job field and retain
+  the original one-job-at-a-time behavior; the earlier parallel client remains
+  compatible when it omits the additive host limit.
 - Every concurrent job receives a deterministic, owner-only Git worktree, branch,
   harness session, log, cancellation controller, and dongo external session ID.
 - Per-job polling names the exact job. A cancellation or lost lease interrupts
@@ -332,7 +339,8 @@ raw process logs are not server data.
   never fabricates a new session ID to reclaim work.
 - Restart reloads only owner-only local state, rediscovers every assigned job,
   and resumes each only when its server lease, deterministic worktree, and stored
-  process/session facts agree.
+  process/session facts agree. A missing worktree is a recovery failure and is
+  never silently recreated for a job already reported as running or blocked.
 - Server outage leaves the local process running only through a short bounded
   grace period. Failure to renew after that period interrupts it.
 - Cancellation, revocation, or local disable always outranks queued execution.

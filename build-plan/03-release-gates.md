@@ -150,6 +150,9 @@
 - Offline, reconnect, reboot, duplicate delivery, multiple-runner race, response
   loss, cancellation race, revocation, lease loss, unsafe output, and uninstall
   paths pass without duplicate execution or disclosure.
+- A clean runner fills six isolated worktree slots, reports exact per-job
+  liveness across restart, refills a released slot, remains compatible with a
+  serial client, and never exceeds the smaller host/project safety bound.
 - Server-visible events contain bounded, redacted lifecycle state only. Raw
   process output, local paths, session IDs, repository content, environment, and
   credentials remain local.

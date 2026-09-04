@@ -479,6 +479,7 @@ export class CoreService {
       harnesses: RunnerHarness[];
       approvalMode?: RunnerApprovalMode;
       browserReviewMode?: RunnerBrowserReviewMode;
+      maxConcurrentJobs?: number;
     },
   ) {
     return await (await this.#runnerManager()).install(options);
@@ -499,6 +500,7 @@ export class CoreService {
   async runnerConfigure(options: {
     approvalMode?: RunnerApprovalMode;
     browserReviewMode?: RunnerBrowserReviewMode;
+    maxConcurrentJobs?: number;
   }) {
     return await (await this.#runnerManager()).configure(options);
   }

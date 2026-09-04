@@ -78,6 +78,8 @@ function stateExplanation(state: RunnerLocalState | undefined): string {
       return "An agent is working on the current job.";
     case "blocked":
       return "The current job is blocked and needs attention in dongo.";
+    case "recovering":
+      return `The runner is reconnecting after a temporary service problem${state.nextRetryAt ? `; its next retry is scheduled for ${state.nextRetryAt}` : ""}. Active agents keep their own leases while the dispatcher recovers.`;
     case "error":
       return "The runner hit a problem. Use dongo runner status --json for technical details.";
     case "stopped":
@@ -92,6 +94,7 @@ export function renderRunnerInstallOutput(result: RunnerInstallResult): string {
     `This computer can now run queued dongo work with ${agentLabel(result.harnesses)} in this repository—even after you close this terminal. Eligible jobs run concurrently in separate Git worktrees, up to the project safety limit.`,
     approvalExplanation(result.approvalMode),
     browserReviewExplanation(result.browserReviewMode),
+    `This computer will run at most ${result.maxConcurrentJobs ?? 6} jobs at once.`,
     ...backgroundServiceExplanation(result.registration.platform),
     result.approvalMode === "automatic"
       ? "To receive new Inbox items automatically, finish setup in Project settings → Local runner."
@@ -118,6 +121,7 @@ export function renderRunnerStatusOutput(result: RunnerStatusResult): string {
     `This computer is set up to work on issues with ${agentLabel(result.harnesses)}.`,
     approvalExplanation(result.approvalMode),
     browserReviewExplanation(result.browserReviewMode),
+    `Local concurrency limit: ${result.maxConcurrentJobs ?? 6} jobs.`,
     ...backgroundServiceExplanation(result.servicePlatform),
     stateExplanation(result.state),
     result.approvalMode === "automatic"
@@ -143,6 +147,7 @@ export function renderRunnerConfigureOutput(result: RunnerConfigureResult): stri
     "",
     approvalExplanation(result.approvalMode),
     browserReviewExplanation(result.browserReviewMode),
+    `Local concurrency limit: ${result.maxConcurrentJobs ?? 6} jobs.`,
     result.approvalMode === "automatic"
       ? `${agentLabel(result.harnesses)} can start in isolated Git worktrees. Confirm Inbox routing in Project settings → Local runner.`
       : "Automatic Inbox processing is off for this computer.",
