@@ -3415,8 +3415,8 @@ function WorkDetail(props: WorkDetailProps) {
             <Show when={props.item.state === "ready"} fallback={<p class="note">Local execution can be queued only while work is Ready.</p>}>
               <Show when={props.runnerHarnesses.length > 0} fallback={
                 <div class="detail-card">
-                  <strong>No local runner is connected.</strong>
-                  <p class="note">Set up Codex or Claude Code on a computer you control, then return here to queue this work.</p>
+                  <strong>No compatible local runner is available for this work.</strong>
+                  <p class="note">A runner may be offline, busy, at project capacity, or missing a compatible agent. Check local runner settings before queuing this work.</p>
                   <a class="button button--quiet" href={props.runnerSettingsHref}>Set up local runner</a>
                 </div>
               }>

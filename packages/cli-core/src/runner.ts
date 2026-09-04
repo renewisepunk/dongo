@@ -112,6 +112,7 @@ export interface RunnerHarnessAdapter {
   validate(): Promise<string>;
   canResume?(input: {
     repositoryRoot: string;
+    gitCommonDirectory: string;
     registrationId: string;
     jobId: string;
   }): Promise<boolean>;
@@ -123,6 +124,7 @@ export interface RunnerHarnessAdapter {
   discardRegistration?(registrationId: string): Promise<void>;
   execute(input: {
     repositoryRoot: string;
+    gitCommonDirectory: string;
     registrationId: string;
     jobId: string;
     kind: RunnerJob["kind"];
@@ -603,6 +605,7 @@ export class LocalRunnerManager {
     }
     await this.#publishState(config, "starting");
     let failureAttempt = 0;
+    let terminalAuthorizationCode: string | undefined;
     const workers = new Map<string, Promise<void>>();
     while (!runSignal.aborted) {
       try {
@@ -653,6 +656,14 @@ export class LocalRunnerManager {
         if (code === "unauthorized" || code === "forbidden" || code === "insufficient_scope") {
           await this.#publishState(config, "error", { lastErrorCode: code, consecutiveFailures: failureAttempt });
           runController.abort(error);
+          await Promise.allSettled(workers.values());
+          await this.#service.disarm(this.#projectRef);
+          await this.#writeConfig({
+            ...config,
+            enabled: false,
+            updatedAt: new Date(this.#now()).toISOString(),
+          });
+          terminalAuthorizationCode = code;
           break;
         }
         const delay = backoffMilliseconds(failureAttempt, this.#random);
@@ -665,7 +676,11 @@ export class LocalRunnerManager {
       }
     }
     await Promise.allSettled(workers.values());
-    await this.#publishState(config, "stopped");
+    await this.#publishState(
+      config,
+      terminalAuthorizationCode ? "disabled" : "stopped",
+      terminalAuthorizationCode ? { lastErrorCode: terminalAuthorizationCode, consecutiveFailures: failureAttempt } : {},
+    );
     signal?.removeEventListener("abort", relayAbort);
     return { stopped: true };
   }
@@ -801,6 +816,7 @@ export class LocalRunnerManager {
     }
     if (recovering && !(await adapter.canResume?.({
       repositoryRoot: workspace.repositoryRoot,
+      gitCommonDirectory: workspace.gitCommonDirectory,
       registrationId: config.registrationId,
       jobId: job.id,
     }))) {
@@ -819,6 +835,7 @@ export class LocalRunnerManager {
     let executionFinished = false;
     const execution = adapter.execute({
       repositoryRoot: workspace.repositoryRoot,
+      gitCommonDirectory: workspace.gitCommonDirectory,
       registrationId: config.registrationId,
       jobId: current.id,
       kind: current.kind,

@@ -20,6 +20,9 @@ The failures observed during the dongo and wiwi releases were a chain of indepen
 10. **Registration status was last-writer-wins instead of an aggregate.** With multiple workers, whichever worker wrote last could make the whole computer look waiting, running, or failed even when sibling jobs had different liveness.
 11. **Milestones were mistaken for terminal state.** Agent comments correctly said code was integrated or live, but the Run was not explicitly finished or its exit was not reconciled. Answered Attention remained visually dominant, and stale Runs continued to consume or appear to consume capacity.
 12. **The UI compressed distinct states into `Running`, `Local run failed`, or `waiting for your blocked`.** It did not identify whether the process was alive, whether implementation was done, which external gate remained, whether the owner had already responded, or whether automatic recovery would occur.
+13. **Terminal runner jobs were associated with Runs by WorkItem and a loose timestamp.** Each dispatcher reserve poll could therefore use an older failed job to tear down a newer Run for the same Work within seconds. Reconciliation and Activity must require the exact `dongo-runner-<job-id>` session and a Run that started before that job became terminal.
+14. **The worktree sandbox omitted shared Git metadata.** A linked worktree could edit files and read the remote while `git fetch` failed when it tried to write `FETCH_HEAD` in the approved checkout's canonical `.git` directory. Grant exactly the validated same-repository, owner-controlled Git common directory, never its parent or an arbitrary external path.
+15. **Runner availability copy treated ineligibility as disconnection.** A connected runner can be busy, at project capacity, or lack the requested harness. UI status must not tell the owner no runner is connected unless connection state itself proves that claim.
 
 ### Product requirements derived from the incident
 
@@ -94,6 +97,7 @@ The failures observed during the dongo and wiwi releases were a chain of indepen
 ## macOS background-service updates can race
 
 - Changing runner configuration may require a LaunchAgent restart. A failed reload can leave the old service running even when the configuration write was rolled back safely.
+- An enabled always-on runner must restart after an unexpected clean process exit. A `SuccessfulExit = false` launchd keepalive condition strands queued work when the dispatcher exits with code 0; bind keepalive to an owner-controlled enable marker and make disable/remove remove that marker before unloading the exact service so intentional or authorization-driven stops cannot loop.
 - Inspect the exact registered service label and current jobs before intervening. Never restart a runner while it owns active work unless the recovery procedure explicitly preserves those Runs.
 - With zero jobs, stop the exact service, apply configuration once, and verify the new process, registration, waiting state, and effective configuration.
 - The background-item name shown by macOS comes from the installed executable or service identity. Use a product-specific executable name so the operating-system notice says `dongo`, not a generic runtime such as `node`.

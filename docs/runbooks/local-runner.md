@@ -96,12 +96,21 @@ service. Neither platform uses `sudo`, a system daemon, a privileged path, or an
 inbound port. Native Windows is out of scope for the first release; WSL follows
 the Linux user-service and Linux-filesystem security boundary.
 
+An enabled service restarts after both failing and unexpected clean exits. Its
+restart policy is bound to an owner-only local enable marker. Disable, removal,
+or terminal remote authorization loss disarms that marker before the process
+stops, and a stop failure preserves local material for a safe retry instead of
+claiming the runner was removed.
+
 ### Codex execution
 
 The Codex adapter resolves and records the exact local `codex` executable,
 verifies its version and required non-interactive features, and starts work in
 the job's isolated worktree with JSONL output and the `workspace-write`
-sandbox. The fixed instruction is sent over standard input, not exposed in the
+sandbox. The runner validates the linked worktree and approved checkout share
+the same owner-controlled, non-symlinked canonical Git common directory, then
+adds exactly that metadata directory to the writable sandbox. It never grants
+the parent worktree area or an unrelated path. The fixed instruction is sent over standard input, not exposed in the
 process list. It never uses approval or sandbox bypass flags. The only hosted
 values added to the local instruction are the validated dongo Work or Intake
 identifier and, for Work only, the bounded browser self-review authorization
