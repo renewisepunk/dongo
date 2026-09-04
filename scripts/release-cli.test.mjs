@@ -62,6 +62,23 @@ test("production deployment orders authorization, smoke, and publication safely"
   assert.match(source, /scripts\/smoke-production\.mjs[\s\S]*--project-ref[\s\S]*productionPublicProjectRef/u);
 });
 
+test("production planning keeps public changelog curation explicit and owner-reviewed", () => {
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL("./deploy-production.mjs", import.meta.url)),
+    "--plan",
+  ], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    env: { ...process.env, CONVEX_DEPLOYMENT: "prod:brainy-camel-172" },
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const lines = result.stdout.trim().split("\n");
+  assert.match(lines.at(-2) ?? "", /agent release notice activation/u);
+  assert.match(lines.at(-1) ?? "", /post-release changelog curation:/u);
+  assert.match(lines.at(-1) ?? "", /owner-approved wording/u);
+  assert.match(lines.at(-1) ?? "", /Public changelog: intentionally skipped/u);
+});
+
 test("public registry access and package-level publishing rights are pinned", async () => {
   const source = await readFile(new URL("./release-cli.mjs", import.meta.url), "utf8");
   assert.match(source, /const publicRegistry = "https:\/\/registry\.npmjs\.org\/"/u);

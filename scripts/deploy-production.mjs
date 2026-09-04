@@ -8,6 +8,11 @@ import { requireReleaseConvexTarget } from "./release-convex-target.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const executable = (name) => process.platform === "win32" ? `${name}.cmd` : name;
 const productionPublicProjectRef = "ps8dhbky-dongo-production-e2e";
+const changelogCurationReminder = [
+  "Review significant completed Work for the public changelog.",
+  "Publish only exact owner-approved wording, or record",
+  "`Public changelog: intentionally skipped` with a non-sensitive reason on the release Work.",
+].join(" ");
 const preflightSteps = [
   ["agent release notice preflight", executable("node"), ["scripts/verify-agent-release-notice.mjs"]],
   ["public CLI release preflight", executable("node"), ["scripts/release-cli.mjs", "--preflight"]],
@@ -53,6 +58,7 @@ if (process.argv.includes("--plan")) {
   for (const [label, command, args] of [...preflightSteps, ...steps]) {
     console.log(`${label}: ${command} ${args.join(" ")}`);
   }
+  console.log(`post-release changelog curation: ${changelogCurationReminder}`);
   process.exit(0);
 }
 
@@ -83,3 +89,4 @@ for (const [label, command, args] of [...preflightSteps, ...steps]) {
 }
 
 console.log("\nProduction stack deployed and smoke-checked; its public CLI release was reconciled before the matching agent notice was activated.");
+console.log(`Post-release changelog curation: ${changelogCurationReminder}`);

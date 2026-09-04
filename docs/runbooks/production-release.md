@@ -16,6 +16,10 @@ Production is `https://dongo.so`, Convex `brainy-camel-172`, D1 `dongo-auth`, an
 - Always verify the checked-in agent release notice before mutation. When the
   public CLI version changes, update its unique identifier, monotonically
   increasing sequence, bounded reviewed summary, and exact pinned command.
+- After an accepted major release, the release coordinator must complete the
+  owner-reviewed public changelog decision in
+  [`changelog.md`](changelog.md): publish only exact approved wording, or record
+  an intentional skip on the release Work.
 
 ## One-time preparation
 
@@ -155,6 +159,15 @@ npm run smoke:production -- --project-ref ps8dhbky-dongo-production-e2e
 ```
 
 Then prove email OTP to an address controlled by the owner, connect a fresh packed CLI with the default `dongo connect`, add a new project-scoped Codex MCP entry, authorize it, call `dongo_session_start`, create/update/finish one disposable work item as the agent, attach and preview one image, revoke that disposable installation, confirm it fails, and reauthorize it to a new installation/actor.
+
+After the production release is accepted and the affected Work is completed,
+perform the changelog curation step printed by the deployment command. The
+release coordinator verifies a bounded candidate list from production evidence
+and requests owner approval for the exact public copy. Publish only that copy
+through project settings and verify `/changelog` in production. If the release
+does not meet the inclusion criteria, record
+`Public changelog: intentionally skipped` and a short, non-sensitive reason on
+the release Work. Changelog publication is never an automatic deployment step.
 
 For an agent-release change, keep one already-authorized MCP client open across
 the MCP deployment and final activation. Its first eligible successful
