@@ -1,4 +1,4 @@
-import { Route, Router, useParams } from "@solidjs/router";
+import { Route, Router } from "@solidjs/router";
 import { MetaProvider } from "@solidjs/meta";
 import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
@@ -854,13 +854,17 @@ const helpDependencies = {
 };
 
 function FixtureOverview() {
-  const params = useParams<{ orgSlug?: string; projectSlug?: string }>();
-  const orgSlug = () => params.orgSlug ?? "fixture-studio";
-  const projectSlug = () => params.projectSlug ?? "dongo";
+  const [, surface, encodedOrgSlug, encodedProjectSlug] = window.location.pathname.split("/");
+  const orgSlug = surface === "app" && encodedOrgSlug
+    ? decodeURIComponent(encodedOrgSlug)
+    : "fixture-studio";
+  const projectSlug = surface === "app" && encodedProjectSlug
+    ? decodeURIComponent(encodedProjectSlug)
+    : "dongo";
   return (
     <Overview
-      orgSlug={orgSlug()}
-      projectSlug={projectSlug()}
+      orgSlug={orgSlug}
+      projectSlug={projectSlug}
       connect={async (orgSlug, projectSlug): Promise<OverviewConnection> => {
         if (oauthScenario() === "overview-connect-error") {
           throw new Error("fixture overview connection detail must stay hidden");
@@ -1301,7 +1305,6 @@ render(
           path="/app/:orgSlug/:projectSlug/ideas"
           component={() => <Ideas orgSlug="fixture-studio" projectSlug="dongo" connect={connectFixtureIdeas} />}
         />
-        <Route path="/app/:orgSlug/:projectSlug" component={FixtureOverview} />
         <Route path="*" component={FixtureOverview} />
       </Router>
     </MetaProvider>
