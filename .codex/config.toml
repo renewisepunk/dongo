@@ -1,2 +1,4 @@
 [mcp_servers.dongo-en8dgh2y-dongo]
 url = "https://dongo.so/p/en8dgh2y-dongo/mcp"
+oauth.client_id = "dongo-codex"
+oauth.callback_url = "http://127.0.0.1/callback"

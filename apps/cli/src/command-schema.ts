@@ -219,7 +219,7 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
     options: [
       { name: "harness", description: "Locally installed harness allowed for this repository.", required: true, repeatable: true, allowed: ["codex", "claude"] },
       { name: "approval", description: "Ask locally before every job, or explicitly opt this repository into automatic starts.", allowed: ["ask", "automatic"] },
-      { name: "label", description: "Human-readable name for this computer." },
+      { name: "label", description: "Recognizable, non-sensitive computer name shown in dongo, such as Studio Mac." },
     ],
   },
   "runner configure": {

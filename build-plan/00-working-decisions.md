@@ -269,6 +269,26 @@ references start a new session and are presented truthfully.
 The complete contract, state machine, security boundary, retention, and rollout
 requirements are recorded in [`08-local-runner.md`](08-local-runner.md).
 
+### D-30 — Visible local-runner identity
+
+Decided: operating-system persistence must identify itself as dongo rather than
+the implementation runtime. The macOS LaunchAgent starts through an owner-only
+fixed launcher whose executable name is `dongo`; Node.js remains an internal
+runtime detail and cannot receive server-controlled arguments. Installation and
+status output must explain the expected **Background Items Added** notification,
+the login-scoped and non-privileged boundary, where macOS exposes the item, and
+the exact status, pause, and removal commands. Project settings uses the same
+language, asks for a recognizable non-sensitive computer label, names the list
+by its authority rather than its registration mechanism, and makes runner
+activity distinct from Work completion.
+
+The CLI remains unbundled and unsigned, so it must not claim association with a
+signed app bundle or add `AssociatedBundleIdentifiers` without a matching team
+identity. Apple documents that an unattributed legacy LaunchAgent is displayed
+from the executable named by `Program` or `ProgramArguments`; the fixed launcher
+provides the truthful dongo name without weakening the existing user-level
+launchd boundary.
+
 ### D-25 — Direct Work breakdown
 
 Decided: one WorkItem may contain at most 100 direct child WorkItems. This is a

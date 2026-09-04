@@ -109,9 +109,12 @@ test("opts into automatic Inbox processing on one trusted runner and supports re
   await expect(page.getByText("dongo integrate codex --apply", { exact: true })).toBeVisible();
   await expect(page.getByText("dongo integrate claude --apply", { exact: true })).toBeVisible();
   await expect(page.getByText(/never copy the dongo CLI credential into an agent/)).toBeVisible();
-  await expect(page.getByText("dongo runner install --harness codex", { exact: true })).toBeVisible();
-  await expect(page.getByText("dongo runner install --harness claude", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Process current and future Inbox with Codex" }).click();
+  await expect(page.getByText(/Background Items Added/)).toContainText("dongo");
+  await expect(page.getByText(/If the alert names node/)).toBeVisible();
+  await expect(page.getByText(/dongo runner install --harness codex --label/)).toBeVisible();
+  await expect(page.getByText("Computers allowed to run dongo", { exact: true })).toBeVisible();
+  await expect(page.getByText("Runner activity", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Use this computer for Inbox pickup with Codex" }).click();
   await expect(page.getByRole("status")).toContainText("Codex will process new Inbox items automatically");
   await expect(page.getByRole("status")).toContainText("3 waiting items were queued too");
   expect(JSON.parse(
@@ -133,9 +136,12 @@ test("does not present an ask-mode runner as ready for Inbox pickup", async ({ p
   await expect(page.getByText("Inbox pickup is off.", { exact: false })).toBeVisible();
   await expect(page.getByText(/New Inbox items will wait here until an agent checks manually/)).toBeVisible();
   await expect(
-    page.getByRole("paragraph").filter({ hasText: "Local approval is required" }).getByRole("code"),
+    page.getByRole("paragraph").filter({ hasText: "Local approval is required" }).getByText(
+      "dongo runner configure --approval automatic",
+      { exact: true },
+    ),
   ).toHaveText("dongo runner configure --approval automatic");
-  await expect(page.getByRole("button", { name: /Process current and future Inbox/ })).toBeHidden();
+  await expect(page.getByRole("button", { name: /Use this computer for Inbox pickup/ })).toBeHidden();
 });
 
 test("updates organization membership and confirms removal", async ({ page }) => {

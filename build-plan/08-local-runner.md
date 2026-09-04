@@ -92,9 +92,20 @@ current credential. The server never accepts caller-provided organization,
 project, Actor, or installation identity.
 
 Local files use the existing dongo owner-only directory and atomic-write rules.
-Repository markers remain non-secret. Service definitions contain only the
-dongo executable path and a registration identifier; credentials stay in the
-owner-only credential store.
+Repository markers remain non-secret. Service definitions contain only fixed,
+locally approved executable paths and product-owned runner arguments;
+credentials stay in the owner-only credential store.
+
+Beginning with runner protocol version `0.1.1`, the macOS LaunchAgent's
+executable is an owner-only fixed launcher named
+`dongo`, not the underlying Node.js runtime. This gives the operating system a
+truthful product identity for its Background Item notice without claiming a
+signed application-bundle association dongo does not have. The launcher fixes
+the locally approved Node and CLI paths plus the product-owned runner command;
+server-controlled values still cannot become executable paths, flags, or shell
+input. Default CLI output and Project settings explain the expected notice,
+login scope, no-inbound-port boundary, and exact inspection, pause, and removal
+controls.
 
 ## Versioned job shape
 
