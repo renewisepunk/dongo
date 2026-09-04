@@ -501,6 +501,47 @@ export type ProjectOverview = {
   ownerAttention?: OwnerAttention[];
 };
 
+export type CrossProjectPriority = {
+  kind: "needs_you" | "working" | "ready" | "inbox";
+  title: string;
+  updatedAt: number;
+  target:
+    | { kind: "work"; id: string; identifier: string }
+    | { kind: "intake"; id: string }
+    | { kind: "overview" };
+};
+
+export type CrossProjectOverviewSnapshot = {
+  generatedAt: number;
+  limits: {
+    organizations: number;
+    projects: number;
+  };
+  truncated: boolean;
+  organizations: Array<{
+    organization: {
+      id: string;
+      name: string;
+      slug: string;
+      plan: "free" | "paid";
+    };
+    membershipRole: "owner" | "member";
+    crossProjectOverview: {
+      enabled: boolean;
+      source: "plan";
+    };
+    projects: Array<{
+      project: {
+        id: string;
+        name: string;
+        slug: string;
+        publicRef: string;
+      };
+      priority: CrossProjectPriority | null;
+    }>;
+  }>;
+};
+
 export type HostCapability = "supported" | "unsupported" | "undisclosed";
 
 export type ProjectConcurrencySnapshot = {
@@ -602,6 +643,11 @@ const listProjectsReference = makeFunctionReference<"query", Record<string, neve
 const overviewReference = makeFunctionReference<"query", { projectId: string }, OverviewSnapshot>(
   "domains/overview/index:getForHuman",
 );
+const crossProjectOverviewReference = makeFunctionReference<
+  "query",
+  Record<string, never>,
+  CrossProjectOverviewSnapshot
+>("domains/overview/index:getAcrossProjectsForHuman");
 const concurrencyReference = makeFunctionReference<
   "query",
   { projectId: string },
@@ -1293,6 +1339,36 @@ export function mapIntakeDetail(detail: IntakeDetailSnapshot): Intake {
     closureNote: detail.intake.closureNote,
     closedAt: relativeTime(detail.intake.closedAt, Date.now()),
   };
+}
+
+export class CrossProjectDataConnection {
+  readonly #client: ConvexClient;
+
+  private constructor(client: ConvexClient) {
+    this.#client = client;
+  }
+
+  static async connect(): Promise<CrossProjectDataConnection> {
+    const client = new ConvexClient(convexDeploymentUrl);
+    client.setAuth(async () => await convexAccessToken());
+    return new CrossProjectDataConnection(client);
+  }
+
+  subscribe(
+    onUpdate: (snapshot: CrossProjectOverviewSnapshot) => void,
+    onError: (error: Error) => void,
+  ): () => void {
+    return this.#client.onUpdate(
+      crossProjectOverviewReference,
+      {},
+      onUpdate,
+      onError,
+    );
+  }
+
+  async close(): Promise<void> {
+    await this.#client.close();
+  }
 }
 
 export class ProjectDataConnection {

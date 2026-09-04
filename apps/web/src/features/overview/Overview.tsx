@@ -1922,6 +1922,12 @@ export function Overview(props: OverviewProps) {
                   }}</For>
                 </div>
               )}</For>
+              <button
+                class="menu-action"
+                type="button"
+                role="menuitem"
+                onClick={() => navigate("/app/projects")}
+              >All projects</button>
               <div class="menu-divider" />
               <Show when={currentProject()}>
                 <div class="menu-label">{projectAllowance()}</div>

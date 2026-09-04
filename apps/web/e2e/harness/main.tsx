@@ -3,6 +3,7 @@ import { MetaProvider } from "@solidjs/meta";
 import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { Overview, type OverviewConnection } from "../../src/features/overview/Overview";
+import { AllProjectsOverview } from "../../src/features/overview/AllProjectsOverview";
 import { HelpGuide } from "../../src/features/help/HelpGuide";
 import { GetStartedGuide } from "../../src/features/public-guides/GetStartedGuide";
 import { PublicHelpGuide } from "../../src/features/public-guides/PublicHelpGuide";
@@ -16,6 +17,7 @@ import type {
   PlatformAdminConnection,
   PlatformDashboard,
 } from "../../src/lib/platform-data";
+import type { CrossProjectOverviewSnapshot } from "../../src/lib/project-data";
 import { Ideas } from "../../src/features/ideas/Ideas";
 import type { WorkItem } from "../../src/features/overview/model";
 import { CompletedWork } from "../../src/routes/app/[orgSlug]/[projectSlug]/done";
@@ -876,6 +878,100 @@ function FixtureOverview() {
   );
 }
 
+const allProjectsSnapshot: CrossProjectOverviewSnapshot = {
+  generatedAt: Date.now(),
+  limits: { organizations: 20, projects: 24 },
+  truncated: false,
+  organizations: [
+    {
+      organization: {
+        id: "organization-paid",
+        name: "Fixture Studio",
+        slug: "fixture-studio",
+        plan: "paid",
+      },
+      membershipRole: "owner",
+      crossProjectOverview: { enabled: true, source: "plan" },
+      projects: [
+        {
+          project: {
+            id: "project-fixture",
+            name: "dongo",
+            slug: "dongo",
+            publicRef: "fixture-project",
+          },
+          priority: {
+            kind: "needs_you",
+            title: "Approve the release candidate",
+            updatedAt: Date.now(),
+            target: { kind: "work", id: "work-needs", identifier: "dong007" },
+          },
+        },
+        {
+          project: {
+            id: "project-companion",
+            name: "Companion",
+            slug: "companion",
+            publicRef: "companion-project",
+          },
+          priority: {
+            kind: "ready",
+            title: "Verify fixture search",
+            updatedAt: Date.now() - 60_000,
+            target: { kind: "work", id: "work-ready-a", identifier: "comp001" },
+          },
+        },
+      ],
+    },
+    {
+      organization: {
+        id: "organization-free",
+        name: "Personal workspace",
+        slug: "personal-workspace",
+        plan: "free",
+      },
+      membershipRole: "owner",
+      crossProjectOverview: { enabled: false, source: "plan" },
+      projects: [{
+        project: {
+          id: "project-private",
+          name: "Private notes",
+          slug: "private-notes",
+          publicRef: "private-notes-project",
+        },
+        priority: null,
+      }],
+    },
+  ],
+};
+
+function FixtureAllProjects() {
+  return (
+    <AllProjectsOverview
+      connect={async () => {
+        if (oauthScenario() === "all-projects-connect-error") {
+          throw new Error("fixture cross-project connection detail must stay hidden");
+        }
+        return {
+          subscribe(onUpdate, onError) {
+            queueMicrotask(() => {
+              if (oauthScenario() === "all-projects-subscription-error") {
+                onError(new Error("fixture cross-project subscription detail must stay hidden"));
+              } else {
+                onUpdate(structuredClone(allProjectsSnapshot));
+              }
+            });
+            return () => undefined;
+          },
+          async close() {
+            document.documentElement.dataset.fixtureAllProjectsClosed = "true";
+          },
+        };
+      }}
+    />
+  );
+}
+
 const platformDashboard: PlatformDashboard = {
   generatedAt: Date.now(),
   accounts: [{
@@ -1136,6 +1232,7 @@ render(
         <Route path="/oauth/consent" component={() => <OAuthConsentRoute dependencies={oauthConsentDependencies} />} />
         <Route path="/connect" component={() => <ConnectRoute dependencies={connectDependencies} />} />
         <Route path="/admin" component={FixturePlatformAdmin} />
+        <Route path="/app/projects" component={FixtureAllProjects} />
         <Route
           path="/app/:orgSlug/:projectSlug/settings"
           component={() => (
