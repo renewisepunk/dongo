@@ -34,6 +34,7 @@ import {
   type RunnerAdapterResolver,
   type RunnerBrowserReviewMode,
 } from "./runner.ts";
+import type { RunnerDeploymentAccessMode } from "./runner-deployment-access.ts";
 import {
   LocalRunnerServiceController,
   type RunnerServiceController,
@@ -479,6 +480,7 @@ export class CoreService {
       harnesses: RunnerHarness[];
       approvalMode?: RunnerApprovalMode;
       browserReviewMode?: RunnerBrowserReviewMode;
+      deploymentAccessMode?: RunnerDeploymentAccessMode;
     },
   ) {
     return await (await this.#runnerManager()).install(options);
@@ -499,6 +501,7 @@ export class CoreService {
   async runnerConfigure(options: {
     approvalMode?: RunnerApprovalMode;
     browserReviewMode?: RunnerBrowserReviewMode;
+    deploymentAccessMode?: RunnerDeploymentAccessMode;
   }) {
     return await (await this.#runnerManager()).configure(options);
   }

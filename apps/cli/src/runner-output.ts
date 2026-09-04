@@ -1,4 +1,4 @@
-import type { CoreService, RunnerBrowserReviewMode, RunnerLocalState } from "@dongo/cli-core";
+import type { CoreService, RunnerBrowserReviewMode, RunnerDeploymentPolicy, RunnerLocalState } from "@dongo/cli-core";
 import type { RunnerApprovalMode, RunnerHarness } from "@dongo/contracts";
 
 type RunnerInstallResult = Awaited<ReturnType<CoreService["runnerInstall"]>>;
@@ -30,6 +30,15 @@ function browserReviewExplanation(mode: RunnerBrowserReviewMode | undefined): st
   return mode === "read_only"
     ? "Read-only browser self-review is on. Codex may inspect this app in your existing signed-in browser session, but may not change data, access unrelated tabs, or bypass browser safety decisions."
     : "Browser self-review is off. An agent will ask you when live browser verification is required.";
+}
+
+function deploymentAccessExplanation(policy: RunnerDeploymentPolicy | undefined): string {
+  if (policy?.mode !== "repository") {
+    return "Trusted deployment access is off. Agents cannot use checkout-local provider credentials from isolated worktrees.";
+  }
+  const capabilities = policy.capabilities.length ? naturalList(policy.capabilities) : "no providers";
+  const sources = policy.sources.length ? policy.sources.join(", ") : "no environment files";
+  return `Trusted deployment access is on for ${capabilities}. Approved sources: ${sources}. Values are checked before launch, passed only in memory, redacted from runner logs, and never copied into worktrees.`;
 }
 
 function backgroundServiceExplanation(platform: "darwin" | "linux" | undefined): string[] {
@@ -92,6 +101,7 @@ export function renderRunnerInstallOutput(result: RunnerInstallResult): string {
     `This computer can now run queued dongo work with ${agentLabel(result.harnesses)} in this repository—even after you close this terminal. Eligible jobs run concurrently in separate Git worktrees, up to the project safety limit.`,
     approvalExplanation(result.approvalMode),
     browserReviewExplanation(result.browserReviewMode),
+    deploymentAccessExplanation(result.deploymentPolicy),
     ...backgroundServiceExplanation(result.registration.platform),
     result.approvalMode === "automatic"
       ? "To receive new Inbox items automatically, finish setup in Project settings → Local runner."
@@ -118,6 +128,7 @@ export function renderRunnerStatusOutput(result: RunnerStatusResult): string {
     `This computer is set up to work on issues with ${agentLabel(result.harnesses)}.`,
     approvalExplanation(result.approvalMode),
     browserReviewExplanation(result.browserReviewMode),
+    deploymentAccessExplanation(result.deploymentPolicy),
     ...backgroundServiceExplanation(result.servicePlatform),
     stateExplanation(result.state),
     result.approvalMode === "automatic"
@@ -143,6 +154,7 @@ export function renderRunnerConfigureOutput(result: RunnerConfigureResult): stri
     "",
     approvalExplanation(result.approvalMode),
     browserReviewExplanation(result.browserReviewMode),
+    deploymentAccessExplanation(result.deploymentPolicy),
     result.approvalMode === "automatic"
       ? `${agentLabel(result.harnesses)} can start in isolated Git worktrees. Confirm Inbox routing in Project settings → Local runner.`
       : "Automatic Inbox processing is off for this computer.",

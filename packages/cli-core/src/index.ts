@@ -14,6 +14,12 @@ export type * from "./marker.ts";
 export { credentialProfile, findRepositoryRoot, repositoryName } from "./repository.ts";
 export { sanitizedChildEnvironment } from "./process-environment.ts";
 export {
+  discoverRunnerDeploymentPolicy,
+  redactRunnerSecrets,
+  resolveRunnerDeploymentEnvironment,
+} from "./runner-deployment-access.ts";
+export type * from "./runner-deployment-access.ts";
+export {
   ClaudeRunnerAdapter,
   CodexRunnerAdapter,
   createRunnerAdapterResolver,

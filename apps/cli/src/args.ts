@@ -29,6 +29,7 @@ const VALUE_OPTIONS = new Set([
   "harness",
   "approval",
   "browser-review",
+  "deployment-access",
   "job-id",
   "label",
   "initial-comment",

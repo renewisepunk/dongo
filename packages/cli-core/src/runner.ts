@@ -12,6 +12,11 @@ import type {
   RunnerPlatform,
 } from "@dongo/contracts";
 import { CliCoreError } from "./errors.ts";
+import {
+  discoverRunnerDeploymentPolicy,
+  type RunnerDeploymentAccessMode,
+  type RunnerDeploymentPolicy,
+} from "./runner-deployment-access.ts";
 import type { SecretStore } from "./secret-store.ts";
 import { FileSecretStore } from "./secret-store.ts";
 import type { RunnerServiceController, RunnerServiceSpec } from "./runner-service.ts";
@@ -43,6 +48,7 @@ export interface RunnerConfig {
   harnesses: RunnerHarness[];
   approvalMode: RunnerApprovalMode;
   browserReviewMode: RunnerBrowserReviewMode;
+  deploymentPolicy: RunnerDeploymentPolicy;
   enabled: boolean;
   installedAt: string;
   updatedAt: string;
@@ -120,6 +126,8 @@ export interface RunnerHarnessAdapter {
     worktreeName: string;
     branch: string;
     browserReviewMode?: RunnerBrowserReviewMode;
+    deploymentPolicy?: RunnerDeploymentPolicy;
+    trustedRepositoryRoot?: string;
     signal: AbortSignal;
     log: (chunk: string) => Promise<void>;
   }): Promise<RunnerHarnessResult>;
@@ -198,6 +206,7 @@ export class LocalRunnerManager {
     harnesses: RunnerHarness[];
     approvalMode?: RunnerApprovalMode;
     browserReviewMode?: RunnerBrowserReviewMode;
+    deploymentAccessMode?: RunnerDeploymentAccessMode;
   }) {
     const existing = await this.#readConfig(false);
     if (existing) {
@@ -237,6 +246,10 @@ export class LocalRunnerManager {
       executablePaths[harness] = await realpath(executablePath);
       executableIdentities[harness] = await captureExecutableIdentity(executablePaths[harness]);
     }
+    const deploymentPolicy = await discoverRunnerDeploymentPolicy(
+      repositoryRoot,
+      input.deploymentAccessMode ?? "disabled",
+    );
     const token = generateRunnerToken();
     const idempotencyKey = randomUUID();
     const registration = await this.#api.runnerRegister({
@@ -268,6 +281,7 @@ export class LocalRunnerManager {
       harnesses,
       approvalMode: input.approvalMode ?? "ask",
       browserReviewMode: input.browserReviewMode ?? "disabled",
+      deploymentPolicy,
       enabled: true,
       installedAt: now,
       updatedAt: now,
@@ -294,6 +308,7 @@ export class LocalRunnerManager {
         repositoryRoot,
         approvalMode: config.approvalMode,
         browserReviewMode: config.browserReviewMode,
+        deploymentPolicy: config.deploymentPolicy,
         harnesses,
       };
     } catch (error) {
@@ -329,6 +344,7 @@ export class LocalRunnerManager {
       harnesses: config?.harnesses ?? [],
       approvalMode: config?.approvalMode,
       browserReviewMode: config?.browserReviewMode,
+      deploymentPolicy: config?.deploymentPolicy,
       servicePlatform: this.#service.platform,
       state,
     };
@@ -371,6 +387,7 @@ export class LocalRunnerManager {
   async configure(input: {
     approvalMode?: RunnerApprovalMode;
     browserReviewMode?: RunnerBrowserReviewMode;
+    deploymentAccessMode?: RunnerDeploymentAccessMode;
   }) {
     const config = await this.#readConfig(true);
     const state = await this.#readState();
@@ -381,28 +398,37 @@ export class LocalRunnerManager {
         exitCode: 6,
       });
     }
-    if (input.approvalMode === undefined && input.browserReviewMode === undefined) {
+    if (input.approvalMode === undefined && input.browserReviewMode === undefined && input.deploymentAccessMode === undefined) {
       throw new CliCoreError({
         code: "validation",
-        message: "Choose an approval mode or browser review mode to configure.",
+        message: "Choose an approval mode, browser review mode, or deployment access mode to configure.",
         exitCode: 2,
       });
     }
     const approvalMode = input.approvalMode ?? config.approvalMode;
     const browserReviewMode = input.browserReviewMode ?? config.browserReviewMode;
-    if (config.approvalMode === approvalMode && config.browserReviewMode === browserReviewMode) {
+    const deploymentPolicy = input.deploymentAccessMode === undefined
+      ? config.deploymentPolicy
+      : await discoverRunnerDeploymentPolicy(config.repositoryRoot, input.deploymentAccessMode);
+    if (
+      config.approvalMode === approvalMode &&
+      config.browserReviewMode === browserReviewMode &&
+      JSON.stringify(config.deploymentPolicy) === JSON.stringify(deploymentPolicy)
+    ) {
       return {
         changed: false,
         approvalMode,
         previousApprovalMode: config.approvalMode,
         browserReviewMode,
         previousBrowserReviewMode: config.browserReviewMode,
+        deploymentPolicy,
+        previousDeploymentPolicy: config.deploymentPolicy,
         harnesses: config.harnesses,
       };
     }
 
     const now = new Date(this.#now()).toISOString();
-    const updated = { ...config, approvalMode, browserReviewMode, updatedAt: now };
+    const updated = { ...config, approvalMode, browserReviewMode, deploymentPolicy, updatedAt: now };
     await this.#service.disable(this.#projectRef);
     await this.#writeConfig(updated);
     try {
@@ -426,6 +452,8 @@ export class LocalRunnerManager {
         previousApprovalMode: config.approvalMode,
         browserReviewMode,
         previousBrowserReviewMode: config.browserReviewMode,
+        deploymentPolicy,
+        previousDeploymentPolicy: config.deploymentPolicy,
         harnesses: config.harnesses,
         service,
       };
@@ -751,6 +779,8 @@ export class LocalRunnerManager {
       worktreeName: workspace.worktreeName,
       branch: workspace.branch,
       browserReviewMode: config.browserReviewMode,
+      deploymentPolicy: config.deploymentPolicy,
+      trustedRepositoryRoot: config.repositoryRoot,
       signal: controller.signal,
       log: (chunk) => log.append(chunk),
     }).then(
@@ -1196,7 +1226,19 @@ function parseConfig(
     if (browserReviewMode !== "disabled" && browserReviewMode !== "read_only") {
       throw new Error("invalid runner browser review mode");
     }
-    return { ...value, browserReviewMode } as RunnerConfig;
+    const deploymentPolicy = value.deploymentPolicy ?? { mode: "disabled", capabilities: [], sources: [] };
+    if (
+      (deploymentPolicy.mode !== "disabled" && deploymentPolicy.mode !== "repository") ||
+      !Array.isArray(deploymentPolicy.capabilities) ||
+      deploymentPolicy.capabilities.some((capability) => !["github", "convex", "cloudflare", "npm"].includes(capability)) ||
+      new Set(deploymentPolicy.capabilities).size !== deploymentPolicy.capabilities.length ||
+      !Array.isArray(deploymentPolicy.sources) ||
+      deploymentPolicy.sources.some((source) => source !== ".env" && source !== ".env.local") ||
+      new Set(deploymentPolicy.sources).size !== deploymentPolicy.sources.length
+    ) {
+      throw new Error("invalid runner deployment policy");
+    }
+    return { ...value, browserReviewMode, deploymentPolicy } as RunnerConfig;
   } catch {
     throw new CliCoreError({
       code: "runner_config_invalid",

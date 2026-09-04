@@ -717,29 +717,39 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           if (browserReview !== undefined && browserReview !== "disabled" && browserReview !== "read-only") {
             throw new CliCoreError({ code: "validation", message: "--browser-review must be disabled or read-only.", exitCode: 2 });
           }
+          const deploymentAccess = option(parsed, "deployment-access");
+          if (deploymentAccess !== undefined && deploymentAccess !== "disabled" && deploymentAccess !== "repository") {
+            throw new CliCoreError({ code: "validation", message: "--deployment-access must be disabled or repository.", exitCode: 2 });
+          }
           const result = await service.runnerInstall({
             label: option(parsed, "label") ?? "This computer",
             harnesses: [...new Set(harnesses)] as Array<"codex" | "claude">,
             approvalMode: approval as "ask" | "automatic" | undefined,
             browserReviewMode: browserReview === "read-only" ? "read_only" : browserReview,
+            ...(deploymentAccess ? { deploymentAccessMode: deploymentAccess as "disabled" | "repository" } : {}),
           });
           data = result;
           if (!parsed.json) humanOutput = renderRunnerInstallOutput(result);
         } else if (action === "configure") {
           const approval = option(parsed, "approval");
           const browserReview = option(parsed, "browser-review");
+          const deploymentAccess = option(parsed, "deployment-access");
           if (approval !== undefined && approval !== "ask" && approval !== "automatic") {
             throw new CliCoreError({ code: "validation", message: "--approval must be ask or automatic.", exitCode: 2 });
           }
           if (browserReview !== undefined && browserReview !== "disabled" && browserReview !== "read-only") {
             throw new CliCoreError({ code: "validation", message: "--browser-review must be disabled or read-only.", exitCode: 2 });
           }
-          if (approval === undefined && browserReview === undefined) {
-            throw new CliCoreError({ code: "validation", message: "Provide --approval and/or --browser-review.", exitCode: 2 });
+          if (deploymentAccess !== undefined && deploymentAccess !== "disabled" && deploymentAccess !== "repository") {
+            throw new CliCoreError({ code: "validation", message: "--deployment-access must be disabled or repository.", exitCode: 2 });
+          }
+          if (approval === undefined && browserReview === undefined && deploymentAccess === undefined) {
+            throw new CliCoreError({ code: "validation", message: "Provide --approval, --browser-review, and/or --deployment-access.", exitCode: 2 });
           }
           const result = await service.runnerConfigure({
             approvalMode: approval as "ask" | "automatic" | undefined,
             browserReviewMode: browserReview === "read-only" ? "read_only" : browserReview,
+            ...(deploymentAccess ? { deploymentAccessMode: deploymentAccess as "disabled" | "repository" } : {}),
           });
           data = result;
           if (!parsed.json) humanOutput = renderRunnerConfigureOutput(result);
