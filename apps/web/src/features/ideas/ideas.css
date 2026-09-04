@@ -7,8 +7,6 @@
     var(--bg);
 }
 
-.ideas-header__trail { color: var(--text-faint); font: 12px var(--mono); }
-
 .ideas-shell { width: min(1180px, calc(100% - 48px)); margin: 0 auto; padding: 52px 0 80px; }
 
 .ideas-intro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr) auto; align-items: end; gap: 28px; padding: 0 0 28px; border-bottom: 1px solid var(--line-strong); }
@@ -78,7 +76,6 @@
 
 @media (max-width: 800px) {
   .ideas-shell { width: calc(100% - 24px); padding-top: 28px; }
-  .ideas-header__trail { display: none; }
   .ideas-intro { grid-template-columns: 1fr; gap: 16px; }
   .ideas-intro .button { justify-self: start; }
   .ideas-filter { overflow-x: auto; }

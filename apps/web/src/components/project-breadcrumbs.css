@@ -1,0 +1,89 @@
+.project-breadcrumbs {
+  min-width: 0;
+  color: var(--text-quiet);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.project-breadcrumbs__list {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.project-breadcrumbs__project {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.project-breadcrumbs__link {
+  display: flex;
+  min-width: 0;
+  max-width: min(32vw, 260px);
+  min-height: 36px;
+  align-items: center;
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-breadcrumbs__link:hover {
+  color: var(--text);
+}
+
+.project-breadcrumbs__current {
+  flex: none;
+  overflow: hidden;
+  color: var(--text-faint);
+  text-overflow: ellipsis;
+}
+
+.project-header__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+
+@media (max-width: 700px) {
+  .app-header.project-header,
+  .settings-header.project-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: 36px 36px;
+    gap: 8px 12px;
+  }
+
+  .project-header > .brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .project-header > .project-breadcrumbs {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .project-header__actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: 12px;
+    justify-self: end;
+  }
+
+  .project-breadcrumbs__list {
+    justify-content: flex-end;
+    gap: 5px;
+  }
+
+  .project-breadcrumbs__link {
+    max-width: 100%;
+  }
+}
