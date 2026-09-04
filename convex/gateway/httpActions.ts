@@ -581,6 +581,13 @@ async function dispatchAgentOperation(
         title: optionalStringField(input, "title"),
         description: optionalStringField(input, "goal"),
         summary: optionalStringField(input, "latestUpdate"),
+        activity: input.activity as
+          | {
+              kind: "executing" | "verification" | "release" | "waiting_for_resource" | "paused";
+              label?: string;
+              nextStep?: string;
+            }
+          | undefined,
         artifact: input.artifact ? artifactInput(input.artifact) : undefined,
         idempotencyKey,
       });

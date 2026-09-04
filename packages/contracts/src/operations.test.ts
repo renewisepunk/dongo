@@ -346,6 +346,29 @@ describe("operation registry", () => {
     }).success).toBe(false);
   });
 
+  it("accepts bounded structured Run activity", () => {
+    const base = {
+      workItemId: "work-1",
+      expectedRevision: 2,
+      idempotencyKey: "activity-update-key",
+    };
+    expect(operationRegistry.update_work.inputSchema.safeParse({
+      ...base,
+      activity: {
+        kind: "verification",
+        label: "Browser acceptance",
+        nextStep: "Promote the accepted revision.",
+      },
+    }).success).toBe(true);
+    expect(operationRegistry.update_work.inputSchema.safeParse({
+      ...base,
+      activity: {
+        kind: "unknown",
+        label: "Ambiguous activity",
+      },
+    }).success).toBe(false);
+  });
+
   it("keeps runner delivery bounded and command-free", () => {
     const token = `dng_run_${"a".repeat(11)}_${"b".repeat(43)}`;
     const registration = {

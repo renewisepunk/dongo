@@ -510,6 +510,17 @@ export const concurrencyForHuman = query({
           .take(100),
       ),
     );
+    const runnerJobs = await ctx.db
+      .query("runnerJobs")
+      .withIndex("by_project_requested", (q) => q.eq("projectId", project._id))
+      .order("desc")
+      .take(200);
+    const latestRunnerJobByWork = new Map<Id<"workItems">, Doc<"runnerJobs">>();
+    for (const job of runnerJobs) {
+      if (job.workItemId && !latestRunnerJobByWork.has(job.workItemId)) {
+        latestRunnerJobByWork.set(job.workItemId, job);
+      }
+    }
     const runs = await Promise.all(
       [...running, ...waiting]
         .sort((left, right) => right.startedAt - left.startedAt)
@@ -536,6 +547,37 @@ export const concurrencyForHuman = query({
           }
           const claimExpiresAt =
             work.claimedRunId === run._id ? work.claimExpiresAt : undefined;
+          const runnerJob = latestRunnerJobByWork.get(work._id);
+          const matchingRunnerJob =
+            runnerJob &&
+            runnerJob.requestedAt <= run.startedAt &&
+            runnerJob.registrationId !== undefined
+              ? runnerJob
+              : undefined;
+          const processExited = matchingRunnerJob !== undefined &&
+            ["cancelled", "failed", "completed", "expired"].includes(
+              matchingRunnerJob.state,
+            );
+          const activityKind = processExited
+            ? "process_exited" as const
+            : run.status === "waiting"
+              ? "waiting_for_owner" as const
+              : run.activityKind ?? "executing" as const;
+          const activityLabel = processExited
+            ? matchingRunnerJob.safeSummary ?? "Local process exited before completion"
+            : run.status === "waiting"
+              ? "Waiting for your response"
+              : run.activityLabel ?? (
+                run.activityKind === "verification"
+                  ? "Verifying the candidate"
+                  : run.activityKind === "release"
+                    ? "Releasing the accepted candidate"
+                    : run.activityKind === "waiting_for_resource"
+                      ? "Waiting for a shared resource"
+                      : run.activityKind === "paused"
+                        ? "Paused locally"
+                        : "Agent is executing"
+              );
           const leaseStatus = run.status === "waiting" || claimExpiresAt === undefined
             ? "released" as const
             : claimExpiresAt <= serverTime
@@ -552,6 +594,17 @@ export const concurrencyForHuman = query({
             },
             actor: await actorSummaryForHumanWithInstallation(ctx, actor),
             state: run.status,
+            activity: {
+              kind: activityKind,
+              label: activityLabel,
+              nextStep: processExited
+                ? "The WorkItem is being returned to Ready for a safe retry."
+                : run.activityNextStep,
+              updatedAt:
+                processExited
+                  ? matchingRunnerJob.updatedAt
+                  : run.activityUpdatedAt ?? run.lastHeartbeatAt,
+            },
             startedAt: run.startedAt,
             lastHeartbeatAt: run.lastHeartbeatAt,
             elapsedMilliseconds: Math.max(0, serverTime - run.startedAt),
@@ -580,6 +633,7 @@ export const concurrencyForHuman = query({
     const activeRuns = visibleRuns.filter(
       (run) =>
         run.state === "running" &&
+        run.activity.kind !== "process_exited" &&
         (run.lease.status === "healthy" || run.lease.status === "expiring"),
     ).length;
     const policy = parallelExecutionPolicy(project);
@@ -903,6 +957,17 @@ export const update = internalMutation({
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     summary: v.optional(v.string()),
+    activity: v.optional(v.object({
+      kind: v.union(
+        v.literal("executing"),
+        v.literal("verification"),
+        v.literal("release"),
+        v.literal("waiting_for_resource"),
+        v.literal("paused"),
+      ),
+      label: v.optional(v.string()),
+      nextStep: v.optional(v.string()),
+    })),
     artifact: v.optional(inlineArtifactValidator),
     idempotencyKey: v.string(),
   },
@@ -932,6 +997,7 @@ export const update = internalMutation({
           title: args.title,
           description: args.description,
           summary: args.summary,
+          activity: args.activity,
           artifact: args.artifact,
         },
         now,
@@ -953,6 +1019,7 @@ export const update = internalMutation({
           args.title === undefined &&
           args.description === undefined &&
           args.summary === undefined &&
+          args.activity === undefined &&
           args.artifact === undefined
         ) {
           fail("validation", "Update requires a changed field or progress summary");
@@ -976,6 +1043,17 @@ export const update = internalMutation({
             args.summary === undefined
               ? run.summary
               : optionalString(args.summary, "summary", MAX_DESCRIPTION_LENGTH),
+          activityKind: args.activity?.kind ?? run.activityKind,
+          activityLabel: args.activity === undefined
+            ? run.activityLabel
+            : optionalString(args.activity.label, "activity.label", 240),
+          activityNextStep: args.activity === undefined
+            ? run.activityNextStep
+            : optionalString(args.activity.nextStep, "activity.nextStep", 500),
+          activityUpdatedAt:
+            args.activity !== undefined || args.summary !== undefined
+              ? now
+              : run.activityUpdatedAt,
           lastHeartbeatAt: now,
         });
         const artifactIds = args.artifact

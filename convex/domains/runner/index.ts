@@ -7,7 +7,11 @@ import {
   mutation,
   query,
 } from "../../_generated/server";
-import { requireHumanProject, resolveAgentPrincipal } from "../../lib/authz";
+import {
+  requireHumanProject,
+  requireSystemActor,
+  resolveAgentPrincipal,
+} from "../../lib/authz";
 import { appendEvent } from "../../lib/events";
 import { fail, optionalString, requireString } from "../../lib/errors";
 import { runIdempotent } from "../../lib/idempotency";
@@ -107,6 +111,72 @@ const TRANSITIONS: Record<RunnerState, ReadonlySet<RunnerState>> = {
   completed: new Set(),
   expired: new Set(),
 };
+
+async function reconcileTerminalRunnerWork(
+  ctx: MutationCtx,
+  job: Doc<"runnerJobs">,
+  actorId: Id<"actors">,
+  now: number,
+) {
+  if (
+    !TERMINAL_STATES.has(job.state) ||
+    (job.kind ?? "work") !== "work" ||
+    !job.workItemId
+  ) return;
+  const work = await ctx.db.get(job.workItemId);
+  if (
+    !work ||
+    work.projectId !== job.projectId ||
+    work.state !== "working" ||
+    !work.claimedRunId
+  ) return;
+  const run = await ctx.db.get(work.claimedRunId);
+  if (
+    !run ||
+    run.projectId !== job.projectId ||
+    !["running", "waiting"].includes(run.status) ||
+    run.startedAt < (job.deliveredAt ?? job.requestedAt)
+  ) return;
+
+  const cancelled = job.state === "cancelled";
+  const failureCode = cancelled
+    ? "runner_job_cancelled"
+    : job.safeCode ?? `runner_job_${job.state}`;
+  await ctx.db.patch(run._id, {
+    status: cancelled ? "cancelled" : "failed",
+    summary: job.safeSummary ?? "The local runner process exited before the WorkItem finished.",
+    failureCode,
+    lastHeartbeatAt: now,
+    finishedAt: now,
+  });
+  await ctx.db.patch(work._id, {
+    state: "ready",
+    claimedByActorId: undefined,
+    claimedByInstallationId: undefined,
+    claimedRunId: undefined,
+    claimedAt: undefined,
+    claimExpiresAt: undefined,
+    revision: work.revision + 1,
+    updatedAt: now,
+  });
+  await appendEvent(ctx, {
+    organizationId: work.organizationId,
+    projectId: work.projectId,
+    workItemId: work._id,
+    runId: run._id,
+    actorId,
+    // A terminal harness job does not cancel the WorkItem: it releases the
+    // orphaned Run and returns the WorkItem to Ready for another attempt.
+    type: "run.failed",
+    data: {
+      source: "runner_job",
+      runnerJobId: job._id,
+      runnerJobState: job.state,
+      failureCode,
+    },
+    createdAt: now,
+  });
+}
 
 function runnerSafeCode(value: string | undefined): string | undefined {
   const code = optionalString(value, "safeCode", 80);
@@ -834,6 +904,41 @@ export const reserve = internalMutation({
         now,
         safeCode,
       );
+      await reconcileTerminalRunnerWork(
+        ctx,
+        {
+          ...stale,
+          state,
+          revision: stale.revision + 1,
+          safeCode,
+          terminalAt: now,
+          leaseExpiresAt: undefined,
+          updatedAt: now,
+        },
+        principal.actor._id,
+        now,
+      );
+    }
+    const terminalJobs = (
+      await Promise.all(
+        (["cancelled", "failed", "completed", "expired"] as const).map((state) =>
+          ctx.db
+            .query("runnerJobs")
+            .withIndex("by_registration_state_updated", (q) =>
+              q.eq("registrationId", registration._id).eq("state", state),
+            )
+            .order("desc")
+            .take(25),
+        ),
+      )
+    ).flat();
+    for (const terminalJob of terminalJobs) {
+      await reconcileTerminalRunnerWork(
+        ctx,
+        terminalJob,
+        principal.actor._id,
+        now,
+      );
     }
     if (args.inspectJobId !== undefined) {
       const inspected = await ctx.db.get(args.inspectJobId);
@@ -892,6 +997,20 @@ export const reserve = internalMutation({
         state,
         now,
         safeCode,
+      );
+      await reconcileTerminalRunnerWork(
+        ctx,
+        {
+          ...stale,
+          state,
+          revision: stale.revision + 1,
+          safeCode,
+          terminalAt: now,
+          leaseExpiresAt: undefined,
+          updatedAt: now,
+        },
+        principal.actor._id,
+        now,
       );
     }
     projectActiveJobs = await activeRunnerJobsForProject(ctx, principal.project._id);
@@ -1063,8 +1182,68 @@ export const updateJob = internalMutation({
       });
       const updated = await ctx.db.get(job._id);
       if (!updated) fail("internal", "Runner job disappeared during update");
+      await reconcileTerminalRunnerWork(ctx, updated, principal.actor._id, now);
       return await jobDto(ctx, updated);
     });
+  },
+});
+
+export const reconcileExpiredExecutionJobs = internalMutation({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const limit = Math.max(1, Math.min(args.limit ?? 100, 200));
+    const perStateLimit = Math.max(1, Math.ceil(limit / 3));
+    const expired = (
+      await Promise.all(
+        (["starting", "running", "blocked"] as const).map((state) =>
+          ctx.db
+            .query("runnerJobs")
+            .withIndex("by_state_lease", (q) =>
+              q.eq("state", state).gt("leaseExpiresAt", 0).lte("leaseExpiresAt", now),
+            )
+            .take(perStateLimit),
+        ),
+      )
+    ).flat().slice(0, limit);
+    let reconciled = 0;
+    for (const job of expired) {
+      const systemActor = await requireSystemActor(ctx, job.organizationId);
+      await ctx.db.patch(job._id, {
+        state: "failed",
+        revision: job.revision + 1,
+        safeCode: "runner_lease_expired",
+        safeSummary: "The local runner process stopped reporting before the WorkItem finished.",
+        terminalAt: now,
+        leaseExpiresAt: undefined,
+        updatedAt: now,
+      });
+      await appendJobEvent(
+        ctx,
+        job,
+        systemActor._id,
+        "failed",
+        now,
+        "runner_lease_expired",
+      );
+      await reconcileTerminalRunnerWork(
+        ctx,
+        {
+          ...job,
+          state: "failed",
+          revision: job.revision + 1,
+          safeCode: "runner_lease_expired",
+          safeSummary: "The local runner process stopped reporting before the WorkItem finished.",
+          terminalAt: now,
+          leaseExpiresAt: undefined,
+          updatedAt: now,
+        },
+        systemActor._id,
+        now,
+      );
+      reconciled += 1;
+    }
+    return { reconciled };
   },
 });
 

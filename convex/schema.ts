@@ -331,6 +331,7 @@ export default defineSchema({
     .index("by_project_state_requested", ["projectId", "state", "requestedAt"])
     .index("by_project_work_requested", ["projectId", "workItemId", "requestedAt"])
     .index("by_project_intake_requested", ["projectId", "intakeId", "requestedAt"])
+    .index("by_state_lease", ["state", "leaseExpiresAt"])
     .index("by_project_target_registration_state_updated", ["projectId", "targetRegistrationId", "state", "updatedAt"])
     .index("by_target_registration_state_updated", ["targetRegistrationId", "state", "updatedAt"])
     .index("by_registration_state_updated", ["registrationId", "state", "updatedAt"]),
@@ -527,6 +528,16 @@ export default defineSchema({
     installationId: v.id("installations"),
     status: runStatus,
     summary: v.optional(v.string()),
+    activityKind: v.optional(v.union(
+      v.literal("executing"),
+      v.literal("verification"),
+      v.literal("release"),
+      v.literal("waiting_for_resource"),
+      v.literal("paused"),
+    )),
+    activityLabel: v.optional(v.string()),
+    activityNextStep: v.optional(v.string()),
+    activityUpdatedAt: v.optional(v.number()),
     externalSessionId: v.optional(v.string()),
     parallelExecutionCapability: v.optional(
       v.union(v.literal("supported"), v.literal("unsupported")),

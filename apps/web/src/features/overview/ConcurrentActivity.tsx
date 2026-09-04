@@ -4,8 +4,10 @@ import { lowercaseDongoBrand } from "../../lib/brand-case";
 import {
   activitySignalState,
   formatRunElapsed,
+  formatRunUpdateAge,
   hostFallbackLabel,
   leaseHealthLabel,
+  runActivityLabel,
   workspaceLabel,
 } from "../../lib/parallel-execution";
 import type { ProjectConcurrencySnapshot } from "../../lib/project-data";
@@ -29,9 +31,10 @@ export function ConcurrentActivity(props: ConcurrentActivityProps) {
   const capacityLabel = () => {
     if (props.status === "error" || !props.snapshot) return "Status unavailable";
     if (!policy()?.enabled) return "Single-agent";
-    return `${capacity()?.activeRuns ?? 0} / ${capacity()?.maxConcurrentRuns ?? policy()!.maxConcurrentRuns} active`;
+    return `${capacity()?.activeRuns ?? 0} / ${capacity()?.maxConcurrentRuns ?? policy()!.maxConcurrentRuns} slots in use`;
   };
-  const signalState = () => activitySignalState(props.status, runs().length);
+  const signalState = () =>
+    activitySignalState(props.status, capacity()?.activeRuns ?? 0);
 
   return (
     <Show when={props.status !== "loading"}>
@@ -47,7 +50,7 @@ export function ConcurrentActivity(props: ConcurrentActivityProps) {
               <span>agent activity</span>
               <span class="section-heading__count">{runs().length}</span>
             </div>
-            <p>Live claimed work across connected agent sessions.</p>
+            <p>What each connected agent is doing, waiting on, and doing next.</p>
           </div>
           <span class="concurrent-activity__capacity" aria-live="polite">{capacityLabel()}</span>
         </div>
@@ -58,7 +61,7 @@ export function ConcurrentActivity(props: ConcurrentActivityProps) {
         >
           <Show
             when={runs().length > 0}
-            fallback={<div class="concurrent-activity__empty">No active agent runs.</div>}
+            fallback={<div class="concurrent-activity__empty">No agent work is in progress. Ready work can start in an available slot.</div>}
           >
             <div class="concurrent-activity__grid">
               <For each={runs()}>{(run) => {
@@ -66,7 +69,7 @@ export function ConcurrentActivity(props: ConcurrentActivityProps) {
                 return (
                   <a
                     class="agent-run-card"
-                    data-state={run.state}
+                    data-state={run.activity.kind}
                     data-run-id={run.id}
                     href={props.workHref(run.workItem.identifier)}
                     aria-current={props.selectedWorkId === run.workItem.id ? "page" : undefined}
@@ -82,15 +85,23 @@ export function ConcurrentActivity(props: ConcurrentActivityProps) {
                           labelClass="agent-run-card__agent"
                         />
                       </span>
-                      <span class="agent-run-card__state"><span aria-hidden="true" />{run.state === "running" ? "Running" : "Waiting"}</span>
+                      <span class="agent-run-card__state"><span aria-hidden="true" />{runActivityLabel(run.activity.kind)}</span>
                     </span>
                     <span class="agent-run-card__work">
                       <span class="mono">{run.workItem.identifier}</span>
                       <strong>{run.workItem.title}</strong>
                     </span>
-                    <span class="agent-run-card__progress">{run.latestProgress || "No progress update yet."}</span>
+                    <span class="agent-run-card__gate"><span>Current step</span><strong>{run.activity.label}</strong></span>
+                    <Show when={run.latestProgress}>
+                      <span class="agent-run-card__progress">{run.latestProgress}</span>
+                    </Show>
+                    <Show when={run.activity.nextStep}>{(nextStep) => (
+                      <span class="agent-run-card__next"><span>Next</span>{nextStep()}</span>
+                    )}</Show>
                     <span class="agent-run-card__telemetry">
                       <span>{formatRunElapsed(run.elapsedMilliseconds)}</span>
+                      <span>·</span>
+                      <span>{formatRunUpdateAge(run.activity.updatedAt, props.snapshot?.serverTime ?? Date.now())}</span>
                       <span>·</span>
                       <span data-lease={run.lease.status}>{leaseHealthLabel(run.lease.status)}</span>
                     </span>
