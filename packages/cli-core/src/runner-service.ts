@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { chmod, lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { chmod, lstat, mkdir, open, readFile, rename, rm, rmdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -26,6 +26,12 @@ export interface RunnerServiceController {
 
 type RunCommand = (command: string, args: string[]) => Promise<void>;
 
+interface RunnerServicePaths {
+  servicePath: string;
+  serviceName: string;
+  launcherPath?: string;
+}
+
 function safeSuffix(projectRef: string): string {
   return createHash("sha256").update(projectRef).digest("hex").slice(0, 16);
 }
@@ -49,7 +55,14 @@ function systemdQuote(value: string): string {
     .replaceAll('"', '\\"')}"`;
 }
 
-async function safeWrite(target: string, contents: string): Promise<void> {
+function shellQuote(value: string): string {
+  if (/\r|\n|\0/u.test(value)) {
+    throw new CliCoreError({ code: "unsafe_path", message: "Runner launcher arguments contain control characters." });
+  }
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+async function safeWrite(target: string, contents: string, mode: 0o600 | 0o700 = 0o600): Promise<void> {
   const directory = path.dirname(target);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const directoryInfo = await lstat(directory);
@@ -63,7 +76,7 @@ async function safeWrite(target: string, contents: string): Promise<void> {
   const handle = await open(
     temporary,
     constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
-    0o600,
+    mode,
   );
   try {
     await handle.writeFile(contents, "utf8");
@@ -88,7 +101,7 @@ async function safeWrite(target: string, contents: string): Promise<void> {
     await rm(temporary, { force: true });
     throw error;
   }
-  await chmod(target, 0o600);
+  await chmod(target, mode);
 }
 
 async function safeRemove(target: string): Promise<void> {
@@ -101,6 +114,27 @@ async function safeRemove(target: string): Promise<void> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
+}
+
+async function safeRemoveEmptyDirectory(target: string): Promise<void> {
+  try {
+    const info = await lstat(target);
+    if (
+      !info.isDirectory() ||
+      info.isSymbolicLink() ||
+      (typeof process.getuid === "function" && info.uid !== process.getuid())
+    ) {
+      throw new CliCoreError({ code: "unsafe_path", message: "Runner service directory is not safe to remove." });
+    }
+    await rmdir(target);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT" && code !== "ENOTEMPTY") throw error;
+  }
+}
+
+function publicService(service: RunnerServicePaths) {
+  return { servicePath: service.servicePath, serviceName: service.serviceName };
 }
 
 async function defaultRunCommand(command: string, args: string[]): Promise<void> {
@@ -167,25 +201,39 @@ export class LocalRunnerServiceController implements RunnerServiceController {
       await this.#runCommand("systemctl", ["--user", "disable", "--now", service.serviceName])
         .catch(() => undefined);
     }
-    return service;
+    return publicService(service);
   }
 
   async remove(projectRef: string) {
-    const service = await this.disable(projectRef);
+    const service = this.#service(projectRef);
+    await this.disable(projectRef);
     await safeRemove(service.servicePath);
+    if (service.launcherPath) {
+      await safeRemove(service.launcherPath);
+      await safeRemoveEmptyDirectory(path.dirname(service.launcherPath));
+    }
     if (this.platform === "linux") {
       await this.#runCommand("systemctl", ["--user", "daemon-reload"]);
     }
-    return service;
+    return publicService(service);
   }
 
-  #service(projectRef: string) {
+  #service(projectRef: string): RunnerServicePaths {
     const suffix = safeSuffix(projectRef);
     if (this.platform === "darwin") {
       const serviceName = `so.dongo.runner.${suffix}`;
       return {
         serviceName,
         servicePath: path.join(this.#homeDirectory, "Library", "LaunchAgents", `${serviceName}.plist`),
+        launcherPath: path.join(
+          this.#homeDirectory,
+          "Library",
+          "Application Support",
+          "dongo",
+          "runner-services",
+          serviceName,
+          "dongo",
+        ),
       };
     }
     const serviceName = `dongo-runner-${suffix}.service`;
@@ -201,11 +249,20 @@ export class LocalRunnerServiceController implements RunnerServiceController {
     if (uid === undefined) {
       throw new CliCoreError({ code: "runner_service_failed", message: "A user ID is required to install the macOS runner." });
     }
+    if (!service.launcherPath) {
+      throw new CliCoreError({ code: "runner_service_failed", message: "The macOS runner launcher path is unavailable." });
+    }
+    const launcher = `#!/bin/sh
+# dongo local runner. Installed and removed by dongo runner commands.
+exec ${shellQuote(spec.nodePath)} ${shellQuote(spec.cliPath)} runner run --project-ref ${shellQuote(spec.projectRef)}
+`;
+    await safeWrite(service.launcherPath, launcher, 0o700);
     const contents = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>Label</key><string>${xml(service.serviceName)}</string>
-<key>ProgramArguments</key><array><string>${xml(spec.nodePath)}</string><string>${xml(spec.cliPath)}</string><string>runner</string><string>run</string><string>--project-ref</string><string>${xml(spec.projectRef)}</string></array>
+<key>Program</key><string>${xml(service.launcherPath)}</string>
+<key>ProgramArguments</key><array><string>${xml(service.launcherPath)}</string></array>
 <key>WorkingDirectory</key><string>${xml(spec.repositoryRoot)}</string>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
 <key>ProcessType</key><string>Background</string>
@@ -215,7 +272,7 @@ export class LocalRunnerServiceController implements RunnerServiceController {
     await this.#runCommand("launchctl", ["bootout", `gui/${uid}/${service.serviceName}`]).catch(() => undefined);
     await this.#runCommand("launchctl", ["enable", `gui/${uid}/${service.serviceName}`]);
     await this.#runCommand("launchctl", ["bootstrap", `gui/${uid}`, service.servicePath]);
-    return service;
+    return publicService(service);
   }
 
   async #installSystemd(spec: RunnerServiceSpec) {
@@ -239,7 +296,7 @@ WantedBy=default.target
     await safeWrite(service.servicePath, contents);
     await this.#runCommand("systemctl", ["--user", "daemon-reload"]);
     await this.#runCommand("systemctl", ["--user", "enable", "--now", service.serviceName]);
-    return service;
+    return publicService(service);
   }
 }
 

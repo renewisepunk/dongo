@@ -168,7 +168,7 @@ test("finish help exposes host-verified integration and release preconditions wi
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.2.7\n");
+  assert.equal(human.values().stdout, "dongo 0.2.8\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -176,7 +176,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.2.7" },
+    data: { version: "0.2.8" },
   });
   assert.equal(json.values().stderr, "");
 });
@@ -963,6 +963,8 @@ test("runner commands explain outcomes without dumping implementation details", 
     "",
     "This computer can now run queued dongo work with Codex in this repository—even after you close this terminal.",
     "You’ll be asked on this computer before an agent starts working.",
+    "macOS may show “Background Items Added” for “dongo.” That is this user-level dongo runner, not an unknown Node.js service.",
+    "Manage it in System Settings → General → Login Items & Extensions, or use dongo runner disable and dongo runner remove.",
     "New Inbox items are not routed here automatically. To enable that, first run: dongo runner configure --approval automatic",
     "If this computer is offline, the issue waits until it comes back.",
     "",
@@ -979,6 +981,8 @@ test("runner commands explain outcomes without dumping implementation details", 
   assert.match(status.values().stdout, /^dongo runner is on\./u);
   assert.match(status.values().stdout, /A job for dong062 is waiting for your approval\./u);
   assert.match(status.values().stdout, /dongo runner approve --job-id job_actionable/u);
+  assert.match(status.values().stdout, /Background Items Added/u);
+  assert.match(status.values().stdout, /System Settings → General → Login Items & Extensions/u);
   assert.doesNotMatch(status.values().stdout, /registration_internal|project_internal|\/Users\/|2026-09-03/u);
   assert.match(status.values().stdout, /New Inbox items are not routed here automatically/u);
 

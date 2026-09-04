@@ -42,7 +42,7 @@ Build and install the self-contained package archive so the command does not dep
 
 ```sh
 npm pack --workspace @wisepunk/dongo
-npm install --global ./wisepunk-dongo-0.2.7.tgz
+npm install --global ./wisepunk-dongo-0.2.8.tgz
 dongo --version
 dongo --help
 ```
@@ -179,6 +179,16 @@ redacted local health, `dongo runner approve --job-id ID` to approve one waiting
 job on this computer, and `dongo runner remove` to stop the service, revoke its
 subordinate credential, and remove local configuration. macOS launchd and Linux
 user systemd are supported; native Windows is not part of the initial release.
+
+On macOS, the installer uses a dedicated executable named `dongo` for the
+user-level LaunchAgent. macOS may therefore show a one-time **Background Items
+Added** notification for **dongo**. That item is the local Inbox runner: it runs
+only after this user signs in, uses Node.js internally, and can be inspected in
+**System Settings → General → Login Items & Extensions**. Older CLI releases
+started launchd with the Node executable directly and may appear as **node**;
+remove that runner, update dongo, and reinstall it to receive the clear service
+identity. Choose a recognizable, non-sensitive computer label with
+`--label "Studio Mac"` so Project settings is equally clear.
 
 Runner commands explain their normal results in plain language: what this
 computer can do, whether approval is required, whether work is waiting, and the

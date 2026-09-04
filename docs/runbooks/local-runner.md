@@ -28,10 +28,13 @@ the intended project. Then, from the connected repository, install one or both
 supported harnesses:
 
 ```sh
-dongo runner install --harness codex
-dongo runner install --harness codex --harness claude
+dongo runner install --harness codex --label "Studio Mac"
+dongo runner install --harness codex --harness claude --label "Studio Mac"
 dongo runner status
 ```
+
+Choose a recognizable, non-sensitive label so the owner can distinguish this
+computer from other runners in Project settings.
 
 The registration is bound to that exact canonical repository root, not merely
 to its Git remote or dongo project. Run installation and status commands from
@@ -57,10 +60,16 @@ have a live job. Each job is targeted to that exact registration and
 uses a fixed triage-only instruction; resulting Ready Work is a separate job
 and is automatically queued only when the project is in autonomous mode.
 
-On macOS, dongo installs a user LaunchAgent. On Linux, it installs a user-level
-systemd service. It does not use `sudo`, a system daemon, or a privileged path.
-Native Windows is out of scope for the first release; WSL follows the Linux
-user-service and Linux-filesystem security boundary.
+On macOS, dongo installs a user LaunchAgent through a fixed executable named
+`dongo`. A one-time **Background Items Added** notification for **dongo** is
+expected. This is the local Inbox runner; Node.js is only its internal runtime.
+The item is visible in **System Settings → General → Login Items & Extensions**.
+If macOS displays `node`, the runner came from an older CLI: remove it with
+`dongo runner remove`, update the CLI through the owner-approved version-pinned
+procedure, and install it again. On Linux, dongo installs a user-level systemd
+service. Neither platform uses `sudo`, a system daemon, a privileged path, or an
+inbound port. Native Windows is out of scope for the first release; WSL follows
+the Linux user-service and Linux-filesystem security boundary.
 
 ### Codex execution
 

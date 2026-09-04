@@ -20,7 +20,7 @@ import { FileSecretStore } from "./secret-store.ts";
 import type { RunnerServiceController, RunnerServiceSpec } from "./runner-service.ts";
 
 const RUNNER_SCHEMA_VERSION = 1;
-const RUNNER_VERSION = "0.1.0";
+const RUNNER_VERSION = "0.1.1";
 const MAX_LOG_BYTES = 5 * 1_024 * 1_024;
 const MAX_LOG_FILES = 3;
 const execFileAsync = promisify(execFile);

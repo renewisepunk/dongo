@@ -26,6 +26,22 @@ function approvalExplanation(mode: RunnerApprovalMode | undefined): string {
     : "You’ll be asked on this computer before an agent starts working.";
 }
 
+function backgroundServiceExplanation(platform: "darwin" | "linux" | undefined): string[] {
+  if (platform === "darwin") {
+    return [
+      "macOS may show “Background Items Added” for “dongo.” That is this user-level dongo runner, not an unknown Node.js service.",
+      "Manage it in System Settings → General → Login Items & Extensions, or use dongo runner disable and dongo runner remove.",
+    ];
+  }
+  if (platform === "linux") {
+    return [
+      "A user-level dongo service now starts when you sign in; it is not a system-wide service.",
+      "Inspect it with dongo runner status, pause it with dongo runner disable, or revoke and remove it with dongo runner remove.",
+    ];
+  }
+  return [];
+}
+
 function safeWorkLabel(state: RunnerLocalState | undefined): string | undefined {
   const identifier = state?.currentJob?.workIdentifier;
   return identifier && /^[a-z]{4}[0-9]{3}$/u.test(identifier) ? identifier : undefined;
@@ -75,6 +91,7 @@ export function renderRunnerInstallOutput(result: RunnerInstallResult): string {
     "",
     `This computer can now run queued dongo work with ${agentLabel(result.harnesses)} in this repository—even after you close this terminal.`,
     approvalExplanation(result.approvalMode),
+    ...backgroundServiceExplanation(result.registration.platform),
     result.approvalMode === "automatic"
       ? "To receive new Inbox items automatically, finish setup in Project settings → Local runner."
       : "New Inbox items are not routed here automatically. To enable that, first run: dongo runner configure --approval automatic",
@@ -99,6 +116,7 @@ export function renderRunnerStatusOutput(result: RunnerStatusResult): string {
     "",
     `This computer is set up to work on issues with ${agentLabel(result.harnesses)}.`,
     approvalExplanation(result.approvalMode),
+    ...backgroundServiceExplanation(result.servicePlatform),
     stateExplanation(result.state),
     result.approvalMode === "automatic"
       ? "Confirm Inbox routing in Project settings → Local runner."

@@ -742,22 +742,23 @@ export function ProjectSettings(props: ProjectSettingsProps) {
               <div class="settings-title-group">
                 <div class="eyebrow">Project settings</div>
                 <h1 class="settings-title">Local runner</h1>
-                <p class="auth-lede">Queue Ready work, or opt in to automatically triage new Inbox Intake, on a computer you control.</p>
+                <p class="auth-lede">A visible, user-controlled background service that picks up dongo work on a computer you trust.</p>
               </div>
               <Show when={owner()} fallback={<div class="security-note">Only an organization owner can view, install, or revoke local runners.</div>}>
                 <section class="settings-section runner-setup">
-                  <div class="settings-section__title">Install on a trusted computer</div>
+                  <div class="settings-section__title">What dongo installs</div>
                   <ol class="runner-steps">
                     <li>Open this connected repository on the computer that should run the work.</li>
                     <li>Install and sign in to Codex and/or Claude Code locally.</li>
                     <li>Connect the selected agent to this project: run <code>dongo integrate codex --apply</code> or <code>dongo integrate claude --apply</code>, complete the printed login, and verify <code>dongo_session_start</code> from that agent.</li>
-                    <li>Run <code>dongo runner install --harness codex</code>, <code>dongo runner install --harness claude</code>, or include both <code>--harness</code> options.</li>
+                    <li>Install the user-level service and give this computer a recognizable label: <code>dongo runner install --harness codex --label "Studio Mac"</code>. Use <code>--harness claude</code> for Claude Code, or include both <code>--harness</code> options.</li>
                     <li>Confirm <code>dongo runner status</code> shows the service waiting.</li>
                   </ol>
-                  <p class="security-note">The agent connection and runner use separate credentials; never copy the dongo CLI credential into an agent. Local approval is required for every job by default. Use <code>dongo runner configure --approval automatic</code> only when this exact repository and computer are deliberately trusted. Then turn on Inbox pickup below. Automatic starts refuse a repository with uncommitted files. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects.</p>
+                  <p class="security-note"><strong>What to expect on macOS:</strong> macOS may show a one-time “Background Items Added” alert for <strong>dongo</strong>. That is this local runner. It starts only after you sign in, runs without administrator access, opens no inbound port, and can be managed in System Settings → General → Login Items & Extensions. If the alert names <strong>node</strong>, it came from an older dongo CLI; remove that runner, update the CLI, and install it again.</p>
+                  <p class="security-note">The agent connection and runner use separate project-scoped credentials; never copy the dongo CLI credential into an agent. Local approval is required for every job by default. Use <code>dongo runner configure --approval automatic</code> only when this exact repository and computer are deliberately trusted. Then turn on Inbox pickup below. Automatic starts refuse a repository with uncommitted files. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects. Inspect, pause, or remove it anytime with <code>dongo runner status</code>, <code>dongo runner disable</code>, or <code>dongo runner remove</code>.</p>
                 </section>
                 <section class="settings-section">
-                  <div class="settings-section__title">Registered computers</div>
+                  <div class="settings-section__title">Computers allowed to run dongo</div>
                   <div class="security-note" data-inbox-pickup={runners().automaticIntake.enabled ? "on" : "off"}>
                     <strong>Inbox pickup is {runners().automaticIntake.enabled ? "on" : "off"}.</strong>{" "}
                     {runners().automaticIntake.enabled
@@ -770,7 +771,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                       <div class="installation-row">
                         <div class="installation-row__name">
                           <span>{runner.label}</span>
-                          <span class="installation-row__meta">{runner.platform === "darwin" ? "macOS" : "Linux"} · {runner.harnesses.map((harness) => harness === "claude" ? "Claude Code" : "Codex").join(" + ")} · {runner.approvalMode === "ask" ? "asks locally" : "automatic for this repository"} · v{runner.version}</span>
+                          <span class="installation-row__meta">dongo runner · {runner.platform === "darwin" ? "macOS" : "Linux"} · {runner.harnesses.map((harness) => harness === "claude" ? "Claude Code" : "Codex").join(" + ")} · {runner.approvalMode === "ask" ? "asks locally" : "automatic for this repository"} · v{runner.version}</span>
                         </div>
                         <div class="installation-row__meta" data-runner-presence={runnerPresence(runner).startsWith("online") ? "online" : "offline"}>{runnerPresence(runner)}</div>
                         <Show when={runner.status !== "revoked"} fallback={<span class="installation-row__meta">revoked</span>}>
@@ -780,7 +781,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                                 when={runners().automaticIntake.enabled && runners().automaticIntake.registrationId === runner.id}
                                 fallback={<For each={runner.harnesses}>{(harness) => (
                                   <button class="button" type="button" disabled={configuringAutomaticIntake()} onClick={() => void configureAutomaticIntake(runner.id, harness, true)}>
-                                    Process current and future Inbox with {harness === "claude" ? "Claude Code" : "Codex"}
+                                    Use this computer for Inbox pickup with {harness === "claude" ? "Claude Code" : "Codex"}
                                   </button>
                                 )}</For>}
                               >
@@ -802,7 +803,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                   </div>
                 </section>
                 <section class="settings-section">
-                  <div class="settings-section__title">Recent runner jobs</div>
+                  <div class="settings-section__title">Runner activity</div>
                   <div class="installation-list">
                     <For each={runners().jobs.slice(0, 20)}>{(job) => (
                       <div class="installation-row">
