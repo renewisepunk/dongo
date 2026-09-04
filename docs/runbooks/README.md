@@ -1,5 +1,10 @@
 # dongo operational runbooks
 
+Material incidents and their prevention plans are indexed under
+[incident reports](../incidents/README.md). For the runner and release failures
+observed on 2026-09-04, see the
+[local-runner and release incident](../incidents/2026-09-04-runner-release.md).
+
 These runbooks cover production at `https://dongo.so` / Convex `brainy-camel-172` and development at `https://dev.dongo.so` / Convex `wandering-camel-662`. They are diagnosis-first: preserve evidence, avoid copying credentials or user content into tickets, and prefer revocation or rollback over manual database repair.
 
 Use [production release and rollback](production-release.md) for live changes. Development remains an independently deployable staging environment.
