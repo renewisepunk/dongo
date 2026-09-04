@@ -318,6 +318,7 @@ export default defineSchema({
     safeMessage: v.optional(v.string()),
     safeSummary: v.optional(v.string()),
     sessionReferencePresent: v.optional(v.boolean()),
+    recoveryAttempts: v.optional(v.number()),
     requestedAt: v.number(),
     expiresAt: v.number(),
     deliveredAt: v.optional(v.number()),
@@ -334,7 +335,8 @@ export default defineSchema({
     .index("by_state_lease", ["state", "leaseExpiresAt"])
     .index("by_project_target_registration_state_updated", ["projectId", "targetRegistrationId", "state", "updatedAt"])
     .index("by_target_registration_state_updated", ["targetRegistrationId", "state", "updatedAt"])
-    .index("by_registration_state_updated", ["registrationId", "state", "updatedAt"]),
+    .index("by_registration_state_updated", ["registrationId", "state", "updatedAt"])
+    .index("by_registration_state_safe_code_updated", ["registrationId", "state", "safeCode", "updatedAt"]),
 
   runnerJobEvents: defineTable({
     organizationId: v.id("organizations"),

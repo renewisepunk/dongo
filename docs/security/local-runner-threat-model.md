@@ -49,7 +49,7 @@ gate has passed.
 | Data exfiltration | Upload structured bounded state only; redact before transport; keep raw process output local and bounded. |
 | Misleading UI | Separate durable queued, fresh presence, local approval, process running, and Work completion facts. Never claim wake or resume without evidence. |
 | Persistence abuse | User-level startup only, explicit install/remove, no root, no inbound port, bounded update path, visible version and revocation. |
-| Cancellation race | Revision-aware cancel request, cooperative signal, bounded termination, terminal reconciliation, immutable terminal state. |
+| Cancellation race | Revision-aware cancel request, cooperative signal, bounded termination, and externally immutable terminal state. Cancellation never recovers automatically; the only server-owned exception is one same-job retry after an exact runner-lease failure, once the upgraded dispatcher no longer reports that job active. |
 
 ## Security invariants
 

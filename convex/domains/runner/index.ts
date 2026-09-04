@@ -47,6 +47,7 @@ const JOB_TTL_MS = 24 * 60 * 60 * 1_000;
 const DELIVERY_RESERVATION_MS = 60_000;
 const DEFAULT_LEASE_MS = 90_000;
 const MAX_LEASE_SECONDS = 3_600;
+const MAX_AUTOMATIC_RECOVERY_ATTEMPTS = 1;
 const RUNNER_SAFE_CODES = new Set([
   "approval_expired",
   "attention_required",
@@ -176,6 +177,110 @@ async function reconcileTerminalRunnerWork(
     },
     createdAt: now,
   });
+}
+
+async function maybeRequeueLeaseExpiredWork(
+  ctx: MutationCtx,
+  job: Doc<"runnerJobs">,
+  registration: Doc<"runnerRegistrations">,
+  currentApprovalMode: "ask" | "automatic",
+  currentHarnesses: Array<"claude" | "codex">,
+  activeJobIds: Array<Id<"runnerJobs">>,
+  actorId: Id<"actors">,
+  now: number,
+) {
+  if (
+    !runnerQueueEnabled() ||
+    job.state !== "failed" ||
+    job.safeCode !== "runner_lease_expired" ||
+    (job.kind ?? "work") !== "work" ||
+    !job.workItemId ||
+    (job.recoveryAttempts ?? 0) >= MAX_AUTOMATIC_RECOVERY_ATTEMPTS ||
+    registration.status !== "active" ||
+    currentApprovalMode !== "automatic" ||
+    !currentHarnesses.includes(job.harness) ||
+    job.registrationId !== registration._id ||
+    activeJobIds.includes(job._id)
+  ) return false;
+
+  const [work, jobs, openAttention, seenAttention] = await Promise.all([
+    ctx.db.get(job.workItemId),
+    ctx.db.query("runnerJobs")
+      .withIndex("by_project_work_requested", (q) =>
+        q.eq("projectId", job.projectId).eq("workItemId", job.workItemId))
+      .order("desc")
+      .take(100),
+    ctx.db.query("attentionRequests")
+      .withIndex("by_work_status", (q) =>
+        q.eq("workItemId", job.workItemId).eq("status", "open"))
+      .take(1),
+    ctx.db.query("attentionRequests")
+      .withIndex("by_work_status", (q) =>
+        q.eq("workItemId", job.workItemId).eq("status", "seen"))
+      .take(1),
+  ]);
+  if (
+    !work ||
+    work.projectId !== job.projectId ||
+    work.state !== "ready" ||
+    work.claimedRunId !== undefined ||
+    work.claimedByActorId !== undefined ||
+    work.claimedByInstallationId !== undefined ||
+    work.claimedAt !== undefined ||
+    work.claimExpiresAt !== undefined ||
+    job.terminalAt === undefined ||
+    work.updatedAt > job.terminalAt ||
+    openAttention.length > 0 ||
+    seenAttention.length > 0 ||
+    jobs[0]?._id !== job._id ||
+    jobs.some((candidate) => candidate._id !== job._id && !TERMINAL_STATES.has(candidate.state))
+  ) return false;
+
+  const revision = job.revision + 1;
+  const recoveryAttempts = (job.recoveryAttempts ?? 0) + 1;
+  await ctx.db.patch(job._id, {
+    state: "queued",
+    revision,
+    targetRegistrationId: registration._id,
+    registrationId: undefined,
+    safeCode: undefined,
+    safeMessage: undefined,
+    safeSummary: undefined,
+    sessionReferencePresent: undefined,
+    expiresAt: now + JOB_TTL_MS,
+    deliveredAt: undefined,
+    reservationExpiresAt: undefined,
+    leaseExpiresAt: undefined,
+    cancellationRequestedAt: undefined,
+    terminalAt: undefined,
+    recoveryAttempts,
+    updatedAt: now,
+  });
+  await appendJobEvent(
+    ctx,
+    job,
+    actorId,
+    "queued",
+    now,
+    "runner_lease_expired",
+    "The automatic runner requeued this Work after its execution lease expired.",
+  );
+  await appendEvent(ctx, {
+    organizationId: job.organizationId,
+    projectId: job.projectId,
+    workItemId: job.workItemId,
+    actorId,
+    type: "runner.job_requeued",
+    data: {
+      jobId: job._id,
+      registrationId: registration._id,
+      revision,
+      recoveryAttempts,
+      source: "runner_lease_expired",
+    },
+    createdAt: now,
+  });
+  return true;
 }
 
 function runnerSafeCode(value: string | undefined): string | undefined {
@@ -939,6 +1044,27 @@ export const reserve = internalMutation({
         principal.actor._id,
         now,
       );
+    }
+    if (args.activeJobIds !== undefined && args.inspectJobId === undefined) {
+      const recoveryCandidates = await ctx.db.query("runnerJobs")
+        .withIndex("by_registration_state_safe_code_updated", (q) =>
+          q.eq("registrationId", registration._id)
+            .eq("state", "failed")
+            .eq("safeCode", "runner_lease_expired"))
+        .order("desc")
+        .take(100);
+      for (const terminalJob of recoveryCandidates) {
+        if (await maybeRequeueLeaseExpiredWork(
+          ctx,
+          terminalJob,
+          registration,
+          args.approvalMode,
+          harnesses,
+          args.activeJobIds,
+          principal.actor._id,
+          now,
+        )) break;
+      }
     }
     if (args.inspectJobId !== undefined) {
       const inspected = await ctx.db.get(args.inspectJobId);
