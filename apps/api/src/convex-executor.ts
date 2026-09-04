@@ -341,11 +341,11 @@ export class ApiConvexOperationExecutor implements ApiOperationExecutor {
       ),
     );
     const controller = new AbortController();
-    const updateWaitSeconds = operation === "get_updates"
+    const longPollWaitSeconds = operation === "get_updates" || operation === "runner_wait"
       ? ((input as { waitSeconds?: number }).waitSeconds ?? 0)
       : 0;
-    const effectiveTimeoutMs = operation === "get_updates"
-      ? Math.max(this.#timeoutMs, updateWaitSeconds * 1_000 + 5_000)
+    const effectiveTimeoutMs = longPollWaitSeconds > 0
+      ? Math.max(this.#timeoutMs, longPollWaitSeconds * 1_000 + 5_000)
       : this.#timeoutMs;
     let timedOut = false;
     const relayAbort = (): void => controller.abort(context.signal.reason);

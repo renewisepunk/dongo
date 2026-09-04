@@ -203,6 +203,21 @@ computer.
    systemctl --user status 'dongo-runner-*.service'
    ```
 
+   Resolve the exact service PID from that bounded service-manager output. If
+   process liveness needs a second check, print only allow-listed identity
+   fields:
+
+   ```sh
+   ps -p "$DONGO_RUNNER_PID" -o pid=,ppid=,pgid=,state=,etime=,comm=
+   ```
+
+   Never use `pgrep -fl`, `ps e`, `ps -E`, wide/full-command output, or an
+   environment dump during a credential-bearing runner or release. Those modes
+   can copy child environment assignments or arguments into terminal and task
+   logs. If this happens, stop at the next safe release boundary and rotate the
+   exposed credential through its owner runbook; redaction after capture is not
+   recovery.
+
 5. Raw harness output is retained only in owner-only rotating local logs under
    the dongo configuration directory. It is capped at 5 MiB per file with three
    retained rotations and is never uploaded as job status.
