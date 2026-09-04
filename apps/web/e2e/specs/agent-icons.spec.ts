@@ -57,8 +57,8 @@ test("vendor favicons load privately as round decorative images", async ({ page 
     };
   });
   expect(presentation).toEqual({
-    width: "20px",
-    height: "20px",
+    width: "17px",
+    height: "17px",
     borderRadius: "50%",
     overflow: "hidden",
   });
@@ -104,8 +104,9 @@ test("operational agent and runner identities share the registry", async ({ page
 
   await page.goto("/app/fixture-studio/dongo/settings?tab=Local%20runner");
   const runner = page.locator(".installation-row").filter({ hasText: "Fixture Mac" });
-  await expect(runner.locator('[data-agent-icon="codex"]')).toBeVisible();
-  await expect(runner.locator('[data-agent-icon="claude"]')).toBeVisible();
+  const harnesses = runner.locator(".installation-row__runner-meta").first();
+  await expect(harnesses.locator('[data-agent-icon="codex"]')).toBeVisible();
+  await expect(harnesses.locator('[data-agent-icon="claude"]')).toBeVisible();
 
   await page.goto("/connect");
   await expect(page.getByRole("tab", { name: "Codex" }).locator('[data-agent-icon="codex"]')).toBeVisible();

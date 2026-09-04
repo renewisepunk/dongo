@@ -1252,7 +1252,7 @@ test("reconciles browser Back and preserves the overview scroll position", async
 test("renders attributed agent progress as safe reviewable Markdown", async ({ page }) => {
   await page.locator('[data-work-id="work-done"]').click();
   const dialog = workDetail(page, "Complete the agent golden journey");
-  await expect(dialog.getByText("Codex", { exact: true })).toBeVisible();
+  await expect(dialog.locator(".conversation-entry__who").first()).toHaveText("Codex");
   await expect(dialog.locator(".conversation-entry__role")).toHaveText(["agent", "agent"]);
   await expect(dialog.getByText("mcp agent", { exact: true })).toBeHidden();
   const historical = dialog.locator(".conversation-entry", { hasText: "Historical transport-attributed update." });
