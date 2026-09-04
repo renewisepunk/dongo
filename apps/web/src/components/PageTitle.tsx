@@ -1,5 +1,6 @@
 import { Title } from "@solidjs/meta";
 import { createEffect, onCleanup } from "solid-js";
+import { isServer } from "solid-js/web";
 
 export function PageTitle(props: { value: string }) {
   const previousTitle = typeof document === "undefined" ? undefined : document.title;
@@ -22,5 +23,5 @@ export function PageTitle(props: { value: string }) {
     }
   });
 
-  return <Title>{props.value}</Title>;
+  return isServer ? <Title>{props.value}</Title> : null;
 }
