@@ -2,13 +2,14 @@ import { For, Show } from "solid-js";
 
 import { lowercaseDongoBrand } from "../../lib/brand-case";
 import {
+  activitySignalState,
   formatRunElapsed,
   hostFallbackLabel,
   leaseHealthLabel,
   workspaceLabel,
 } from "../../lib/parallel-execution";
 import type { ProjectConcurrencySnapshot } from "../../lib/project-data";
-import { AgentIcon } from "../../components/AgentIcon";
+import { AgentIdentity } from "../../components/AgentIdentity";
 
 export type ConcurrentActivityProps = {
   snapshot?: ProjectConcurrencySnapshot;
@@ -30,6 +31,7 @@ export function ConcurrentActivity(props: ConcurrentActivityProps) {
     if (!policy()?.enabled) return "Single-agent";
     return `${capacity()?.activeRuns ?? 0} / ${capacity()?.maxConcurrentRuns ?? policy()!.maxConcurrentRuns} active`;
   };
+  const signalState = () => activitySignalState(props.status, runs().length);
 
   return (
     <Show when={props.status !== "loading"}>
@@ -37,7 +39,11 @@ export function ConcurrentActivity(props: ConcurrentActivityProps) {
         <div class="concurrent-activity__head">
           <div>
             <div class="section-heading" id="concurrent-activity-heading">
-              <span class="concurrent-activity__signal" aria-hidden="true" />
+              <span
+                class="concurrent-activity__signal"
+                data-state={signalState()}
+                aria-hidden="true"
+              />
               <span>agent activity</span>
               <span class="section-heading__count">{runs().length}</span>
             </div>
@@ -69,8 +75,12 @@ export function ConcurrentActivity(props: ConcurrentActivityProps) {
                     <span class="agent-run-card__rail" aria-hidden="true" />
                     <span class="agent-run-card__topline">
                       <span class="agent-run-card__identity">
-                        <AgentIcon agentName={run.actor.displayName?.trim() || run.actor.name.trim()} />
-                        <span class="agent-run-card__agent">{lowercaseDongoBrand(run.actor.displayName?.trim() || run.actor.name.trim() || "Agent")}</span>
+                        <AgentIdentity
+                          agentName={run.actor.displayName?.trim() || run.actor.name.trim()}
+                          agentType={run.actor.agentType}
+                          label={lowercaseDongoBrand(run.actor.displayName?.trim() || run.actor.name.trim() || "Agent")}
+                          labelClass="agent-run-card__agent"
+                        />
                       </span>
                       <span class="agent-run-card__state"><span aria-hidden="true" />{run.state === "running" ? "Running" : "Waiting"}</span>
                     </span>

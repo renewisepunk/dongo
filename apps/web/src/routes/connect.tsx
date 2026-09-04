@@ -1,6 +1,8 @@
 import { A } from "@solidjs/router";
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { AuthFrame } from "../components/AuthFrame";
+import { AgentIdentity } from "../components/AgentIdentity";
+import { AgentIcon } from "../components/AgentIcon";
 import { PageTitle } from "../components/PageTitle";
 import { RequireHumanSession } from "../components/RequireHumanSession";
 import {
@@ -242,7 +244,9 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
               onClick={() => setHost(item)}
               onKeyDown={(event) => moveHostTab(event, item)}
             >
-              {item}
+              <Show when={item !== "AGENTS.md"} fallback={item}>
+                <AgentIdentity agentName={item} />
+              </Show>
             </button>
           ))}
         </div>
@@ -280,6 +284,7 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
             <Show when={verifiedInstallation()} fallback={<span class="status-spinner" aria-hidden="true" />}>
               <span class="status-dot" aria-hidden="true" />
             </Show>
+            <Show when={host() !== "AGENTS.md"}><AgentIcon agentName={host()} /></Show>
             <span>{connectionTitle()}</span>
           </div>
           <div class="connection-card__body">{connectionBody()}</div>

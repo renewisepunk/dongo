@@ -1,6 +1,7 @@
 import { A, useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
+import { AgentIdentity } from "../../components/AgentIdentity";
 import { PageTitle } from "../../components/PageTitle";
 import { ProjectBreadcrumbs } from "../../components/ProjectBreadcrumbs";
 import { SignOutButton } from "../../components/SignOutButton";
@@ -138,6 +139,10 @@ function runnerJobLabel(state: RunnerJobState): string {
     case "completed": return "completed";
     case "expired": return "expired";
   }
+}
+
+function runnerHarnessName(harness: RunnerHarness): "Claude Code" | "Codex" {
+  return harness === "claude" ? "Claude Code" : "Codex";
 }
 
 function formatBytes(bytes: number): string {
@@ -704,7 +709,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                 <div class="installation-list">
                   <For each={installations()}>{(installation) => (
                     <div class="installation-row">
-                      <div class="installation-row__name"><span>{lowercaseDongoBrand(installation.label)}</span><span class="installation-row__meta">{installationType(installation)} · {installation.scopes.join(", ")}</span></div>
+                      <div class="installation-row__name"><AgentIdentity agentName={lowercaseDongoBrand(installation.label)} agentType={installation.clientId} /><span class="installation-row__meta">{installationType(installation)} · {installation.scopes.join(", ")}</span></div>
                       <div class="installation-row__meta">{relativeTime(installation.lastUsedAt)} · {installation.status}</div>
                       <Show when={installation.status !== "revoked"} fallback={<span class="installation-row__meta">revoked</span>}>
                         <Show when={confirmRevoke() === installation.id} fallback={<button class="button button--quiet button--danger" type="button" onClick={() => setConfirmRevoke(installation.id)}>Revoke</button>}>
@@ -801,7 +806,13 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                       <div class="installation-row">
                         <div class="installation-row__name">
                           <span>{runner.label}</span>
-                          <span class="installation-row__meta">dongo runner · {runner.platform === "darwin" ? "macOS" : "Linux"} · {runner.harnesses.map((harness) => harness === "claude" ? "Claude Code" : "Codex").join(" + ")} · {runner.approvalMode === "ask" ? "asks locally" : "automatic for this repository"} · v{runner.version}</span>
+                          <span class="installation-row__meta installation-row__runner-meta">
+                            <span>dongo runner · {runner.platform === "darwin" ? "macOS" : "Linux"} · </span>
+                            <For each={runner.harnesses}>{(harness, index) => (
+                              <><Show when={index() > 0}><span> + </span></Show><AgentIdentity agentName={runnerHarnessName(harness)} /></>
+                            )}</For>
+                            <span> · {runner.approvalMode === "ask" ? "asks locally" : "automatic for this repository"} · v{runner.version}</span>
+                          </span>
                         </div>
                         <div class="installation-row__meta" data-runner-presence={runnerPresence(runner).startsWith("online") ? "online" : "offline"}>{runnerPresence(runner)}</div>
                         <Show when={runner.status !== "revoked"} fallback={<span class="installation-row__meta">revoked</span>}>
@@ -811,7 +822,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                                 when={runners().automaticIntake.enabled && runners().automaticIntake.registrationId === runner.id}
                                 fallback={<For each={runner.harnesses}>{(harness) => (
                                   <button class="button" type="button" disabled={configuringAutomaticIntake()} onClick={() => void configureAutomaticIntake(runner.id, harness, true)}>
-                                    Use this computer for Inbox pickup with {harness === "claude" ? "Claude Code" : "Codex"}
+                                    <span>Use this computer for Inbox pickup with </span><AgentIdentity agentName={runnerHarnessName(harness)} />
                                   </button>
                                 )}</For>}
                               >
@@ -837,7 +848,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                   <div class="installation-list">
                     <For each={runners().jobs.slice(0, 20)}>{(job) => (
                       <div class="installation-row">
-                        <div class="installation-row__name"><A href={job.kind === "intake" ? `/app/${props.orgSlug}/${props.projectSlug}?intake=${encodeURIComponent(job.intakeId!)}` : `/app/${props.orgSlug}/${props.projectSlug}?work=${encodeURIComponent(job.workIdentifier!)}`}>{job.kind === "intake" ? "Inbox Intake" : job.workIdentifier}</A><span class="installation-row__meta">{job.harness === "claude" ? "Claude Code" : "Codex"} · {job.safeSummary ?? job.safeMessage ?? runnerJobLabel(job.state)}</span></div>
+                        <div class="installation-row__name"><A href={job.kind === "intake" ? `/app/${props.orgSlug}/${props.projectSlug}?intake=${encodeURIComponent(job.intakeId!)}` : `/app/${props.orgSlug}/${props.projectSlug}?work=${encodeURIComponent(job.workIdentifier!)}`}>{job.kind === "intake" ? "Inbox Intake" : job.workIdentifier}</A><span class="installation-row__meta installation-row__runner-meta"><AgentIdentity agentName={runnerHarnessName(job.harness)} /><span> · {job.safeSummary ?? job.safeMessage ?? runnerJobLabel(job.state)}</span></span></div>
                         <span class="runner-state" data-state={job.state}>{runnerJobLabel(job.state)}</span>
                       </div>
                     )}</For>

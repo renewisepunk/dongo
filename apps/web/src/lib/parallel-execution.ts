@@ -7,6 +7,14 @@ export const DEFAULT_PARALLEL_RUN_LIMIT = 4;
 export const MIN_PARALLEL_RUN_LIMIT = 2;
 export const MAX_PARALLEL_RUN_LIMIT = 8;
 
+export function activitySignalState(
+  status: "loading" | "ready" | "error",
+  activeRunCount: number,
+): "active" | "idle" | "unavailable" {
+  if (status !== "ready") return "unavailable";
+  return activeRunCount > 0 ? "active" : "idle";
+}
+
 export function parallelExecutionPolicy(
   enabled: boolean,
   maxConcurrentRuns = DEFAULT_PARALLEL_RUN_LIMIT,

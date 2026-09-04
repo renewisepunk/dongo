@@ -16,6 +16,7 @@ export type OwnerAttention = {
   id: string;
   intakeId?: string;
   agent?: string;
+  agentType?: string;
   age?: string;
   unseen: boolean;
   attention: Attention;
@@ -65,6 +66,7 @@ export type WorkItem = {
   title: string;
   state: WorkState;
   agent?: string;
+  agentType?: string;
   age?: string;
   elapsed?: string;
   latest?: string;

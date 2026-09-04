@@ -175,8 +175,29 @@ test("hides the desktop alert control when native notifications are unsupported"
 test("shows concurrent agents, safe workspace detail, and live progress", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo?scenario=concurrency-live");
   const activity = page.getByRole("region", { name: "agent activity" });
+  const signal = activity.locator(".concurrent-activity__signal");
 
   await expect(activity).toContainText("1 / 4 active");
+  await expect(signal).toHaveAttribute("data-state", "active");
+  await expect.poll(async () => signal.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const probe = document.createElement("span");
+    probe.style.background = "var(--green)";
+    document.body.append(probe);
+    const green = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return { color: style.backgroundColor, animation: style.animationName, green };
+  })).toEqual({ color: expect.any(String), animation: "dongo-blink", green: expect.any(String) });
+  expect(await signal.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(
+    await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.background = "var(--green)";
+      document.body.append(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    }),
+  );
   const running = activity.locator('[data-run-id="run-attachments"]');
   const waiting = activity.locator('[data-run-id="run-release"]');
   await expect(running).toContainText("Claude");
@@ -207,8 +228,39 @@ test("keeps an undisclosed host serial without implying workspace support", asyn
 
 test("keeps Working usable when live agent activity is unavailable", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo?scenario=concurrency-error");
+  const signal = page.locator(".concurrent-activity__signal");
   await expect(page.getByText("Live agent activity is temporarily unavailable.")).toBeVisible();
+  await expect(signal).toHaveAttribute("data-state", "unavailable");
+  await expect.poll(async () => signal.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
   await expect(page.locator('[data-work-id="work-working"]')).toBeVisible();
+});
+
+test("uses a still amber signal when no agents are active", async ({ page }) => {
+  const signal = page.locator(".concurrent-activity__signal");
+  await expect(page.getByText("No active agent runs.")).toBeVisible();
+  await expect(signal).toHaveAttribute("data-state", "idle");
+  await expect.poll(async () => signal.evaluate((element) => ({
+    animation: getComputedStyle(element).animationName,
+    color: getComputedStyle(element).backgroundColor,
+  }))).toEqual({
+    animation: "none",
+    color: await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.background = "var(--amber)";
+      document.body.append(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    }),
+  });
+});
+
+test("stops the active signal animation when reduced motion is requested", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/app/fixture-studio/dongo?scenario=concurrency-live");
+  const signal = page.locator(".concurrent-activity__signal");
+  await expect(signal).toHaveAttribute("data-state", "active");
+  await expect.poll(async () => signal.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
 });
 
 test("hands focus to a replacement Run without stealing retained row focus", async ({ page }) => {
@@ -1292,7 +1344,7 @@ test("reconciles browser Back and preserves the overview scroll position", async
 test("renders attributed agent progress as safe reviewable Markdown", async ({ page }) => {
   await page.locator('[data-work-id="work-done"]').click();
   const dialog = workDetail(page, "Complete the agent golden journey");
-  await expect(dialog.getByText("Codex", { exact: true })).toBeVisible();
+  await expect(dialog.locator(".conversation-entry__who").first()).toHaveText("Codex");
   await expect(dialog.locator(".conversation-entry__role")).toHaveText(["agent", "agent"]);
   await expect(dialog.getByText("mcp agent", { exact: true })).toBeHidden();
   const historical = dialog.locator(".conversation-entry", { hasText: "Historical transport-attributed update." });
@@ -1306,7 +1358,7 @@ test("renders attributed agent progress as safe reviewable Markdown", async ({ p
   );
   await expect(dialog.getByRole("table")).toContainText("Contracts");
   await expect(dialog.getByText("231 tests passed", { exact: true })).toBeVisible();
-  await expect(dialog.locator("img")).toHaveCount(0);
+  await expect(dialog.locator(".markdown-content img")).toHaveCount(0);
   await expect(dialog.getByText("<img src=x onerror=alert(1)>", { exact: true })).toBeVisible();
 });
 

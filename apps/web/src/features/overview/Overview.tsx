@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
+import { AgentIdentity } from "../../components/AgentIdentity";
 import { PageTitle } from "../../components/PageTitle";
 import { MarkdownContent } from "../../components/MarkdownContent";
 import { SignOutButton } from "../../components/SignOutButton";
@@ -261,8 +262,12 @@ function runnerJobLabel(state: RunnerJobState): string {
   }
 }
 
+function runnerHarnessName(harness: RunnerHarness): "Claude Code" | "Codex" {
+  return harness === "claude" ? "Claude Code" : "Codex";
+}
+
 function readyRunnerJobLabel(job: RunnerJob): string {
-  const agent = job.harness === "claude" ? "Claude Code" : "Codex";
+  const agent = runnerHarnessName(job.harness);
   switch (job.state) {
     case "queued": return `Queued for ${agent}`;
     case "delivered": return `Sent to ${agent}`;
@@ -2090,7 +2095,8 @@ export function Overview(props: OverviewProps) {
                   <span class="work-row__meta">
                     <span class="attention-kind">{item.attention?.kind}</span>
                     <Show when={item.attention?.important}><span class="attention-important">important</span></Show>
-                    <span>{item.agent}</span><span>·</span><span>{item.age}</span>
+                    <AgentIdentity agentName={item.agent} agentType={item.agentType} />
+                    <span>·</span><span>{item.age}</span>
                   </span>
                 </a>
               )}</For>
@@ -2348,7 +2354,9 @@ export function Overview(props: OverviewProps) {
                     <span class="work-row__identifier mono">{item.identifier}</span>
                   </span>
                   <span class="work-row__meta">
-                    <span class="activity-dot" aria-hidden="true" /><span>{item.agent}</span><span>·</span><span>{item.elapsed}</span>
+                    <span class="activity-dot" aria-hidden="true" />
+                    <AgentIdentity agentName={item.agent} agentType={item.agentType} />
+                    <span>·</span><span>{item.elapsed}</span>
                   </span>
                   <Show when={item.latest}><span class="work-row__latest">{item.latest}</span></Show>
                 </a>
@@ -2404,7 +2412,12 @@ export function Overview(props: OverviewProps) {
                     <span class="ready-row__position">{String(index() + 1).padStart(2, "0")}</span>
                     <span class="work-row__title">{item.title}</span>
                     <Show when={runnerSnapshot().jobs.find((job) => job.kind === "work" && job.workItemId === item.id)}>{(job) => (
-                      <span class="ready-row__runner mono" data-state={job().state}>{readyRunnerJobLabel(job())}</span>
+                      <span class="ready-row__runner mono" data-state={job().state}>
+                        <AgentIdentity
+                          agentName={runnerHarnessName(job().harness)}
+                          label={readyRunnerJobLabel(job())}
+                        />
+                      </span>
                     )}</Show>
                     <span class="work-row__identifier mono">{item.identifier}</span>
                   </a>
@@ -2808,7 +2821,7 @@ function OwnerAttentionCard(props: OwnerAttentionCardProps) {
       </div>
       <MarkdownContent source={props.item.attention.body} class="attention-card__body" />
       <div class="note">
-        {props.item.agent} is asking about {props.item.intakeId ? "Intake" : "this project"}. Your answer stays in dongo even if the agent session has ended.
+        <AgentIdentity agentName={props.item.agent} agentType={props.item.agentType} /> is asking about {props.item.intakeId ? "Intake" : "this project"}. Your answer stays in dongo even if the agent session has ended.
       </div>
       <div class="attention-options">
         <For each={props.item.attention.options ?? []}>{(option) => (
@@ -3142,7 +3155,16 @@ function WorkDetail(props: WorkDetailProps) {
             </Show>
           </button>
           <h2 class="detail__title" id="work-detail-title">{props.item.title}</h2>
-          <div class="detail__state"><span class="detail__state-dot" data-state={props.item.state} /><span>{stateLine()}</span></div>
+          <div class="detail__state">
+            <span class="detail__state-dot" data-state={props.item.state} />
+            <Show
+              when={props.item.state === "working" ? props.item.agent : undefined}
+              fallback={<span>{stateLine()}</span>}
+            >
+              <span>Working · </span>
+              <AgentIdentity agentName={props.item.agent} agentType={props.item.agentType} />
+            </Show>
+          </div>
         </div>
 
         <Show when={props.item.attention}>{(attention) => (
@@ -3373,7 +3395,9 @@ function WorkDetail(props: WorkDetailProps) {
                   <div class="runner-work-actions">
                     <For each={props.runnerHarnesses}>{(harness) => (
                       <button class="button button--primary" type="button" disabled={runnerPending()} onClick={() => void queueRunner(harness)}>
-                        {runnerPending() ? "Queuing…" : `Run with ${harness === "claude" ? "Claude Code" : "Codex"}`}
+                        <Show when={!runnerPending()} fallback="Queuing…">
+                          <span>Run with </span><AgentIdentity agentName={runnerHarnessName(harness)} />
+                        </Show>
                       </button>
                     )}</For>
                   </div>
@@ -3383,7 +3407,7 @@ function WorkDetail(props: WorkDetailProps) {
             </Show>
           }>{(job) => (
             <div class="detail-card runner-job-status" data-state={job().state}>
-              <div class="runner-job-status__head"><strong>{job().harness === "claude" ? "Claude Code" : "Codex"}</strong><span class="runner-state" data-state={job().state}>{runnerJobLabel(job().state)}</span></div>
+              <div class="runner-job-status__head"><strong><AgentIdentity agentName={runnerHarnessName(job().harness)} /></strong><span class="runner-state" data-state={job().state}>{runnerJobLabel(job().state)}</span></div>
               <Show when={job().safeSummary ?? job().safeMessage}><p class="note">{job().safeSummary ?? job().safeMessage}</p></Show>
               <Show when={["queued", "delivered", "awaiting_local_approval", "starting", "running", "blocked"].includes(job().state)}>
                 <button class="button button--quiet button--danger" type="button" disabled={runnerPending()} onClick={() => void cancelRunner()}>{runnerPending() ? "Requesting…" : "Cancel local run"}</button>
@@ -3394,7 +3418,9 @@ function WorkDetail(props: WorkDetailProps) {
                 <div class="runner-work-actions">
                   <For each={props.runnerHarnesses}>{(harness) => (
                     <button class="button button--quiet" type="button" disabled={runnerPending()} onClick={() => void queueRunner(harness)}>
-                      {runnerPending() ? "Queuing…" : `Run again with ${harness === "claude" ? "Claude Code" : "Codex"}`}
+                      <Show when={!runnerPending()} fallback="Queuing…">
+                        <span>Run again with </span><AgentIdentity agentName={runnerHarnessName(harness)} />
+                      </Show>
                     </button>
                   )}</For>
                 </div>
@@ -3436,7 +3462,7 @@ function WorkDetail(props: WorkDetailProps) {
 
         <Show when={props.item.latest}>
           <section class="detail-section">
-            <div class="detail-section__label">latest from {actorDisplayIdentity({ type: "agent", name: props.item.agent ?? "Agent" })}</div>
+            <div class="detail-section__label">latest from <AgentIdentity agentName={actorDisplayIdentity({ type: "agent", name: props.item.agent ?? "Agent" })} agentType={props.item.agentType} /></div>
             <div class="detail-card"><MarkdownContent source={props.item.latest ?? ""} /></div>
             <div class="security-note">{props.item.state === "done" || props.item.state === "cancelled" ? "run finished" : props.item.elapsed ?? "waiting to start"}</div>
           </section>
@@ -3462,11 +3488,21 @@ function WorkDetail(props: WorkDetailProps) {
             <For each={props.item.conversation}>{(entry) => (
               <div class="conversation-entry">
                 <div class="conversation-entry__meta">
-                  <span class="conversation-entry__who" data-role={entry.role ?? (entry.human ? "human" : "agent")}>{actorDisplayIdentity({
-                    type: entry.role === "system" ? "system" : entry.human || entry.role === "human" ? "human" : "agent",
-                    name: entry.who,
-                    agentType: entry.agentType,
-                  })}</span>
+                  <span class="conversation-entry__who" data-role={entry.role ?? (entry.human ? "human" : "agent")}>
+                    <Show
+                      when={entry.role !== "system" && !entry.human && entry.role !== "human"}
+                      fallback={actorDisplayIdentity({
+                        type: entry.role === "system" ? "system" : "human",
+                        name: entry.who,
+                        agentType: entry.agentType,
+                      })}
+                    >
+                      <AgentIdentity
+                        agentName={actorDisplayIdentity({ type: "agent", name: entry.who, agentType: entry.agentType })}
+                        agentType={entry.agentType}
+                      />
+                    </Show>
+                  </span>
                   <span class="conversation-entry__role">{entry.role === "system" ? "system" : entry.human || entry.role === "human" ? "human" : "agent"}</span>
                   <span>{entry.when}</span>
                 </div>
