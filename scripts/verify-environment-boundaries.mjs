@@ -95,6 +95,7 @@ if (packageJson?.scripts?.["deploy:production"] !== "node scripts/deploy-product
 
 const devDeploy = readFileSync("scripts/deploy-dev.mjs", "utf8");
 const productionDeploy = readFileSync("scripts/deploy-production.mjs", "utf8");
+const releaseConvexTarget = readFileSync("scripts/release-convex-target.mjs", "utf8");
 const productionWebDeploy = readFileSync("scripts/deploy-production-web.mjs", "utf8");
 for (const [path] of workers) {
   if (path !== "apps/web/wrangler.jsonc" && !devDeploy.includes(path)) {
@@ -107,6 +108,18 @@ for (const [path] of workers) {
 if (!devDeploy.includes('"convex", "dev", "--once"')) failures.push("scripts/deploy-dev.mjs: Convex development deploy is missing");
 if (!productionDeploy.includes('"convex", "deploy"')) failures.push("scripts/deploy-production.mjs: Convex production deploy is missing");
 if (!productionDeploy.includes('"d1", "migrations", "apply"')) failures.push("scripts/deploy-production.mjs: production D1 migration is missing");
+if (!devDeploy.includes('requireReleaseConvexTarget({ root, stage: "development" })')) {
+  failures.push("scripts/deploy-dev.mjs: exact named Convex target preflight is missing");
+}
+if (!productionDeploy.includes('requireReleaseConvexTarget({ root, stage: "production" })')) {
+  failures.push("scripts/deploy-production.mjs: exact named Convex target preflight is missing");
+}
+if (!releaseConvexTarget.includes('development: "dev:wandering-camel-662"')) {
+  failures.push("scripts/release-convex-target.mjs: named development target changed");
+}
+if (!releaseConvexTarget.includes('production: "prod:brainy-camel-172"')) {
+  failures.push("scripts/release-convex-target.mjs: named production target changed");
+}
 if (!productionDeploy.includes("scripts/deploy-production-web.mjs")) failures.push("scripts/deploy-production.mjs: production web deploy is missing");
 if (!productionWebDeploy.includes('VITE_DONGO_GOOGLE_AUTH_CONFIGURED: "true"')) {
   failures.push("scripts/deploy-production-web.mjs: production Google sign-in is not enabled");

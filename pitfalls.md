@@ -46,7 +46,9 @@ The failures observed during the dongo and wiwi releases were a chain of indepen
 ## Isolated worktrees do not inherit ignored configuration
 
 - A Git worktree shares repository history, not ignored files such as `.env` or `.env.local`.
-- Before a runner attempts deployment, validate that the exact isolated release checkout can resolve its named Convex deployment and Cloudflare account. Never let a missing deployment target silently fall back to a local Convex backend.
+- The concrete failure was worse than a late authentication prompt: `convex dev --once` ran without a resolved remote selector, initialized a `127.0.0.1` backend, and wrote an ignored `.env.local`. The release script then continued and redeployed the development auth Worker before the operator interrupted it. A provider command returning success does not prove it touched the intended environment.
+- Before a runner attempts deployment, validate that the exact isolated release checkout can resolve its named Convex deployment and Cloudflare account. The repository release script must repeat the exact-target check before spawning its first child command, so a launcher regression still cannot mutate Convex, Workers, D1, web, or npm. Never let a missing deployment target silently fall back to a local Convex backend.
+- Treat selectors as release inputs, not hints: development accepts only `dev:wandering-camel-662`, production accepts only `prod:brainy-camel-172`, and any deploy key must name the same target. Reject local, cross-environment, unknown, missing, unsafe-file, and mismatched-key states without logging values.
 - Reuse trusted owner configuration through an explicit, non-echoing mechanism. Do not copy secrets into worktrees, dongo comments, logs, artifacts, snapshots, commits, or command output.
 - Report the missing capability or configuration source by safe name only. Do not print values while diagnosing.
 

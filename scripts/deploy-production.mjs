@@ -3,13 +3,10 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { requireReleaseConvexTarget } from "./release-convex-target.mjs";
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const executable = (name) => process.platform === "win32" ? `${name}.cmd` : name;
-const productionEnvironment = {
-  ...process.env,
-  CI: "true",
-  CLOUDFLARE_ENV: "production",
-};
 const productionPublicProjectRef = "ps8dhbky-dongo-production-e2e";
 const preflightSteps = [
   ["agent release notice preflight", executable("node"), ["scripts/verify-agent-release-notice.mjs"]],
@@ -38,7 +35,21 @@ if (!existsSync(resolve(root, "package.json")) || !existsSync(resolve(root, "con
   process.exit(2);
 }
 
+let releaseTarget;
+try {
+  releaseTarget = requireReleaseConvexTarget({ root, stage: "production" });
+} catch (error) {
+  console.error(error instanceof Error ? error.message : "Production release target preflight failed.");
+  process.exit(2);
+}
+const productionEnvironment = {
+  ...releaseTarget.environment,
+  CI: "true",
+  CLOUDFLARE_ENV: "production",
+};
+
 if (process.argv.includes("--plan")) {
+  console.log(`Convex target preflight: ${releaseTarget.target} (${releaseTarget.source})`);
   for (const [label, command, args] of [...preflightSteps, ...steps]) {
     console.log(`${label}: ${command} ${args.join(" ")}`);
   }
