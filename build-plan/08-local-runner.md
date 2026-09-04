@@ -247,6 +247,16 @@ parsed defensively with line and total-size limits. The adapter captures the
 exact session ID and uses `codex exec resume <id>` only for a later continuation
 of the same runner job and repository identity.
 
+Immediately before each harness launch, the local runner reads the repository's
+`origin` host and asks the owner's installed GitHub CLI for that host's current
+token. A successful bounded probe contributes only `GH_TOKEN`, or `GH_HOST` plus
+`GH_ENTERPRISE_TOKEN`, to the harness process environment so sandboxed child
+commands can use the same authenticated GitHub identity as the login session.
+This local bridge is refreshed per launch and is never represented in the
+hosted job contract, process arguments, prompts, worktrees, runner state, or
+logs. Any missing tool, unknown remote, failed login, timeout, oversized output,
+or malformed token contributes no environment value.
+
 ### Claude Code
 
 The adapter resolves `claude` locally and verifies a supported version. It runs

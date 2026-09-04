@@ -39,6 +39,7 @@ gate has passed.
 | Duplicate execution | Idempotent enqueue, atomic delivery reservation, one execution lease, exact replay, and reconciliation after uncertain responses. |
 | Stale runner continues work | Renew runner and Work leases together; interrupt after bounded renewal grace; do not reclaim blindly. |
 | Permission bypass | Preserve harness permissions and sandbox; prohibit Codex and Claude bypass flags in code and tests. |
+| GitHub credential exposure | Resolve only the current `origin` host through the owner's local `gh` CLI immediately before harness launch. Keep the token in memory and the child environment only; never place it in hosted jobs, arguments, prompts, worktrees, durable state, or logs. Bound output and time, reject malformed values, and inject nothing when resolution fails. |
 | Prompt injection | Treat all project content as untrusted; the fixed launcher instruction requires normal dongo retrieval and repository policy, not obedience to queue metadata. |
 | Data exfiltration | Upload structured bounded state only; redact before transport; keep raw process output local and bounded. |
 | Misleading UI | Separate durable queued, fresh presence, local approval, process running, and Work completion facts. Never claim wake or resume without evidence. |
