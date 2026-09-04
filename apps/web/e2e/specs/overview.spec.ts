@@ -302,6 +302,46 @@ test("switches projects through an accessible keyboard menu", async ({ page }) =
   await expect(page).toHaveURL(/\/app\/fixture-studio\/companion$/);
 });
 
+test("gives the exact current project strong visual and accessible context", async ({ page }) => {
+  const trigger = page.getByRole("button", { name: "Select organization or project" });
+  const projectName = trigger.locator(".project-button__name");
+  const composerHeading = page.getByRole("heading", { name: "New Intake for dongo" });
+  const composerProject = composerHeading.locator(".composer__project");
+
+  await expect(trigger).toHaveAccessibleDescription("Current project: dongo");
+  await expect(projectName).toHaveText("dongo");
+  await expect(projectName).toHaveAttribute("title", "dongo");
+  await expect(composerHeading).toBeVisible();
+  await expect(composerProject).toHaveText("dongo");
+  await expect(composerProject).toHaveAttribute("title", "dongo");
+
+  const styles = await page.evaluate(() => {
+    const trigger = document.querySelector<HTMLElement>(".project-button");
+    const label = document.querySelector<HTMLElement>(".composer__label");
+    const project = document.querySelector<HTMLElement>(".composer__project");
+    if (!trigger || !label || !project) throw new Error("Project context is unavailable");
+    const triggerStyle = getComputedStyle(trigger);
+    const labelStyle = getComputedStyle(label);
+    const projectStyle = getComputedStyle(project);
+    return {
+      triggerTransform: triggerStyle.textTransform,
+      triggerWeight: Number.parseInt(triggerStyle.fontWeight, 10),
+      triggerShadow: triggerStyle.boxShadow,
+      labelTransform: labelStyle.textTransform,
+      labelWeight: Number.parseInt(labelStyle.fontWeight, 10),
+      projectTransform: projectStyle.textTransform,
+      projectWeight: Number.parseInt(projectStyle.fontWeight, 10),
+    };
+  });
+  expect(styles.triggerTransform).toBe("uppercase");
+  expect(styles.triggerWeight).toBeGreaterThanOrEqual(700);
+  expect(styles.triggerShadow).not.toBe("none");
+  expect(styles.labelTransform).toBe("uppercase");
+  expect(styles.labelWeight).toBeGreaterThanOrEqual(700);
+  expect(styles.projectTransform).toBe("uppercase");
+  expect(styles.projectWeight).toBeGreaterThanOrEqual(700);
+});
+
 test("shows the current plan allowance and keeps project creation discoverable", async ({ page }) => {
   await page.getByRole("button", { name: "Select organization or project" }).click();
   const menu = page.getByRole("menu", { name: "Organizations and projects" });
@@ -1390,7 +1430,11 @@ test("reflows at 320 CSS pixels and honors reduced motion", async ({ page, brows
   await expect(search.locator("span").first()).toBeVisible();
   expect(await search.evaluate((element) => getComputedStyle(element, "::before").content)).toBe("none");
   const projectName = project.locator("span").first();
+  const composerProject = page.locator(".composer__project");
   await projectName.evaluate((element) => {
+    element.textContent = "A very long mobile project name that must truncate";
+  });
+  await composerProject.evaluate((element) => {
     element.textContent = "A very long mobile project name that must truncate";
   });
   await expect.poll(async () => page.evaluate(() =>
@@ -1403,6 +1447,13 @@ test("reflows at 320 CSS pixels and honors reduced motion", async ({ page, brows
   }));
   expect(projectNameMetrics.scrollWidth, JSON.stringify(projectNameMetrics))
     .toBeGreaterThan(projectNameMetrics.clientWidth);
+  const composerProjectMetrics = await composerProject.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+    text: element.textContent,
+  }));
+  expect(composerProjectMetrics.scrollWidth, JSON.stringify(composerProjectMetrics))
+    .toBeGreaterThan(composerProjectMetrics.clientWidth);
 
   await brand.focus();
   await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
