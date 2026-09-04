@@ -652,9 +652,22 @@
 .concurrent-activity__signal {
   width: 7px;
   height: 7px;
+  background: var(--text-ghost);
+}
+
+.concurrent-activity__signal[data-state="active"] {
   background: var(--green);
   box-shadow: 0 0 0 4px oklch(0.82 0.2 150 / 0.08);
   animation: dongo-blink 1.8s steps(1) infinite;
+}
+
+.concurrent-activity__signal[data-state="idle"] {
+  background: var(--amber);
+  box-shadow: 0 0 0 4px oklch(0.84 0.19 78 / 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .concurrent-activity__signal[data-state="active"] { animation: none; }
 }
 
 .concurrent-activity__capacity {

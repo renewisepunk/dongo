@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  activitySignalState,
   formatRunElapsed,
   hostFallbackLabel,
   leaseHealthLabel,
@@ -9,6 +10,13 @@ import {
 } from "./parallel-execution";
 
 describe("parallel execution presentation", () => {
+  it("reports active, idle, and unavailable activity signal states truthfully", () => {
+    expect(activitySignalState("ready", 2)).toBe("active");
+    expect(activitySignalState("ready", 0)).toBe("idle");
+    expect(activitySignalState("loading", 0)).toBe("unavailable");
+    expect(activitySignalState("error", 2)).toBe("unavailable");
+  });
+
   it("keeps single-agent mode safe and bounds the opt-in safety cap", () => {
     expect(parallelExecutionPolicy(false, 8)).toEqual({
       enabled: false,
