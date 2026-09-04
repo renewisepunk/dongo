@@ -49,6 +49,9 @@ This file records failure modes observed while operating the local runner and re
 ## Browser review needs an explicit capability, not an ad hoc permission plea
 
 - Configure browser review on the runner before launching a job that requires live acceptance.
+- Treat runner authorization and Codex site permission as separate gates. `browserReviewMode: read_only` exposes the browser tool and scopes the job prompt; it does not override a Denied origin saved in **ChatGPT/Codex Settings → Browser Use → Site permissions**.
+- Preflight every repository-documented review origin before starting release work. If an origin such as `dev.dongo.so` is denied, tell the owner the exact settings path and require them to change or remove that specific override before the job claims the release lane.
+- Never report “browser permission changed” merely because the runner mode changed. Prove the exact origin can be opened from the intended runner session; a persisted site denial is non-retryable and agents must not clear or bypass their own safety settings.
 - Default to disabled. When the owner enables read-only review, restrict it to declared project origins and non-mutating actions; do not sign in again, change data, open unrelated tabs, or weaken browser security.
 - Intake triage does not need browser control. Grant browser review only to repository Work whose acceptance criteria require it.
 - A prior Attention response cannot retrofit browser access into a stopped process. Resolve the stale request and launch a fresh Run under the corrected runner configuration.
