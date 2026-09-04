@@ -28,13 +28,14 @@ export type AgentReleaseDelivery = Readonly<{
  */
 export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   schemaVersion: 1,
-  sequence: 12,
-  id: "dongo-cli-0.2.12",
+  sequence: 13,
+  id: "dongo-cli-0.2.12-combined",
   title: "dongo CLI 0.2.12 is available",
   changes: [
-    "One installed local runner can now execute up to six independent jobs concurrently by default, each in its own deterministic Git worktree, and refill slots as jobs finish.",
-    "Owners can set a 1–8 local job limit; dongo enforces the smaller local and project safety cap while older serial runners remain compatible.",
-    "Runner status now distinguishes temporary service recovery from terminal errors, and restart resumes only exact jobs whose worktree and harness session still agree.",
+    "One local runner can execute six independent jobs concurrently by default in deterministic Git worktrees, refill slots, and respect 1–8 host and project safety caps while older serial runners remain compatible.",
+    "Runner status now reports exact job activity and temporary recovery; restart resumes only jobs whose worktree and harness session still agree.",
+    "Repository connections now self-reconcile safely across linked worktrees and concurrent connect attempts without repeating browser authorization.",
+    "Opt-in trusted deployment access preflights GitHub, Convex, Cloudflare, and npm, bridges only approved values into job worktrees, and redacts them from logs.",
   ],
   hostedMcp: {
     status: "already_current",
