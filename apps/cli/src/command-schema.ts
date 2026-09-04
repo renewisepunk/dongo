@@ -226,23 +226,25 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
   "runner install": {
     command: "runner install",
     summary: "Install the login-scoped local runner for this repository.",
-    usage: "dongo runner install --harness codex|claude [--harness ...] [--approval ask|automatic] [--browser-review disabled|read-only] [--max-concurrent-jobs 1..8] [--label NAME]",
+    usage: "dongo runner install --harness codex|claude [--harness ...] [--approval ask|automatic] [--browser-review disabled|read-only] [--max-concurrent-jobs 1..8] [--deployment-access disabled|repository] [--label NAME]",
     options: [
       { name: "harness", description: "Locally installed harness allowed for this repository.", required: true, repeatable: true, allowed: ["codex", "claude"] },
       { name: "approval", description: "Ask locally before every job, or explicitly opt this repository into automatic starts.", allowed: ["ask", "automatic"] },
       { name: "browser-review", description: "Allow Codex to inspect this app in the existing browser session without changing data.", allowed: ["disabled", "read-only"] },
       { name: "max-concurrent-jobs", description: "Maximum jobs this computer may run at once; defaults to 6.", type: "integer", minimum: 1, maximum: 8 },
+      { name: "deployment-access", description: "Allow agents to use only approved provider credentials and .env values from this repository's trusted checkout.", allowed: ["disabled", "repository"] },
       { name: "label", description: "Recognizable, non-sensitive computer name shown in dongo, such as Studio Mac." },
     ],
   },
   "runner configure": {
     command: "runner configure",
-    summary: "Change local runner trust, browser self-review, and concurrency settings.",
-    usage: "dongo runner configure [--approval ask|automatic] [--browser-review disabled|read-only] [--max-concurrent-jobs 1..8]",
+    summary: "Change local runner trust, browser self-review, concurrency, and deployment access settings.",
+    usage: "dongo runner configure [--approval ask|automatic] [--browser-review disabled|read-only] [--max-concurrent-jobs 1..8] [--deployment-access disabled|repository]",
     options: [
       { name: "approval", description: "Ask locally before every job, or trust this repository for automatic starts.", allowed: ["ask", "automatic"] },
       { name: "browser-review", description: "Allow Codex to inspect this app in the existing browser session without changing data.", allowed: ["disabled", "read-only"] },
       { name: "max-concurrent-jobs", description: "Maximum jobs this computer may run at once.", type: "integer", minimum: 1, maximum: 8 },
+      { name: "deployment-access", description: "Review and allow trusted repository deployment credentials for isolated worktrees.", allowed: ["disabled", "repository"] },
     ],
   },
   "runner status": { command: "runner status", summary: "Show local runner health without exposing credentials.", usage: "dongo runner status", options: [] },

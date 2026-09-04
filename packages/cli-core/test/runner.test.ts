@@ -36,6 +36,7 @@ test("runner installation stores a one-time credential locally and exposes only 
   assert.equal(installed.approvalMode, "ask");
   assert.equal(installed.browserReviewMode, "disabled");
   assert.equal(installed.maxConcurrentJobs, 6);
+  assert.deepEqual(installed.deploymentPolicy, { mode: "disabled", capabilities: [], sources: [] });
   assert.deepEqual(installed.harnesses, ["claude", "codex"]);
   assert.equal(service.installs.length, 1);
   assert.match(api.registrationToken ?? "", /^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$/u);
@@ -44,6 +45,7 @@ test("runner installation stores a one-time credential locally and exposes only 
   assert.equal(status.enabled, true);
   assert.equal("token" in status, false);
   assert.equal(status.browserReviewMode, "disabled");
+  assert.deepEqual(status.deploymentPolicy, { mode: "disabled", capabilities: [], sources: [] });
   assert.doesNotMatch(JSON.stringify(status), /dng_run_/u);
   await assert.rejects(
     manager.install({ label: "Duplicate", harnesses: ["codex"] }),
@@ -95,6 +97,29 @@ test("runner browser self-review is an explicit local setting", async (context) 
   assert.equal(service.disables, 1);
   assert.equal(service.installs.length, 2);
   assert.equal((await manager.status()).browserReviewMode, "read_only");
+});
+
+test("runner deployment access records only reviewed provider and source names", async (context) => {
+  const fixture = await runnerFixture(context);
+  const api = new FakeRunnerApi();
+  const service = new FakeService();
+  const manager = fixture.manager(api, service);
+  await execFileAsync("git", ["-C", fixture.repository, "remote", "add", "origin", "git@github.com:example/project.git"]);
+  await mkdir(path.join(fixture.repository, "convex"));
+  await writeFile(path.join(fixture.repository, ".env.local"), "CONVEX_DEPLOYMENT=dev:fixture\n", { mode: 0o600 });
+
+  const installed = await manager.install({
+    label: "Release Mac",
+    harnesses: ["codex"],
+    deploymentAccessMode: "repository",
+  });
+
+  assert.deepEqual(installed.deploymentPolicy, {
+    mode: "repository",
+    capabilities: ["convex", "github"],
+    sources: [".env.local"],
+  });
+  assert.doesNotMatch(JSON.stringify(await manager.status()), /dev:fixture/u);
 });
 
 test("ask mode requires exact local approval before executing a command-free job", async (context) => {

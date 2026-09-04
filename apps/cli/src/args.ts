@@ -30,6 +30,7 @@ const VALUE_OPTIONS = new Set([
   "approval",
   "browser-review",
   "max-concurrent-jobs",
+  "deployment-access",
   "job-id",
   "label",
   "initial-comment",
