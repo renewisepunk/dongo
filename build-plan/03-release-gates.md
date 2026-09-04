@@ -131,7 +131,9 @@
 ## Local runner gate
 
 - Runner jobs are command-free, project-derived, idempotent, revision-aware,
-  leased, cancellable, and terminally immutable.
+  leased, and cancellable. Terminal state is externally immutable; the sole
+  internal exception is a one-attempt same-job recovery after an exact runner
+  lease expiry, once the upgraded dispatcher no longer reports that job active.
 - A runner proves both its current project-scoped OAuth grant and independently
   revocable subordinate registration credential.
 - The runner opens no inbound port, runs without elevation, stores credentials

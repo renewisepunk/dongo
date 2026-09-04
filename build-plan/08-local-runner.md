@@ -184,8 +184,12 @@ queued|delivered|awaiting_local_approval -> expired
   Attention inside the Work or Intake lifecycle uses normal dongo Attention;
   the exact local harness session resumes only after that Attention is resolved.
 - Cancellation is cooperative first and forceful after a bounded grace period.
-- Terminal states are immutable. Exact idempotency replay returns the original
-  result; a changed payload fails.
+- Terminal states are immutable to clients. The sole server-owned exception is
+  one same-job recovery from `failed` to `queued` after an exact
+  `runner_lease_expired` result, once an upgraded automatic dispatcher no
+  longer reports that job active, the Work is still Ready and unclaimed, no
+  Attention is unresolved, and no newer Work activity superseded the request.
+  Exact idempotency replay returns the original result; a changed payload fails.
 
 Jobs expire after 24 hours when execution has not started. Presence expires 90
 seconds after the latest authenticated check-in. A delivered job returns to

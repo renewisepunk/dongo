@@ -633,10 +633,11 @@ describe("local runner delivery", () => {
       harness: "codex",
       idempotencyKey: "runner-enqueue-lease",
     });
-    await fixture.root.mutation(
-      internal.domains.runner.index.reserve,
-      waitArgs(fixture.authorization, registration.id, token),
-    );
+    await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
     const starting = await fixture.root.mutation(internal.domains.runner.index.updateJob, {
       authorization: fixture.authorization,
       registrationId: registration.id,
@@ -658,10 +659,11 @@ describe("local runner delivery", () => {
       state: "running",
       idempotencyKey: "runner-running-stale-lease",
     })).rejects.toThrow(/lease expired/u);
-    await fixture.root.mutation(
-      internal.domains.runner.index.reserve,
-      waitArgs(fixture.authorization, registration.id, token),
-    );
+    await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
     const stored = await fixture.root.run(async (ctx) =>
       await ctx.db.get(queued.id as Id<"runnerJobs">));
     expect(stored).toMatchObject({ state: "failed", safeCode: "runner_lease_expired" });
@@ -683,10 +685,11 @@ describe("local runner delivery", () => {
       harness: "codex",
       idempotencyKey: "runner-enqueue-process-exit",
     });
-    await fixture.root.mutation(
-      internal.domains.runner.index.reserve,
-      waitArgs(fixture.authorization, registration.id, token, "automatic"),
-    );
+    await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
     const starting = await fixture.root.mutation(internal.domains.runner.index.updateJob, {
       authorization: fixture.authorization,
       registrationId: registration.id,
@@ -772,10 +775,11 @@ describe("local runner delivery", () => {
       harness: "codex",
       idempotencyKey: "runner-enqueue-reconnect-exit",
     });
-    await fixture.root.mutation(
-      internal.domains.runner.index.reserve,
-      waitArgs(fixture.authorization, registration.id, token, "automatic"),
-    );
+    await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
     const work = await fixture.root.run(async (ctx) =>
       await ctx.db.get(created.workItemId as Id<"workItems">));
     if (!work) throw new Error("work fixture missing");
@@ -807,10 +811,12 @@ describe("local runner delivery", () => {
       });
     });
 
-    await fixture.root.mutation(
-      internal.domains.runner.index.reserve,
-      waitArgs(fixture.authorization, registration.id, token, "automatic"),
-    );
+    const reconnected = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(reconnected.job).toBeUndefined();
     const reconciled = await fixture.root.run(async (ctx) => ({
       work: await ctx.db.get(created.workItemId as Id<"workItems">),
       run: await ctx.db.get(active.runId as Id<"runs">),
@@ -821,6 +827,554 @@ describe("local runner delivery", () => {
       status: "failed",
       failureCode: "harness_failed",
     });
+  });
+
+  it("requeues the latest lease-expired Work once when an automatic runner reconnects", async () => {
+    const fixture = await runnerFixture();
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(fixture.projectId, {
+        parallelExecutionEnabled: true,
+        maxConcurrentRuns: 6,
+      });
+    });
+    const token = runnerToken("a", "r");
+    const registration = await register(fixture, token, "Recovery Mac", "automatic");
+    const created = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Resume after a transient runner outage",
+      kind: "task",
+      idempotencyKey: "runner-work-automatic-recovery",
+    });
+    const queued = await fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: created.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-enqueue-automatic-recovery",
+    });
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(queued.id as Id<"runnerJobs">, {
+        state: "failed",
+        revision: 2,
+        registrationId: registration.id as Id<"runnerRegistrations">,
+        safeCode: "runner_lease_expired",
+        safeSummary: "The runner stopped reporting before the WorkItem finished.",
+        terminalAt: Date.now() + 1_000,
+        updatedAt: Date.now() + 1_000,
+      });
+    });
+
+    const legacy = await fixture.root.mutation(
+      internal.domains.runner.index.reserve,
+      waitArgs(fixture.authorization, registration.id, token, "automatic"),
+    );
+    expect(legacy.job).toBeUndefined();
+    const inspected = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      inspectJobId: queued.id as Id<"runnerJobs">,
+    });
+    expect(inspected.job).toMatchObject({ id: queued.id, state: "failed" });
+    const stillActive = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [queued.id as Id<"runnerJobs">],
+      hostCapacity: 6,
+    });
+    expect(stillActive.job).toBeUndefined();
+    const harnessRemoved = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      harnesses: ["claude"],
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(harnessRemoved.job).toBeUndefined();
+    const downgraded = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "ask"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(downgraded.job).toBeUndefined();
+    const attentionId = await fixture.root.run(async (ctx) => {
+      const profile = (await ctx.db.query("humanProfiles").take(1))[0];
+      if (!profile) throw new Error("human profile fixture missing");
+      return await ctx.db.insert("attentionRequests", {
+        organizationId: fixture.authorization.organizationId,
+        projectId: fixture.projectId,
+        workItemId: created.workItemId as Id<"workItems">,
+        requestedByActorId: fixture.authorization.actorId,
+        requestedFromProfileId: profile._id,
+        kind: "blocked",
+        title: "Wait for the owner",
+        urgency: "important",
+        status: "open",
+        createdAt: Date.now(),
+      });
+    });
+    const blocked = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(blocked.job).toBeUndefined();
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(attentionId, {
+        status: "resolved",
+        resolvedAt: Date.now(),
+        resolutionKind: "resolved",
+      });
+    });
+
+    const recovered = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(recovered.job).toMatchObject({
+      id: queued.id,
+      state: "delivered",
+      revision: 4,
+      registrationId: registration.id,
+    });
+    expect(recovered.job).not.toHaveProperty("safeCode");
+    expect(recovered.job).not.toHaveProperty("recoveryAttempts");
+    const recoveredStored = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(queued.id as Id<"runnerJobs">));
+    expect(recoveredStored?.recoveryAttempts).toBe(1);
+
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(queued.id as Id<"runnerJobs">, {
+        state: "failed",
+        revision: 5,
+        safeCode: "runner_lease_expired",
+        terminalAt: Date.now(),
+        reservationExpiresAt: undefined,
+        updatedAt: Date.now(),
+      });
+    });
+    const bounded = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(bounded.job).toBeUndefined();
+    const stored = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(queued.id as Id<"runnerJobs">));
+    expect(stored).toMatchObject({
+      state: "failed",
+      safeCode: "runner_lease_expired",
+      recoveryAttempts: 1,
+    });
+  });
+
+  it("does not revive an older lease failure after the latest retry is exhausted", async () => {
+    const fixture = await runnerFixture();
+    const token = runnerToken("l", "r");
+    const registration = await register(fixture, token, "Latest-only Mac", "automatic");
+    const created = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Keep historical failures terminal",
+      kind: "task",
+      idempotencyKey: "runner-work-latest-recovery",
+    });
+    const first = await fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: created.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-enqueue-old-recovery",
+    });
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(first.id as Id<"runnerJobs">, {
+        state: "failed",
+        revision: 2,
+        registrationId: registration.id as Id<"runnerRegistrations">,
+        safeCode: "runner_lease_expired",
+        requestedAt: Date.now() - 10_000,
+        terminalAt: Date.now() - 9_000,
+        updatedAt: Date.now() - 9_000,
+      });
+    });
+    const latest = await fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: created.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-enqueue-latest-recovery",
+    });
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(latest.id as Id<"runnerJobs">, {
+        state: "failed",
+        revision: 2,
+        registrationId: registration.id as Id<"runnerRegistrations">,
+        safeCode: "runner_lease_expired",
+        recoveryAttempts: 1,
+        terminalAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+
+    const result = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(result.job).toBeUndefined();
+    const jobs = await fixture.root.run(async (ctx) =>
+      await ctx.db.query("runnerJobs")
+        .withIndex("by_project_work_requested", (q) =>
+          q.eq("projectId", fixture.projectId).eq("workItemId", created.workItemId))
+        .collect());
+    expect(jobs).toHaveLength(2);
+    expect(jobs.every((job) => job.state === "failed")).toBe(true);
+  });
+
+  it("never recovers a cancelled runner job", async () => {
+    const fixture = await runnerFixture();
+    const token = runnerToken("u", "c");
+    const registration = await register(fixture, token, "Cancellation Mac", "automatic");
+    const created = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Keep cancellation terminal",
+      kind: "task",
+      idempotencyKey: "runner-cancel-recovery-work",
+    });
+    const queued = await fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: created.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-cancel-recovery-enqueue",
+    });
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(queued.id as Id<"runnerJobs">, {
+        state: "cancelled",
+        revision: 2,
+        registrationId: registration.id as Id<"runnerRegistrations">,
+        safeCode: "user_cancelled",
+        terminalAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+
+    const result = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(result.job).toBeUndefined();
+    const stored = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(queued.id as Id<"runnerJobs">));
+    expect(stored).toMatchObject({ state: "cancelled", safeCode: "user_cancelled" });
+    expect(stored?.recoveryAttempts).toBeUndefined();
+  });
+
+  it("finds a recoverable lease failure behind newer permanent failures", async () => {
+    const fixture = await runnerFixture();
+    const token = runnerToken("f", "s");
+    const registration = await register(fixture, token, "Starvation-safe Mac", "automatic");
+    const created = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Do not starve this recovery",
+      kind: "task",
+      idempotencyKey: "runner-starvation-work",
+    });
+    const recoverable = await fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: created.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-starvation-enqueue",
+    });
+    const baseTime = Date.now() + 1_000;
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(recoverable.id as Id<"runnerJobs">, {
+        state: "failed",
+        revision: 2,
+        registrationId: registration.id as Id<"runnerRegistrations">,
+        safeCode: "runner_lease_expired",
+        terminalAt: baseTime,
+        updatedAt: baseTime,
+      });
+      const registrationDocument = await ctx.db.get(
+        registration.id as Id<"runnerRegistrations">,
+      );
+      if (!registrationDocument) throw new Error("runner fixture missing");
+      for (let index = 0; index < 30; index += 1) {
+        const updatedAt = baseTime + index + 1;
+        await ctx.db.insert("runnerJobs", {
+          organizationId: registrationDocument.organizationId,
+          projectId: fixture.projectId,
+          kind: "intake",
+          requestedByActorId: fixture.authorization.actorId,
+          harness: "codex",
+          state: "failed",
+          revision: 2,
+          registrationId: registration.id as Id<"runnerRegistrations">,
+          safeCode: "harness_failed",
+          requestedAt: updatedAt,
+          expiresAt: updatedAt + 24 * 60 * 60_000,
+          terminalAt: updatedAt,
+          updatedAt,
+        });
+      }
+    });
+
+    const result = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(result.job).toMatchObject({ id: recoverable.id, state: "delivered" });
+  });
+
+  it("keeps a recovered job queued until both project and host capacity are available", async () => {
+    const fixture = await runnerFixture();
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(fixture.projectId, {
+        parallelExecutionEnabled: true,
+        maxConcurrentRuns: 2,
+      });
+    });
+    const token = runnerToken("c", "p");
+    const registration = await register(fixture, token, "Capacity recovery Mac", "automatic");
+    const externalWork = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Occupy one project slot",
+      kind: "task",
+      idempotencyKey: "runner-recovery-external-work",
+    });
+    const externalSessionId = "runner-recovery-capacity-session";
+    await fixture.root.mutation(internal.gateway.readModels.sessionStart, {
+      authorization: { ...fixture.authorization, externalSessionId },
+      hostCapabilities: { parallelExecution: "supported", worktreeIsolation: "supported" },
+    });
+    const externalDocument = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(externalWork.workItemId as Id<"workItems">));
+    const externalRun = await fixture.root.mutation(internal.domains.work.index.start, {
+      authorization: { ...fixture.authorization, externalSessionId },
+      workItemId: externalWork.workItemId,
+      expectedRevision: externalDocument!.revision,
+      workspace: {
+        kind: "worktree",
+        worktreeName: "recovery-capacity",
+        branch: "codex/recovery-capacity",
+      },
+      idempotencyKey: "runner-recovery-external-start",
+    });
+    const runnerWork: Array<{ id: Id<"runnerJobs"> }> = [];
+    for (const [index, title] of ["Occupy one host slot", "Recover when capacity opens"].entries()) {
+      const work = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+        projectId: fixture.projectId,
+        title,
+        kind: "task",
+        idempotencyKey: `runner-recovery-capacity-work-${index}`,
+      });
+      runnerWork.push(await fixture.human.mutation(api.domains.runner.index.enqueue, {
+        projectId: fixture.projectId,
+        workItemId: work.workItemId,
+        harness: "codex",
+        idempotencyKey: `runner-recovery-capacity-enqueue-${index}`,
+      }));
+    }
+    const sibling = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 2,
+    });
+    expect(sibling.job?.id).toBe(runnerWork[0]?.id);
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(runnerWork[1]!.id as Id<"runnerJobs">, {
+        state: "failed",
+        revision: 2,
+        registrationId: registration.id as Id<"runnerRegistrations">,
+        safeCode: "runner_lease_expired",
+        terminalAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+
+    const projectFull = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [sibling.job!.id as Id<"runnerJobs">],
+      hostCapacity: 2,
+    });
+    expect(projectFull.job).toBeUndefined();
+    const queuedAtProjectCap = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(runnerWork[1]!.id as Id<"runnerJobs">));
+    expect(queuedAtProjectCap).toMatchObject({ state: "queued", recoveryAttempts: 1 });
+
+    await fixture.root.run(async (ctx) => {
+      const now = Date.now();
+      await ctx.db.patch(externalRun.runId as Id<"runs">, {
+        status: "completed",
+        finishedAt: now,
+        lastHeartbeatAt: now,
+      });
+      await ctx.db.patch(externalWork.workItemId as Id<"workItems">, {
+        state: "ready",
+        claimedByActorId: undefined,
+        claimedByInstallationId: undefined,
+        claimedRunId: undefined,
+        claimedAt: undefined,
+        claimExpiresAt: undefined,
+        revision: externalDocument!.revision + 2,
+        updatedAt: now,
+      });
+    });
+    const hostFull = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [sibling.job!.id as Id<"runnerJobs">],
+      hostCapacity: 1,
+    });
+    expect(hostFull.job).toBeUndefined();
+    const refill = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [sibling.job!.id as Id<"runnerJobs">],
+      hostCapacity: 2,
+    });
+    expect(refill.job?.id).toBe(runnerWork[1]?.id);
+  });
+
+  it("expires a live lease, releases its Run, and redelivers the same job once", async () => {
+    const fixture = await runnerFixture();
+    const token = runnerToken("e", "l");
+    const registration = await register(fixture, token, "Exact lifecycle Mac", "automatic");
+    const created = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Recover the exact live lifecycle",
+      kind: "task",
+      idempotencyKey: "runner-exact-lifecycle-work",
+    });
+    const queued = await fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: created.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-exact-lifecycle-enqueue",
+    });
+    await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    const starting = await fixture.root.mutation(internal.domains.runner.index.updateJob, {
+      authorization: fixture.authorization,
+      registrationId: registration.id,
+      token,
+      jobId: queued.id,
+      expectedRevision: 2,
+      state: "starting",
+      idempotencyKey: "runner-exact-lifecycle-starting",
+    });
+    const running = await fixture.root.mutation(internal.domains.runner.index.updateJob, {
+      authorization: fixture.authorization,
+      registrationId: registration.id,
+      token,
+      jobId: queued.id,
+      expectedRevision: starting.revision,
+      state: "running",
+      idempotencyKey: "runner-exact-lifecycle-running",
+    });
+    const readyWork = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(created.workItemId as Id<"workItems">));
+    const active = await fixture.root.mutation(internal.domains.work.index.start, {
+      authorization: {
+        ...fixture.authorization,
+        externalSessionId: "runner-exact-lifecycle-session",
+      },
+      workItemId: created.workItemId,
+      expectedRevision: readyWork!.revision,
+      idempotencyKey: "runner-exact-lifecycle-run",
+    });
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(queued.id as Id<"runnerJobs">, { leaseExpiresAt: 1 });
+    });
+
+    const recovered = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(recovered.job).toMatchObject({
+      id: queued.id,
+      state: "delivered",
+      revision: running.revision + 3,
+    });
+    const state = await fixture.root.run(async (ctx) => ({
+      job: await ctx.db.get(queued.id as Id<"runnerJobs">),
+      work: await ctx.db.get(created.workItemId as Id<"workItems">),
+      run: await ctx.db.get(active.runId as Id<"runs">),
+    }));
+    expect(state.job?.recoveryAttempts).toBe(1);
+    expect(state.work?.state).toBe("ready");
+    expect(state.work?.claimedRunId).toBeUndefined();
+    expect(state.run).toMatchObject({
+      status: "failed",
+      failureCode: "runner_lease_expired",
+    });
+  });
+
+  it("does not resurrect an old runner request after newer direct Run activity", async () => {
+    const fixture = await runnerFixture();
+    const token = runnerToken("s", "q");
+    const registration = await register(fixture, token, "Chronology Mac", "automatic");
+    const created = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Prefer the newer direct Run",
+      kind: "task",
+      idempotencyKey: "runner-chronology-work",
+    });
+    const queued = await fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: created.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-chronology-enqueue",
+    });
+    const terminalAt = Date.now() - 10_000;
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(queued.id as Id<"runnerJobs">, {
+        state: "failed",
+        revision: 2,
+        registrationId: registration.id as Id<"runnerRegistrations">,
+        safeCode: "runner_lease_expired",
+        terminalAt,
+        updatedAt: terminalAt,
+      });
+    });
+    const ready = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(created.workItemId as Id<"workItems">));
+    const newer = await fixture.root.mutation(internal.domains.work.index.start, {
+      authorization: {
+        ...fixture.authorization,
+        externalSessionId: "runner-chronology-session",
+      },
+      workItemId: created.workItemId,
+      expectedRevision: ready!.revision,
+      idempotencyKey: "runner-chronology-start",
+    });
+    await fixture.root.run(async (ctx) => {
+      const now = Date.now();
+      await ctx.db.patch(newer.runId as Id<"runs">, {
+        status: "failed",
+        failureCode: "newer_direct_run_failed",
+        finishedAt: now,
+        lastHeartbeatAt: now,
+      });
+      await ctx.db.patch(created.workItemId as Id<"workItems">, {
+        state: "ready",
+        claimedByActorId: undefined,
+        claimedByInstallationId: undefined,
+        claimedRunId: undefined,
+        claimedAt: undefined,
+        claimExpiresAt: undefined,
+        revision: ready!.revision + 2,
+        updatedAt: now,
+      });
+    });
+
+    const result = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(result.job).toBeUndefined();
+    const stored = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(queued.id as Id<"runnerJobs">));
+    expect(stored).toMatchObject({ state: "failed", safeCode: "runner_lease_expired" });
+    expect(stored?.recoveryAttempts).toBeUndefined();
   });
 
   it("reconciles a crashed runner after its bounded execution lease", async () => {
@@ -889,6 +1443,15 @@ describe("local runner delivery", () => {
       status: "failed",
       failureCode: "runner_lease_expired",
     });
+
+    const recovered = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(recovered.job).toMatchObject({ id: jobId, state: "delivered" });
+    const recoveredJob = await fixture.root.run(async (ctx) => await ctx.db.get(jobId));
+    expect(recoveredJob?.recoveryAttempts).toBe(1);
   });
 });
 

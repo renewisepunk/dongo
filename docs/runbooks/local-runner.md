@@ -205,6 +205,14 @@ delivery is reserved for 60 seconds until acknowledged; running jobs renew a
 revocation outrank execution. A lost or expired lease requires the local process
 to stop and refetch; it must never continue by guessing.
 
+When an automatic-mode runner reconnects, the server may requeue the latest
+explicitly authorized Work job once if its only terminal reason is an expired
+runner lease and the Work is still Ready and unclaimed. The retry remains
+targeted to the same active registration and passes through the normal atomic
+project and host capacity checks. Repeated lease expiry, older historical jobs,
+ask-mode runners, cancellation, and harness or workspace failures stay terminal
+and require a deliberate human Retry instead of forming an unbounded loop.
+
 ## Recovery and rollback
 
 - To stop all new queue creation immediately, set the Convex environment switch
