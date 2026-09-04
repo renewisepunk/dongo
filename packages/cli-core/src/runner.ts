@@ -22,6 +22,8 @@ const RUNNER_VERSION = "0.2.0";
 const MAX_LOG_BYTES = 5 * 1_024 * 1_024;
 const MAX_LOG_FILES = 3;
 
+export type RunnerBrowserReviewMode = "disabled" | "read_only";
+
 export interface RunnerConfig {
   schemaVersion: 1;
   projectRef: string;
@@ -40,6 +42,7 @@ export interface RunnerConfig {
   version: string;
   harnesses: RunnerHarness[];
   approvalMode: RunnerApprovalMode;
+  browserReviewMode: RunnerBrowserReviewMode;
   enabled: boolean;
   installedAt: string;
   updatedAt: string;
@@ -116,6 +119,7 @@ export interface RunnerHarnessAdapter {
     intakeId?: string;
     worktreeName: string;
     branch: string;
+    browserReviewMode?: RunnerBrowserReviewMode;
     signal: AbortSignal;
     log: (chunk: string) => Promise<void>;
   }): Promise<RunnerHarnessResult>;
@@ -193,6 +197,7 @@ export class LocalRunnerManager {
     label: string;
     harnesses: RunnerHarness[];
     approvalMode?: RunnerApprovalMode;
+    browserReviewMode?: RunnerBrowserReviewMode;
   }) {
     const existing = await this.#readConfig(false);
     if (existing) {
@@ -262,6 +267,7 @@ export class LocalRunnerManager {
       version: RUNNER_VERSION,
       harnesses,
       approvalMode: input.approvalMode ?? "ask",
+      browserReviewMode: input.browserReviewMode ?? "disabled",
       enabled: true,
       installedAt: now,
       updatedAt: now,
@@ -287,6 +293,7 @@ export class LocalRunnerManager {
         service: installed,
         repositoryRoot,
         approvalMode: config.approvalMode,
+        browserReviewMode: config.browserReviewMode,
         harnesses,
       };
     } catch (error) {
@@ -321,6 +328,7 @@ export class LocalRunnerManager {
       repositoryRoot: config?.repositoryRoot,
       harnesses: config?.harnesses ?? [],
       approvalMode: config?.approvalMode,
+      browserReviewMode: config?.browserReviewMode,
       servicePlatform: this.#service.platform,
       state,
     };
@@ -357,26 +365,44 @@ export class LocalRunnerManager {
   }
 
   async configureApproval(approvalMode: RunnerApprovalMode) {
+    return await this.configure({ approvalMode });
+  }
+
+  async configure(input: {
+    approvalMode?: RunnerApprovalMode;
+    browserReviewMode?: RunnerBrowserReviewMode;
+  }) {
     const config = await this.#readConfig(true);
     const state = await this.#readState();
     if (state?.currentJobs.length) {
       throw new CliCoreError({
         code: "runner_busy",
-        message: "Wait for the current runner job to finish before changing automatic-start approval.",
+        message: "Wait for the current runner jobs to finish before changing local runner settings.",
         exitCode: 6,
       });
     }
-    if (config.approvalMode === approvalMode) {
+    if (input.approvalMode === undefined && input.browserReviewMode === undefined) {
+      throw new CliCoreError({
+        code: "validation",
+        message: "Choose an approval mode or browser review mode to configure.",
+        exitCode: 2,
+      });
+    }
+    const approvalMode = input.approvalMode ?? config.approvalMode;
+    const browserReviewMode = input.browserReviewMode ?? config.browserReviewMode;
+    if (config.approvalMode === approvalMode && config.browserReviewMode === browserReviewMode) {
       return {
         changed: false,
         approvalMode,
         previousApprovalMode: config.approvalMode,
+        browserReviewMode,
+        previousBrowserReviewMode: config.browserReviewMode,
         harnesses: config.harnesses,
       };
     }
 
     const now = new Date(this.#now()).toISOString();
-    const updated = { ...config, approvalMode, updatedAt: now };
+    const updated = { ...config, approvalMode, browserReviewMode, updatedAt: now };
     await this.#service.disable(this.#projectRef);
     await this.#writeConfig(updated);
     try {
@@ -398,6 +424,8 @@ export class LocalRunnerManager {
         changed: true,
         approvalMode,
         previousApprovalMode: config.approvalMode,
+        browserReviewMode,
+        previousBrowserReviewMode: config.browserReviewMode,
         harnesses: config.harnesses,
         service,
       };
@@ -722,6 +750,7 @@ export class LocalRunnerManager {
       intakeId: current.intakeId,
       worktreeName: workspace.worktreeName,
       branch: workspace.branch,
+      browserReviewMode: config.browserReviewMode,
       signal: controller.signal,
       log: (chunk) => log.append(chunk),
     }).then(
@@ -1163,7 +1192,11 @@ function parseConfig(
       typeof value.installedAt !== "string" ||
       typeof value.updatedAt !== "string"
     ) throw new Error("invalid runner configuration");
-    return value as RunnerConfig;
+    const browserReviewMode = value.browserReviewMode ?? "disabled";
+    if (browserReviewMode !== "disabled" && browserReviewMode !== "read_only") {
+      throw new Error("invalid runner browser review mode");
+    }
+    return { ...value, browserReviewMode } as RunnerConfig;
   } catch {
     throw new CliCoreError({
       code: "runner_config_invalid",

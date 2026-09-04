@@ -53,6 +53,7 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
     workIdentifier: "dong027",
     worktreeName: "dong027-12345678",
     branch: "codex/dongo-runner-dong027-123456789abc",
+    browserReviewMode: "read_only" as const,
     signal: new AbortController().signal,
     log: async () => undefined,
   };
@@ -74,6 +75,8 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
   assert.match(executionCalls[0]?.input ?? "", /externalSessionId dongo-runner-job-1/u);
   assert.match(executionCalls[0]?.input ?? "", /workspace\.worktreeName as dong027-12345678/u);
   assert.match(executionCalls[0]?.input ?? "", /workspace\.branch as codex\/dongo-runner-dong027-123456789abc/u);
+  assert.match(executionCalls[0]?.input ?? "", /locally enabled read-only browser self-review/u);
+  assert.match(executionCalls[0]?.input ?? "", /does not authorize signing in to another account/u);
   assert.doesNotMatch(executionCalls[0]?.args.join(" ") ?? "", /dong027/u);
   assert.equal(executionCalls[0]?.args.some((value) => value.includes("dangerously")), false);
   assert.equal(executionCalls[0]?.env.GH_TOKEN, "secret-1");
@@ -96,6 +99,37 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
   assert.doesNotMatch(JSON.stringify(first), /private model output/u);
   await adapter.discardRegistration(input.registrationId);
   assert.equal(await adapter.canResume(input), false);
+});
+
+test("Codex adapter omits browser authorization unless the owner enabled it locally", async () => {
+  const calls: Array<{ args: string[]; input: string }> = [];
+  const adapter = new CodexRunnerAdapter({
+    store: new MemorySecretStore(),
+    executablePath: "/bin/sh",
+    spawnProcess: ((_executable: string, args: string[]) => {
+      const child = fakeChild();
+      const call = { args, input: "" };
+      child.stdin.on("data", (value) => { call.input += value.toString(); });
+      calls.push(call);
+      queueMicrotask(() => {
+        child.stdout.end();
+        child.stderr.end();
+        child.emit("exit", 0);
+      });
+      return child;
+    }) as never,
+    resolveCredentialEnvironment: noCredentialEnvironment,
+  });
+  await adapter.execute({
+    repositoryRoot: process.cwd(),
+    registrationId: "registration-disabled",
+    jobId: "job-disabled",
+    kind: "work",
+    workIdentifier: "dong080",
+    signal: new AbortController().signal,
+    log: async () => undefined,
+  });
+  assert.doesNotMatch(calls[0]?.input ?? "", /browser self-review/u);
 });
 
 test("Codex adapter refuses an invalid server identifier before launch", async () => {
@@ -306,6 +340,7 @@ test("runner adapters use a fixed triage-only prompt for an Intake job", async (
     jobId: "job-intake",
     kind: "intake",
     intakeId: "ks705f6sdbjpvgqhn812x0s7a18dnw1d",
+    browserReviewMode: "read_only",
     signal: new AbortController().signal,
     log: async () => undefined,
   });
@@ -313,6 +348,7 @@ test("runner adapters use a fixed triage-only prompt for an Intake job", async (
   assert.match(execution?.input ?? "", /exact dongo Intake ks705f6sdbjpvgqhn812x0s7a18dnw1d/u);
   assert.match(execution?.input ?? "", /only this Intake triage/u);
   assert.match(execution?.input ?? "", /do not start or implement/u);
+  assert.doesNotMatch(execution?.input ?? "", /browser self-review/u);
   assert.doesNotMatch(execution?.args.join(" ") ?? "", /ks705f6/u);
 });
 

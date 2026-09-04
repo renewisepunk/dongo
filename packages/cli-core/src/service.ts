@@ -32,6 +32,7 @@ import {
   createRunnerStore,
   LocalRunnerManager,
   type RunnerAdapterResolver,
+  type RunnerBrowserReviewMode,
 } from "./runner.ts";
 import {
   LocalRunnerServiceController,
@@ -477,6 +478,7 @@ export class CoreService {
       label: string;
       harnesses: RunnerHarness[];
       approvalMode?: RunnerApprovalMode;
+      browserReviewMode?: RunnerBrowserReviewMode;
     },
   ) {
     return await (await this.#runnerManager()).install(options);
@@ -492,6 +494,13 @@ export class CoreService {
 
   async runnerConfigureApproval(approvalMode: RunnerApprovalMode) {
     return await (await this.#runnerManager()).configureApproval(approvalMode);
+  }
+
+  async runnerConfigure(options: {
+    approvalMode?: RunnerApprovalMode;
+    browserReviewMode?: RunnerBrowserReviewMode;
+  }) {
+    return await (await this.#runnerManager()).configure(options);
   }
 
   async runnerDisable() {

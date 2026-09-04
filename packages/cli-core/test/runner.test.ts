@@ -33,6 +33,7 @@ test("runner installation stores a one-time credential locally and exposes only 
     harnesses: ["codex", "claude", "codex"],
   });
   assert.equal(installed.approvalMode, "ask");
+  assert.equal(installed.browserReviewMode, "disabled");
   assert.deepEqual(installed.harnesses, ["claude", "codex"]);
   assert.equal(service.installs.length, 1);
   assert.match(api.registrationToken ?? "", /^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$/u);
@@ -40,6 +41,7 @@ test("runner installation stores a one-time credential locally and exposes only 
   assert.equal(status.installed, true);
   assert.equal(status.enabled, true);
   assert.equal("token" in status, false);
+  assert.equal(status.browserReviewMode, "disabled");
   assert.doesNotMatch(JSON.stringify(status), /dng_run_/u);
   await assert.rejects(
     manager.install({ label: "Duplicate", harnesses: ["codex"] }),
@@ -73,18 +75,38 @@ test("runner approval can be changed in place without replacing its credential",
   assert.equal(service.installs.length, 2);
 });
 
+test("runner browser self-review is an explicit local setting", async (context) => {
+  const fixture = await runnerFixture(context);
+  const api = new FakeRunnerApi();
+  const service = new FakeService();
+  const manager = fixture.manager(api, service);
+  await manager.install({ label: "Review Mac", harnesses: ["codex"] });
+  const beforeToken = api.registrationToken;
+
+  const configured = await manager.configure({ browserReviewMode: "read_only" });
+
+  assert.equal(configured.changed, true);
+  assert.equal(configured.previousBrowserReviewMode, "disabled");
+  assert.equal(configured.browserReviewMode, "read_only");
+  assert.equal(configured.approvalMode, "ask");
+  assert.equal(api.registrationToken, beforeToken);
+  assert.equal(service.disables, 1);
+  assert.equal(service.installs.length, 2);
+  assert.equal((await manager.status()).browserReviewMode, "read_only");
+});
+
 test("ask mode requires exact local approval before executing a command-free job", async (context) => {
   const fixture = await runnerFixture(context);
   const controller = new AbortController();
   const api = new FakeRunnerApi();
   const service = new FakeService();
   let manager: LocalRunnerManager;
-  let received: { repositoryRoot: string; workIdentifier: string } | undefined;
+  let received: { repositoryRoot: string; workIdentifier: string; browserReviewMode?: string } | undefined;
   const adapter: RunnerHarnessAdapter = {
     harness: "codex",
     validate: async () => "/bin/sh",
-    execute: async ({ repositoryRoot, workIdentifier, log }) => {
-      received = { repositoryRoot, workIdentifier: workIdentifier! };
+    execute: async ({ repositoryRoot, workIdentifier, browserReviewMode, log }) => {
+      received = { repositoryRoot, workIdentifier: workIdentifier!, browserReviewMode };
       await log("local output only\n");
       return { outcome: "completed", safeCode: "verified", safeSummary: "Implementation and checks completed." };
     },
@@ -100,7 +122,7 @@ test("ask mode requires exact local approval before executing a command-free job
       }
     },
   });
-  await manager.install({ label: "Approval Mac", harnesses: ["codex"] });
+  await manager.install({ label: "Approval Mac", harnesses: ["codex"], browserReviewMode: "read_only" });
   api.job = runnerJob("delivered", 2);
   api.onTerminal = () => controller.abort();
   await manager.run(controller.signal);
@@ -112,6 +134,7 @@ test("ask mode requires exact local approval before executing a command-free job
     "completed",
   ]);
   assert.equal(received?.workIdentifier, "dong026");
+  assert.equal(received?.browserReviewMode, "read_only");
   assert.notEqual(received?.repositoryRoot, fixture.repository);
   assert.match(received?.repositoryRoot ?? "", /runner-worktrees/u);
   const status = await manager.status();

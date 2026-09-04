@@ -7,7 +7,7 @@ Production runs at [dongo.so](https://dongo.so) against the isolated Convex prod
 ## Product surfaces
 
 - **Web:** email-code sign-in, project onboarding, Intake capture, Overview, Work detail, Attention response, search, and administration. Google sign-in is proven in development and remains disabled in production until its exact production callback is registered.
-- **CLI:** one-link OAuth Device Authorization, complete agent operations, secure credential storage, diagnostics, attachment download, deterministic `.agent-work` export, and an optional local runner. Owners may separately opt one automatic-mode runner and harness into triaging only newly created Inbox Intake; sleeping or offline computers leave those jobs durably queued.
+- **CLI:** one-link OAuth Device Authorization, complete agent operations, secure credential storage, diagnostics, attachment download, deterministic `.agent-work` export, and an optional local runner. Owners may separately opt one automatic-mode runner and harness into triaging only newly created Inbox Intake, and may explicitly allow read-only browser self-review for Work; sleeping or offline computers leave jobs durably queued.
 - **Remote MCP:** project-specific Streamable HTTP endpoints with OAuth discovery, PKCE/CIMD or supported DCR, per-installation grants, and the same operation semantics as the CLI.
 - **Edge services:** isolated authorization, typed agent API, MCP gateway, direct R2 attachment delivery, and durable notification dispatch.
 
