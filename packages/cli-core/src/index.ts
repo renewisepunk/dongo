@@ -1,5 +1,6 @@
 export { SystemBrowserOpener } from "./browser.ts";
 export type { BrowserOpener } from "./browser.ts";
+export { acquireConnectionLock } from "./connection-lock.ts";
 export { fetchAttachmentFile } from "./attachments.ts";
 export type * from "./attachments.ts";
 export { DeviceAuthorizationClient } from "./device-auth.ts";
@@ -11,7 +12,13 @@ export type * from "./integrations.ts";
 export { CliCoreError } from "./errors.ts";
 export { markerPath, readProjectMarker, writeProjectMarker } from "./marker.ts";
 export type * from "./marker.ts";
-export { credentialProfile, findRepositoryRoot, repositoryName } from "./repository.ts";
+export {
+  canonicalRepositoryRoot,
+  credentialProfile,
+  findRepositoryRoot,
+  repositoryCredentialProfiles,
+  repositoryName,
+} from "./repository.ts";
 export { sanitizedChildEnvironment } from "./process-environment.ts";
 export {
   ClaudeRunnerAdapter,

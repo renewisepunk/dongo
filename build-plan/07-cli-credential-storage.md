@@ -13,7 +13,7 @@ On POSIX systems:
 
 - configuration directory: `${XDG_CONFIG_HOME:-~/.config}/dongo`;
 - credential directory: `credentials/`, forced to owner-only `0700`;
-- one opaque filename per product-origin + repository-root profile;
+- one opaque filename per product-origin + repository binding profile;
 - credential file: forced to owner-only `0600`;
 - writes: create a new same-directory temporary file with exclusive creation, then atomically rename;
 - reads: reject symlinks, non-regular files, wrong ownership, and group/other permissions before parsing;
@@ -128,8 +128,15 @@ Keychain can improve protection for data at rest and against unrelated processes
 The credential profile is derived from:
 
 ```text
-normalized product origin + absolute repository root
+normalized product origin + primary checkout owning Git's common directory
 ```
+
+Linked Git worktrees share that common directory and therefore reuse the same
+repository-scoped credential. During migration, the CLI may discover a newer
+exact-project marker in a sibling worktree and reuse its profile only when the
+product origin, project ID/reference, installation ID, and common Git directory
+all agree. An independent clone, copied marker, changed repository, or different
+remote cannot satisfy that proof and remains rejected.
 
 The derived profile is hashed before becoming a filename. The credential document contains the exact:
 
@@ -144,7 +151,10 @@ The derived profile is hashed before becoming a filename. The credential documen
 
 The repository contains only `.agent-work/project.json`, which holds non-secret environment, project, installation, and credential-profile identifiers. Every command validates that marker against compiled environment endpoints and the expected repository-derived profile before loading or transmitting a credential.
 
-Moving/copying a repository to a different absolute root intentionally requires a new connection. Copying only `.agent-work/project.json` never copies authority.
+Moving an existing linked Git worktree does not require a new connection because
+Git's common directory remains the same. An independent clone or copied
+repository has a different common directory and intentionally requires its own
+connection. Copying only `.agent-work/project.json` never copies authority.
 
 ## 6. Filesystem contract
 
@@ -220,12 +230,18 @@ If permissions, ownership, file type, schema, issuer, resource, or marker bindin
 
 ### Connect
 
-1. Detect the repository and resolve the exact project proposal/reference.
-2. Complete Device Authorization in the external browser.
+1. Detect the repository, acquire its owner-only single-flight connection lock,
+   and reconcile any healthy marker/credential from the checkout or a linked
+   worktree.
+2. Return the verified existing project/installation without browser activity,
+   or—only when authorization is absent or rejected—complete Device
+   Authorization in the external browser.
 3. Validate the token response.
 4. Create the user credential directory and atomically store the bounded credential.
 5. Write the non-secret repository marker.
 6. Start a server session and report Connected only when marker, credential, and server context agree.
+7. Release the connection lock; a waiting concurrent command then rechecks the
+   completed state and must not create a second installation.
 
 If local storage fails after browser approval, report that the connection did not complete and store no partial marker/credential. A retry may start a fresh device request; it must not print token material.
 

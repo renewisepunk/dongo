@@ -98,7 +98,15 @@ Omit both to ask the authorizing owner a durable project-level question, or add
 general form requires no Work claim or Run and remains available after the
 current CLI session exits.
 
-Add `--json` to receive one JSON object on stdout. Progress and the one complete browser approval link are written to stderr. The normal flow opens that link, waits for browser approval, stores the resulting credential, writes a non-secret project marker, and returns control to the terminal. `--no-browser` supports SSH/headless sessions by printing the same complete link while polling continues; no code or token needs to be copied into the CLI.
+Add `--json` to receive one JSON object on stdout. Before connecting, run
+`dongo auth status --json` and `dongo doctor --json`. A healthy existing binding
+is reused—including from a linked Git worktree—and `dongo connect` returns it
+without opening a browser. When authorization is genuinely needed, progress and
+the one complete browser approval link are written to stderr. Concurrent
+connect commands are single-flight: later commands wait for the active attempt
+and reconcile its result rather than opening another approval. `--no-browser`
+supports SSH/headless sessions by printing the same complete link while polling
+continues; no code or token needs to be copied into the CLI.
 
 Add `--agent-host codex` when the same owner action should explicitly approve the CLI and Codex for the selected project. The page names both clients and their access. Codex still completes its own PKCE login, stores a separate credential, and remains independently revocable; the CLI credential is never copied into Codex. Other hosts and connections without this flag retain their own approval.
 
