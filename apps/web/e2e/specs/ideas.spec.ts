@@ -205,11 +205,11 @@ test("shows promoted provenance in both directions", async ({ page }) => {
   await ideaRow(page, "idea-promoted").click();
   await page.getByRole("link", { name: "View in Inbox" }).first().click();
   await expect(page).toHaveURL(/\?intake=intake-from-idea$/);
-  await expect(page).toHaveTitle("(1) dongo · Intake — dongo");
   await expect(page.getByRole("link", { name: "Promoted from Ideas" })).toHaveAttribute(
     "href",
     "/app/fixture-studio/dongo/ideas?filter=promoted&idea=idea-promoted",
   );
+  await expect(page).toHaveTitle("(1) dongo · Intake — dongo");
 });
 
 test("stacks the selected Idea on a narrow viewport without horizontal overflow", async ({ page }) => {
