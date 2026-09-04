@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { constants } from "node:fs";
 import { access, realpath, stat } from "node:fs/promises";
 import path from "node:path";
@@ -19,6 +19,8 @@ const VERSION_CHECK_TIMEOUT_MS = 5_000;
 const MAX_PROBE_OUTPUT_BYTES = 64 * 1_024;
 const MAX_EVENT_LINE_BYTES = 128 * 1_024;
 const MAX_EVENT_STREAM_BYTES = 8 * 1_024 * 1_024;
+const GITHUB_CREDENTIAL_PROBE_TIMEOUT_MS = 5_000;
+const GITHUB_CREDENTIAL_PROBE_MAX_BYTES = 8 * 1_024;
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const CLAUDE_SESSION_ID = /^[A-Za-z0-9_-]{8,128}$/u;
 const sessionIndexLocks = new WeakMap<object, Map<string, Promise<void>>>();
@@ -38,6 +40,18 @@ type SpawnHarness = (
   args: string[],
   options: HarnessSpawnOptions,
 ) => HarnessChild;
+
+export type ResolveCredentialEnvironment = (options: {
+  repositoryRoot: string;
+  environmentPath?: string;
+}) => Promise<NodeJS.ProcessEnv>;
+
+export type RunCredentialProbe = (options: {
+  command: string;
+  args: string[];
+  cwd: string;
+  environmentPath?: string;
+}) => Promise<{ ok: boolean; stdout: string }>;
 
 interface AdapterInput {
   repositoryRoot: string;
@@ -67,6 +81,7 @@ export interface CodexRunnerAdapterOptions {
   executablePath?: string;
   environmentPath?: string;
   spawnProcess?: SpawnHarness;
+  resolveCredentialEnvironment?: ResolveCredentialEnvironment;
 }
 
 export type ClaudeRunnerAdapterOptions = CodexRunnerAdapterOptions;
@@ -77,6 +92,7 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
   readonly #executablePath?: string;
   readonly #environmentPath?: string;
   readonly #spawn: SpawnHarness;
+  readonly #resolveCredentialEnvironment: ResolveCredentialEnvironment;
 
   constructor(options: CodexRunnerAdapterOptions) {
     this.#store = options.store;
@@ -84,6 +100,7 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
     this.#environmentPath = options.environmentPath;
     this.#spawn = options.spawnProcess ?? ((executable, args, spawnOptions) =>
       spawn(executable, args, spawnOptions));
+    this.#resolveCredentialEnvironment = options.resolveCredentialEnvironment ?? resolveGitHubCliChildEnvironment;
   }
 
   async validate(): Promise<string> {
@@ -117,6 +134,10 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
     const executable = await resolveExecutable("codex", this.#executablePath, this.#environmentPath);
     const existing = await readSession(this.#store, this.harness, input, SESSION_ID);
     const prompt = runnerPrompt(input);
+    const credentialEnvironment = await this.#resolveCredentialEnvironment({
+      repositoryRoot: input.repositoryRoot,
+      environmentPath: this.#environmentPath,
+    });
     const args = existing
       ? ["exec", "resume", "--json", existing.sessionId, "-"]
       : ["exec", "--json", "--sandbox", "workspace-write", "--cd", input.repositoryRoot, "-"];
@@ -126,6 +147,7 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
       args,
       input: prompt,
       environmentPath: this.#environmentPath,
+      credentialEnvironment,
       repositoryRoot: input.repositoryRoot,
       signal: input.signal,
       log: input.log,
@@ -168,6 +190,7 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
   readonly #executablePath?: string;
   readonly #environmentPath?: string;
   readonly #spawn: SpawnHarness;
+  readonly #resolveCredentialEnvironment: ResolveCredentialEnvironment;
 
   constructor(options: ClaudeRunnerAdapterOptions) {
     this.#store = options.store;
@@ -175,6 +198,7 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
     this.#environmentPath = options.environmentPath;
     this.#spawn = options.spawnProcess ?? ((executable, args, spawnOptions) =>
       spawn(executable, args, spawnOptions));
+    this.#resolveCredentialEnvironment = options.resolveCredentialEnvironment ?? resolveGitHubCliChildEnvironment;
   }
 
   async validate(): Promise<string> {
@@ -207,6 +231,10 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
     assertRunnerTarget(input);
     const executable = await resolveExecutable("claude", this.#executablePath, this.#environmentPath);
     const existing = await readSession(this.#store, this.harness, input, CLAUDE_SESSION_ID);
+    const credentialEnvironment = await this.#resolveCredentialEnvironment({
+      repositoryRoot: input.repositoryRoot,
+      environmentPath: this.#environmentPath,
+    });
     const args = [
       "-p",
       "--output-format",
@@ -221,6 +249,7 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
       args,
       input: runnerPrompt(input),
       environmentPath: this.#environmentPath,
+      credentialEnvironment,
       repositoryRoot: input.repositoryRoot,
       signal: input.signal,
       log: input.log,
@@ -299,6 +328,74 @@ async function resolveExecutable(name: string, explicitPath?: string, environmen
     code: "harness_unavailable",
     message: `The local ${name} executable was not found on an absolute PATH entry.`,
     exitCode: 4,
+  });
+}
+
+export async function resolveGitHubCliChildEnvironment(options: {
+  repositoryRoot: string;
+  environmentPath?: string;
+  runProbe?: RunCredentialProbe;
+}): Promise<NodeJS.ProcessEnv> {
+  const runProbe = options.runProbe ?? runCredentialProbe;
+  const remote = await runProbe({
+    command: "git",
+    args: ["remote", "get-url", "origin"],
+    cwd: options.repositoryRoot,
+    environmentPath: options.environmentPath,
+  }).catch(() => ({ ok: false, stdout: "" }));
+  if (!remote.ok) return {};
+  const hostname = remoteHostname(remote.stdout);
+  if (!hostname) return {};
+  const credential = await runProbe({
+    command: "gh",
+    args: ["auth", "token", "--hostname", hostname],
+    cwd: options.repositoryRoot,
+    environmentPath: options.environmentPath,
+  }).catch(() => ({ ok: false, stdout: "" }));
+  if (!credential.ok) return {};
+  const token = credential.stdout.trim();
+  if (!token || token.length > GITHUB_CREDENTIAL_PROBE_MAX_BYTES || /\s/u.test(token)) return {};
+  return hostname === "github.com"
+    ? { GH_TOKEN: token }
+    : { GH_ENTERPRISE_TOKEN: token, GH_HOST: hostname };
+}
+
+function remoteHostname(remote: string): string | undefined {
+  const value = remote.trim();
+  const scpLike = /^[^@\s]+@([^:\s/]+):[^\s]+$/u.exec(value);
+  if (scpLike?.[1]) return scpLike[1].toLowerCase();
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:", "ssh:", "git:"].includes(url.protocol)) return undefined;
+    return url.hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+async function runCredentialProbe(options: {
+  command: string;
+  args: string[];
+  cwd: string;
+  environmentPath?: string;
+}): Promise<{ ok: boolean; stdout: string }> {
+  let executable: string;
+  try {
+    executable = await resolveExecutable(options.command, undefined, options.environmentPath);
+  } catch {
+    return { ok: false, stdout: "" };
+  }
+  return await new Promise((resolve) => {
+    execFile(executable, options.args, {
+      cwd: options.cwd,
+      env: sanitizedChildEnvironment(options.environmentPath ? { PATH: options.environmentPath } : {}),
+      encoding: "utf8",
+      maxBuffer: GITHUB_CREDENTIAL_PROBE_MAX_BYTES,
+      timeout: GITHUB_CREDENTIAL_PROBE_TIMEOUT_MS,
+      windowsHide: true,
+    }, (error, stdout) => {
+      resolve({ ok: !error, stdout: typeof stdout === "string" ? stdout : "" });
+    });
   });
 }
 
@@ -526,6 +623,7 @@ async function runHarnessProcess(options: {
   args: string[];
   input?: string;
   environmentPath?: string;
+  credentialEnvironment?: NodeJS.ProcessEnv;
   repositoryRoot: string;
   signal: AbortSignal;
   log: (chunk: string) => Promise<void>;
@@ -537,7 +635,10 @@ async function runHarnessProcess(options: {
   try {
     child = options.spawnProcess(options.executable, options.args, {
       cwd: options.repositoryRoot,
-      env: sanitizedChildEnvironment(options.environmentPath ? { PATH: options.environmentPath } : {}),
+      env: sanitizedChildEnvironment({
+        ...(options.environmentPath ? { PATH: options.environmentPath } : {}),
+        ...options.credentialEnvironment,
+      }),
       shell: false,
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],

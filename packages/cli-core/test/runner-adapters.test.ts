@@ -5,13 +5,19 @@ import test from "node:test";
 import { DONGO_COMPLETION_INSTRUCTIONS } from "@dongo/mcp/managed-integrations";
 
 import { MemorySecretStore } from "../src/secret-store.ts";
-import { ClaudeRunnerAdapter, CodexRunnerAdapter } from "../src/runner-adapters.ts";
+import {
+  ClaudeRunnerAdapter,
+  CodexRunnerAdapter,
+  resolveGitHubCliChildEnvironment,
+} from "../src/runner-adapters.ts";
+
+const noCredentialEnvironment = async () => ({});
 
 test("Codex adapter uses fixed safe arguments and stdin, then resumes only the exact local job session", async () => {
-  const calls: Array<{ executable: string; args: string[]; cwd: string; input: string }> = [];
-  const spawnProcess = (_executable: string, args: string[], options: { cwd: string }) => {
+  const calls: Array<{ executable: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv; input: string }> = [];
+  const spawnProcess = (_executable: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }) => {
     const child = fakeChild();
-    const call = { executable: _executable, args, cwd: options.cwd, input: "" };
+    const call = { executable: _executable, args, cwd: options.cwd, env: options.env, input: "" };
     child.stdin.on("data", (value) => { call.input += value.toString(); });
     calls.push(call);
     queueMicrotask(() => {
@@ -31,10 +37,12 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
     });
     return child;
   };
+  let credentialResolution = 0;
   const adapter = new CodexRunnerAdapter({
     store: new MemorySecretStore(),
     executablePath: "/bin/sh",
     spawnProcess: spawnProcess as never,
+    resolveCredentialEnvironment: async () => ({ GH_TOKEN: `secret-${++credentialResolution}` }),
   });
   await adapter.validate();
   const input = {
@@ -68,6 +76,8 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
   assert.match(executionCalls[0]?.input ?? "", /workspace\.branch as codex\/dongo-runner-dong027-123456789abc/u);
   assert.doesNotMatch(executionCalls[0]?.args.join(" ") ?? "", /dong027/u);
   assert.equal(executionCalls[0]?.args.some((value) => value.includes("dangerously")), false);
+  assert.equal(executionCalls[0]?.env.GH_TOKEN, "secret-1");
+  assert.doesNotMatch(JSON.stringify({ args: executionCalls[0]?.args, input: executionCalls[0]?.input }), /secret-1/u);
   assert.equal(await adapter.canResume(input), true);
   await adapter.execute(input);
   executionCalls = calls.filter(({ args }) => args.at(-1) === "-");
@@ -81,6 +91,8 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
   assert.match(executionCalls[1]?.input ?? "", /exact dongo WorkItem dong027/u);
   assert.ok(executionCalls[1]?.input.includes(DONGO_COMPLETION_INSTRUCTIONS));
   assert.equal(executionCalls[1]?.cwd, process.cwd());
+  assert.equal(executionCalls[1]?.env.GH_TOKEN, "secret-2");
+  assert.equal(credentialResolution, 2);
   assert.doesNotMatch(JSON.stringify(first), /private model output/u);
   await adapter.discardRegistration(input.registrationId);
   assert.equal(await adapter.canResume(input), false);
@@ -95,6 +107,7 @@ test("Codex adapter refuses an invalid server identifier before launch", async (
       launches += 1;
       return fakeChild();
     }) as never,
+    resolveCredentialEnvironment: noCredentialEnvironment,
   });
   await assert.rejects(adapter.execute({
     repositoryRoot: process.cwd(),
@@ -137,6 +150,7 @@ test("Claude Code adapter uses print mode and stdin, then resumes only its exact
     store: new MemorySecretStore(),
     executablePath: "/bin/sh",
     spawnProcess: spawnProcess as never,
+    resolveCredentialEnvironment: noCredentialEnvironment,
   });
   await adapter.validate();
   const input = {
@@ -192,6 +206,7 @@ test("harness sessions cannot be resumed from a different repository", async () 
     store,
     executablePath: "/bin/sh",
     spawnProcess: spawnProcess as never,
+    resolveCredentialEnvironment: noCredentialEnvironment,
   });
   const input = {
     repositoryRoot: process.cwd(),
@@ -220,6 +235,7 @@ test("adapter validation rejects a CLI that lacks the safe runner features", asy
     store: new MemorySecretStore(),
     executablePath: "/bin/sh",
     spawnProcess: spawnProcess as never,
+    resolveCredentialEnvironment: noCredentialEnvironment,
   });
   await assert.rejects(adapter.validate(), (error: Error & { code?: string }) => {
     assert.equal(error.code, "harness_unsupported");
@@ -244,6 +260,7 @@ test("adapter cancellation terminates the local harness and reports no remote ou
     store: new MemorySecretStore(),
     executablePath: "/bin/sh",
     spawnProcess: spawnProcess as never,
+    resolveCredentialEnvironment: noCredentialEnvironment,
   });
   const result = await adapter.execute({
     repositoryRoot: process.cwd(),
@@ -281,6 +298,7 @@ test("runner adapters use a fixed triage-only prompt for an Intake job", async (
     store: new MemorySecretStore(),
     executablePath: "/bin/sh",
     spawnProcess: spawnProcess as never,
+    resolveCredentialEnvironment: noCredentialEnvironment,
   });
   await adapter.execute({
     repositoryRoot: process.cwd(),
@@ -296,6 +314,52 @@ test("runner adapters use a fixed triage-only prompt for an Intake job", async (
   assert.match(execution?.input ?? "", /only this Intake triage/u);
   assert.match(execution?.input ?? "", /do not start or implement/u);
   assert.doesNotMatch(execution?.args.join(" ") ?? "", /ks705f6/u);
+});
+
+test("GitHub CLI credentials are resolved from the repository host without entering arguments or durable state", async () => {
+  const calls: Array<{ command: string; args: string[]; cwd: string }> = [];
+  const environment = await resolveGitHubCliChildEnvironment({
+    repositoryRoot: "/safe/repository",
+    runProbe: async ({ command, args, cwd }) => {
+      calls.push({ command, args, cwd });
+      return command === "git"
+        ? { ok: true, stdout: "git@github.com:renewisepunk/dongo.git\n" }
+        : { ok: true, stdout: "github-secret-value\n" };
+    },
+  });
+  assert.deepEqual(environment, { GH_TOKEN: "github-secret-value" });
+  assert.deepEqual(calls, [
+    { command: "git", args: ["remote", "get-url", "origin"], cwd: "/safe/repository" },
+    { command: "gh", args: ["auth", "token", "--hostname", "github.com"], cwd: "/safe/repository" },
+  ]);
+  assert.doesNotMatch(JSON.stringify(calls), /github-secret-value/u);
+});
+
+test("GitHub CLI credential resolution fails closed and supports authenticated enterprise hosts", async () => {
+  const missing = await resolveGitHubCliChildEnvironment({
+    repositoryRoot: "/safe/repository",
+    runProbe: async () => ({ ok: false, stdout: "" }),
+  });
+  assert.deepEqual(missing, {});
+
+  const malformed = await resolveGitHubCliChildEnvironment({
+    repositoryRoot: "/safe/repository",
+    runProbe: async ({ command }) => command === "git"
+      ? { ok: true, stdout: "https://github.com/renewisepunk/dongo.git" }
+      : { ok: true, stdout: "not a token\n" },
+  });
+  assert.deepEqual(malformed, {});
+
+  const enterprise = await resolveGitHubCliChildEnvironment({
+    repositoryRoot: "/safe/repository",
+    runProbe: async ({ command }) => command === "git"
+      ? { ok: true, stdout: "https://github.example.com/renewisepunk/dongo.git" }
+      : { ok: true, stdout: "enterprise-secret" },
+  });
+  assert.deepEqual(enterprise, {
+    GH_ENTERPRISE_TOKEN: "enterprise-secret",
+    GH_HOST: "github.example.com",
+  });
 });
 
 function fakeChild() {

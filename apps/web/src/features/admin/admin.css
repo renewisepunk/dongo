@@ -13,12 +13,6 @@
   padding: 12px 22px;
 }
 
-.settings-header__title {
-  color: var(--text-muted);
-  font-family: var(--mono);
-  font-size: 12px;
-}
-
 .settings-layout {
   display: grid;
   width: min(960px, 100%);

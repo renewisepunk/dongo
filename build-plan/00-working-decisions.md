@@ -444,6 +444,31 @@ Work share the Closed history surface but retain distinct states and labels;
 dismissed Intake becomes read-only and leaves Inbox. No self-service close
 operation hard-deletes content or restores Free-plan Work capacity.
 
+### D-30 — Bounded paid cross-project overview
+
+Decided: signed-in people have one optional **All projects** route, reached from
+the existing project selector. It groups only their accessible active projects
+by organization and keeps the project-scoped Overview as the primary working
+surface. Each entitled project shows one priority item using the existing
+Needs You, active Working, Ready, then Inbox precedence, with direct navigation
+to that project's canonical Overview or item detail.
+
+Cross-project live status is a Paid organization entitlement. Free
+organizations remain visible as navigation groups without exposing aggregated
+live state, including when an operator has raised their active-project
+allowance; that allowance does not silently change plan entitlements. The query
+derives projects only through the current human's memberships, ignores archived
+projects, accepts no caller-supplied organization or project IDs, and fails
+closed before reading project status for an unentitled organization.
+
+One subscription covers the entire route. It returns at most 20 organizations
+after one membership lookahead, reads at most 24 active projects per snapshot,
+applies constant per-project lane lookups, and returns a truthful truncation
+indicator instead of allowing query and subscription work to grow without
+bound. Wide screens use scannable project columns; narrow screens preserve the
+same organization and project order in one stack without hiding status or
+navigation from keyboard or screen-reader users.
+
 ## Decisions that may wait until after the walking skeleton
 
 - Billing provider and checkout/customer-portal UX.

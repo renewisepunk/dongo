@@ -112,7 +112,7 @@ export async function connectFixtureIdeas(orgSlug: string, projectSlug: string):
   if (scenario() === "ideas-connect-error") throw new Error("fixture Ideas connection detail must stay hidden");
   return {
     projectId: "project-fixture",
-    projectName: "dongo",
+    projectName: scenario() === "breadcrumb-project-name" ? "R&D / Launch" : "dongo",
     subscribeIdeas(_state, onUpdate, onError) {
       if (scenario() === "ideas-subscription-error") {
         queueMicrotask(() => onError(new Error("fixture Ideas subscription detail must stay hidden")));
