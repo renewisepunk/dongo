@@ -28,12 +28,13 @@ export type AgentReleaseDelivery = Readonly<{
  */
 export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   schemaVersion: 1,
-  sequence: 11,
-  id: "dongo-cli-0.2.11",
-  title: "dongo CLI 0.2.11 is available",
+  sequence: 14,
+  id: "dongo-cli-0.2.12-final",
+  title: "dongo CLI 0.2.12 is available",
   changes: [
-    "Owners can locally enable read-only browser self-review so runner-launched Codex Work jobs can verify the application in an existing signed-in browser session.",
-    "Browser self-review is off by default, never applies to Intake, and excludes unrelated tabs, new sign-ins, state-changing actions, permission grants, and safety-policy bypasses.",
+    "Runners now fill and refill six isolated worktree slots by default, with configurable 1–8 host/project bounds, serial compatibility, exact per-job recovery, and lease/cancel safety.",
+    "Connections self-reconcile across linked worktrees and concurrent connects without repeated browser authorization.",
+    "Opt-in deployment access preflights approved GitHub, Convex, Cloudflare, and npm credentials and redacts job logs.",
   ],
   hostedMcp: {
     status: "already_current",
@@ -41,9 +42,9 @@ export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   },
   cli: {
     packageName: "@wisepunk/dongo",
-    version: "0.2.11",
+    version: "0.2.12",
     checkCommand: "dongo --version",
-    installCommand: "npm install --global @wisepunk/dongo@0.2.11",
+    installCommand: "npm install --global @wisepunk/dongo@0.2.12",
     consentRequired: true,
   },
 } satisfies AgentReleaseNotice);

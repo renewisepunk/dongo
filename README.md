@@ -123,9 +123,18 @@ cannot reload MCP servers dynamically may need one restart.
 ```sh
 npm install --global @wisepunk/dongo
 dongo --version
+dongo auth status --json
+dongo doctor
+# Only when these checks say this repository needs authorization:
 dongo connect --agent-host codex
 dongo doctor
 ```
+
+Always inspect the current binding before starting authorization. A healthy
+existing connection—including from a linked Git worktree—is reused without
+opening another browser approval. `dongo connect` is idempotent and
+single-flight: concurrent invocations wait for the active approval, then
+reconcile its result instead of creating duplicate installations.
 
 Because the public CLI package is new, npm or an agent host may show a
 new-package safety warning during the initial release window. Verify the exact
@@ -134,7 +143,15 @@ scoped package and its repository/integrity metadata with
 unscoped lookalike or bypass a host security policy. A host-required approval is
 an expected user confirmation, not a setup failure.
 
-`dongo connect` always connects to the live service at `dongo.so` and opens a browser for project approval. `--agent-host codex` makes that one screen explicitly approve both the CLI and Codex; each still receives a separate project-scoped credential. Authentication stays outside the repository, which receives only a non-secret connection marker and public OAuth client settings. SSH and headless environments can use `--no-browser`. Development infrastructure is private to dongo's own source-level test harnesses and is not selectable from the installed CLI.
+`dongo connect` always connects to the live service at `dongo.so`. It opens a
+browser for project approval only when no healthy matching binding already
+exists. `--agent-host codex` makes that one screen explicitly approve both the
+CLI and Codex; each still receives a separate project-scoped credential.
+Authentication stays outside the repository, which receives only a non-secret
+connection marker and public OAuth client settings. SSH and headless
+environments can use `--no-browser`. Development infrastructure is private to
+dongo's own source-level test harnesses and is not selectable from the installed
+CLI.
 
 ## Manual MCP setup
 

@@ -543,10 +543,25 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
             title: option(parsed, "title"),
             goal: option(parsed, "goal"),
             latestUpdate: option(parsed, "latest-update"),
+            activity: option(parsed, "activity-kind")
+              ? {
+                  kind: option(parsed, "activity-kind") as
+                    | "executing"
+                    | "verification"
+                    | "release"
+                    | "waiting_for_resource"
+                    | "paused",
+                  label: option(parsed, "activity-label"),
+                  nextStep: option(parsed, "activity-next-step"),
+                }
+              : undefined,
             artifact: artifacts[0] ? artifact(artifacts[0]) : undefined,
           };
-          if (!update.title && !update.goal && !update.latestUpdate && !update.artifact) {
-            throw new CliCoreError({ code: "validation", message: "work update requires a title, goal, latest update, or artifact.", exitCode: 2 });
+          if ((option(parsed, "activity-label") || option(parsed, "activity-next-step")) && !update.activity) {
+            throw new CliCoreError({ code: "validation", message: "--activity-label and --activity-next-step require --activity-kind.", exitCode: 2 });
+          }
+          if (!update.title && !update.goal && !update.latestUpdate && !update.activity && !update.artifact) {
+            throw new CliCoreError({ code: "validation", message: "work update requires a title, goal, latest update, activity, or artifact.", exitCode: 2 });
           }
           data = await service.execute("update_work", {
             idempotencyKey: commandMutationKey(),
@@ -717,29 +732,49 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           if (browserReview !== undefined && browserReview !== "disabled" && browserReview !== "read-only") {
             throw new CliCoreError({ code: "validation", message: "--browser-review must be disabled or read-only.", exitCode: 2 });
           }
+          const maxConcurrentJobs = integerOption(parsed, "max-concurrent-jobs", 1);
+          if (maxConcurrentJobs !== undefined && maxConcurrentJobs > 8) {
+            throw new CliCoreError({ code: "validation", message: "--max-concurrent-jobs must be between 1 and 8.", exitCode: 2 });
+          }
+          const deploymentAccess = option(parsed, "deployment-access");
+          if (deploymentAccess !== undefined && deploymentAccess !== "disabled" && deploymentAccess !== "repository") {
+            throw new CliCoreError({ code: "validation", message: "--deployment-access must be disabled or repository.", exitCode: 2 });
+          }
           const result = await service.runnerInstall({
             label: option(parsed, "label") ?? "This computer",
             harnesses: [...new Set(harnesses)] as Array<"codex" | "claude">,
             approvalMode: approval as "ask" | "automatic" | undefined,
             browserReviewMode: browserReview === "read-only" ? "read_only" : browserReview,
+            maxConcurrentJobs,
+            ...(deploymentAccess ? { deploymentAccessMode: deploymentAccess as "disabled" | "repository" } : {}),
           });
           data = result;
           if (!parsed.json) humanOutput = renderRunnerInstallOutput(result);
         } else if (action === "configure") {
           const approval = option(parsed, "approval");
           const browserReview = option(parsed, "browser-review");
+          const maxConcurrentJobs = integerOption(parsed, "max-concurrent-jobs", 1);
+          const deploymentAccess = option(parsed, "deployment-access");
           if (approval !== undefined && approval !== "ask" && approval !== "automatic") {
             throw new CliCoreError({ code: "validation", message: "--approval must be ask or automatic.", exitCode: 2 });
           }
           if (browserReview !== undefined && browserReview !== "disabled" && browserReview !== "read-only") {
             throw new CliCoreError({ code: "validation", message: "--browser-review must be disabled or read-only.", exitCode: 2 });
           }
-          if (approval === undefined && browserReview === undefined) {
-            throw new CliCoreError({ code: "validation", message: "Provide --approval and/or --browser-review.", exitCode: 2 });
+          if (maxConcurrentJobs !== undefined && maxConcurrentJobs > 8) {
+            throw new CliCoreError({ code: "validation", message: "--max-concurrent-jobs must be between 1 and 8.", exitCode: 2 });
+          }
+          if (deploymentAccess !== undefined && deploymentAccess !== "disabled" && deploymentAccess !== "repository") {
+            throw new CliCoreError({ code: "validation", message: "--deployment-access must be disabled or repository.", exitCode: 2 });
+          }
+          if (approval === undefined && browserReview === undefined && maxConcurrentJobs === undefined && deploymentAccess === undefined) {
+            throw new CliCoreError({ code: "validation", message: "Provide --approval, --browser-review, --max-concurrent-jobs, and/or --deployment-access.", exitCode: 2 });
           }
           const result = await service.runnerConfigure({
             approvalMode: approval as "ask" | "automatic" | undefined,
             browserReviewMode: browserReview === "read-only" ? "read_only" : browserReview,
+            maxConcurrentJobs,
+            ...(deploymentAccess ? { deploymentAccessMode: deploymentAccess as "disabled" | "repository" } : {}),
           });
           data = result;
           if (!parsed.json) humanOutput = renderRunnerConfigureOutput(result);

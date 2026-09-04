@@ -10,6 +10,12 @@ crons.interval(
   { limit: 100 },
 );
 crons.interval(
+  "reconcile exited runner processes",
+  { minutes: 1 },
+  internal.domains.runner.index.reconcileExpiredExecutionJobs,
+  { limit: 100 },
+);
+crons.interval(
   "reconcile expired intake claims",
   { minutes: 5 },
   internal.domains.intake.index.reconcileExpiredClaims,

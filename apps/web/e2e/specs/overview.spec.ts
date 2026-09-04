@@ -177,7 +177,7 @@ test("shows concurrent agents, safe workspace detail, and live progress", async 
   const activity = page.getByRole("region", { name: "agent activity" });
   const signal = activity.locator(".concurrent-activity__signal");
 
-  await expect(activity).toContainText("1 / 4 active");
+  await expect(activity).toContainText("1 / 4 slots in use");
   await expect(signal).toHaveAttribute("data-state", "active");
   await expect.poll(async () => signal.evaluate((element) => {
     const style = getComputedStyle(element);
@@ -202,10 +202,12 @@ test("shows concurrent agents, safe workspace detail, and live progress", async 
   const waiting = activity.locator('[data-run-id="run-release"]');
   await expect(running).toContainText("Claude");
   await expect(running).toContainText("dong008");
-  await expect(running).toContainText("Running");
+  await expect(running).toContainText("Verifying");
+  await expect(running).toContainText("Current stepBrowser acceptance");
+  await expect(running).toContainText("NextRelease the accepted candidate.");
   await expect(running).toContainText("Worktree · codex/attachment-delivery");
   await expect(running).toContainText("Lease healthy");
-  await expect(waiting).toContainText("Waiting");
+  await expect(waiting).toContainText("Needs you");
   await expect(waiting).toContainText("Isolated workspace");
   await expect(waiting).toContainText("Lease released");
   await expect(running).toContainText("Live progress: retry cancellation verified.");
@@ -237,7 +239,7 @@ test("keeps Working usable when live agent activity is unavailable", async ({ pa
 
 test("uses a still amber signal when no agents are active", async ({ page }) => {
   const signal = page.locator(".concurrent-activity__signal");
-  await expect(page.getByText("No active agent runs.")).toBeVisible();
+  await expect(page.getByText("No agent work is in progress. Ready work can start in an available slot.")).toBeVisible();
   await expect(signal).toHaveAttribute("data-state", "idle");
   await expect.poll(async () => signal.evaluate((element) => ({
     animation: getComputedStyle(element).animationName,
@@ -575,7 +577,7 @@ test("responds to Attention and reconciles the work lane", async ({ page }) => {
   );
   await dialog.getByRole("button", { name: "Respond", exact: true }).click();
 
-  await expect(dialog.getByText("✓ answered")).toBeVisible();
+  await expect(dialog.getByText("✓ resolved — no action needed")).toBeVisible();
   await expect(dialog.getByText(/Approve staging — Proceed with/).first()).toBeVisible();
   await expect(dialog.getByText(/next explicit pull.*backoff.*stopped agent/i)).toBeVisible();
   await expect(page.getByText("Response sent to your agent")).toBeVisible();

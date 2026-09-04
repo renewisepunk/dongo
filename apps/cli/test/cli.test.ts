@@ -169,7 +169,7 @@ test("finish help exposes host-verified integration and release preconditions wi
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.2.11\n");
+  assert.equal(human.values().stdout, "dongo 0.2.12\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -177,7 +177,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.2.11" },
+    data: { version: "0.2.12" },
   });
   assert.equal(json.values().stderr, "");
 });
@@ -440,7 +440,7 @@ test("CLI routes every remaining v1 operation with stable JSON and reusable muta
     { operation: "create_work", argv: ["work", "create", "--title", "Title", "--goal", "Goal"] },
     { operation: "get_work", argv: ["work", "get", "--identifier", "DON-1"] },
     { operation: "start_work", argv: ["work", "start", "--work-id", "work_1", "--revision", "1", "--session-id", "session_1"] },
-    { operation: "update_work", argv: ["work", "update", "--work-id", "work_1", "--revision", "2", "--latest-update", "Progress"] },
+    { operation: "update_work", argv: ["work", "update", "--work-id", "work_1", "--revision", "2", "--activity-kind", "verification", "--activity-label", "Browser acceptance", "--activity-next-step", "Release the candidate"] },
     { operation: "renew_claim", argv: ["work", "renew", "--work-id", "work_1", "--revision", "3"] },
     { operation: "finish_work", argv: ["work", "finish", "--work-id", "work_1", "--revision", "4", "--outcome", "Done"] },
     { operation: "add_comment", argv: ["comment", "add", "--work-id", "work_1", "--body", "Context"] },
@@ -825,7 +825,7 @@ test("runner commands expose explicit local policy and stable JSON", async () =>
       calls.push({ method: "approve", input: jobId });
       return { approved: true, jobId };
     },
-    runnerConfigure: async (input: { approvalMode?: string; browserReviewMode?: string }) => {
+    runnerConfigure: async (input: { approvalMode?: string; browserReviewMode?: string; maxConcurrentJobs?: number; deploymentAccessMode?: string }) => {
       calls.push({ method: "configure", input });
       return { changed: true, approvalMode: input.approvalMode ?? "ask", previousApprovalMode: "ask", browserReviewMode: input.browserReviewMode ?? "disabled", previousBrowserReviewMode: "disabled", harnesses: ["codex"] };
     },
@@ -842,8 +842,12 @@ test("runner commands expose explicit local policy and stable JSON", async () =>
     "automatic",
     "--browser-review",
     "read-only",
+    "--deployment-access",
+    "repository",
     "--label",
     "Studio Mac",
+    "--max-concurrent-jobs",
+    "4",
     "--json",
   ], { output: install.output, serviceFactory: () => service as never }), 0);
   assert.deepEqual(calls[0], {
@@ -853,6 +857,8 @@ test("runner commands expose explicit local policy and stable JSON", async () =>
       harnesses: ["codex", "claude"],
       approvalMode: "automatic",
       browserReviewMode: "read_only",
+      maxConcurrentJobs: 4,
+      deploymentAccessMode: "repository",
     },
   });
   assert.equal(JSON.parse(install.values().stdout).command, "runner install");
@@ -873,9 +879,13 @@ test("runner commands expose explicit local policy and stable JSON", async () =>
     "configure",
     "--approval",
     "automatic",
+    "--max-concurrent-jobs",
+    "3",
+    "--deployment-access",
+    "disabled",
     "--json",
   ], { output: configure.output, serviceFactory: () => service as never }), 0);
-  assert.deepEqual(calls[2], { method: "configure", input: { approvalMode: "automatic", browserReviewMode: undefined } });
+  assert.deepEqual(calls[2], { method: "configure", input: { approvalMode: "automatic", browserReviewMode: undefined, maxConcurrentJobs: 3, deploymentAccessMode: "disabled" } });
   assert.equal(JSON.parse(configure.values().stdout).command, "runner configure");
 });
 
@@ -901,6 +911,8 @@ test("runner commands explain outcomes without dumping implementation details", 
     repositoryRoot: "/Users/Workspace/dongo",
     approvalMode: "ask",
     browserReviewMode: "disabled",
+    maxConcurrentJobs: 6,
+    deploymentPolicy: { mode: "disabled", capabilities: [], sources: [] },
     harnesses: ["codex"],
   };
   const waitingStatus = {
@@ -912,6 +924,8 @@ test("runner commands explain outcomes without dumping implementation details", 
     harnesses: ["codex"],
     approvalMode: "ask",
     browserReviewMode: "disabled",
+    maxConcurrentJobs: 6,
+    deploymentPolicy: { mode: "disabled", capabilities: [], sources: [] },
     servicePlatform: "darwin",
     state: {
       schemaVersion: 2,
@@ -951,12 +965,16 @@ test("runner commands explain outcomes without dumping implementation details", 
       workIdentifier: "dong062",
       intakeId: undefined,
     }),
-    runnerConfigure: async ({ approvalMode, browserReviewMode }: { approvalMode?: "ask" | "automatic"; browserReviewMode?: "disabled" | "read_only" }) => ({
+    runnerConfigure: async ({ approvalMode, browserReviewMode, maxConcurrentJobs }: { approvalMode?: "ask" | "automatic"; browserReviewMode?: "disabled" | "read_only"; maxConcurrentJobs?: number }) => ({
       changed: true,
       approvalMode: approvalMode ?? "ask",
       previousApprovalMode: approvalMode === "automatic" ? "ask" as const : "automatic" as const,
       browserReviewMode: browserReviewMode ?? "disabled",
       previousBrowserReviewMode: "disabled" as const,
+      maxConcurrentJobs: maxConcurrentJobs ?? 6,
+      previousMaxConcurrentJobs: 6,
+      deploymentPolicy: { mode: "disabled" as const, capabilities: [], sources: [] },
+      previousDeploymentPolicy: { mode: "disabled" as const, capabilities: [], sources: [] },
       harnesses: ["codex" as const],
     }),
     runnerDisable: async () => ({
@@ -982,6 +1000,8 @@ test("runner commands explain outcomes without dumping implementation details", 
     "This computer can now run queued dongo work with Codex in this repository—even after you close this terminal. Eligible jobs run concurrently in separate Git worktrees, up to the project safety limit.",
     "You’ll be asked on this computer before an agent starts working.",
     "Browser self-review is off. An agent will ask you when live browser verification is required.",
+    "This computer will run at most 6 jobs at once.",
+    "Trusted deployment access is off. Agents cannot use checkout-local provider credentials from isolated worktrees.",
     "macOS may show “Background Items Added” for “dongo.” That is this user-level dongo runner, not an unknown Node.js service.",
     "Manage it in System Settings → General → Login Items & Extensions, or use dongo runner disable and dongo runner remove.",
     "New Inbox items are not routed here automatically. To enable that, first run: dongo runner configure --approval automatic",
@@ -1015,6 +1035,8 @@ test("runner commands explain outcomes without dumping implementation details", 
     "",
     "Your agents can start automatically in isolated Git worktrees.",
     "Browser self-review is off. An agent will ask you when live browser verification is required.",
+    "Local concurrency limit: 6 jobs.",
+    "Trusted deployment access is off. Agents cannot use checkout-local provider credentials from isolated worktrees.",
     "Codex can start in isolated Git worktrees. Confirm Inbox routing in Project settings → Local runner.",
     "",
   ].join("\n"));

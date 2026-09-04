@@ -3538,6 +3538,35 @@
             "type": "string",
             "maxLength": 100000
           },
+          "activity": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "executing",
+                  "verification",
+                  "release",
+                  "waiting_for_resource",
+                  "paused"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "nextStep": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": false
+          },
           "artifact": {
             "type": "object",
             "properties": {
@@ -4403,6 +4432,11 @@
               "minLength": 1,
               "maxLength": 256
             }
+          },
+          "hostCapacity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8
           },
           "inspectJobId": {
             "type": "string",

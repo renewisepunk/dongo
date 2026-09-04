@@ -29,6 +29,43 @@ beforeEach(() => {
 });
 
 describe("agent lifecycle reliability", () => {
+  it("records the current Run phase and automatic next step", async () => {
+    const t = convexTest(schema, modules);
+    const context = await seededContext(t, `run-activity-${crypto.randomUUID()}`);
+    const work = await successfulData(t, context, "create_work", {
+      title: "Expose truthful execution state",
+      goal: "Show the current gate instead of a generic Running label.",
+      idempotencyKey: "create-run-activity-work",
+    });
+    const started = await successfulData(t, context, "start_work", {
+      workItemId: work.id,
+      expectedRevision: work.revision,
+      externalSessionId: "run-activity-session",
+      idempotencyKey: "start-run-activity-work",
+    });
+    const updated = await successfulData(t, context, "update_work", {
+      workItemId: work.id,
+      expectedRevision: started.revision,
+      latestUpdate: "The candidate is built and browser acceptance is running.",
+      activity: {
+        kind: "verification",
+        label: "Browser acceptance",
+        nextStep: "Release the accepted revision.",
+      },
+      idempotencyKey: "update-run-activity-work",
+    });
+    const stored = await t.run(async (ctx) => ({
+      work: await ctx.db.get(work.id as Id<"workItems">),
+      run: await ctx.db.get(updated.activeRun.id as Id<"runs">),
+    }));
+    expect(stored.run).toMatchObject({
+      activityKind: "verification",
+      activityLabel: "Browser acceptance",
+      activityNextStep: "Release the accepted revision.",
+      activityUpdatedAt: expect.any(Number),
+    });
+  });
+
   it("delivers idempotent Inbox nudges through a truthful cursor and waiter presence", async () => {
     const t = convexTest(schema, modules);
     const key = `updates-${crypto.randomUUID()}`;

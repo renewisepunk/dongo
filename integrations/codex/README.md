@@ -3,10 +3,18 @@
 Preferred interactive setup after substituting the trusted project values:
 
 ```sh
+# Inspect before authorizing; skip connect when both checks are healthy.
+dongo auth status --json
+dongo doctor --json
 dongo connect --agent-host codex
 dongo integrate codex --apply
 codex mcp login dongo-{{shortProjectRef}} --scopes dongo:work:read,dongo:work:write,dongo:attachments:read
 ```
+
+Run `dongo connect` only when the status or doctor result says repository
+authorization is missing or invalid. A healthy linked-worktree binding is
+reused, and a concurrent connect waits for the owning attempt instead of
+opening another approval.
 
 The first command presents one explicit dongo CLI + Codex approval. The checked-in `config.toml` then supplies Codex's fixed public native client ID and loopback callback; login still performs S256 PKCE and stores Codex's separate credential, but no second dongo approval is needed. Alternatively, omit `--agent-host codex` and complete the normal Codex consent during login. Do not add `bearer_token_env_var` or copy a dongo CLI credential. Codex owns this OAuth grant and its secure storage.
 

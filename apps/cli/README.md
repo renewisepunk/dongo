@@ -42,7 +42,7 @@ Build and install the self-contained package archive so the command does not dep
 
 ```sh
 npm pack --workspace @wisepunk/dongo
-npm install --global ./wisepunk-dongo-0.2.11.tgz
+npm install --global ./wisepunk-dongo-0.2.12.tgz
 dongo --version
 dongo --help
 ```
@@ -98,7 +98,15 @@ Omit both to ask the authorizing owner a durable project-level question, or add
 general form requires no Work claim or Run and remains available after the
 current CLI session exits.
 
-Add `--json` to receive one JSON object on stdout. Progress and the one complete browser approval link are written to stderr. The normal flow opens that link, waits for browser approval, stores the resulting credential, writes a non-secret project marker, and returns control to the terminal. `--no-browser` supports SSH/headless sessions by printing the same complete link while polling continues; no code or token needs to be copied into the CLI.
+Add `--json` to receive one JSON object on stdout. Before connecting, run
+`dongo auth status --json` and `dongo doctor --json`. A healthy existing binding
+is reused—including from a linked Git worktree—and `dongo connect` returns it
+without opening a browser. When authorization is genuinely needed, progress and
+the one complete browser approval link are written to stderr. Concurrent
+connect commands are single-flight: later commands wait for the active attempt
+and reconcile its result rather than opening another approval. `--no-browser`
+supports SSH/headless sessions by printing the same complete link while polling
+continues; no code or token needs to be copied into the CLI.
 
 Add `--agent-host codex` when the same owner action should explicitly approve the CLI and Codex for the selected project. The page names both clients and their access. Codex still completes its own PKCE login, stores a separate credential, and remains independently revocable; the CLI credential is never copied into Codex. Other hosts and connections without this flag retain their own approval.
 
@@ -172,6 +180,22 @@ An existing runner can change this local choice without replacing its credential
 with `dongo runner configure --approval ask|automatic`. Inbox pickup remains a
 separate owner action in **Project settings → Local runner**; turning it on
 explicitly queues current unclaimed Intake as well as future items.
+Git worktrees do not inherit ignored release configuration. Trusted deployment
+access is therefore off by default, including after an upgrade. An owner can
+review and enable the repository-scoped bridge during installation with
+`--deployment-access repository`, or later with
+`dongo runner configure --deployment-access repository`. The runner records
+only detected provider names and the approved filenames `.env` and
+`.env.local`; it never records their values. For each Work job it rereads only
+an allow-list of GitHub, Convex, Cloudflare, and npm settings from the approved
+checkout, validates the existing provider sessions inside the exact isolated
+worktree, and passes those values only in the agent process environment. A
+temporary owner-only npm configuration refers to the token by environment
+variable and is deleted after the process exits. Missing, expired, changed, or
+unsafe configuration stops before the agent starts and names the failed
+provider without falling back to a different deployment target. Runner logs
+redact every injected secret. Disable the bridge with
+`dongo runner configure --deployment-access disabled`.
 Installation records the exact supported Codex and/or Claude Code executable;
 a queued job cannot replace its path, flags, environment, or instruction. Use
 `dongo runner status` to inspect

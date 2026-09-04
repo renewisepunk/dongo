@@ -236,6 +236,134 @@ describe("local runner delivery", () => {
     expect(inspected.job?.id).toBe(second.job?.id);
   });
 
+  it("fills six host slots, respects a smaller host bound, and refills a released slot", async () => {
+    const fixture = await runnerFixture();
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(fixture.projectId, {
+        parallelExecutionEnabled: true,
+        maxConcurrentRuns: 6,
+      });
+    });
+    const token = runnerToken("6", "h");
+    const registration = await register(fixture, token, "Six-slot Mac", "automatic");
+    const queued = [];
+    for (let index = 0; index < 7; index += 1) {
+      const work = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+        projectId: fixture.projectId,
+        title: `Fan-out job ${index + 1}`,
+        kind: "task",
+        idempotencyKey: `runner-six-work-${index}`,
+      });
+      queued.push(await fixture.human.mutation(api.domains.runner.index.enqueue, {
+        projectId: fixture.projectId,
+        workItemId: work.workItemId,
+        harness: "codex",
+        idempotencyKey: `runner-six-enqueue-${index}`,
+      }));
+    }
+
+    const activeJobIds: Array<Id<"runnerJobs">> = [];
+    for (let index = 0; index < 6; index += 1) {
+      const delivery = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+        ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+        activeJobIds,
+        hostCapacity: 6,
+      });
+      expect(delivery.job?.id).toBe(queued[index]?.id);
+      activeJobIds.push(delivery.job!.id as Id<"runnerJobs">);
+      if (index === 1) {
+        const atHostCapacity = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+          ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+          activeJobIds,
+          hostCapacity: 2,
+        });
+        expect(atHostCapacity.job).toBeUndefined();
+      }
+    }
+    const full = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds,
+      hostCapacity: 6,
+    });
+    expect(full.job).toBeUndefined();
+
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(activeJobIds[0]!, {
+        state: "completed",
+        revision: 3,
+        terminalAt: Date.now(),
+        reservationExpiresAt: undefined,
+      });
+    });
+    const refill = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: activeJobIds.slice(1),
+      hostCapacity: 6,
+    });
+    expect(refill.job?.id).toBe(queued[6]?.id);
+
+  });
+
+  it("counts an existing non-runner Run against the atomic project capacity", async () => {
+    const fixture = await runnerFixture();
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(fixture.projectId, {
+        parallelExecutionEnabled: true,
+        maxConcurrentRuns: 2,
+      });
+    });
+    const occupied = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Already running outside the local runner",
+      kind: "task",
+      idempotencyKey: "runner-global-cap-occupied",
+    });
+    const externalSessionId = "runner-global-cap-session";
+    const occupiedDoc = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(occupied.workItemId as Id<"workItems">));
+    await fixture.root.mutation(internal.gateway.readModels.sessionStart, {
+      authorization: { ...fixture.authorization, externalSessionId },
+      hostCapabilities: { parallelExecution: "supported", worktreeIsolation: "supported" },
+    });
+    await fixture.root.mutation(internal.domains.work.index.start, {
+      authorization: { ...fixture.authorization, externalSessionId },
+      workItemId: occupied.workItemId,
+      expectedRevision: occupiedDoc!.revision,
+      workspace: { kind: "worktree", worktreeName: "already-running", branch: "work/already-running" },
+      idempotencyKey: "runner-global-cap-start",
+    });
+
+    const token = runnerToken("g", "c");
+    const registration = await register(fixture, token, "Capacity Mac", "automatic");
+    const queued = [];
+    for (let index = 0; index < 2; index += 1) {
+      const work = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+        projectId: fixture.projectId,
+        title: `Queued capacity job ${index + 1}`,
+        kind: "task",
+        idempotencyKey: `runner-global-cap-work-${index}`,
+      });
+      queued.push(await fixture.human.mutation(api.domains.runner.index.enqueue, {
+        projectId: fixture.projectId,
+        workItemId: work.workItemId,
+        harness: "codex",
+        idempotencyKey: `runner-global-cap-enqueue-${index}`,
+      }));
+    }
+    const first = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(first.job?.id).toBe(queued[0]?.id);
+    const atGlobalCapacity = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [first.job!.id as Id<"runnerJobs">],
+      hostCapacity: 6,
+    });
+    expect(atGlobalCapacity.job).toBeUndefined();
+  });
+
   it("replays an unacknowledged delivery to another registered machine", async () => {
     const fixture = await runnerFixture();
     const first = await register(fixture, runnerToken("c", "d"), "First Mac");
@@ -537,6 +665,230 @@ describe("local runner delivery", () => {
     const stored = await fixture.root.run(async (ctx) =>
       await ctx.db.get(queued.id as Id<"runnerJobs">));
     expect(stored).toMatchObject({ state: "failed", safeCode: "runner_lease_expired" });
+  });
+
+  it("releases a Work claim when its runner process exits", async () => {
+    const fixture = await runnerFixture();
+    const token = runnerToken("x", "z");
+    const registration = await register(fixture, token, "Exit Mac", "automatic");
+    const created = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Recover an exited process",
+      kind: "task",
+      idempotencyKey: "runner-work-process-exit",
+    });
+    const queued = await fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: created.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-enqueue-process-exit",
+    });
+    await fixture.root.mutation(
+      internal.domains.runner.index.reserve,
+      waitArgs(fixture.authorization, registration.id, token, "automatic"),
+    );
+    const starting = await fixture.root.mutation(internal.domains.runner.index.updateJob, {
+      authorization: fixture.authorization,
+      registrationId: registration.id,
+      token,
+      jobId: queued.id,
+      expectedRevision: 2,
+      state: "starting",
+      idempotencyKey: "runner-start-process-exit",
+    });
+    const running = await fixture.root.mutation(internal.domains.runner.index.updateJob, {
+      authorization: fixture.authorization,
+      registrationId: registration.id,
+      token,
+      jobId: queued.id,
+      expectedRevision: starting.revision,
+      state: "running",
+      idempotencyKey: "runner-running-process-exit",
+      sessionReferencePresent: true,
+    });
+    const readyWork = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(created.workItemId as Id<"workItems">));
+    if (!readyWork) throw new Error("work fixture missing");
+    const active = await fixture.root.mutation(internal.domains.work.index.start, {
+      authorization: {
+        ...fixture.authorization,
+        externalSessionId: "runner-process-exit-session",
+      },
+      workItemId: created.workItemId,
+      expectedRevision: readyWork.revision,
+      workspace: {
+        kind: "worktree",
+        worktreeName: "process-exit",
+        branch: "codex/process-exit",
+      },
+      idempotencyKey: "start-work-process-exit",
+    });
+
+    await fixture.root.mutation(internal.domains.runner.index.updateJob, {
+      authorization: fixture.authorization,
+      registrationId: registration.id,
+      token,
+      jobId: queued.id,
+      expectedRevision: running.revision,
+      state: "failed",
+      safeCode: "harness_failed",
+      safeSummary: "The local Codex process exited unexpectedly.",
+      idempotencyKey: "runner-failed-process-exit",
+    });
+
+    const reconciled = await fixture.root.run(async (ctx) => ({
+      work: await ctx.db.get(created.workItemId as Id<"workItems">),
+      run: await ctx.db.get(active.runId as Id<"runs">),
+    }));
+    expect(reconciled.work?.state).toBe("ready");
+    expect(reconciled.work?.claimedRunId).toBeUndefined();
+    expect(reconciled.work?.claimedByInstallationId).toBeUndefined();
+    expect(reconciled.run).toMatchObject({
+      status: "failed",
+      failureCode: "harness_failed",
+      summary: "The local Codex process exited unexpectedly.",
+    });
+    const concurrency = await fixture.human.query(
+      api.domains.work.index.concurrencyForHuman,
+      { projectId: fixture.projectId },
+    );
+    expect(concurrency.capacity.activeRuns).toBe(0);
+    expect(concurrency.runs).toEqual([]);
+  });
+
+  it("reconciles an already-terminal runner job when the runner reconnects", async () => {
+    const fixture = await runnerFixture();
+    const token = runnerToken("v", "w");
+    const registration = await register(fixture, token, "Reconnect Mac", "automatic");
+    const created = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Recover after a disconnected runner",
+      kind: "task",
+      idempotencyKey: "runner-work-reconnect-exit",
+    });
+    const queued = await fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: created.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-enqueue-reconnect-exit",
+    });
+    await fixture.root.mutation(
+      internal.domains.runner.index.reserve,
+      waitArgs(fixture.authorization, registration.id, token, "automatic"),
+    );
+    const work = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(created.workItemId as Id<"workItems">));
+    if (!work) throw new Error("work fixture missing");
+    const active = await fixture.root.mutation(internal.domains.work.index.start, {
+      authorization: {
+        ...fixture.authorization,
+        externalSessionId: "runner-reconnect-exit-session",
+      },
+      workItemId: created.workItemId,
+      expectedRevision: work.revision,
+      workspace: {
+        kind: "worktree",
+        worktreeName: "reconnect-exit",
+        branch: "codex/reconnect-exit",
+      },
+      idempotencyKey: "start-work-reconnect-exit",
+    });
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(queued.id as Id<"runnerJobs">, {
+        state: "failed",
+        revision: 3,
+        registrationId: registration.id as Id<"runnerRegistrations">,
+        safeCode: "harness_failed",
+        safeSummary: "The process vanished while the runner was disconnected.",
+        terminalAt: Date.now(),
+        reservationExpiresAt: undefined,
+        leaseExpiresAt: undefined,
+        updatedAt: Date.now(),
+      });
+    });
+
+    await fixture.root.mutation(
+      internal.domains.runner.index.reserve,
+      waitArgs(fixture.authorization, registration.id, token, "automatic"),
+    );
+    const reconciled = await fixture.root.run(async (ctx) => ({
+      work: await ctx.db.get(created.workItemId as Id<"workItems">),
+      run: await ctx.db.get(active.runId as Id<"runs">),
+    }));
+    expect(reconciled.work?.state).toBe("ready");
+    expect(reconciled.work?.claimedRunId).toBeUndefined();
+    expect(reconciled.run).toMatchObject({
+      status: "failed",
+      failureCode: "harness_failed",
+    });
+  });
+
+  it("reconciles a crashed runner after its bounded execution lease", async () => {
+    const fixture = await runnerFixture();
+    const token = runnerToken("c", "r");
+    const registration = await register(fixture, token, "Crash Mac", "automatic");
+    const created = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Recover after a runner crash",
+      kind: "task",
+      idempotencyKey: "runner-work-crash-reconcile",
+    });
+    const requestedAt = Date.now() - 10_000;
+    const jobId = await fixture.root.run(async (ctx) => {
+      const registrationDoc = await ctx.db.get(
+        registration.id as Id<"runnerRegistrations">,
+      );
+      if (!registrationDoc) throw new Error("runner fixture missing");
+      return await ctx.db.insert("runnerJobs", {
+        organizationId: registrationDoc.organizationId,
+        projectId: fixture.projectId,
+        kind: "work",
+        workItemId: created.workItemId as Id<"workItems">,
+        requestedByActorId: fixture.authorization.actorId,
+        harness: "codex",
+        state: "running",
+        revision: 4,
+        registrationId: registration.id as Id<"runnerRegistrations">,
+        requestedAt,
+        expiresAt: requestedAt + 24 * 60 * 60_000,
+        deliveredAt: requestedAt + 1_000,
+        leaseExpiresAt: Date.now() - 1,
+        updatedAt: Date.now() - 1,
+      });
+    });
+    const readyWork = await fixture.root.run(async (ctx) =>
+      await ctx.db.get(created.workItemId as Id<"workItems">));
+    if (!readyWork) throw new Error("work fixture missing");
+    const active = await fixture.root.mutation(internal.domains.work.index.start, {
+      authorization: {
+        ...fixture.authorization,
+        externalSessionId: "runner-crash-session",
+      },
+      workItemId: created.workItemId,
+      expectedRevision: readyWork.revision,
+      idempotencyKey: "start-work-crash-reconcile",
+    });
+
+    const result = await fixture.root.mutation(
+      internal.domains.runner.index.reconcileExpiredExecutionJobs,
+      { limit: 10 },
+    );
+    expect(result).toEqual({ reconciled: 1 });
+    const reconciled = await fixture.root.run(async (ctx) => ({
+      job: await ctx.db.get(jobId),
+      work: await ctx.db.get(created.workItemId as Id<"workItems">),
+      run: await ctx.db.get(active.runId as Id<"runs">),
+    }));
+    expect(reconciled.job).toMatchObject({
+      state: "failed",
+      safeCode: "runner_lease_expired",
+    });
+    expect(reconciled.work?.state).toBe("ready");
+    expect(reconciled.work?.claimedRunId).toBeUndefined();
+    expect(reconciled.run).toMatchObject({
+      status: "failed",
+      failureCode: "runner_lease_expired",
+    });
   });
 });
 

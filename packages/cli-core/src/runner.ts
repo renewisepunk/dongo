@@ -12,13 +12,19 @@ import type {
   RunnerPlatform,
 } from "@dongo/contracts";
 import { CliCoreError } from "./errors.ts";
+import {
+  discoverRunnerDeploymentPolicy,
+  type RunnerDeploymentAccessMode,
+  type RunnerDeploymentPolicy,
+} from "./runner-deployment-access.ts";
 import type { SecretStore } from "./secret-store.ts";
 import { FileSecretStore } from "./secret-store.ts";
 import type { RunnerServiceController, RunnerServiceSpec } from "./runner-service.ts";
 import { RunnerWorkspaceManager, type RunnerWorkspace } from "./runner-workspaces.ts";
 
 const RUNNER_SCHEMA_VERSION = 1;
-const RUNNER_VERSION = "0.2.0";
+const RUNNER_VERSION = "0.3.0";
+const DEFAULT_MAX_CONCURRENT_JOBS = 6;
 const MAX_LOG_BYTES = 5 * 1_024 * 1_024;
 const MAX_LOG_FILES = 3;
 
@@ -43,6 +49,8 @@ export interface RunnerConfig {
   harnesses: RunnerHarness[];
   approvalMode: RunnerApprovalMode;
   browserReviewMode: RunnerBrowserReviewMode;
+  maxConcurrentJobs: number;
+  deploymentPolicy: RunnerDeploymentPolicy;
   enabled: boolean;
   installedAt: string;
   updatedAt: string;
@@ -57,6 +65,7 @@ export interface RunnerLocalState {
     | "awaiting_local_approval"
     | "running"
     | "blocked"
+    | "recovering"
     | "error"
     | "stopped";
   projectRef: string;
@@ -86,6 +95,8 @@ export interface RunnerLocalState {
   }>;
   lastSeenAt?: string;
   lastErrorCode?: string;
+  consecutiveFailures?: number;
+  nextRetryAt?: string;
   updatedAt: string;
 }
 
@@ -120,6 +131,8 @@ export interface RunnerHarnessAdapter {
     worktreeName: string;
     branch: string;
     browserReviewMode?: RunnerBrowserReviewMode;
+    deploymentPolicy?: RunnerDeploymentPolicy;
+    trustedRepositoryRoot?: string;
     signal: AbortSignal;
     log: (chunk: string) => Promise<void>;
   }): Promise<RunnerHarnessResult>;
@@ -198,6 +211,8 @@ export class LocalRunnerManager {
     harnesses: RunnerHarness[];
     approvalMode?: RunnerApprovalMode;
     browserReviewMode?: RunnerBrowserReviewMode;
+    maxConcurrentJobs?: number;
+    deploymentAccessMode?: RunnerDeploymentAccessMode;
   }) {
     const existing = await this.#readConfig(false);
     if (existing) {
@@ -219,6 +234,7 @@ export class LocalRunnerManager {
     if (!label || label.length > 120) {
       throw new CliCoreError({ code: "validation", message: "Runner label must be between 1 and 120 characters.", exitCode: 2 });
     }
+    const maxConcurrentJobs = normalizedMaxConcurrentJobs(input.maxConcurrentJobs);
     const executablePaths = {} as Record<RunnerHarness, string>;
     const executableIdentities = {} as Record<RunnerHarness, string>;
     for (const harness of harnesses) {
@@ -237,6 +253,10 @@ export class LocalRunnerManager {
       executablePaths[harness] = await realpath(executablePath);
       executableIdentities[harness] = await captureExecutableIdentity(executablePaths[harness]);
     }
+    const deploymentPolicy = await discoverRunnerDeploymentPolicy(
+      repositoryRoot,
+      input.deploymentAccessMode ?? "disabled",
+    );
     const token = generateRunnerToken();
     const idempotencyKey = randomUUID();
     const registration = await this.#api.runnerRegister({
@@ -268,6 +288,8 @@ export class LocalRunnerManager {
       harnesses,
       approvalMode: input.approvalMode ?? "ask",
       browserReviewMode: input.browserReviewMode ?? "disabled",
+      maxConcurrentJobs,
+      deploymentPolicy,
       enabled: true,
       installedAt: now,
       updatedAt: now,
@@ -294,6 +316,8 @@ export class LocalRunnerManager {
         repositoryRoot,
         approvalMode: config.approvalMode,
         browserReviewMode: config.browserReviewMode,
+        maxConcurrentJobs: config.maxConcurrentJobs,
+        deploymentPolicy: config.deploymentPolicy,
         harnesses,
       };
     } catch (error) {
@@ -329,6 +353,8 @@ export class LocalRunnerManager {
       harnesses: config?.harnesses ?? [],
       approvalMode: config?.approvalMode,
       browserReviewMode: config?.browserReviewMode,
+      maxConcurrentJobs: config?.maxConcurrentJobs,
+      deploymentPolicy: config?.deploymentPolicy,
       servicePlatform: this.#service.platform,
       state,
     };
@@ -371,6 +397,8 @@ export class LocalRunnerManager {
   async configure(input: {
     approvalMode?: RunnerApprovalMode;
     browserReviewMode?: RunnerBrowserReviewMode;
+    maxConcurrentJobs?: number;
+    deploymentAccessMode?: RunnerDeploymentAccessMode;
   }) {
     const config = await this.#readConfig(true);
     const state = await this.#readState();
@@ -381,28 +409,46 @@ export class LocalRunnerManager {
         exitCode: 6,
       });
     }
-    if (input.approvalMode === undefined && input.browserReviewMode === undefined) {
+    if (
+      input.approvalMode === undefined &&
+      input.browserReviewMode === undefined &&
+      input.maxConcurrentJobs === undefined &&
+      input.deploymentAccessMode === undefined
+    ) {
       throw new CliCoreError({
         code: "validation",
-        message: "Choose an approval mode or browser review mode to configure.",
+        message: "Choose an approval mode, browser review mode, concurrency limit, or deployment access mode to configure.",
         exitCode: 2,
       });
     }
     const approvalMode = input.approvalMode ?? config.approvalMode;
     const browserReviewMode = input.browserReviewMode ?? config.browserReviewMode;
-    if (config.approvalMode === approvalMode && config.browserReviewMode === browserReviewMode) {
+    const maxConcurrentJobs = normalizedMaxConcurrentJobs(input.maxConcurrentJobs ?? config.maxConcurrentJobs);
+    const deploymentPolicy = input.deploymentAccessMode === undefined
+      ? config.deploymentPolicy
+      : await discoverRunnerDeploymentPolicy(config.repositoryRoot, input.deploymentAccessMode);
+    if (
+      config.approvalMode === approvalMode &&
+      config.browserReviewMode === browserReviewMode &&
+      config.maxConcurrentJobs === maxConcurrentJobs &&
+      JSON.stringify(config.deploymentPolicy) === JSON.stringify(deploymentPolicy)
+    ) {
       return {
         changed: false,
         approvalMode,
         previousApprovalMode: config.approvalMode,
         browserReviewMode,
         previousBrowserReviewMode: config.browserReviewMode,
+        maxConcurrentJobs,
+        previousMaxConcurrentJobs: config.maxConcurrentJobs,
+        deploymentPolicy,
+        previousDeploymentPolicy: config.deploymentPolicy,
         harnesses: config.harnesses,
       };
     }
 
     const now = new Date(this.#now()).toISOString();
-    const updated = { ...config, approvalMode, browserReviewMode, updatedAt: now };
+    const updated = { ...config, approvalMode, browserReviewMode, maxConcurrentJobs, deploymentPolicy, updatedAt: now };
     await this.#service.disable(this.#projectRef);
     await this.#writeConfig(updated);
     try {
@@ -426,6 +472,10 @@ export class LocalRunnerManager {
         previousApprovalMode: config.approvalMode,
         browserReviewMode,
         previousBrowserReviewMode: config.browserReviewMode,
+        maxConcurrentJobs,
+        previousMaxConcurrentJobs: config.maxConcurrentJobs,
+        deploymentPolicy,
+        previousDeploymentPolicy: config.deploymentPolicy,
         harnesses: config.harnesses,
         service,
       };
@@ -502,6 +552,11 @@ export class LocalRunnerManager {
   }
 
   async run(signal?: AbortSignal): Promise<{ stopped: true }> {
+    const runController = new AbortController();
+    const relayAbort = () => runController.abort(signal?.reason);
+    signal?.addEventListener("abort", relayAbort, { once: true });
+    if (signal?.aborted) runController.abort(signal.reason);
+    const runSignal = runController.signal;
     const config = await this.#readConfig(true);
     if (!config.enabled) {
       throw new CliCoreError({ code: "runner_disabled", message: "This dongo runner is disabled.", exitCode: 6 });
@@ -540,29 +595,43 @@ export class LocalRunnerManager {
       projectRef: config.projectRef,
       environmentPath: config.environmentPath,
     });
+    try {
+      await workspaceManager.preflight();
+    } catch (error) {
+      await this.#publishState(config, "error", { lastErrorCode: safeErrorCode(error) });
+      throw error;
+    }
     await this.#publishState(config, "starting");
     let failureAttempt = 0;
     const workers = new Map<string, Promise<void>>();
-    while (!signal?.aborted) {
+    while (!runSignal.aborted) {
       try {
-        await this.#publishState(config, workers.size > 0 ? "running" : "waiting", {
-          lastSeenAt: new Date(this.#now()).toISOString(),
-        });
+        if (workers.size >= config.maxConcurrentJobs) {
+          await Promise.race(workers.values()).catch(() => undefined);
+          continue;
+        }
+        await this.#publishState(config, workers.size > 0 ? "running" : "waiting");
         const result = await this.#api.runnerWait({
           idempotencyKey: randomUUID(),
           registrationId: config.registrationId,
           token: config.token,
-          waitSeconds: workers.size === 0 ? 20 : 0,
+          waitSeconds: 20,
           platform: config.platform,
           version: config.version,
           harnesses: config.harnesses,
           approvalMode: config.approvalMode,
           activeJobIds: [...workers.keys()],
-        }, { signal });
+          hostCapacity: config.maxConcurrentJobs,
+        }, { signal: runSignal });
         failureAttempt = 0;
+        await this.#publishState(config, workers.size > 0 ? "running" : "waiting", {
+          lastSeenAt: new Date(this.#now()).toISOString(),
+          consecutiveFailures: 0,
+        });
         if (result.job && !workers.has(result.job.id)) {
           this.#activeJobs.set(result.job.id, { job: result.job });
-          const worker = this.#runJob(config, result.job, workspaceManager, signal)
+          const worker = Promise.resolve()
+            .then(() => this.#runJob(config, result.job!, workspaceManager, runSignal))
             .finally(async () => {
               workers.delete(result.job!.id);
               this.#activeJobs.delete(result.job!.id);
@@ -574,25 +643,30 @@ export class LocalRunnerManager {
         if (workers.size > 0) {
           await Promise.race([
             ...workers.values(),
-            abortableSleep(250, signal),
+            abortableSleep(250, runSignal),
           ]).catch(() => undefined);
         }
       } catch (error) {
-        if (signal?.aborted || isCancellation(error)) break;
+        if (runSignal.aborted || isCancellation(error)) break;
         failureAttempt += 1;
         const code = safeErrorCode(error);
-        await this.#publishState(config, "error", {
-          lastErrorCode: code,
-        });
         if (code === "unauthorized" || code === "forbidden" || code === "insufficient_scope") {
+          await this.#publishState(config, "error", { lastErrorCode: code, consecutiveFailures: failureAttempt });
+          runController.abort(error);
           break;
         }
         const delay = backoffMilliseconds(failureAttempt, this.#random);
-        await this.#sleep(delay, signal).catch(() => undefined);
+        await this.#publishState(config, "recovering", {
+          lastErrorCode: code,
+          consecutiveFailures: failureAttempt,
+          nextRetryAt: new Date(this.#now() + delay).toISOString(),
+        });
+        await this.#sleep(delay, runSignal).catch(() => undefined);
       }
     }
     await Promise.allSettled(workers.values());
     await this.#publishState(config, "stopped");
+    signal?.removeEventListener("abort", relayAbort);
     return { stopped: true };
   }
 
@@ -611,7 +685,9 @@ export class LocalRunnerManager {
       if (current && !["cancelled", "failed", "completed", "expired"].includes(current.state)) {
         const code = safeErrorCode(error);
         await this.#updateJob(config, current, "failed", {
-          safeCode: code === "worktree_setup_failed" ? code : "harness_failed",
+          safeCode: code === "worktree_setup_failed" || code === "runner_workspace_missing"
+            ? "worktree_setup_failed"
+            : "harness_failed",
           safeSummary: "The local runner could not complete this job. Review the owner-only runner log.",
         }, signal).catch(() => undefined);
       }
@@ -630,7 +706,7 @@ export class LocalRunnerManager {
       return;
     }
     const recovering = job.state === "running" || job.state === "blocked";
-    let workspace = recovering ? await workspaceManager.prepare(job) : undefined;
+    let workspace = recovering ? await workspaceManager.recover(job) : undefined;
     if (workspace) this.#activeJobs.set(job.id, { job, workspace });
     if (recovering) {
       const pending = await this.#readPendingResult(config, job);
@@ -751,6 +827,8 @@ export class LocalRunnerManager {
       worktreeName: workspace.worktreeName,
       branch: workspace.branch,
       browserReviewMode: config.browserReviewMode,
+      deploymentPolicy: config.deploymentPolicy,
+      trustedRepositoryRoot: config.repositoryRoot,
       signal: controller.signal,
       log: (chunk) => log.append(chunk),
     }).then(
@@ -938,13 +1016,22 @@ export class LocalRunnerManager {
   ) {
     const active = this.#activeJobs.get(job.id);
     this.#activeJobs.set(job.id, { job, workspace: workspace ?? active?.workspace });
-    await this.#publishState(config, job.state === "blocked" ? "blocked" : job.state === "awaiting_local_approval" ? "awaiting_local_approval" : "running");
+    await this.#publishState(config, this.#aggregateStatus());
+  }
+
+  #aggregateStatus(): RunnerLocalState["status"] {
+    const states = [...this.#activeJobs.values()].map(({ job }) => job.state);
+    if (states.length === 0) return "waiting";
+    if (states.some((state) => ["delivered", "starting", "running", "cancel_requested"].includes(state))) return "running";
+    if (states.some((state) => state === "awaiting_local_approval")) return "awaiting_local_approval";
+    if (states.some((state) => state === "blocked")) return "blocked";
+    return "running";
   }
 
   async #publishState(
     config: RunnerConfig,
     status: RunnerLocalState["status"],
-    extra: Pick<RunnerLocalState, "lastSeenAt" | "lastErrorCode"> = {},
+    extra: Pick<RunnerLocalState, "lastSeenAt" | "lastErrorCode" | "consecutiveFailures" | "nextRetryAt"> = {},
   ) {
     const write = async () => {
       const currentJobs = [...this.#activeJobs.values()].map(({ job, workspace }) => ({
@@ -958,9 +1045,12 @@ export class LocalRunnerManager {
         worktreeName: workspace?.worktreeName,
         branch: workspace?.branch,
       }));
+      const effectiveStatus = currentJobs.length > 0 && !["error", "recovering", "stopped", "disabled"].includes(status)
+        ? this.#aggregateStatus()
+        : status;
       await this.#writeState({
         schemaVersion: 2,
-        status,
+        status: effectiveStatus,
         projectRef: config.projectRef,
         registrationId: config.registrationId,
         version: config.version,
@@ -1196,7 +1286,20 @@ function parseConfig(
     if (browserReviewMode !== "disabled" && browserReviewMode !== "read_only") {
       throw new Error("invalid runner browser review mode");
     }
-    return { ...value, browserReviewMode } as RunnerConfig;
+    const maxConcurrentJobs = normalizedMaxConcurrentJobs(value.maxConcurrentJobs);
+    const deploymentPolicy = value.deploymentPolicy ?? { mode: "disabled", capabilities: [], sources: [] };
+    if (
+      (deploymentPolicy.mode !== "disabled" && deploymentPolicy.mode !== "repository") ||
+      !Array.isArray(deploymentPolicy.capabilities) ||
+      deploymentPolicy.capabilities.some((capability) => !["github", "convex", "cloudflare", "npm"].includes(capability)) ||
+      new Set(deploymentPolicy.capabilities).size !== deploymentPolicy.capabilities.length ||
+      !Array.isArray(deploymentPolicy.sources) ||
+      deploymentPolicy.sources.some((source) => source !== ".env" && source !== ".env.local") ||
+      new Set(deploymentPolicy.sources).size !== deploymentPolicy.sources.length
+    ) {
+      throw new Error("invalid runner deployment policy");
+    }
+    return { ...value, browserReviewMode, maxConcurrentJobs, deploymentPolicy } as RunnerConfig;
   } catch {
     throw new CliCoreError({
       code: "runner_config_invalid",
@@ -1204,6 +1307,18 @@ function parseConfig(
       exitCode: 4,
     });
   }
+}
+
+function normalizedMaxConcurrentJobs(value: number | undefined): number {
+  const normalized = value ?? DEFAULT_MAX_CONCURRENT_JOBS;
+  if (!Number.isInteger(normalized) || normalized < 1 || normalized > 8) {
+    throw new CliCoreError({
+      code: "validation",
+      message: "Runner concurrency must be an integer between 1 and 8.",
+      exitCode: 2,
+    });
+  }
+  return normalized;
 }
 
 function validExecutablePaths(

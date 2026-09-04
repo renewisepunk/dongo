@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, symlink } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
-import { CliCoreError, CoreService, MemorySecretStore, writeProjectMarker } from "../src/index.ts";
+import {
+  CliCoreError,
+  CoreService,
+  credentialProfile,
+  MemorySecretStore,
+  writeProjectMarker,
+} from "../src/index.ts";
 import type { ProjectMarker } from "../src/index.ts";
+
+const execFileAsync = promisify(execFile);
 
 const session = {
   project: { id: "project_1", name: "dongo", publicRef: "pub_dongo", executionMode: "manual" as const },
@@ -90,14 +100,15 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
   assert.doesNotMatch(marker, /access-secret|refresh-secret|device-secret|ABCD-EFGH/);
   assert.match(marker, /pub_dongo/);
 
-  await service.connect({ origin: "http://localhost:8787" });
-  assert.match(opened[1] ?? "", /[?&]project_ref=pub_dongo(?:&|$)/u);
+  const reconnected = await service.connect({ origin: "http://localhost:8787" });
+  assert.equal(reconnected.project.publicRef, "pub_dongo");
+  assert.equal(opened.length, 1, "a healthy existing connection must not start another browser authorization");
 
   await service.createProject({
     origin: "http://localhost:8787",
     projectName: "Another project",
   });
-  const creationUrl = new URL(opened[2] ?? "");
+  const creationUrl = new URL(opened[1] ?? "");
   assert.equal(creationUrl.searchParams.get("project_action"), "create");
   assert.equal(creationUrl.searchParams.get("project_name"), "Another project");
   assert.equal(creationUrl.searchParams.has("project_ref"), false);
@@ -124,6 +135,266 @@ test("connect, status, doctor, overview, sync, and logout form a safe local slic
   assert.equal((await service.logout()).revoked, true);
   assert.equal((await service.authStatus()).authenticated, false);
   assert.ok(calls.some((url) => url.endsWith("/oauth2/revoke")));
+});
+
+test("a linked worktree reuses the newest exact-project sibling binding", async (context) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "dongo-service-worktrees-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const primary = path.join(directory, "primary");
+  const linked = path.join(directory, "linked");
+  const configDirectory = path.join(directory, "config");
+  await mkdir(primary);
+  await execFileAsync("git", ["-C", primary, "init", "-q"]);
+  await execFileAsync("git", ["-C", primary, "config", "user.email", "test@example.com"]);
+  await execFileAsync("git", ["-C", primary, "config", "user.name", "Test"]);
+  await execFileAsync("git", ["-C", primary, "commit", "--allow-empty", "-m", "initial"]);
+  await execFileAsync("git", ["-C", primary, "worktree", "add", "-q", "-b", "linked", linked]);
+
+  const environment = {
+    productOrigin: "http://localhost:8787",
+    issuer: "http://localhost:8787/api/auth",
+    apiBaseUrl: "http://localhost:8787/api/agent/v1",
+    apiResource: "http://localhost:8787/api/agent/v1",
+  };
+  const staleProfile = credentialProfile(environment.productOrigin, await realpath(primary));
+  const healthyProfile = credentialProfile(environment.productOrigin, await realpath(linked));
+  const marker: ProjectMarker = {
+    schemaVersion: 1,
+    environment: "custom",
+    ...environment,
+    publicProjectRef: "pub_dongo",
+    projectId: "project_1",
+    projectName: "dongo",
+    installationId: "install_1",
+    credentialProfile: staleProfile,
+    connectedAt: "2026-09-01T00:00:00.000Z",
+  };
+  await writeProjectMarker(linked, marker);
+  await writeProjectMarker(primary, {
+    ...marker,
+    credentialProfile: healthyProfile,
+    connectedAt: "2026-09-04T00:00:00.000Z",
+  });
+  const store = new MemorySecretStore();
+  const credential = JSON.stringify({
+    schemaVersion: 1,
+    clientId: "dongo-cli",
+    issuer: environment.issuer,
+    resource: environment.apiResource,
+    tokenEndpoint: `${environment.issuer}/oauth2/token`,
+    revocationEndpoint: `${environment.issuer}/oauth2/revoke`,
+    accessToken: "healthy-access",
+    accessTokenExpiresAt: Date.now() + 3600_000,
+    tokenType: "Bearer",
+    scopes: ["dongo:work:read"],
+  });
+  await store.set(healthyProfile, credential);
+  let browserOpens = 0;
+  const service = new CoreService({
+    cwd: linked,
+    configDirectory,
+    allowNonProduction: true,
+    secretStore: store,
+    browserOpener: { open: async () => (browserOpens += 1, true) },
+    fetch: async (input, init) => {
+      assert.equal(new Headers(init?.headers).get("authorization"), "Bearer healthy-access");
+      if (String(input).endsWith("/session_start")) return envelope(session, "req_linked_session");
+      return new Response(null, { status: 404 });
+    },
+  });
+
+  const linkedDoctor = await service.doctor();
+  assert.equal(linkedDoctor.ok, true, JSON.stringify(linkedDoctor.checks));
+  assert.equal((await service.connect({ origin: environment.productOrigin })).project.publicRef, "pub_dongo");
+  assert.equal(browserOpens, 0);
+});
+
+test("a copied marker remains rejected in an independent repository", async (context) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "dongo-service-independent-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const original = path.join(directory, "original");
+  const independent = path.join(directory, "independent");
+  await mkdir(path.join(original, ".git"), { recursive: true });
+  await mkdir(path.join(independent, ".git"), { recursive: true });
+  const environment = {
+    productOrigin: "http://localhost:8787",
+    issuer: "http://localhost:8787/api/auth",
+    apiBaseUrl: "http://localhost:8787/api/agent/v1",
+    apiResource: "http://localhost:8787/api/agent/v1",
+  };
+  await writeProjectMarker(independent, {
+    schemaVersion: 1,
+    environment: "custom",
+    ...environment,
+    publicProjectRef: "pub_dongo",
+    projectId: "project_1",
+    projectName: "dongo",
+    installationId: "install_1",
+    credentialProfile: credentialProfile(environment.productOrigin, original),
+    connectedAt: "2026-09-04T00:00:00.000Z",
+  });
+  let requests = 0;
+  const service = new CoreService({
+    cwd: independent,
+    configDirectory: path.join(directory, "config"),
+    allowNonProduction: true,
+    secretStore: new MemorySecretStore(),
+    fetch: async () => {
+      requests += 1;
+      return new Response(null, { status: 500 });
+    },
+  });
+
+  const result = await service.doctor();
+  assert.equal(result.ok, false);
+  assert.match(result.checks.at(-1)?.detail ?? "", /credential binding are inconsistent/u);
+  assert.equal(requests, 0, "an independent repository must be rejected before credential or network use");
+});
+
+test("a changed repository remote invalidates a bound marker", async (context) => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-service-remote-"));
+  context.after(() => rm(repositoryRoot, { force: true, recursive: true }));
+  await execFileAsync("git", ["-C", repositoryRoot, "init", "-q"]);
+  await execFileAsync("git", ["-C", repositoryRoot, "remote", "add", "origin", "git@github.com:renewisepunk/replacement.git"]);
+  const environment = {
+    productOrigin: "http://localhost:8787",
+    issuer: "http://localhost:8787/api/auth",
+    apiBaseUrl: "http://localhost:8787/api/agent/v1",
+    apiResource: "http://localhost:8787/api/agent/v1",
+  };
+  await writeProjectMarker(repositoryRoot, {
+    schemaVersion: 1,
+    environment: "custom",
+    ...environment,
+    publicProjectRef: "pub_dongo",
+    projectId: "project_1",
+    projectName: "dongo",
+    installationId: "install_1",
+    credentialProfile: credentialProfile(environment.productOrigin, await realpath(repositoryRoot)),
+    repositoryUrl: "https://github.com/renewisepunk/dongo",
+    connectedAt: "2026-09-04T00:00:00.000Z",
+  });
+  let requests = 0;
+  const service = new CoreService({
+    cwd: repositoryRoot,
+    configDirectory: path.join(repositoryRoot, "..", "config"),
+    allowNonProduction: true,
+    secretStore: new MemorySecretStore(),
+    fetch: async () => {
+      requests += 1;
+      return new Response(null, { status: 500 });
+    },
+  });
+
+  const result = await service.doctor();
+  assert.equal(result.ok, false);
+  assert.match(result.checks.at(-1)?.detail ?? "", /credential binding are inconsistent/u);
+  assert.equal(requests, 0, "a changed remote must be rejected before credential or network use");
+});
+
+test("concurrent connect calls create one browser authorization and reuse its result", async (context) => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-connect-single-flight-"));
+  const configDirectory = await mkdtemp(path.join(os.tmpdir(), "dongo-connect-single-flight-config-"));
+  context.after(() => rm(repositoryRoot, { force: true, recursive: true }));
+  context.after(() => rm(configDirectory, { force: true, recursive: true }));
+  await mkdir(path.join(repositoryRoot, ".git"));
+  const store = new MemorySecretStore();
+  let browserOpens = 0;
+  let releaseToken!: () => void;
+  const tokenGate = new Promise<void>((resolve) => { releaseToken = resolve; });
+  const fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith("/device/code")) return Response.json({
+      device_code: "device-secret",
+      user_code: "ABCD-EFGH",
+      verification_uri: "http://localhost:8787/device",
+      verification_uri_complete: "http://localhost:8787/device?user_code=ABCD-EFGH",
+      expires_in: 60,
+      interval: 1,
+    });
+    if (url.endsWith("/oauth2/token")) {
+      await tokenGate;
+      return Response.json({
+        access_token: "access-secret",
+        refresh_token: "refresh-secret",
+        token_type: "Bearer",
+        expires_in: 3600,
+        scope: "dongo:work:read offline_access",
+      });
+    }
+    if (url.endsWith("/session_start")) {
+      assert.equal(new Headers(init?.headers).get("authorization"), "Bearer access-secret");
+      return envelope(session, "req_single_flight_session");
+    }
+    return new Response(null, { status: 404 });
+  };
+  const makeService = () => new CoreService({
+    cwd: repositoryRoot,
+    configDirectory,
+    allowNonProduction: true,
+    secretStore: store,
+    deviceClock: { now: Date.now, sleep: async () => undefined },
+    browserOpener: { open: async () => (browserOpens += 1, true) },
+    fetch,
+  });
+  const first = makeService().connect({ origin: "http://localhost:8787" });
+  while (browserOpens === 0) await new Promise((resolve) => setTimeout(resolve, 1));
+  const second = makeService().connect({ origin: "http://localhost:8787" });
+  releaseToken();
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+  assert.equal(firstResult.project.publicRef, "pub_dongo");
+  assert.equal(secondResult.project.publicRef, "pub_dongo");
+  assert.equal(browserOpens, 1);
+});
+
+test("a waiter does not repeat a failed connection authorization", async (context) => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-connect-failed-owner-"));
+  const configDirectory = await mkdtemp(path.join(os.tmpdir(), "dongo-connect-failed-owner-config-"));
+  context.after(() => rm(repositoryRoot, { force: true, recursive: true }));
+  context.after(() => rm(configDirectory, { force: true, recursive: true }));
+  await mkdir(path.join(repositoryRoot, ".git"));
+  let browserOpens = 0;
+  let releaseFailure!: () => void;
+  const failureGate = new Promise<void>((resolve) => { releaseFailure = resolve; });
+  const makeService = () => new CoreService({
+    cwd: repositoryRoot,
+    configDirectory,
+    allowNonProduction: true,
+    secretStore: new MemorySecretStore(),
+    deviceClock: { now: Date.now, sleep: async () => undefined },
+    browserOpener: { open: async () => (browserOpens += 1, true) },
+    fetch: async (input) => {
+      const url = String(input);
+      if (url.endsWith("/device/code")) return Response.json({
+        device_code: "device-secret",
+        user_code: "ABCD-EFGH",
+        verification_uri: "http://localhost:8787/device",
+        verification_uri_complete: "http://localhost:8787/device?user_code=ABCD-EFGH",
+        expires_in: 60,
+        interval: 1,
+      });
+      if (url.endsWith("/oauth2/token")) {
+        await failureGate;
+        return Response.json({ error: "access_denied" }, { status: 400 });
+      }
+      return new Response(null, { status: 404 });
+    },
+  });
+  const first = makeService().connect({ origin: "http://localhost:8787" });
+  while (browserOpens === 0) await new Promise((resolve) => setTimeout(resolve, 1));
+  const second = makeService().connect({ origin: "http://localhost:8787" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  releaseFailure();
+
+  const [ownerResult, waiterResult] = await Promise.allSettled([first, second]);
+  assert.equal(ownerResult.status, "rejected");
+  assert.ok(ownerResult.reason instanceof CliCoreError);
+  assert.equal(ownerResult.reason.code, "authorization_denied");
+  assert.equal(waiterResult.status, "rejected");
+  assert.ok(waiterResult.reason instanceof CliCoreError);
+  assert.equal(waiterResult.reason.code, "connection_attempt_incomplete");
+  assert.match(waiterResult.reason.message, /did not start another authorization/u);
+  assert.equal(browserOpens, 1);
 });
 
 test("CI setup authenticates from the environment and writes only a non-secret project marker", async () => {

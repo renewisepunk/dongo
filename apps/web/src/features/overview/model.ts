@@ -70,6 +70,12 @@ export type WorkItem = {
   age?: string;
   elapsed?: string;
   latest?: string;
+  activity?: {
+    kind: "executing" | "verification" | "release" | "waiting_for_resource" | "paused";
+    label: string;
+    nextStep?: string;
+    updatedAt?: number;
+  };
   goal: string;
   attention?: Attention;
   artifacts?: Artifact[];

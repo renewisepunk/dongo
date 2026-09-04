@@ -58,6 +58,7 @@ function readArchiveEntry(archivePath, entry) {
     cwd: repositoryRoot,
     env: process.env,
     encoding: null,
+    maxBuffer: 16 * 1_024 * 1_024,
     stdio: ["ignore", "pipe", "pipe"],
   });
 }

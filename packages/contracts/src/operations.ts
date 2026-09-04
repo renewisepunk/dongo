@@ -75,6 +75,11 @@ export type RunWorkspaceInput = {
   worktreeName?: string;
   branch?: string;
 };
+export type RunActivityInput = {
+  kind: "executing" | "verification" | "release" | "waiting_for_resource" | "paused";
+  label?: string;
+  nextStep?: string;
+};
 
 export type OperationMap = {
   session_start: { input: { externalSessionId: string; hostCapabilities?: HostCapabilitiesInput }; output: SessionStart };
@@ -87,7 +92,7 @@ export type OperationMap = {
   create_work: { input: MutationInput & { title: string; goal: string; context?: string; links?: string[]; initialComment?: string; sourceIntakeIds?: string[]; parentWorkItemId?: string }; output: WorkItem };
   get_work: { input: { workItemId?: string; identifier?: string }; output: WorkItem };
   start_work: { input: MutationInput & { workItemId: string; expectedRevision: number; externalSessionId: string; leaseSeconds?: number; workspace?: RunWorkspaceInput }; output: WorkItem };
-  update_work: { input: MutationInput & { workItemId: string; expectedRevision: number; title?: string; goal?: string; latestUpdate?: string; artifact?: AgentArtifactInput }; output: WorkItem };
+  update_work: { input: MutationInput & { workItemId: string; expectedRevision: number; title?: string; goal?: string; latestUpdate?: string; activity?: RunActivityInput; artifact?: AgentArtifactInput }; output: WorkItem };
   renew_claim: { input: MutationInput & { workItemId: string; expectedRevision: number; leaseSeconds?: number }; output: WorkItem };
   finish_work: { input: MutationInput & { workItemId: string; expectedRevision: number; outcome: string; artifacts?: AgentArtifactInput[] }; output: WorkItem };
   add_comment: { input: MutationInput & { workItemId: string; body: string }; output: WorkItem };
@@ -100,7 +105,7 @@ export type OperationMap = {
   runner_register: { input: MutationInput & { token: string; label: string; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic" }; output: RunnerRegistration };
   runner_rotate: { input: MutationInput & { registrationId: string; token: string; replacementToken: string }; output: RunnerRegistration };
   runner_revoke: { input: MutationInput & { registrationId: string; token: string }; output: RunnerRegistration };
-  runner_wait: { input: MutationInput & { registrationId: string; token: string; waitSeconds?: number; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic"; activeJobIds?: string[]; inspectJobId?: string }; output: RunnerWait };
+  runner_wait: { input: MutationInput & { registrationId: string; token: string; waitSeconds?: number; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic"; activeJobIds?: string[]; hostCapacity?: number; inspectJobId?: string }; output: RunnerWait };
   runner_update_job: { input: MutationInput & { registrationId: string; token: string; jobId: string; expectedRevision: number; state: RunnerJob["state"]; leaseSeconds?: number; safeCode?: string; safeMessage?: string; safeSummary?: string; sessionReferencePresent?: boolean }; output: RunnerJob };
 };
 
@@ -156,6 +161,17 @@ const runWorkspaceInput = z.object({
   kind: z.enum(["worktree", "shared_checkout", "undisclosed"]),
   worktreeName: z.string().trim().min(1).max(240).optional(),
   branch: z.string().trim().min(1).max(240).optional(),
+}).strict();
+const runActivityInput = z.object({
+  kind: z.enum([
+    "executing",
+    "verification",
+    "release",
+    "waiting_for_resource",
+    "paused",
+  ]),
+  label: z.string().trim().min(1).max(240).optional(),
+  nextStep: z.string().trim().min(1).max(500).optional(),
 }).strict();
 const runnerToken = z.string().regex(
   /^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$/u,
@@ -258,6 +274,7 @@ export const operationRegistry = {
       title: z.string().min(1).max(500).optional(),
       goal: boundedText.optional(),
       latestUpdate: boundedText.optional(),
+      activity: runActivityInput.optional(),
       artifact: workArtifactInput.optional(),
     }).strict(),
     workItemSchema,
@@ -362,6 +379,7 @@ export const operationRegistry = {
       harnesses: z.array(runnerHarnessSchema).min(1).max(2),
       approvalMode: runnerApprovalModeSchema,
       activeJobIds: z.array(identifier).max(8).optional(),
+      hostCapacity: z.number().int().min(1).max(8).optional(),
       inspectJobId: identifier.optional(),
     }).strict().superRefine((input, context) => {
       if (input.activeJobIds !== undefined && input.inspectJobId !== undefined) {

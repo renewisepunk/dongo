@@ -1,5 +1,10 @@
 # Claude Code connection
 
+Before changing authentication, run `dongo auth status --json` and
+`dongo doctor --json` from the repository. Do not start `dongo connect` when
+both are healthy. A valid linked-worktree binding is reused, and a concurrent
+connect waits for the owning attempt instead of opening another browser flow.
+
 Run `dongo integrate claude` from the repository to preview the dongo-owned
 project configuration and managed `CLAUDE.md` instructions. The preview is the
 place to review the proposed files and rollback guidance; it does not change the

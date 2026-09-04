@@ -41,6 +41,28 @@ export function formatRunElapsed(elapsedMilliseconds: number): string {
   return remainingMinutes ? `${hours}h ${remainingMinutes}m elapsed` : `${hours}h elapsed`;
 }
 
+export function formatRunUpdateAge(updatedAt: number, now = Date.now()): string {
+  const seconds = Math.max(0, Math.floor((now - updatedAt) / 1_000));
+  if (seconds < 15) return "updated just now";
+  if (seconds < 60) return `updated ${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `updated ${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `updated ${hours}h ago`;
+}
+
+export function runActivityLabel(
+  kind: ProjectConcurrencySnapshot["runs"][number]["activity"]["kind"],
+): string {
+  if (kind === "verification") return "Verifying";
+  if (kind === "release") return "Releasing";
+  if (kind === "waiting_for_owner") return "Needs you";
+  if (kind === "waiting_for_resource") return "Resource wait";
+  if (kind === "paused") return "Paused";
+  if (kind === "process_exited") return "Process exited";
+  return "Executing";
+}
+
 export function leaseHealthLabel(
   status: ProjectConcurrencySnapshot["runs"][number]["lease"]["status"],
 ): string {

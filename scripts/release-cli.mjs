@@ -91,6 +91,7 @@ function readArchiveEntry(archivePath, entry) {
   const result = spawnSync("tar", ["-xOf", archivePath, entry], {
     cwd: repositoryRoot,
     encoding: null,
+    maxBuffer: 16 * 1_024 * 1_024,
     stdio: ["ignore", "pipe", "pipe"],
   });
   if (result.error) throw result.error;

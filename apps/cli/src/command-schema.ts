@@ -150,8 +150,19 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
   "work update": {
     command: "work update",
     summary: "Record WorkItem details or Run progress.",
-    usage: "dongo work update --work-id ID --revision N (--title TEXT | --goal TEXT | --latest-update TEXT | --artifact JSON)",
-    options: [workId, revision, { name: "title", description: "Updated title." }, { name: "goal", description: "Updated goal." }, { name: "latest-update", description: "Meaningful Run progress or blocker." }, artifact, idempotency],
+    usage: "dongo work update --work-id ID --revision N (--title TEXT | --goal TEXT | --latest-update TEXT | --activity-kind KIND | --artifact JSON)",
+    options: [
+      workId,
+      revision,
+      { name: "title", description: "Updated title." },
+      { name: "goal", description: "Updated goal." },
+      { name: "latest-update", description: "Meaningful Run progress or blocker." },
+      { name: "activity-kind", description: "Current Run phase.", allowed: ["executing", "verification", "release", "waiting_for_resource", "paused"] },
+      { name: "activity-label", description: "Plain-language current gate or named resource." },
+      { name: "activity-next-step", description: "What will happen next." },
+      artifact,
+      idempotency,
+    ],
   },
   "work renew": { command: "work renew", summary: "Renew the active WorkItem claim.", usage: "dongo work renew --work-id ID --revision N [--lease-seconds N]", options: [workId, revision, lease, idempotency] },
   "work finish": {
@@ -215,21 +226,25 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
   "runner install": {
     command: "runner install",
     summary: "Install the login-scoped local runner for this repository.",
-    usage: "dongo runner install --harness codex|claude [--harness ...] [--approval ask|automatic] [--browser-review disabled|read-only] [--label NAME]",
+    usage: "dongo runner install --harness codex|claude [--harness ...] [--approval ask|automatic] [--browser-review disabled|read-only] [--max-concurrent-jobs 1..8] [--deployment-access disabled|repository] [--label NAME]",
     options: [
       { name: "harness", description: "Locally installed harness allowed for this repository.", required: true, repeatable: true, allowed: ["codex", "claude"] },
       { name: "approval", description: "Ask locally before every job, or explicitly opt this repository into automatic starts.", allowed: ["ask", "automatic"] },
       { name: "browser-review", description: "Allow Codex to inspect this app in the existing browser session without changing data.", allowed: ["disabled", "read-only"] },
+      { name: "max-concurrent-jobs", description: "Maximum jobs this computer may run at once; defaults to 6.", type: "integer", minimum: 1, maximum: 8 },
+      { name: "deployment-access", description: "Allow agents to use only approved provider credentials and .env values from this repository's trusted checkout.", allowed: ["disabled", "repository"] },
       { name: "label", description: "Recognizable, non-sensitive computer name shown in dongo, such as Studio Mac." },
     ],
   },
   "runner configure": {
     command: "runner configure",
-    summary: "Change local runner trust and browser self-review settings.",
-    usage: "dongo runner configure [--approval ask|automatic] [--browser-review disabled|read-only]",
+    summary: "Change local runner trust, browser self-review, concurrency, and deployment access settings.",
+    usage: "dongo runner configure [--approval ask|automatic] [--browser-review disabled|read-only] [--max-concurrent-jobs 1..8] [--deployment-access disabled|repository]",
     options: [
       { name: "approval", description: "Ask locally before every job, or trust this repository for automatic starts.", allowed: ["ask", "automatic"] },
       { name: "browser-review", description: "Allow Codex to inspect this app in the existing browser session without changing data.", allowed: ["disabled", "read-only"] },
+      { name: "max-concurrent-jobs", description: "Maximum jobs this computer may run at once.", type: "integer", minimum: 1, maximum: 8 },
+      { name: "deployment-access", description: "Review and allow trusted repository deployment credentials for isolated worktrees.", allowed: ["disabled", "repository"] },
     ],
   },
   "runner status": { command: "runner status", summary: "Show local runner health without exposing credentials.", usage: "dongo runner status", options: [] },
@@ -377,8 +392,8 @@ export function validateCommand(parsed: ParsedArgs): { name: string; schema: Com
     const count = Number(Boolean(parsed.values["work-id"]?.[0])) + Number(Boolean(parsed.values.identifier?.[0]));
     if (count !== 1) issues.push("Provide exactly one of --work-id or --identifier.");
   }
-  if (name === "work update" && !["title", "goal", "latest-update", "artifact"].some((option) => parsed.values[option]?.[0])) {
-    issues.push("Provide at least one of --title, --goal, --latest-update, or --artifact.");
+  if (name === "work update" && !["title", "goal", "latest-update", "activity-kind", "artifact"].some((option) => parsed.values[option]?.[0])) {
+    issues.push("Provide at least one of --title, --goal, --latest-update, --activity-kind, or --artifact.");
   }
   if (name === "session-start" || name === "session start") {
     const parallel = parsed.values["parallel-capability"]?.[0];

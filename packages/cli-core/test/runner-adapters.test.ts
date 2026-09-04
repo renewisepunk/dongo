@@ -4,6 +4,7 @@ import { PassThrough } from "node:stream";
 import test from "node:test";
 import { DONGO_COMPLETION_INSTRUCTIONS } from "@dongo/mcp/managed-integrations";
 
+import { CliCoreError } from "../src/errors.ts";
 import { MemorySecretStore } from "../src/secret-store.ts";
 import {
   ClaudeRunnerAdapter,
@@ -130,6 +131,125 @@ test("Codex adapter omits browser authorization unless the owner enabled it loca
     log: async () => undefined,
   });
   assert.doesNotMatch(calls[0]?.input ?? "", /browser self-review/u);
+});
+
+test("runner deployment preflight injects approved values, redacts logs, and avoids redundant login guidance", async () => {
+  const calls: Array<{ env: NodeJS.ProcessEnv; input: string }> = [];
+  let cleaned = false;
+  let log = "";
+  const adapter = new CodexRunnerAdapter({
+    store: new MemorySecretStore(),
+    executablePath: "/bin/sh",
+    spawnProcess: ((_executable: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+      const child = fakeChild();
+      const call = { env: options.env, input: "" };
+      child.stdin.on("data", (value) => { call.input += value.toString(); });
+      calls.push(call);
+      queueMicrotask(() => {
+        child.stdout.write("token=deployment-sec");
+        child.stdout.end("ret-value\n");
+        child.stderr.end();
+        child.emit("exit", 0);
+      });
+      return child;
+    }) as never,
+    resolveCredentialEnvironment: async () => ({ GH_TOKEN: "github-secret-value" }),
+    resolveDeploymentEnvironment: async () => ({
+      environment: { CONVEX_DEPLOY_KEY: "deployment-secret-value" },
+      secretValues: ["deployment-secret-value"],
+      cleanup: async () => { cleaned = true; },
+    }),
+  });
+  const result = await adapter.execute({
+    repositoryRoot: process.cwd(),
+    trustedRepositoryRoot: process.cwd(),
+    registrationId: "registration-deploy",
+    jobId: "job-deploy",
+    kind: "work",
+    workIdentifier: "dong084",
+    deploymentPolicy: { mode: "repository", capabilities: ["github", "convex"], sources: [".env.local"] },
+    signal: new AbortController().signal,
+    log: async (chunk) => { log += chunk; },
+  });
+  assert.equal(result.outcome, "completed");
+  assert.equal(calls[0]?.env.CONVEX_DEPLOY_KEY, "deployment-secret-value");
+  assert.equal(log, "token=[redacted]\n");
+  assert.doesNotMatch(log, /deployment-secret-value/u);
+  assert.match(calls[0]?.input ?? "", /already preflighted/u);
+  assert.match(calls[0]?.input ?? "", /do not start a new login flow unless a fresh state check actually fails/u);
+  assert.equal(cleaned, true);
+});
+
+test("failed deployment preflight stops before the harness starts with an actionable provider error", async () => {
+  let launches = 0;
+  const adapter = new CodexRunnerAdapter({
+    store: new MemorySecretStore(),
+    executablePath: "/bin/sh",
+    spawnProcess: (() => {
+      launches += 1;
+      return fakeChild();
+    }) as never,
+    resolveCredentialEnvironment: async () => ({ GH_TOKEN: "github-secret-value" }),
+    resolveDeploymentEnvironment: async () => {
+      throw new CliCoreError({
+        code: "deployment_cloudflare_unavailable",
+        message: "Trusted Cloudflare deployment access is missing or expired on this computer.",
+      });
+    },
+  });
+  const result = await adapter.execute({
+    repositoryRoot: process.cwd(),
+    registrationId: "registration-deploy",
+    jobId: "job-deploy-failure",
+    kind: "work",
+    workIdentifier: "dong084",
+    deploymentPolicy: { mode: "repository", capabilities: ["cloudflare"], sources: [] },
+    signal: new AbortController().signal,
+    log: async () => undefined,
+  });
+  assert.equal(result.safeCode, "deployment_cloudflare_unavailable");
+  assert.equal(result.safeSummary, "Trusted Cloudflare deployment access is missing or expired on this computer.");
+  assert.equal(launches, 0);
+});
+
+test("Claude Code receives the same reviewed deployment bridge and cleanup", async () => {
+  let launchedEnvironment: NodeJS.ProcessEnv | undefined;
+  let cleaned = false;
+  const adapter = new ClaudeRunnerAdapter({
+    store: new MemorySecretStore(),
+    executablePath: "/bin/sh",
+    spawnProcess: ((_executable: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+      launchedEnvironment = options.env;
+      const child = fakeChild();
+      queueMicrotask(() => {
+        child.stdout.end();
+        child.stderr.end();
+        child.emit("exit", 0);
+      });
+      return child;
+    }) as never,
+    resolveCredentialEnvironment: noCredentialEnvironment,
+    resolveDeploymentEnvironment: async () => ({
+      environment: { CLOUDFLARE_API_TOKEN: "cloudflare-secret-value" },
+      secretValues: ["cloudflare-secret-value"],
+      cleanup: async () => { cleaned = true; },
+    }),
+  });
+
+  const result = await adapter.execute({
+    repositoryRoot: process.cwd(),
+    registrationId: "registration-claude-deploy",
+    jobId: "job-claude-deploy",
+    kind: "work",
+    workIdentifier: "dong084",
+    deploymentPolicy: { mode: "repository", capabilities: ["cloudflare"], sources: [".env"] },
+    signal: new AbortController().signal,
+    log: async () => undefined,
+  });
+
+  assert.equal(result.outcome, "completed");
+  assert.equal(launchedEnvironment?.CLOUDFLARE_API_TOKEN, "cloudflare-secret-value");
+  assert.equal(cleaned, true);
 });
 
 test("Codex adapter refuses an invalid server identifier before launch", async () => {

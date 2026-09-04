@@ -199,7 +199,9 @@ The first release uses authenticated long polling rather than a permanent
 WebSocket. `runner_wait` checks immediately, then waits for at most 20 seconds
 using bounded server intervals. The local loop immediately drains returned work
 and backs off after transport failure through 1, 2, 5, 10, and at most 30
-seconds with jitter. Successful empty waits do not invoke a model and reopen
+seconds with jitter. While backing off it reports `recovering`, the bounded
+failure count, safe code, and next retry time locally; it advances `lastSeenAt`
+only after a successful service response. Successful empty waits do not invoke a model and reopen
 without an artificial delay. This reuses the deployed API boundary, survives
 edge restarts, and keeps Convex authoritative without adding socket-local state.
 
@@ -227,6 +229,12 @@ Each registration has an owner-only local record containing:
 - approval mode, defaulting to `ask`;
 - browser self-review mode, defaulting to `disabled` and limited to local
   `read_only` authorization for Work jobs;
+- a local concurrent-job limit from 1 through 8, defaulting to 6; every parallel
+  wait reports that host bound and the server reserves only up to the smaller of
+  it and the project safety cap;
+- trusted deployment access, defaulting to `disabled`, or an explicit
+  repository policy containing only detected provider names and the safe
+  source filenames `.env` and `.env.local`;
 - the owner-only parent directory used for isolated runner worktrees;
 - the active job set, including each bounded worktree and branch label;
 - the last exact harness session ID created for each runner job, when available.
@@ -234,8 +242,20 @@ Each registration has an owner-only local record containing:
 Server state may display the locally reported mode but cannot raise its
 privilege. A remote request for automatic execution is ignored; only the local
 record decides. Hosted job data cannot enable browser review or widen its
-scope. Changing the executable, repository identity, automatic mode, or browser review mode
-requires local confirmation and rotates the policy revision.
+scope. Changing the executable, repository identity, automatic mode, browser
+review mode, or deployment-access policy requires local confirmation and
+rotates the policy revision.
+
+Enabling repository deployment access is also a local owner action. It does not
+copy ignored files into worktrees. Immediately before a Work harness launches,
+the runner revalidates the approved checkout and imports only the fixed
+GitHub/Convex/Cloudflare/npm allow-list into memory. Host environment values may
+override those same named entries; no other shell environment crosses the
+boundary. The exact worktree must then pass bounded provider probes. Changed
+source discovery, unsafe file ownership or permissions, missing configuration,
+or an expired provider session fails the job before launch with one provider-
+specific safe code. Existing runner records migrate to disabled rather than
+silently gaining access.
 
 ## Harness adapters
 
@@ -259,6 +279,18 @@ This local bridge is refreshed per launch and is never represented in the
 hosted job contract, process arguments, prompts, worktrees, runner state, or
 logs. Any missing tool, unknown remote, failed login, timeout, oversized output,
 or malformed token contributes no environment value.
+
+When trusted deployment access is enabled, the same launch boundary also
+resolves the fixed release inputs required by the detected repository:
+`CONVEX_DEPLOYMENT`, `CONVEX_DEPLOY_KEY`, `CONVEX_SITE_URL`, `CONVEX_URL`,
+`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `NPM_ACCESS_TOKEN`, and
+`NODE_AUTH_TOKEN`. GitHub access comes only from the existing `gh` identity.
+The runner actively checks GitHub, Convex, Cloudflare, and npm before starting
+the harness. It passes values only through the child environment, creates no
+worktree configuration file, redacts exact injected values from stdout and
+stderr, and removes its owner-only temporary npm placeholder configuration on
+every exit path. The fixed prompt tells the agent that access already passed
+preflight so it checks current state before requesting a new login.
 
 ### Claude Code
 
@@ -315,8 +347,10 @@ raw process logs are not server data.
 
 - Two enqueue requests for the same eligible WorkItem return one active job.
 - Upgraded runners declare their active job IDs and atomically refill available
-  capacity up to the project `maxConcurrentRuns` policy. Older runners omit that
-  field and retain the original one-job-at-a-time behavior.
+  capacity up to the smaller of their local host limit and the project
+  `maxConcurrentRuns` policy. Older runners omit the active-job field and retain
+  the original one-job-at-a-time behavior; the earlier parallel client remains
+  compatible when it omits the additive host limit.
 - Every concurrent job receives a deterministic, owner-only Git worktree, branch,
   harness session, log, cancellation controller, and dongo external session ID.
 - Per-job polling names the exact job. A cancellation or lost lease interrupts
@@ -332,7 +366,8 @@ raw process logs are not server data.
   never fabricates a new session ID to reclaim work.
 - Restart reloads only owner-only local state, rediscovers every assigned job,
   and resumes each only when its server lease, deterministic worktree, and stored
-  process/session facts agree.
+  process/session facts agree. A missing worktree is a recovery failure and is
+  never silently recreated for a job already reported as running or blocked.
 - Server outage leaves the local process running only through a short bounded
   grace period. Failure to renew after that period interrupts it.
 - Cancellation, revocation, or local disable always outranks queued execution.
