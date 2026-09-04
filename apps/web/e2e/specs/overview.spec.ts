@@ -1662,6 +1662,9 @@ test("keeps mobile controls reachable without horizontal overflow", async ({ pag
   const detail = workDetail(page, "Verify fixture search");
   await expect(detail).toBeVisible();
   await expect(page.locator(".detail-backdrop")).toBeHidden();
+  await detail.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished));
+  });
   const detailBounds = await detail.boundingBox();
   expect(detailBounds).not.toBeNull();
   expect(detailBounds!.x).toBe(0);
