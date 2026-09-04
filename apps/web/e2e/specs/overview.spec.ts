@@ -1665,12 +1665,18 @@ test("keeps mobile controls reachable without horizontal overflow", async ({ pag
   await detail.evaluate(async (element) => {
     await Promise.all(element.getAnimations().map((animation) => animation.finished));
   });
-  const detailBounds = await detail.boundingBox();
+  const [detailBounds, viewportBounds] = await Promise.all([
+    detail.boundingBox(),
+    page.evaluate(() => ({
+      width: document.documentElement.clientWidth,
+      height: document.documentElement.clientHeight,
+    })),
+  ]);
   expect(detailBounds).not.toBeNull();
   expect(detailBounds!.x).toBe(0);
   expect(detailBounds!.y).toBe(0);
-  expect(detailBounds!.width).toBe(390);
-  expect(detailBounds!.height).toBe(844);
+  expect(detailBounds!.width).toBe(viewportBounds.width);
+  expect(detailBounds!.height).toBe(viewportBounds.height);
   await detail.getByRole("button", { name: /close|back/i }).click();
 
   const undersized = await page.locator("button:visible, a:visible").evaluateAll((elements) =>
