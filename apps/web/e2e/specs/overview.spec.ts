@@ -175,8 +175,29 @@ test("hides the desktop alert control when native notifications are unsupported"
 test("shows concurrent agents, safe workspace detail, and live progress", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo?scenario=concurrency-live");
   const activity = page.getByRole("region", { name: "agent activity" });
+  const signal = activity.locator(".concurrent-activity__signal");
 
   await expect(activity).toContainText("1 / 4 active");
+  await expect(signal).toHaveAttribute("data-state", "active");
+  await expect.poll(async () => signal.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const probe = document.createElement("span");
+    probe.style.background = "var(--green)";
+    document.body.append(probe);
+    const green = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return { color: style.backgroundColor, animation: style.animationName, green };
+  })).toEqual({ color: expect.any(String), animation: "dongo-blink", green: expect.any(String) });
+  expect(await signal.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(
+    await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.background = "var(--green)";
+      document.body.append(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    }),
+  );
   const running = activity.locator('[data-run-id="run-attachments"]');
   const waiting = activity.locator('[data-run-id="run-release"]');
   await expect(running).toContainText("Claude");
@@ -207,8 +228,39 @@ test("keeps an undisclosed host serial without implying workspace support", asyn
 
 test("keeps Working usable when live agent activity is unavailable", async ({ page }) => {
   await page.goto("/app/fixture-studio/dongo?scenario=concurrency-error");
+  const signal = page.locator(".concurrent-activity__signal");
   await expect(page.getByText("Live agent activity is temporarily unavailable.")).toBeVisible();
+  await expect(signal).toHaveAttribute("data-state", "unavailable");
+  await expect.poll(async () => signal.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
   await expect(page.locator('[data-work-id="work-working"]')).toBeVisible();
+});
+
+test("uses a still amber signal when no agents are active", async ({ page }) => {
+  const signal = page.locator(".concurrent-activity__signal");
+  await expect(page.getByText("No active agent runs.")).toBeVisible();
+  await expect(signal).toHaveAttribute("data-state", "idle");
+  await expect.poll(async () => signal.evaluate((element) => ({
+    animation: getComputedStyle(element).animationName,
+    color: getComputedStyle(element).backgroundColor,
+  }))).toEqual({
+    animation: "none",
+    color: await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.background = "var(--amber)";
+      document.body.append(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    }),
+  });
+});
+
+test("stops the active signal animation when reduced motion is requested", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/app/fixture-studio/dongo?scenario=concurrency-live");
+  const signal = page.locator(".concurrent-activity__signal");
+  await expect(signal).toHaveAttribute("data-state", "active");
+  await expect.poll(async () => signal.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
 });
 
 test("hands focus to a replacement Run without stealing retained row focus", async ({ page }) => {
@@ -300,6 +352,46 @@ test("switches projects through an accessible keyboard menu", async ({ page }) =
   await expect(companion).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/app\/fixture-studio\/companion$/);
+});
+
+test("gives the exact current project strong visual and accessible context", async ({ page }) => {
+  const trigger = page.getByRole("button", { name: "Select organization or project" });
+  const projectName = trigger.locator(".project-button__name");
+  const composerHeading = page.getByRole("heading", { name: "New Intake for dongo" });
+  const composerProject = composerHeading.locator(".composer__project");
+
+  await expect(trigger).toHaveAccessibleDescription("Current project: dongo");
+  await expect(projectName).toHaveText("dongo");
+  await expect(projectName).toHaveAttribute("title", "dongo");
+  await expect(composerHeading).toBeVisible();
+  await expect(composerProject).toHaveText("dongo");
+  await expect(composerProject).toHaveAttribute("title", "dongo");
+
+  const styles = await page.evaluate(() => {
+    const trigger = document.querySelector<HTMLElement>(".project-button");
+    const label = document.querySelector<HTMLElement>(".composer__label");
+    const project = document.querySelector<HTMLElement>(".composer__project");
+    if (!trigger || !label || !project) throw new Error("Project context is unavailable");
+    const triggerStyle = getComputedStyle(trigger);
+    const labelStyle = getComputedStyle(label);
+    const projectStyle = getComputedStyle(project);
+    return {
+      triggerTransform: triggerStyle.textTransform,
+      triggerWeight: Number.parseInt(triggerStyle.fontWeight, 10),
+      triggerShadow: triggerStyle.boxShadow,
+      labelTransform: labelStyle.textTransform,
+      labelWeight: Number.parseInt(labelStyle.fontWeight, 10),
+      projectTransform: projectStyle.textTransform,
+      projectWeight: Number.parseInt(projectStyle.fontWeight, 10),
+    };
+  });
+  expect(styles.triggerTransform).toBe("uppercase");
+  expect(styles.triggerWeight).toBeGreaterThanOrEqual(700);
+  expect(styles.triggerShadow).not.toBe("none");
+  expect(styles.labelTransform).toBe("uppercase");
+  expect(styles.labelWeight).toBeGreaterThanOrEqual(700);
+  expect(styles.projectTransform).toBe("uppercase");
+  expect(styles.projectWeight).toBeGreaterThanOrEqual(700);
 });
 
 test("shows the current plan allowance and keeps project creation discoverable", async ({ page }) => {
@@ -1390,7 +1482,11 @@ test("reflows at 320 CSS pixels and honors reduced motion", async ({ page, brows
   await expect(search.locator("span").first()).toBeVisible();
   expect(await search.evaluate((element) => getComputedStyle(element, "::before").content)).toBe("none");
   const projectName = project.locator("span").first();
+  const composerProject = page.locator(".composer__project");
   await projectName.evaluate((element) => {
+    element.textContent = "A very long mobile project name that must truncate";
+  });
+  await composerProject.evaluate((element) => {
     element.textContent = "A very long mobile project name that must truncate";
   });
   await expect.poll(async () => page.evaluate(() =>
@@ -1403,6 +1499,13 @@ test("reflows at 320 CSS pixels and honors reduced motion", async ({ page, brows
   }));
   expect(projectNameMetrics.scrollWidth, JSON.stringify(projectNameMetrics))
     .toBeGreaterThan(projectNameMetrics.clientWidth);
+  const composerProjectMetrics = await composerProject.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+    text: element.textContent,
+  }));
+  expect(composerProjectMetrics.scrollWidth, JSON.stringify(composerProjectMetrics))
+    .toBeGreaterThan(composerProjectMetrics.clientWidth);
 
   await brand.focus();
   await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");

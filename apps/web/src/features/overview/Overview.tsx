@@ -1876,11 +1876,15 @@ export function Overview(props: OverviewProps) {
       <header class="app-header app-header--overview">
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
         <div class="header-menu">
+          <span class="visually-hidden" id="overview-current-project">
+            Current project: {projectName()}
+          </span>
           <button
             ref={projectMenuButton}
             class="project-button"
             type="button"
             aria-label="Select organization or project"
+            aria-describedby="overview-current-project"
             aria-haspopup="menu"
             aria-expanded={projectMenuOpen()}
             onClick={() => {
@@ -1890,7 +1894,8 @@ export function Overview(props: OverviewProps) {
               if (next) focusFirstMenuItem(() => projectMenu);
             }}
           >
-            <span>{projectName()}</span><span style={{ color: "var(--text-faint)" }}>▾</span>
+            <span class="project-button__name" title={projectName()}>{projectName()}</span>
+            <span class="project-button__chevron" aria-hidden="true">▾</span>
           </button>
           <Show when={projectMenuOpen()}>
             <div
@@ -2119,7 +2124,12 @@ export function Overview(props: OverviewProps) {
           >
           <section class="composer" aria-label="Add something">
             <div class="composer__heading">
-              <span>New Intake</span>
+              <h2 class="composer__heading-copy">
+                <span class="composer__label">New Intake</span>
+                <span class="composer__heading-divider" aria-hidden="true">/</span>
+                <span class="visually-hidden"> for </span>
+                <strong class="composer__project" title={projectName()}>{projectName()}</strong>
+              </h2>
               <button
                 class="composer__close"
                 type="button"

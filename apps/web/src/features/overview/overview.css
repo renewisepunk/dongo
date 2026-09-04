@@ -72,11 +72,31 @@
 }
 
 .project-button {
+  max-width: min(280px, 32vw);
   gap: 7px;
-  color: #b9b9c1;
+  border-color: var(--line-strong);
+  background: var(--surface-0);
+  box-shadow: inset 2px 0 0 var(--amber);
+  color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 12px;
-  padding: 7px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  padding: 7px 11px 7px 13px;
+  text-transform: uppercase;
+}
+
+.project-button__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-button__chevron {
+  flex: none;
+  color: var(--amber);
+  font-size: 10px;
 }
 
 .project-button:hover,
@@ -86,6 +106,10 @@
 .icon-button:hover {
   border-color: var(--line-strong);
   color: var(--text);
+}
+
+.project-button:hover {
+  background: var(--surface-1);
 }
 
 .header-spacer { flex: 1; }
@@ -300,13 +324,45 @@
 
 .composer__heading {
   display: flex;
+  min-width: 0;
   align-items: center;
+  gap: 12px;
   justify-content: space-between;
-  color: var(--text-faint);
+}
+
+.composer__heading-copy {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  margin: 0;
   text-transform: uppercase;
+}
+
+.composer__label {
+  flex: none;
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+}
+
+.composer__heading-divider {
+  flex: none;
+  color: var(--text-ghost);
+  font-size: 11px;
+}
+
+.composer__project {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .composer__close {
@@ -596,9 +652,22 @@
 .concurrent-activity__signal {
   width: 7px;
   height: 7px;
+  background: var(--text-ghost);
+}
+
+.concurrent-activity__signal[data-state="active"] {
   background: var(--green);
   box-shadow: 0 0 0 4px oklch(0.82 0.2 150 / 0.08);
   animation: dongo-blink 1.8s steps(1) infinite;
+}
+
+.concurrent-activity__signal[data-state="idle"] {
+  background: var(--amber);
+  box-shadow: 0 0 0 4px oklch(0.84 0.19 78 / 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .concurrent-activity__signal[data-state="active"] { animation: none; }
 }
 
 .concurrent-activity__capacity {
@@ -2467,12 +2536,6 @@
     width: 100%;
     max-width: none;
     justify-content: space-between;
-  }
-  .project-button span:first-child {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .menu-popover,
   .header-menu--right .menu-popover {
