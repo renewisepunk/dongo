@@ -13,7 +13,7 @@ The failures observed during the dongo and wiwi releases were a chain of indepen
 3. **Repeated service failures did not lead to useful recovery feedback.** The runner repeatedly moved from `temporarily_unavailable` to `waiting` and back to `temporarily_unavailable` with no current jobs. The UI did not explain the retry/backoff cycle, prove recovery, or explain why Ready work was still not being consumed.
 4. **Authentication was checked too late and at the wrong scope.** GitHub CLI, Wrangler, dongo CLI, repository binding, and browser access are separate capabilities. Jobs discovered invalid or invisible credentials only at integration or release time, after substantial work, and then each emitted its own authentication request.
 5. **Isolated worktrees lacked an explicit trusted-configuration bridge.** Git history is shared, but ignored files are not. Release jobs could see source code yet fail to resolve the same Convex, Cloudflare, GitHub, or npm context as the owner's checkout.
-6. **Repository binding was not reliably portable across worktrees.** The canonical runner checkout could read runner state while another isolated worktree for the same repository reported inconsistent marker origins or credential binding. A job must validate and self-reconcile repository identity without starting a new browser connection flow for an already-connected project.
+6. **Repository binding was not reliably portable across worktrees.** The canonical runner checkout could read runner state while another isolated worktree for the same repository reported inconsistent marker origins or credential binding. Fresh worktrees inherited an older tracked `.agent-work/project.json` credential profile while the healthy runner checkout had newer local binding state. A job must validate and self-reconcile repository identity without starting a new browser connection flow for an already-connected project; a checkout-local marker must not masquerade as portable authentication state.
 7. **Browser authorization had three disagreeing layers.** Runner read-only mode, global Chrome site permission, and a task's cached Browser Use decision could disagree. Already-running tasks retained a stale denial after the global allow-list was correct, causing repeated requests and preventing self-review.
 8. **Shared review and release resources were uncoordinated.** Parallel source work reused browser profiles, ports, Playwright processes, live-provider conversations, and deployment targets. This produced crashes, host-load timeouts, and unnecessary serialization or blocking.
 9. **Recovery could mutate state before proving resumability.** Recovery of running or blocked work could prepare a missing deterministic worktree before the exact agent session had successfully resumed. That obscured whether the original workspace was recovered, replaced, or still absent.
@@ -51,6 +51,7 @@ The failures observed during the dongo and wiwi releases were a chain of indepen
 
 - Separate worktrees make source edits parallel; they do not make every external resource parallel.
 - Serialize only the scarce shared resource: production/development deployment, a fixed browser debug port, a shared Playwright browser profile, a live WhatsApp conversation, or a single test sender/receiver.
+- Give every isolated Playwright worktree a unique `DONGO_E2E_PORT`. Reusing the default port can attach a test to another worktree's already-running Vite server and falsely validate stale code.
 - Keep unrelated implementation, tests, review, and CI parallel. A project-wide single-job runner defeats the purpose of worktree isolation.
 - Represent shared-resource ownership with a bounded claim or lease, a visible waiting reason, timeout/recovery behavior, and fair handoff. Do not improvise coordination by leaving unexplained “Running” cards.
 - Map processes to their worktree and Run before sending `STOP`, `CONT`, or termination signals. Record any mistaken intervention honestly.
@@ -71,6 +72,7 @@ The failures observed during the dongo and wiwi releases were a chain of indepen
 - Run development deployment and acceptance first. Promote the same accepted revision to production, then run post-cutover checks before finishing Work.
 - If another commit lands during acceptance, restart the necessary integration and release checks for the new shared target rather than describing the older candidate as current.
 - A deployment failure that stops before later services mutate is not a release. Record exactly which stage changed and which did not.
+- When any CLI surface changes, combine compatible pending CLI changes behind one new version, compute and pin the digest from the final combined package payload, and publish that immutable version once. Never reuse a published version or calculate provenance before all release-bound CLI commits are present.
 
 ## GitHub status can be internally inconsistent
 
