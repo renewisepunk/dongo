@@ -35,15 +35,15 @@ export function GetStartedGuide() {
           <div class="agent-brief__prompt"><span aria-hidden="true">›</span> Install the dongo skills, then set up dongo for this repository.</div>
           <div class="agent-brief__status">
             <span><i data-state="done" /> skills installed</span>
-            <span><i data-state="done" /> agent prepares CLI + MCP</span>
-            <span><i data-state="active" /> browser approval</span>
-            <span><i /> agent verifies connection</span>
+            <span><i data-state="active" /> check existing setup</span>
+            <span><i /> repair only what is missing</span>
+            <span><i /> verify the requested capability</span>
           </div>
         </div>
       </section>
 
       <div class="public-guide-flow" aria-label="Connection sequence">
-        <span>dongo skills</span><b aria-hidden="true">→</b><span>tell your agent</span><b aria-hidden="true">→</b><span>browser approval</span><b aria-hidden="true">→</b><span>ready to work</span>
+        <span>dongo skills</span><b aria-hidden="true">→</b><span>inspect current state</span><b aria-hidden="true">→</b><span>approve only if needed</span><b aria-hidden="true">→</b><span>verify exact scope</span>
       </div>
 
       <GuideSection
@@ -53,23 +53,24 @@ export function GetStartedGuide() {
         lede="Use your agent’s normal skill installer to add both dongo skills from the public repository. This is the only setup step you need to perform before asking the agent to help."
       >
         <GuideCode label="tell your agent">{SKILL_PROMPT}</GuideCode>
-        <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">What happens next</div><div><h3>Your agent owns the mechanical setup.</h3><p>It installs the published CLI if needed, connects this repository, previews and applies its own MCP configuration, and checks the resulting connection. You approve the dongo browser prompts.</p></div></aside>
+        <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">What happens next</div><div><h3>Your agent checks before it changes anything.</h3><p>It first verifies the installed CLI, local authorization, repository binding, and host connection. It installs, connects, or opens browser approval only for a missing or invalid phase, then reports exactly what it proved.</p></div></aside>
       </GuideSection>
 
       <GuideSection
         index="02"
         id="authorize"
-        title="Approve the connection"
-        lede="dongo authentication moves from your agent to the browser for your approval, then back to the agent for verification."
+        title="Approve only the missing connection"
+        lede="A browser prompt is a conditional recovery step, not the beginning of every dongo session. Healthy CLI and host grants are reused without asking you to authenticate again."
       >
         <aside class="guide-callout guide-callout--green">
           <div class="guide-callout__label">One live service</div>
           <div><h3>There is no environment choice.</h3><p>The installed CLI always connects to <code>dongo.so</code>. Development infrastructure is private to dongo's own testing and cannot be selected by a user or agent.</p></div>
         </aside>
-        <div class="guide-process" role="list" aria-label="Browser authorization steps">
-          <article role="listitem"><span>1</span><h3>Your agent opens the link</h3><p>The CLI opens a complete approval URL. Over SSH, the agent gives you that same URL to open in a trusted browser.</p></article>
-          <article role="listitem"><span>2</span><h3>You approve the scoped install</h3><p>Sign in if needed, confirm the account, proposed project, and requested access.</p></article>
-          <article role="listitem"><span>3</span><h3>Your agent verifies</h3><p>The page reports “Approved”; the agent only proceeds after the CLI and MCP diagnostics succeed.</p></article>
+        <div class="guide-process" role="list" aria-label="State-first authorization steps">
+          <article role="listitem"><span>1</span><h3>Inspect</h3><p>The agent runs read-only checks and names the first missing or invalid layer.</p></article>
+          <article role="listitem"><span>2</span><h3>Approve if required</h3><p>The browser opens only when a repository or host grant actually needs approval. Sign in only when dongo presents sign-in.</p></article>
+          <article role="listitem"><span>3</span><h3>Recheck the same layer</h3><p>The agent verifies the exact repository, project, and installation instead of treating an opened link as success.</p></article>
+          <article role="listitem"><span>4</span><h3>Continue</h3><p>Completed phases stay complete. A later GitHub, Cloudflare, browser, runner, or dispatch failure is diagnosed separately.</p></article>
         </div>
         <aside class="guide-callout guide-callout--green">
           <div class="guide-callout__label">No project yet?</div>
@@ -138,14 +139,15 @@ ${dongoPublicOrigin}/p/<project-ref>/mcp`}</code></pre>
         index="04"
         id="verify"
         title="Verify before doing work"
-        lede="The skills perform these read-only checks for you. Run them manually only when diagnosing a connection."
+        lede="The skills keep a phase ledger based on observed results. Run these commands manually only when diagnosing a connection."
       >
         <GuideCode label="verify the CLI">{VERIFY_COMMANDS}</GuideCode>
         <div class="guide-verification">
-          <div><span>CLI</span><strong>doctor passes</strong><p>Project marker, credential binding, and API connectivity agree.</p></div>
-          <div><span>MCP</span><strong><code>dongo_session_start</code> succeeds</strong><p>The host identifies its own actor and the intended project without copying a CLI token.</p></div>
-          <div><span>Human</span><strong>project opens</strong><p>Use <A href="/open">Open app</A> to review Intake, work, comments, and agent updates.</p></div>
+          <div><span>Repository setup</span><strong>CLI, authorization, binding, and doctor</strong><p>Each phase is verified separately. An expired grant does not make an installed CLI disappear.</p></div>
+          <div><span>Agent host</span><strong>integration and host authorization</strong><p><code>dongo_session_start</code> must identify the intended project and this host’s own installation actor.</p></div>
+          <div><span>Requested capability</span><strong>runner, Intake, dispatch, release, or review</strong><p>Only the capabilities requested for this session are tested. Their failures never reset healthy dongo setup.</p></div>
         </div>
+        <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">Truthful progress</div><div><h3>The current label should match the current check.</h3><p>“Downloading the dongo CLI” disappears as soon as installation completes. Waiting approval, host restart, runner registration, Ready-work dispatch, GitHub access, Cloudflare access, and browser review are different phases with different next actions.</p></div></aside>
       </GuideSection>
 
       <GuideSection

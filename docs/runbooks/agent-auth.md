@@ -1,5 +1,40 @@
 # Agent authentication and host recovery
 
+## Diagnose setup as independent phases
+
+Start every setup or repair with bounded, read-only checks. Do not begin with
+`dongo connect`, host login, or provider login merely because the user said
+“use dongo” or because a later capability failed.
+
+Track CLI installation/version, CLI authorization, repository binding,
+repository diagnostics, host integration, host authorization, runner
+registration, Inbox pickup, GitHub capability, deployment-provider capability,
+browser review, and actual Work dispatch independently. For each requested
+phase, record its current state, safe evidence, and next action. Update the
+visible progress label when the phase changes; a completed “Downloading latest
+dongo CLI” label must never remain while integration or Work is underway.
+
+This separation is operational, not cosmetic. A healthy browser account does
+not bind a new repository. A passing CLI doctor does not prove the host MCP
+grant, runner registration, GitHub access, Cloudflare access, browser review, or
+Ready-work dispatch. Conversely, a failure in any of those later layers does
+not invalidate an already-proven dongo CLI or repository connection.
+
+When setup resumes after a restart or a background process has an uncertain
+result, reconcile current state before retrying. Re-run the relevant read-only
+check. If the intended state is already present, mark the old attempt
+superseded and continue. Launch a new approval only when evidence proves that
+the exact repository or installation grant remains absent, expired, or
+revoked.
+
+The repeated 2026-09-04 failures came from collapsing these layers into one
+setup story: an already-current CLI retained a download label; a successful
+repository connection was followed by a duplicate connection attempt; healthy
+dongo authorization was blamed for GitHub, Cloudflare, browser, runner, and
+scheduler failures; and later Work looked blocked because the UI continued to
+emphasize historical state. State-first phase reporting makes the first failing
+boundary visible and prevents unrelated reauthentication loops.
+
 ## CLI device authorization
 
 Expected flow:

@@ -19,6 +19,10 @@ test("keeps get started public and preserves routes into help, sign-in, and the 
   await expect(page.getByRole("heading", { name: "Install the skills. Follow the prompts. Start working." })).toBeVisible();
   await expect(page.getByRole("link", { name: /Install dongo skills/ }).first()).toHaveAttribute("href", "https://github.com/renewisepunk/dongo-skills");
   await expect(page.getByText("No project yet?")).toBeVisible();
+  await expect(page.getByText("check existing setup", { exact: true })).toBeVisible();
+  await expect(page.getByRole("list", { name: "State-first authorization steps" }).getByRole("listitem")).toHaveCount(4);
+  await expect(page.getByText("repair only what is missing", { exact: true })).toBeVisible();
+  await expect(page.getByText("GitHub access, Cloudflare access, and browser review", { exact: false })).toBeVisible();
   await expect(page.getByText(/newly published.*exact scoped package/i)).toBeVisible();
   await expect(page.getByText("The CLI does not invoke macOS Keychain", { exact: false })).toBeVisible();
   await expect(page.getByText("Re-authenticate", { exact: true })).toBeVisible();
