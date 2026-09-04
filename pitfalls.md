@@ -51,6 +51,7 @@ The failures observed during the dongo and wiwi releases were a chain of indepen
 
 - Separate worktrees make source edits parallel; they do not make every external resource parallel.
 - Serialize only the scarce shared resource: production/development deployment, a fixed browser debug port, a shared Playwright browser profile, a live WhatsApp conversation, or a single test sender/receiver.
+- Give every isolated Playwright worktree a unique `DONGO_E2E_PORT`. Reusing the default port can attach a test to another worktree's already-running Vite server and falsely validate stale code.
 - Keep unrelated implementation, tests, review, and CI parallel. A project-wide single-job runner defeats the purpose of worktree isolation.
 - Represent shared-resource ownership with a bounded claim or lease, a visible waiting reason, timeout/recovery behavior, and fair handoff. Do not improvise coordination by leaving unexplained “Running” cards.
 - Map processes to their worktree and Run before sending `STOP`, `CONT`, or termination signals. Record any mistaken intervention honestly.
@@ -71,6 +72,7 @@ The failures observed during the dongo and wiwi releases were a chain of indepen
 - Run development deployment and acceptance first. Promote the same accepted revision to production, then run post-cutover checks before finishing Work.
 - If another commit lands during acceptance, restart the necessary integration and release checks for the new shared target rather than describing the older candidate as current.
 - A deployment failure that stops before later services mutate is not a release. Record exactly which stage changed and which did not.
+- When any CLI surface changes, combine compatible pending CLI changes behind one new version, compute and pin the digest from the final combined package payload, and publish that immutable version once. Never reuse a published version or calculate provenance before all release-bound CLI commits are present.
 
 ## GitHub status can be internally inconsistent
 
