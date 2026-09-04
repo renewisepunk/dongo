@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { requireReleaseConvexTarget } from "./release-convex-target.mjs";
+
 const root = process.cwd();
 const executable = (name) => process.platform === "win32" ? `${name}.cmd` : name;
 const steps = [
@@ -19,7 +21,16 @@ if (!existsSync(resolve(root, "package.json")) || !existsSync(resolve(root, "con
   process.exit(2);
 }
 
+let releaseTarget;
+try {
+  releaseTarget = requireReleaseConvexTarget({ root, stage: "development" });
+} catch (error) {
+  console.error(error instanceof Error ? error.message : "Development release target preflight failed.");
+  process.exit(2);
+}
+
 if (process.argv.includes("--plan")) {
+  console.log(`Convex target preflight: ${releaseTarget.target} (${releaseTarget.source})`);
   for (const [label, command, args] of steps) {
     console.log(`${label}: ${command} ${args.join(" ")}`);
   }
@@ -30,7 +41,7 @@ for (const [label, command, args] of steps) {
   console.log(`\n==> Deploying ${label} to development`);
   const result = spawnSync(command, args, {
     cwd: root,
-    env: process.env,
+    env: releaseTarget.environment,
     stdio: "inherit",
   });
   if (result.error) {

@@ -35,6 +35,15 @@ npm run deploy:dev:plan
 npm run deploy:dev
 ```
 
+Both commands first require the exact named selector
+`CONVEX_DEPLOYMENT=dev:wandering-camel-662`. The automatic runner supplies it
+in memory through the approved deployment bridge; a trusted manual checkout may
+keep it in its owner-controlled ignored `.env.local` or `.env`. A missing,
+local, production, or otherwise mismatched selector stops before the first
+child command. Do not remove this guard or run `convex dev --once` without the
+named selector: Convex may otherwise initialize a local `127.0.0.1` backend,
+write `.env.local`, and make a partial release look like a remote deployment.
+
 Do not accept a web-only deploy as a coherent candidate when Convex, contracts, auth, API, MCP, files, or notification code changed. `npm run deploy:dev:web` is reserved for an explicitly isolated web iteration. The canonical runner stops at the first failed service so a partial candidate cannot be reported as complete.
 
 Verify all health/readiness routes from the [runbook index](README.md), then repeat email OTP, CLI device authorization, MCP discovery/login, one read, one idempotent write, web Intake/Attention, attachment, notification, and sync journeys.

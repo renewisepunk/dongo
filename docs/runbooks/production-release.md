@@ -78,6 +78,7 @@ export NPM_ACCESS_TOKEN
 NPM_CONFIG_USERCONFIG="$release_npm_config" \
   node scripts/release-cli.mjs --preflight
 NPM_CONFIG_USERCONFIG="$release_npm_config" \
+  CONVEX_DEPLOYMENT=prod:brainy-camel-172 \
   npm run deploy:production
 ```
 
@@ -105,9 +106,17 @@ npm run verify:agent-release-notice
 npm run verify:cli-package
 npm run release:cli:plan
 CLOUDFLARE_ENV=production npm run build --workspace @dongo/web
-npm run deploy:production:plan
+CONVEX_DEPLOYMENT=prod:brainy-camel-172 npm run deploy:production:plan
 git status --short
 ```
+
+The production plan and deploy both verify the exact named selector
+`prod:brainy-camel-172` before any child command. The selector may come from the
+automatic runner's in-memory trusted bridge or an explicit process environment
+as above. A deploy key, when present, must identify the same named target. The
+runner never prints the key. A missing, development, local, or mismatched target
+is a hard preflight failure; never let Convex infer a target during a production
+release.
 
 The worktree must be empty. Inspect `apps/web/dist/server/wrangler.json`: it must name `dongo-web-production`, route only `dongo.so` and `www.dongo.so`, and reference only `brainy-camel-172`. The production browser/server bundles must not contain `dev.dongo.so` or `wandering-camel-662`.
 
@@ -120,7 +129,7 @@ npx wrangler deployments list --name dongo-coming-soon --json
 ## Deploy and cut over
 
 ```sh
-npm run deploy:production
+CONVEX_DEPLOYMENT=prod:brainy-camel-172 npm run deploy:production
 ```
 
 The runner first validates the agent release notice, then verifies whether the public CLI must be published and confirms
