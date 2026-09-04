@@ -8,6 +8,7 @@ This file records failure modes observed while operating the local runner and re
 - Check the layers independently: installed CLI version, CLI authorization, repository binding, `dongo doctor`, hosted MCP availability, GitHub CLI access, Cloudflare/Wrangler access, and browser-review authorization.
 - Start a new login or connection only after a specific layer is proven missing or invalid. Explain which layer failed and what the login will change.
 - Browser sign-in, repository binding, CLI authorization, MCP authorization, GitHub authorization, and Cloudflare authorization are separate states. One succeeding does not prove the others.
+- Treat Wrangler OAuth as host-scoped but verify it from the exact isolated runner checkout before resolving every matching release blocker. One successful trusted-terminal refresh should unblock all runners using that host credential; individual jobs should verify and resume, not each initiate another login flow.
 
 ## Isolated worktrees do not inherit ignored configuration
 
@@ -29,6 +30,7 @@ This file records failure modes observed while operating the local runner and re
 - “Implementation complete,” “pushed,” “merged,” and “release is live” describe milestones; none automatically closes the Run.
 - Finish Work only after the agent has called the finish operation and the service has reconciled the Run, lease, runner job, and Work state.
 - Agent Activity should distinguish actively executing, waiting for CI, waiting for a shared resource, waiting for the owner, paused, process exited, and stale/failed reconciliation.
+- When Attention is answered and a replacement Run starts, invalidate both Overview and open-detail state. Move the answered request into clearly resolved history; never leave its dominant `BLOCKED` badge beside a current `Working` status or hide the resolution below the fold.
 - A finished or vanished process must be reconciled within a bounded interval. Stale Attention from a dead process should be resolved or cancelled and must not continue consuming an active slot.
 - When an old Run cannot resume, return the WorkItem to Ready with an explicit truthful reason. Start a fresh Run after the underlying capability is fixed.
 
