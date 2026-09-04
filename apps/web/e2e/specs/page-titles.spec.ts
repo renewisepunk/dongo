@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("uses descriptive titles for public, authentication, and authorization routes", async ({ page }) => {
   test.slow();
   const routes: Array<[string, string]> = [
-    ["/", "Ideas into visible agent work — dongo"],
+    ["/", "Agent work, visible — dongo"],
     ["/get-started", "Get started — dongo"],
     ["/help", "Help — dongo"],
     ["/security", "Security and privacy — dongo"],

@@ -1,0 +1,392 @@
+{
+  "category": "webpage",
+  "duration_s": 8,
+  "fps": 30,
+  "canvas": {
+    "w": 1920,
+    "h": 1080,
+    "aspect": "16:9"
+  },
+  "style": "A faithful source-free reconstruction of the accepted dongo Overview, staged as one calm product frame rather than a generic dashboard or cinematic website fly-through. Use near-black surfaces, square one-pixel borders, compact high-contrast type, amber only for human Attention, green only for live or completed state, and a static camera. The product remains readable throughout: motion is limited to 180-280ms vertical entries, deterministic status/caret changes, transform-only list reconciliation, and one restrained state transition. No rounded cards, decorative gradients, blur, glow, grain, 3D, zoom, pan, pointer clicks, captions, or external media.",
+  "palette": [
+    "#08080a",
+    "#0a0a0d",
+    "#15151a",
+    "#ececee",
+    "#b9b9c1",
+    "#6c6c76",
+    "#ffb700",
+    "#45e77a"
+  ],
+  "font": "Montserrat",
+  "beats": [
+    12,
+    72,
+    126,
+    174,
+    228
+  ],
+  "export": "mp4",
+  "asset_needs": [],
+  "shot_brief": "Open on a large, stable dongo Overview already legible beside the homepage copy. Two Run cards settle beneath the exact heading \"agent activity\" and the line \"Live claimed work across connected agent sessions.\" Their canonical Work identifiers, agents, healthy leases, and bounded \"Worktree · <branch>\" labels make concurrent host-created isolation concrete without claiming that dongo creates agents or worktrees. A small deterministic progress update establishes liveness. One Run then leaves active work and enters Recently done; the other changes from Running to Waiting as an amber Needs you decision opens above all other content. The single dominant motif is calm vertical reconciliation: the Overview reorganizes itself as the work changes while the camera and product shell remain fixed. Hold the final hierarchy long enough to read, then hard-cut to the opening state at the loop boundary.",
+  "catalog_reuse": {
+    "whole_scene_blocks": [],
+    "whole_scene_reason": "No catalog block matches the accepted dongo Overview closely enough. Social, browser-window, flowchart, 3D UI, and notification blocks introduce foreign chrome, rounded geometry, connectors, depth, or visual emphasis that would weaken product fidelity.",
+    "components": [
+      {
+        "name": "beat-timeline",
+        "use": "Borrow its single paused master-timeline labels and explicit beat-row orchestration; replace all token visuals with the reconstructed dongo DOM."
+      },
+      {
+        "name": "grid-card-assemble",
+        "use": "Borrow only the short fade plus 16px slide-up stagger for the two initial Run cards; keep dongo card markup, borders, spacing, and colors unchanged."
+      }
+    ],
+    "animation_rules": [
+      {
+        "name": "anchored-layout-expand",
+        "use": "Author the final Needs you-first layout in CSS, mask the attention region while closed, and move the attention sheet plus every downstream region with one shared transform tween. Never tween height, top, margin, padding, or grid dimensions."
+      },
+      {
+        "name": "discrete-text-sequence",
+        "use": "Swap progress and state labels at authored frame thresholds and drive the tiny block caret/activity blink from the paused timeline; do not use free-running CSS animation."
+      }
+    ]
+  },
+  "customize": {
+    "source": {
+      "mode": "local-dom-reconstruction",
+      "references": [
+        "apps/web/src/features/marketing/MarketingHome.tsx",
+        "apps/web/src/features/overview/Overview.tsx",
+        "apps/web/src/features/overview/ConcurrentActivity.tsx",
+        "build-plan/06-design-implementation-contract.md"
+      ],
+      "restrictions": [
+        "Do not browse or capture a remote page.",
+        "Do not add images, icons, logos, screenshots, audio, or other external assets.",
+        "Do not reproduce prototype-only browser or device chrome."
+      ]
+    },
+    "typography": {
+      "ui_family": "Montserrat",
+      "ui_role": "Available HyperFrames surrogate for the accepted Switzer-like interface typography.",
+      "operational_family": "JetBrains Mono",
+      "operational_uses": [
+        "dongo wordmark",
+        "project path and live label",
+        "section headings and counts",
+        "Work identifiers",
+        "Running and Waiting labels",
+        "elapsed time, lease health, and workspace labels"
+      ],
+      "weights": {
+        "regular": 400,
+        "medium": 500,
+        "section": 600
+      },
+      "case_rule": "Write dongo in lowercase everywhere. Keep operational section labels lowercase; do not title-case the product name."
+    },
+    "geometry": {
+      "border_radius_px": 0,
+      "border_px": 1,
+      "rail_px": 3,
+      "shadow": "none",
+      "camera": "static",
+      "perspective": "none"
+    },
+    "hero_frame_layout": {
+      "stage": {
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080,
+        "background": "#08080a"
+      },
+      "product_shell": {
+        "selector": "#dongo-overview",
+        "x": 60,
+        "y": 52,
+        "w": 1800,
+        "h": 976,
+        "background": "#0a0a0d",
+        "border": "1px solid #15151a",
+        "overflow": "hidden"
+      },
+      "app_header": {
+        "selector": "#app-header",
+        "x": 60,
+        "y": 52,
+        "w": 1800,
+        "h": 82,
+        "content": [
+          "dongo",
+          "rene / website",
+          "live"
+        ],
+        "font_px": 28,
+        "border_bottom": "1px solid #15151a"
+      },
+      "overview_stack": {
+        "selector": "#overview-stack",
+        "x": 180,
+        "y": 158,
+        "w": 1560,
+        "h": 824,
+        "final_css_is_authority": true,
+        "final_regions": {
+          "needs_you": {
+            "x": 180,
+            "y": 158,
+            "w": 1560,
+            "h": 188
+          },
+          "agent_activity": {
+            "x": 180,
+            "y": 374,
+            "w": 1560,
+            "h": 316
+          },
+          "recently_done": {
+            "x": 180,
+            "y": 720,
+            "w": 1560,
+            "h": 132
+          }
+        },
+        "opening_offsets": {
+          "needs_sheet_y": -216,
+          "downstream_y": -216,
+          "recently_done_row_y": 16
+        }
+      },
+      "activity_grid": {
+        "selector": "#run-grid",
+        "columns": 2,
+        "column_gap_px": 18,
+        "row_gap_px": 18,
+        "run_card_w_px": 771,
+        "run_card_h_px": 214,
+        "remaining_run_final_w_px": 771,
+        "empty_slot_after_completion": "Retain the empty right grid track so #run-dong075 never stretches or moves horizontally."
+      },
+      "type_scale_px": {
+        "chrome": 28,
+        "section_heading": 24,
+        "section_subcopy": 25,
+        "run_agent": 29,
+        "run_title": 34,
+        "run_progress": 27,
+        "run_meta": 21,
+        "attention_title": 36,
+        "done_title": 32
+      },
+      "safe_area": {
+        "left": 60,
+        "top": 52,
+        "right": 60,
+        "bottom": 52
+      }
+    },
+    "dom_regions": [
+      {
+        "selector": "#app-header",
+        "role": "persistent application header",
+        "content": "dongo | rene / website | live"
+      },
+      {
+        "selector": "#needs-region",
+        "role": "first content block when actionable",
+        "initial_state": "masked closed",
+        "final_state": "open above all other Overview content"
+      },
+      {
+        "selector": "#needs-dong075",
+        "role": "amber Attention row",
+        "content": "dong075 | Choose the launch note | Codex needs a decision"
+      },
+      {
+        "selector": "#agent-activity-region",
+        "role": "live claimed work region",
+        "heading": "agent activity",
+        "description": "Live claimed work across connected agent sessions."
+      },
+      {
+        "selector": "#activity-count",
+        "role": "active Run count",
+        "states": [
+          "02 active",
+          "01 active"
+        ]
+      },
+      {
+        "selector": "#run-dong075",
+        "role": "persistent Run card",
+        "content": {
+          "agent": "Codex",
+          "identifier": "dong075",
+          "title": "Reframe the homepage",
+          "progress_running": "Building the product story and checking the responsive layout.",
+          "progress_waiting": "Implementation ready. Waiting for your launch-note decision.",
+          "elapsed": "2m",
+          "lease": "Lease healthy",
+          "workspace": "Worktree · codex/dong075"
+        }
+      },
+      {
+        "selector": "#run-dong076",
+        "role": "Run card that completes",
+        "content": {
+          "agent": "Claude Code",
+          "identifier": "dong076",
+          "title": "Tighten release notes",
+          "progress_initial": "Focused checks are green. Preparing the exact revision.",
+          "progress_verified": "Exact revision verified. Ready to integrate.",
+          "elapsed": "4m",
+          "lease": "Lease healthy",
+          "workspace": "Worktree · claude/dong076"
+        }
+      },
+      {
+        "selector": "#recently-done-region",
+        "role": "completed work region",
+        "heading": "recently done"
+      },
+      {
+        "selector": "#done-dong076",
+        "role": "green completed row",
+        "content": "dong076 | Tighten release notes | Integrated into main · verified now"
+      }
+    ],
+    "motion": {
+      "dominant_motif": "calm vertical reconciliation",
+      "camera_motion": "none",
+      "spatial_properties": [
+        "x",
+        "y",
+        "scale",
+        "opacity"
+      ],
+      "forbidden_properties": [
+        "width",
+        "height",
+        "top",
+        "left",
+        "margin",
+        "padding",
+        "borderRadius"
+      ],
+      "eases": {
+        "entry": "power3.out",
+        "reconcile": "power3.inOut",
+        "exit": "power2.in",
+        "status_color": "power1.inOut"
+      },
+      "activity_blink": "Use one paused-timeline driver and a deterministic step waveform. Green live dots are on at frames 0-17, 30-47, 60-77, 90-107, and 120-137; after frame 174 only the amber Waiting/Needs you dots blink on the same 18-on/12-off cadence. No CSS animation and no infinite repeat.",
+      "loop": "Hold the final state through frame 239. At frame 240, outside the rendered frame range, hard-reset to the authored opening state. Do not reverse the story, crossfade screens, or fade the product to black."
+    },
+    "timeline": [
+      {
+        "id": "establish",
+        "start_frame": 0,
+        "end_frame": 15,
+        "start_s": 0,
+        "end_s": 0.5,
+        "actions": [
+          "Keep the full shell and header present from frame 0; settle #dongo-overview from y 8 and opacity 0.94 to y 0 and opacity 1 over frames 0-7.",
+          "Reveal #run-dong075 with fade_in plus slide_bottom from y 16 to 0 over frames 4-11.",
+          "Reveal #run-dong076 with the same move over frames 8-15. The four-frame stagger is the only initial cascade."
+        ]
+      },
+      {
+        "id": "parallel-work-hold",
+        "start_frame": 16,
+        "end_frame": 71,
+        "start_s": 0.5333,
+        "end_s": 2.4,
+        "actions": [
+          "Hold both Run cards completely still and readable.",
+          "Drive only the small live dots and a 2px JetBrains Mono block caret at the end of #run-dong076 progress from the deterministic timeline blink."
+        ]
+      },
+      {
+        "id": "progress-update",
+        "start_frame": 72,
+        "end_frame": 125,
+        "start_s": 2.4,
+        "end_s": 4.2,
+        "actions": [
+          "At frame 72, swap #run-dong076 progress to \"Exact revision verified. Ready to integrate.\" with the discrete-text rule.",
+          "Over frames 72-78, move the old line y 0 to -6 with opacity 1 to 0 while the replacement moves y 6 to 0 with opacity 0 to 1; both occupy a fixed-height wrapper so the card never reflows.",
+          "Hold the verified state from frame 79 through frame 125."
+        ]
+      },
+      {
+        "id": "completion-reconcile",
+        "start_frame": 126,
+        "end_frame": 173,
+        "start_s": 4.2,
+        "end_s": 5.8,
+        "actions": [
+          "Over frames 126-133, fade #run-dong076 out while it moves y 0 to -10; do not rotate or scale it.",
+          "At frame 130, discretely change #activity-count from \"02 active\" to \"01 active\".",
+          "Keep #run-dong075 fixed in the left grid track while the right track becomes empty; do not stretch, slide, or remeasure the remaining card.",
+          "Reveal #done-dong076 beneath agent activity over frames 132-139 with fade_in plus slide_bottom from y 16 to 0. Use the green rail/check only after frame 132.",
+          "Hold one active Run plus Recently done from frame 140 through frame 173."
+        ]
+      },
+      {
+        "id": "attention-reconcile",
+        "start_frame": 174,
+        "end_frame": 227,
+        "start_s": 5.8,
+        "end_s": 7.6,
+        "actions": [
+          "At frame 174, discretely change #run-dong075 from Running to Waiting and its progress to \"Implementation ready. Waiting for your launch-note decision.\".",
+          "Over frames 174-179, color-shift only the #run-dong075 rail, state dot, and state label from green to amber.",
+          "Over frames 174-182, open #needs-region from its authored top mask while #agent-activity-region and #recently-done-region share the same y -216 to 0 transform tween. Use anchored-layout-expand so the attention edge and downstream stack never separate.",
+          "Reveal #needs-dong075 opacity 0 to 1 with y 12 to 0 over frames 177-184, after the region has begun opening.",
+          "Hold the final Needs you-first hierarchy from frame 185 through frame 227."
+        ]
+      },
+      {
+        "id": "final-read-and-loop-cut",
+        "start_frame": 228,
+        "end_frame": 239,
+        "start_s": 7.6,
+        "end_s": 8,
+        "actions": [
+          "Keep every region and label still for the final read.",
+          "Allow one amber step-blink at frame 228; add no pulse, zoom, shimmer, or exit.",
+          "Cut directly back to frame 0 after frame 239."
+        ]
+      }
+    ],
+    "proof_frames": [
+      18,
+      84,
+      146,
+      204,
+      234
+    ],
+    "poster_frame": 204
+  },
+  "content": {
+    "url": "local://dongo-overview",
+    "capture": "Reconstruct the accepted dongo Overview directly in HyperFrames from repository UI components and the design implementation contract. No remote browse, page capture, screenshot, or external media is permitted.",
+    "highlights": [
+      {
+        "selector": "#agent-activity-region",
+        "label": "Two connected agent sessions work concurrently in host-created isolated worktrees."
+      },
+      {
+        "selector": "#recently-done-region",
+        "label": "One canonical Work item is integrated and verified."
+      },
+      {
+        "selector": "#needs-region",
+        "label": "One owner decision is now required and remains attached to the active Run."
+      }
+    ]
+  }
+}

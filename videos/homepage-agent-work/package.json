@@ -1,0 +1,11 @@
+{
+  "name": "homepage-agent-work",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.8.27 preview",
+    "check": "npx --yes hyperframes@0.8.27 check compositions",
+    "render": "npx --yes hyperframes@0.8.27 render --composition compositions/index.html --output renders/homepage-agent-work.mp4 --format mp4 --skill motion-graphics",
+    "publish": "npx --yes hyperframes@0.8.27 publish"
+  }
+}
