@@ -741,6 +741,13 @@ export function Overview(props: OverviewProps) {
     }
   };
 
+  const closeDetailFromBackdrop = (event: PointerEvent) => {
+    if (event.target !== event.currentTarget) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeDetail();
+  };
+
   const openWork = (
     reference: string,
     updateRoute = true,
@@ -2487,6 +2494,14 @@ export function Overview(props: OverviewProps) {
           </Show>
         </div>
       </div>
+
+      <Show when={selectedWorkId() || selectedIntakeId()}>
+        <div
+          class="detail-backdrop"
+          aria-hidden="true"
+          onPointerDown={closeDetailFromBackdrop}
+        />
+      </Show>
 
       <For each={selectedWorkId() ? [selectedWorkId()!] : []}>{() => (
         <Show when={selectedWork()}>{(item) => (

@@ -887,6 +887,48 @@ test("opens search by keyboard and restores focus after detail close", async ({ 
   await expect(searchButton).toBeFocused();
 });
 
+test("dismisses overlay Work and Intake drawers from the backdrop without activating Overview", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 720 });
+  const readyLink = page.locator('[data-work-id="work-ready-a"]');
+  const underlyingLink = page.locator('[data-work-id="work-needs"]');
+  const underlyingBounds = await underlyingLink.boundingBox();
+  if (!underlyingBounds) throw new Error("The underlying Overview row is not visible");
+
+  await underlyingLink.evaluate((element) => {
+    element.addEventListener("click", () => {
+      document.documentElement.dataset.backdropUnderlyingClicks = String(
+        Number(document.documentElement.dataset.backdropUnderlyingClicks ?? "0") + 1,
+      );
+    });
+  });
+
+  await readyLink.click();
+  await expect(workDetail(page, "Verify fixture search")).toBeVisible();
+  await expect(page.locator(".detail-backdrop")).toBeVisible();
+  await page.mouse.click(underlyingBounds.x + 8, underlyingBounds.y + underlyingBounds.height / 2);
+
+  await expect(workDetail(page, "Verify fixture search")).toBeHidden();
+  await expect(page).not.toHaveURL(/work=/);
+  await expect(readyLink).toBeFocused();
+  await expect.poll(async () => page.evaluate(() =>
+    document.documentElement.dataset.backdropUnderlyingClicks ?? "0",
+  )).toBe("0");
+
+  const intakeLink = page.locator('[data-nav-kind="intake"][data-nav-id="intake-waiting"]');
+  await intakeLink.click();
+  await expect(workDetail(page, "Investigate the fixture login screen")).toBeVisible();
+  await page.locator(".detail-backdrop").dispatchEvent("pointerdown", {
+    bubbles: true,
+    cancelable: true,
+    pointerId: 2,
+    pointerType: "touch",
+  });
+
+  await expect(workDetail(page, "Investigate the fixture login screen")).toBeHidden();
+  await expect(page).not.toHaveURL(/intake=/);
+  await expect(intakeLink).toBeFocused();
+});
+
 test("uses an attachment filename for attachment-only Intake search results", async ({ page }) => {
   await page.getByRole("button", { name: "Search this project" }).click();
   const search = page.getByRole("dialog", { name: "Search this project" });
@@ -989,6 +1031,7 @@ test("uses a wide contextual navigator and non-modal detail article", async ({ p
   const detail = page.getByRole("region", { name: "Verify fixture search" });
   await expect(detail).toBeVisible();
   await expect(detail).not.toHaveAttribute("aria-modal");
+  await expect(page.locator(".detail-backdrop")).toBeHidden();
   await expect(readyLink).toHaveAttribute("aria-current", "page");
 
   const layout = await page.locator(".app-page").evaluate((element) => {
@@ -1614,6 +1657,18 @@ test("keeps mobile controls reachable without horizontal overflow", async ({ pag
   await page.keyboard.press("Escape");
   await expect(profileMenu).toBeHidden();
   await expect(profile).toBeFocused();
+
+  await page.locator('[data-work-id="work-ready-a"]').click();
+  const detail = workDetail(page, "Verify fixture search");
+  await expect(detail).toBeVisible();
+  await expect(page.locator(".detail-backdrop")).toBeHidden();
+  const detailBounds = await detail.boundingBox();
+  expect(detailBounds).not.toBeNull();
+  expect(detailBounds!.x).toBe(0);
+  expect(detailBounds!.y).toBe(0);
+  expect(detailBounds!.width).toBe(390);
+  expect(detailBounds!.height).toBe(844);
+  await detail.getByRole("button", { name: /close|back/i }).click();
 
   const undersized = await page.locator("button:visible, a:visible").evaluateAll((elements) =>
     elements.flatMap((element) => {

@@ -1110,6 +1110,18 @@
 
 .view-all:hover { color: var(--text); }
 
+.detail-backdrop { display: none; }
+
+@media (min-width: 701px) and (max-width: 1099px) {
+  .detail-backdrop {
+    position: absolute;
+    z-index: 29;
+    inset: 0;
+    display: block;
+    background: rgb(4 4 6 / 46%);
+  }
+}
+
 .detail {
   position: absolute;
   z-index: 30;

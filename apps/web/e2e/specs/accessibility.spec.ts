@@ -35,6 +35,7 @@ test("keeps the authenticated overview and work detail free of detectable WCAG A
   await expect(page.getByRole("region", { name: "Add something" })).toBeVisible();
   await expectWcagConformance(page);
 
+  await page.setViewportSize({ width: 900, height: 720 });
   await page.locator('[data-work-id="work-ready-a"]').click();
   await expect(page.getByRole("region", { name: "Verify fixture search" })).toBeVisible();
   await expectWcagConformance(page);
