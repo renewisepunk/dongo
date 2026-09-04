@@ -2593,6 +2593,7 @@
   .attachment-row__copy { min-width: 180px; }
 
   .detail {
+    position: fixed;
     inset: 0;
     width: auto;
     border-left: 0;
