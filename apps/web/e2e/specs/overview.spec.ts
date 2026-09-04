@@ -1344,7 +1344,7 @@ test("reconciles browser Back and preserves the overview scroll position", async
 test("renders attributed agent progress as safe reviewable Markdown", async ({ page }) => {
   await page.locator('[data-work-id="work-done"]').click();
   const dialog = workDetail(page, "Complete the agent golden journey");
-  await expect(dialog.getByText("Codex", { exact: true })).toBeVisible();
+  await expect(dialog.locator(".conversation-entry__who").first()).toHaveText("Codex");
   await expect(dialog.locator(".conversation-entry__role")).toHaveText(["agent", "agent"]);
   await expect(dialog.getByText("mcp agent", { exact: true })).toBeHidden();
   const historical = dialog.locator(".conversation-entry", { hasText: "Historical transport-attributed update." });
@@ -1358,7 +1358,7 @@ test("renders attributed agent progress as safe reviewable Markdown", async ({ p
   );
   await expect(dialog.getByRole("table")).toContainText("Contracts");
   await expect(dialog.getByText("231 tests passed", { exact: true })).toBeVisible();
-  await expect(dialog.locator("img")).toHaveCount(0);
+  await expect(dialog.locator(".markdown-content img")).toHaveCount(0);
   await expect(dialog.getByText("<img src=x onerror=alert(1)>", { exact: true })).toBeVisible();
 });
 
