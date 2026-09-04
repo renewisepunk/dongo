@@ -111,10 +111,9 @@ test("ask mode requires exact local approval before executing a command-free job
     "running",
     "completed",
   ]);
-  assert.deepEqual(received, {
-    repositoryRoot: fixture.repository,
-    workIdentifier: "dong026",
-  });
+  assert.equal(received?.workIdentifier, "dong026");
+  assert.notEqual(received?.repositoryRoot, fixture.repository);
+  assert.match(received?.repositoryRoot ?? "", /runner-worktrees/u);
   const status = await manager.status();
   assert.equal(status.state?.status, "stopped");
   assert.doesNotMatch(JSON.stringify(api.transitions), /dng_run_|local output only/u);
@@ -248,7 +247,8 @@ test("a restarted runner resumes only when its adapter has the exact local sessi
     harness: "codex",
     validate: async () => "/bin/sh",
     canResume: async ({ jobId, registrationId, repositoryRoot }) =>
-      jobId === "job-1" && registrationId === "registration-1" && repositoryRoot === fixture.repository,
+      jobId === "job-1" && registrationId === "registration-1" &&
+      repositoryRoot !== fixture.repository && repositoryRoot.includes("runner-worktrees"),
     execute: async () => {
       executions += 1;
       return { outcome: "completed", sessionReferencePresent: true };
@@ -285,7 +285,7 @@ test("a successful harness exit cannot complete a job until dongo Work is done",
   assert.equal(api.transitions.at(-1)?.safeCode, "work_not_completed");
 });
 
-test("automatic mode refuses a dirty repository before launching a harness", async (context) => {
+test("automatic mode isolates work from changes in the registered checkout", async (context) => {
   const fixture = await runnerFixture(context);
   const controller = new AbortController();
   const api = new FakeRunnerApi();
@@ -306,9 +306,40 @@ test("automatic mode refuses a dirty repository before launching a harness", asy
   });
   await manager.install({ label: "Clean Mac", harnesses: ["codex"], approvalMode: "automatic" });
   await manager.run(controller.signal);
-  assert.equal(executions, 0);
-  assert.equal(api.job.state, "failed");
-  assert.equal(api.transitions.at(-1)?.safeCode, "dirty_repository");
+  assert.equal(executions, 1);
+  assert.equal(api.job.state, "completed");
+});
+
+test("the runner executes distinct queued jobs concurrently in isolated worktrees", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new ParallelRunnerApi([
+    { ...runnerJob("delivered", 2), id: "job-1", workItemId: "work-1", workIdentifier: "dong026" } as RunnerJob,
+    { ...runnerJob("delivered", 2), id: "job-2", workItemId: "work-2", workIdentifier: "dong027" } as RunnerJob,
+  ], () => controller.abort());
+  const roots = new Set<string>();
+  const branches = new Set<string>();
+  let release!: () => void;
+  const bothStarted = new Promise<void>((resolve) => { release = resolve; });
+  const manager = fixture.manager(api as never, new FakeService(), {
+    adapter: () => ({
+      harness: "codex",
+      validate: async () => "/bin/sh",
+      execute: async ({ repositoryRoot, branch }) => {
+        roots.add(repositoryRoot);
+        branches.add(branch);
+        if (roots.size === 2) release();
+        await bothStarted;
+        return { outcome: "completed", sessionReferencePresent: true };
+      },
+    }),
+  });
+  await manager.install({ label: "Parallel Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  await manager.run(controller.signal);
+  assert.equal(roots.size, 2);
+  assert.equal(branches.size, 2);
+  assert.equal([...roots].every((root) => root !== fixture.repository && root.includes("runner-worktrees")), true);
+  assert.deepEqual([...api.jobs.values()].map((job) => job.state), ["completed", "completed"]);
 });
 
 test("losing the runner lease stops the harness before the manager retries", async (context) => {
@@ -316,8 +347,8 @@ test("losing the runner lease stops the harness before the manager retries", asy
   const controller = new AbortController();
   const api = new FakeRunnerApi();
   api.job = runnerJob("delivered", 2);
-  api.dropJobOnWait = 2;
-  let sleepCalls = 0;
+  api.dropInspectedJob = true;
+  api.onTerminal = () => controller.abort();
   let harnessStopped = false;
   const manager = fixture.manager(api, new FakeService(), {
     adapter: () => ({
@@ -330,15 +361,12 @@ test("losing the runner lease stops the harness before the manager retries", asy
         }, { once: true });
       }),
     }),
-    sleep: async () => {
-      sleepCalls += 1;
-      if (sleepCalls > 1) controller.abort();
-    },
+    sleep: async () => undefined,
   });
   await manager.install({ label: "Lease Mac", harnesses: ["codex"], approvalMode: "automatic" });
   await manager.run(controller.signal);
   assert.equal(harnessStopped, true);
-  assert.equal(api.job.state, "running");
+  assert.equal(api.job.state, "failed");
   assert.equal(api.transitions.filter(({ state }) => state === "running").length, 1);
 });
 
@@ -546,6 +574,7 @@ class FakeRunnerApi {
   intakeOpenAttention = false;
   waitCalls = 0;
   dropJobOnWait?: number;
+  dropInspectedJob = false;
 
   async getWork(input: { workItemId?: string }): Promise<WorkItem> {
     return {
@@ -607,9 +636,13 @@ class FakeRunnerApi {
     return { ...registration({ label: "Fake", platform: "darwin", version: "0.1.0", harnesses: ["codex"], approvalMode: "ask" }), status: "revoked" as const };
   }
 
-  async runnerWait(): Promise<RunnerWait> {
+  async runnerWait(input?: { activeJobIds?: string[]; inspectJobId?: string }): Promise<RunnerWait> {
     this.waitCalls += 1;
-    if (this.waitCalls === this.dropJobOnWait) {
+    if (
+      this.waitCalls === this.dropJobOnWait ||
+      (this.dropInspectedJob && input?.inspectJobId === this.job?.id) ||
+      (this.job && input?.activeJobIds?.includes(this.job.id))
+    ) {
       return {
         registration: registration({ label: "Fake", platform: "darwin", version: "0.1.0", harnesses: ["codex"], approvalMode: "ask" }),
         wait: { status: "timed_out", requestedSeconds: 0, elapsedMilliseconds: 0 },
@@ -638,6 +671,55 @@ class FakeRunnerApi {
     this.onTransition?.(input.state);
     if (["completed", "failed", "cancelled"].includes(input.state)) this.onTerminal?.();
     return this.job;
+  }
+}
+
+class ParallelRunnerApi {
+  readonly jobs: Map<string, RunnerJob>;
+  readonly #onComplete: () => void;
+  completed = 0;
+
+  constructor(jobs: RunnerJob[], onComplete: () => void) {
+    this.jobs = new Map(jobs.map((job) => [job.id, job]));
+    this.#onComplete = onComplete;
+  }
+
+  async getWork(input: { workItemId?: string }): Promise<WorkItem> {
+    return {
+      id: input.workItemId!, projectId: "project-1", identifier: input.workItemId === "work-1" ? "dong026" : "dong027",
+      sequence: 26, title: "Parallel work", goal: "Complete it", state: "done", orderKey: "a", revision: 1,
+      sourceIntakeIds: [], artifacts: [], conversation: [], createdAt: 1, updatedAt: 1,
+    } as unknown as WorkItem;
+  }
+
+  async getIntake(): Promise<Intake> { throw new Error("not used"); }
+  async runnerRegister(input: { token: string; label: string; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic" }) {
+    return registration(input);
+  }
+  async runnerRotate() { return registration({ label: "Parallel", platform: "darwin", version: "0.1.0", harnesses: ["codex"], approvalMode: "automatic" }); }
+  async runnerRevoke() { return registration({ label: "Parallel", platform: "darwin", version: "0.1.0", harnesses: ["codex"], approvalMode: "automatic" }); }
+  async runnerWait(input: { activeJobIds?: string[]; inspectJobId?: string }): Promise<RunnerWait> {
+    const job = input.inspectJobId
+      ? this.jobs.get(input.inspectJobId)
+      : [...this.jobs.values()].find((candidate) =>
+        !["completed", "failed", "cancelled", "expired"].includes(candidate.state) &&
+        !input.activeJobIds?.includes(candidate.id));
+    return {
+      registration: registration({ label: "Parallel", platform: "darwin", version: "0.1.0", harnesses: ["codex"], approvalMode: "automatic" }),
+      job,
+      wait: { status: job ? "job_available" : "not_requested", requestedSeconds: 0, elapsedMilliseconds: 0 },
+      serverTime: Date.now(),
+    };
+  }
+  async runnerUpdateJob(input: { jobId: string; state: RunnerJob["state"] }): Promise<RunnerJob> {
+    const job = this.jobs.get(input.jobId)!;
+    const updated = { ...job, state: input.state, revision: job.revision + 1 };
+    this.jobs.set(input.jobId, updated);
+    if (input.state === "completed") {
+      this.completed += 1;
+      if (this.completed === this.jobs.size) this.#onComplete();
+    }
+    return updated;
   }
 }
 
@@ -700,6 +782,14 @@ async function runnerFixture(context: TestContext) {
   const bin = path.join(root, "bin");
   await Promise.all([mkdir(path.join(repository, ".git"), { recursive: true }), mkdir(bin)]);
   await execFileAsync("git", ["-C", repository, "init", "--quiet"]);
+  await writeFile(path.join(repository, "README.md"), "runner fixture\n");
+  await execFileAsync("git", ["-C", repository, "add", "README.md"]);
+  await execFileAsync("git", [
+    "-C", repository,
+    "-c", "user.name=dongo tests",
+    "-c", "user.email=tests@dongo.invalid",
+    "commit", "--quiet", "-m", "runner fixture",
+  ]);
   const nodePath = path.join(bin, "node");
   const cliPath = path.join(bin, "dongo.js");
   await Promise.all([writeFile(nodePath, "node"), writeFile(cliPath, "cli")]);

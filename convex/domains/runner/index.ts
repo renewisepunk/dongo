@@ -12,6 +12,7 @@ import { appendEvent } from "../../lib/events";
 import { fail, optionalString, requireString } from "../../lib/errors";
 import { runIdempotent } from "../../lib/idempotency";
 import { agentContextValidator } from "../../lib/validators";
+import { parallelExecutionPolicy } from "../work/concurrency";
 import {
   hashRunnerCredentialToken,
   runnerCredentialTokenPrefix,
@@ -63,6 +64,7 @@ const RUNNER_SAFE_CODES = new Set([
   "user_cancelled",
   "work_completed",
   "work_not_completed",
+  "worktree_setup_failed",
 ]);
 const TERMINAL_STATES = new Set<RunnerState>([
   "cancelled",
@@ -78,6 +80,7 @@ const ACTIVE_STATES = new Set<RunnerState>([
   "blocked",
   "cancel_requested",
 ]);
+const ACTIVE_STATE_LIST = [...ACTIVE_STATES];
 const TRANSITIONS: Record<RunnerState, ReadonlySet<RunnerState>> = {
   queued: new Set(["delivered", "cancelled", "expired"]),
   delivered: new Set([
@@ -510,6 +513,52 @@ async function cancelRegistrationJobs(
   }
 }
 
+async function activeRunnerJobsForProject(
+  ctx: Pick<MutationCtx, "db">,
+  projectId: Id<"projects">,
+) {
+  const groups = await Promise.all(
+    ACTIVE_STATE_LIST.map((state) => ctx.db.query("runnerJobs")
+      .withIndex("by_project_state_requested", (q) =>
+        q.eq("projectId", projectId).eq("state", state))
+      .take(100)),
+  );
+  return groups.flat();
+}
+
+async function activeRunnerJobsForRegistration(
+  ctx: Pick<MutationCtx, "db">,
+  registrationId: Id<"runnerRegistrations">,
+) {
+  const groups = await Promise.all(
+    ACTIVE_STATE_LIST.map((state) => ctx.db.query("runnerJobs")
+      .withIndex("by_registration_state_updated", (q) =>
+        q.eq("registrationId", registrationId).eq("state", state))
+      .take(20)),
+  );
+  return groups.flat();
+}
+
+async function activeRunWorkItemIds(
+  ctx: Pick<MutationCtx, "db">,
+  projectId: Id<"projects">,
+  now: number,
+) {
+  const runs = await ctx.db.query("runs")
+    .withIndex("by_project_status", (q) =>
+      q.eq("projectId", projectId).eq("status", "running"))
+    .take(100);
+  const active = new Set<Id<"workItems">>();
+  for (const run of runs) {
+    const work = await ctx.db.get(run.workItemId);
+    if (
+      work?.claimedRunId === run._id &&
+      (work.claimExpiresAt ?? 0) > now
+    ) active.add(run.workItemId);
+  }
+  return active;
+}
+
 export const register = internalMutation({
   args: {
     authorization: agentContextValidator,
@@ -684,6 +733,8 @@ export const reserve = internalMutation({
     version: v.string(),
     harnesses: v.array(harnessValidator),
     approvalMode: approvalModeValidator,
+    activeJobIds: v.optional(v.array(v.id("runnerJobs"))),
+    inspectJobId: v.optional(v.id("runnerJobs")),
   },
   handler: async (ctx, args) => {
     const { principal, registration } = await requireRegistration(ctx, {
@@ -691,6 +742,15 @@ export const reserve = internalMutation({
       scope: "dongo:work:write",
     });
     const now = Date.now();
+    if (args.activeJobIds !== undefined && args.inspectJobId !== undefined) {
+      fail("validation", "activeJobIds and inspectJobId are mutually exclusive");
+    }
+    if (args.activeJobIds && args.activeJobIds.length > 8) {
+      fail("validation", "activeJobIds cannot contain more than 8 jobs");
+    }
+    if (args.inspectJobId !== undefined && args.waitSeconds !== 0) {
+      fail("validation", "inspectJobId requires waitSeconds 0");
+    }
     const harnesses = normalizedHarnesses(args.harnesses);
     if (harnesses.length === 0) fail("validation", "At least one runner harness is required");
     await ctx.db.patch(registration._id, {
@@ -738,21 +798,20 @@ export const reserve = internalMutation({
       await appendJobEvent(ctx, stale, principal.actor._id, "queued", now, "delivery_expired");
     }
 
-    const assigned = await ctx.db.query("runnerJobs")
-      .withIndex("by_registration_state_updated", (q) =>
-        q.eq("registrationId", registration._id),
-      )
-      .take(20);
+    const assigned = await activeRunnerJobsForRegistration(ctx, registration._id);
     for (const stale of assigned) {
       const leaseExpired = ["starting", "running", "blocked"].includes(stale.state) &&
         (stale.leaseExpiresAt ?? 0) < now;
       const approvalExpired = stale.state === "awaiting_local_approval" && stale.expiresAt <= now;
-      if (!leaseExpired && !approvalExpired) continue;
-      const state: RunnerState = approvalExpired ? "expired" : "failed";
+      const cancellationExpired = stale.state === "cancel_requested" &&
+        (stale.leaseExpiresAt ?? stale.reservationExpiresAt ?? 0) < now;
+      if (!leaseExpired && !approvalExpired && !cancellationExpired) continue;
+      const state: RunnerState = cancellationExpired ? "cancelled" : approvalExpired ? "expired" : "failed";
+      const safeCode = cancellationExpired ? "user_cancelled" : approvalExpired ? "approval_expired" : "runner_lease_expired";
       await ctx.db.patch(stale._id, {
         state,
         revision: stale.revision + 1,
-        safeCode: approvalExpired ? "approval_expired" : "runner_lease_expired",
+        safeCode,
         terminalAt: now,
         leaseExpiresAt: undefined,
         updatedAt: now,
@@ -763,16 +822,75 @@ export const reserve = internalMutation({
         principal.actor._id,
         state,
         now,
-        approvalExpired ? "approval_expired" : "runner_lease_expired",
+        safeCode,
       );
     }
-    const refreshedAssigned = await ctx.db.query("runnerJobs")
-      .withIndex("by_registration_state_updated", (q) =>
-        q.eq("registrationId", registration._id),
-      )
-      .take(20);
-    const active = refreshedAssigned.find((job) => ACTIVE_STATES.has(job.state));
+    if (args.inspectJobId !== undefined) {
+      const inspected = await ctx.db.get(args.inspectJobId);
+      if (
+        !inspected ||
+        inspected.projectId !== registration.projectId ||
+        inspected.registrationId !== registration._id
+      ) fail("not_found", "Runner job not found");
+      return {
+        registration: registrationDto({
+          ...registration,
+          platform: args.platform,
+          version: args.version.trim(),
+          harnesses,
+          approvalMode: args.approvalMode,
+          lastSeenAt: now,
+          waitingUntil: undefined,
+          updatedAt: now,
+        }),
+        job: await jobDto(ctx, inspected),
+      };
+    }
+    const refreshedAssigned = await activeRunnerJobsForRegistration(ctx, registration._id);
+    const active = args.activeJobIds === undefined
+      ? refreshedAssigned[0]
+      : refreshedAssigned.find((job) => !args.activeJobIds!.includes(job._id));
     if (active) return { registration: registrationDto({ ...registration, platform: args.platform, version: args.version.trim(), harnesses, approvalMode: args.approvalMode, lastSeenAt: now, waitingUntil: args.waitSeconds > 0 ? now + args.waitSeconds * 1_000 : undefined, updatedAt: now }), job: await jobDto(ctx, active) };
+
+    const policy = parallelExecutionPolicy(principal.project);
+    let projectActiveJobs = await activeRunnerJobsForProject(ctx, principal.project._id);
+    for (const stale of projectActiveJobs) {
+      const leaseExpired = ["starting", "running", "blocked"].includes(stale.state) &&
+        (stale.leaseExpiresAt ?? 0) < now;
+      const approvalExpired = stale.state === "awaiting_local_approval" && stale.expiresAt <= now;
+      const cancellationExpired = stale.state === "cancel_requested" &&
+        (stale.leaseExpiresAt ?? stale.reservationExpiresAt ?? 0) < now;
+      if (!leaseExpired && !approvalExpired && !cancellationExpired) continue;
+      const state: RunnerState = cancellationExpired ? "cancelled" : approvalExpired ? "expired" : "failed";
+      const safeCode = cancellationExpired ? "user_cancelled" : approvalExpired ? "approval_expired" : "runner_lease_expired";
+      await ctx.db.patch(stale._id, {
+        state,
+        revision: stale.revision + 1,
+        safeCode,
+        terminalAt: now,
+        leaseExpiresAt: undefined,
+        updatedAt: now,
+      });
+      await appendJobEvent(
+        ctx,
+        stale,
+        principal.actor._id,
+        state,
+        now,
+        safeCode,
+      );
+    }
+    projectActiveJobs = await activeRunnerJobsForProject(ctx, principal.project._id);
+    if (projectActiveJobs.length >= policy.maxConcurrentRuns) {
+      return { registration: registrationDto({ ...registration, platform: args.platform, version: args.version.trim(), harnesses, approvalMode: args.approvalMode, lastSeenAt: now, waitingUntil: args.waitSeconds > 0 ? now + args.waitSeconds * 1_000 : undefined, updatedAt: now }) };
+    }
+
+    const occupiedWorkItems = await activeRunWorkItemIds(ctx, principal.project._id, now);
+    for (const activeJob of projectActiveJobs) {
+      if (activeJob.kind !== "intake" && activeJob.workItemId) {
+        occupiedWorkItems.add(activeJob.workItemId);
+      }
+    }
 
     const [targetedQueued, sharedQueued] = await Promise.all([
       ctx.db.query("runnerJobs")
@@ -801,6 +919,10 @@ export const reserve = internalMutation({
         candidate.targetRegistrationId !== registration._id
       ) continue;
       if (!harnesses.includes(candidate.harness)) continue;
+      if (
+        candidate.kind !== "intake" &&
+        occupiedWorkItems.size >= policy.maxConcurrentRuns
+      ) continue;
       await ctx.db.patch(candidate._id, {
         state: "delivered",
         revision: candidate.revision + 1,

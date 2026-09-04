@@ -22,7 +22,7 @@ function agentLabel(harnesses: RunnerHarness[]): string {
 
 function approvalExplanation(mode: RunnerApprovalMode | undefined): string {
   return mode === "automatic"
-    ? "Your agents can start automatically when this repository is clean."
+    ? "Your agents can start automatically in isolated Git worktrees."
     : "You’ll be asked on this computer before an agent starts working.";
 }
 
@@ -42,20 +42,23 @@ function backgroundServiceExplanation(platform: "darwin" | "linux" | undefined):
   return [];
 }
 
-function safeWorkLabel(state: RunnerLocalState | undefined): string | undefined {
-  const identifier = state?.currentJob?.workIdentifier;
-  return identifier && /^[a-z]{4}[0-9]{3}$/u.test(identifier) ? identifier : undefined;
-}
-
-function safeJobId(state: RunnerLocalState | undefined): string | undefined {
-  const id = state?.currentJob?.id;
-  return id && /^[A-Za-z0-9_-]+$/u.test(id) ? id : undefined;
-}
-
 function stateExplanation(state: RunnerLocalState | undefined): string {
   if (!state) return "No recent activity yet.";
-  const work = safeWorkLabel(state);
-  const agent = state.currentJob ? harnessLabel(state.currentJob.harness) : undefined;
+  const jobs = state.currentJobs ?? (state.currentJob ? [state.currentJob] : []);
+  if (jobs.length > 0) {
+    const counts = new Map<string, number>();
+    for (const job of jobs) counts.set(job.state, (counts.get(job.state) ?? 0) + 1);
+    const summary = [...counts.entries()]
+      .map(([jobState, count]) => `${count} ${jobState.replaceAll("_", " ")}`)
+      .join(", ");
+    const approvals = jobs
+      .filter((job) => job.state === "awaiting_local_approval" && /^[A-Za-z0-9_-]+$/u.test(job.id))
+      .map((job) => `Approve ${job.workIdentifier && /^[a-z]{4}[0-9]{3}$/u.test(job.workIdentifier) ? job.workIdentifier : "this job"}: dongo runner approve --job-id ${job.id}`);
+    return [
+      `${jobs.length} agent ${jobs.length === 1 ? "job is" : "jobs are"} active in separate worktrees (${summary}).`,
+      ...approvals,
+    ].join("\n");
+  }
   switch (state.status) {
     case "disabled":
       return "It is paused and will not pick up new work.";
@@ -63,21 +66,12 @@ function stateExplanation(state: RunnerLocalState | undefined): string {
       return "It is starting in the background.";
     case "waiting":
       return "It is online and waiting for work.";
-    case "awaiting_local_approval": {
-      const jobId = safeJobId(state);
-      const subject = work ? ` for ${work}` : "";
-      return jobId
-        ? `A job${subject} is waiting for your approval.\nApprove it: dongo runner approve --job-id ${jobId}`
-        : `A job${subject} is waiting for your approval.`;
-    }
+    case "awaiting_local_approval":
+      return "A job is waiting for your approval.";
     case "running":
-      return agent && work
-        ? `${agent} is working on ${work}.`
-        : "An agent is working on the current job.";
+      return "An agent is working on the current job.";
     case "blocked":
-      return work
-        ? `${work} is blocked and needs attention in dongo.`
-        : "The current job is blocked and needs attention in dongo.";
+      return "The current job is blocked and needs attention in dongo.";
     case "error":
       return "The runner hit a problem. Use dongo runner status --json for technical details.";
     case "stopped":
@@ -89,7 +83,7 @@ export function renderRunnerInstallOutput(result: RunnerInstallResult): string {
   return [
     "dongo runner is ready.",
     "",
-    `This computer can now run queued dongo work with ${agentLabel(result.harnesses)} in this repository—even after you close this terminal.`,
+    `This computer can now run queued dongo work with ${agentLabel(result.harnesses)} in this repository—even after you close this terminal. Eligible jobs run concurrently in separate Git worktrees, up to the project safety limit.`,
     approvalExplanation(result.approvalMode),
     ...backgroundServiceExplanation(result.registration.platform),
     result.approvalMode === "automatic"
@@ -140,7 +134,7 @@ export function renderRunnerConfigureOutput(result: RunnerConfigureResult): stri
         ? "Automatic starts are allowed for this repository."
         : "Automatic starts were already allowed for this repository.",
       "",
-      `${agentLabel(result.harnesses)} can now start without a separate approval when this repository is clean.`,
+      `${agentLabel(result.harnesses)} can now start without a separate approval in an isolated Git worktree.`,
       "To receive Inbox items, return to Project settings → Local runner and turn on automatic Inbox processing.",
     ].join("\n") + "\n";
   }

@@ -70,7 +70,7 @@ Excluded:
 - resolve the approved repository and executable from owner-only local config;
 - validate the repository identity and refuse a moved, replaced, or unsafe path;
 - build a fixed instruction from the project and canonical Work identifier;
-- create an isolated worktree when local policy requires and Git permits it;
+- create one isolated worktree and one agent session for every active job;
 - start, monitor, interrupt, and terminate only the selected supported harness;
 - retain raw process output locally under an owner-only bounded log policy;
 - send redacted lifecycle events and a bounded human-readable final summary.
@@ -225,8 +225,8 @@ Each registration has an owner-only local record containing:
 - the exact repository root and repository identity captured during approval;
 - the selected `codex` or `claude` executable resolved locally;
 - approval mode, defaulting to `ask`;
-- whether isolated worktrees are required and their local parent directory;
-- a concurrency limit of one for the initial release;
+- the owner-only parent directory used for isolated runner worktrees;
+- the active job set, including each bounded worktree and branch label;
 - the last exact harness session ID created for each runner job, when available.
 
 Server state may display the locally reported mode but cannot raise its
@@ -259,7 +259,7 @@ same bounds. The adapter captures the exact `session_id` and uses `--resume
 identity.
 
 For both adapters, missing authentication, unsupported versions, local approval
-denial, an unsafe repository, a dirty-worktree policy failure, or an unavailable
+denial, an unsafe repository, worktree setup failure, or an unavailable
 resume reference becomes a specific safe state. A resume failure may start a
 new session only after recording that fallback; it must never silently continue
 the most recent unrelated session.
@@ -292,15 +292,25 @@ raw process logs are not server data.
 ## Failure, concurrency, and recovery
 
 - Two enqueue requests for the same eligible WorkItem return one active job.
-- Two runners may receive availability, but one atomic delivery reservation wins.
+- Upgraded runners declare their active job IDs and atomically refill available
+  capacity up to the project `maxConcurrentRuns` policy. Older runners omit that
+  field and retain the original one-job-at-a-time behavior.
+- Every concurrent job receives a deterministic, owner-only Git worktree, branch,
+  harness session, log, cancellation controller, and dongo external session ID.
+- Per-job polling names the exact job. A cancellation or lost lease interrupts
+  only that job; the dispatcher and sibling jobs continue.
+- Delivery capacity is enforced across registrations. Active runner Work jobs
+  and live Runs for the same WorkItem count once, so reservation cannot launch
+  models ahead of the authoritative project safety cap.
 - A registration cannot deliver, start, update, or cancel a job from another
   project or registration.
 - A WorkItem already claimed outside the runner fails start without launching a
   process.
 - If the runner loses either lease, it interrupts the process and refetches; it
   never fabricates a new session ID to reclaim work.
-- Restart reloads only owner-only local state, reconciles the exact job, and
-  resumes only when the server lease and stored process/session facts agree.
+- Restart reloads only owner-only local state, rediscovers every assigned job,
+  and resumes each only when its server lease, deterministic worktree, and stored
+  process/session facts agree.
 - Server outage leaves the local process running only through a short bounded
   grace period. Failure to renew after that period interrupts it.
 - Cancellation, revocation, or local disable always outranks queued execution.

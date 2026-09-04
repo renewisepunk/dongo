@@ -38,10 +38,16 @@ computer from other runners in Project settings.
 
 The registration is bound to that exact canonical repository root, not merely
 to its Git remote or dongo project. Run installation and status commands from
-the checkout that will execute jobs. A runner installed in another checkout or
-repository does not cover this one. For automatic mode, use a dedicated clean
-checkout or worktree when the normal checkout regularly contains unrelated
-uncommitted work.
+the checkout that anchors the runner. A runner installed in another checkout
+or repository does not cover this one. Each job itself runs in a separate Git
+worktree under dongo's owner-only local data directory, so unrelated changes in
+the registered checkout are never shared with automatic jobs.
+
+When project parallel execution is enabled, one runner fills available capacity
+with separate agent processes and worktrees up to the project safety limit
+(maximum eight). `dongo runner status` lists every active job and its approval
+command when needed. Project settings reports `N active of M` or `at capacity`;
+`online · waiting for work` means the runner is healthy and has no active jobs.
 
 Ask-before-run is the default. A user may explicitly opt one local repository
 into automatic starts with `--approval automatic`, or change an existing runner
@@ -75,7 +81,7 @@ the Linux user-service and Linux-filesystem security boundary.
 
 The Codex adapter resolves and records the exact local `codex` executable,
 verifies its version and required non-interactive features, and starts work in
-the exact approved repository with JSONL output and the `workspace-write`
+the job's isolated worktree with JSONL output and the `workspace-write`
 sandbox. The fixed instruction is sent over standard input, not exposed in the
 process list. It never uses approval or sandbox bypass flags. The only hosted
 value added to the local instruction is the validated dongo Work or Intake
@@ -92,7 +98,7 @@ dongo status or logs.
 
 The Claude Code adapter resolves and records the exact local `claude`
 executable, verifies its version and required non-interactive features, and
-runs print mode with streaming JSON in the exact approved repository. The
+runs print mode with streaming JSON in the job's isolated worktree. The
 fixed instruction is sent over standard input. It uses Claude Code's
 `acceptEdits` permission mode so repository edits can proceed while
 side-effecting commands retain Claude's configured permission policy. It never

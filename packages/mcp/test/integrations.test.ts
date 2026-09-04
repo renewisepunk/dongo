@@ -52,11 +52,11 @@ test("all host instruction blocks exactly match canonical server instructions", 
   assert.match(DONGO_MCP_INSTRUCTIONS, /optional local runner/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /does not inject into, interrupt, or restart this conversation/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /another repository's runner does not apply/u);
-  assert.match(DONGO_MCP_INSTRUCTIONS, /automatic starts wait while that checkout has uncommitted files/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /Each active job runs in its own local Git worktree and agent session/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /Humans may enrich waiting or claimed Intake/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /save preserves the claim but advances the Intake revision/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /review the current text, context, links, and finalized attachments/u);
-  assert.match(DONGO_MCP_INSTRUCTIONS, /@wisepunk\/dongo@0\.2\.8/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /@wisepunk\/dongo@0\.2\.9/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /ask whether they want to install it/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /Never install automatically/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /next eligible successful tool result/u);

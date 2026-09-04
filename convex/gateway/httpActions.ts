@@ -771,6 +771,7 @@ async function dispatchAgentOperation(
       });
     case "runner_wait": {
       const waitSeconds = (input.waitSeconds as number | undefined) ?? 0;
+      const inspectJobId = input.inspectJobId as Id<"runnerJobs"> | undefined;
       const startedAt = Date.now();
       let intervalMilliseconds = 1_000;
       let result: { registration: unknown; job?: unknown } | undefined;
@@ -785,8 +786,10 @@ async function dispatchAgentOperation(
             version: stringField(input, "version"),
             harnesses: input.harnesses as Array<"codex" | "claude">,
             approvalMode: stringField(input, "approvalMode") as "ask" | "automatic",
+            activeJobIds: input.activeJobIds as Array<Id<"runnerJobs">> | undefined,
+            inspectJobId,
           });
-          if (result.job || waitSeconds === 0) break;
+          if (result.job || waitSeconds === 0 || inspectJobId) break;
           const remaining = waitSeconds * 1_000 - (Date.now() - startedAt);
           if (remaining <= 0) break;
           await new Promise((resolve) =>
@@ -795,11 +798,13 @@ async function dispatchAgentOperation(
           intervalMilliseconds = Math.min(intervalMilliseconds * 2, 5_000);
         }
       } finally {
-        await ctx.runMutation(internal.domains.runner.index.finishWait, {
-          authorization: baseAuthorization,
-          registrationId: stringField(input, "registrationId") as Id<"runnerRegistrations">,
-          token: stringField(input, "token"),
-        });
+        if (!inspectJobId) {
+          await ctx.runMutation(internal.domains.runner.index.finishWait, {
+            authorization: baseAuthorization,
+            registrationId: stringField(input, "registrationId") as Id<"runnerRegistrations">,
+            token: stringField(input, "token"),
+          });
+        }
       }
       if (!result) throw new Error("Runner wait was unavailable");
       return {

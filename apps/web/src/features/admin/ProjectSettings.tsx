@@ -445,10 +445,28 @@ export function ProjectSettings(props: ProjectSettingsProps) {
 
   const runnerPresence = (runner: RunnerRegistration) => {
     if (runner.status === "revoked") return "revoked";
+    const activeStates = new Set<RunnerJobState>([
+      "delivered",
+      "awaiting_local_approval",
+      "starting",
+      "running",
+      "blocked",
+      "cancel_requested",
+    ]);
+    const activeJobs = runners().jobs.filter((job) =>
+      job.registrationId === runner.id && activeStates.has(job.state)).length;
     if (
       (runner.waitingUntil !== undefined && runner.waitingUntil > runners().serverTime) ||
       (runner.lastSeenAt !== undefined && runner.lastSeenAt >= runners().serverTime - 45_000)
-    ) return "online · waiting for work";
+    ) {
+      if (activeJobs > 0) {
+        const limit = allowParallelWork() ? maxConcurrentRuns() : 1;
+        return activeJobs >= limit
+          ? `online · at capacity · ${activeJobs} active`
+          : `online · ${activeJobs} active of ${limit}`;
+      }
+      return "online · waiting for work";
+    }
     return runner.lastSeenAt
       ? `offline · ${relativeTime(runner.lastSeenAt).replace(/^used /u, "last seen ")}`
       : "offline · never connected";
@@ -755,7 +773,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
                     <li>Confirm <code>dongo runner status</code> shows the service waiting.</li>
                   </ol>
                   <p class="security-note"><strong>What to expect on macOS:</strong> macOS may show a one-time “Background Items Added” alert for <strong>dongo</strong>. That is this local runner. It starts only after you sign in, runs without administrator access, opens no inbound port, and can be managed in System Settings → General → Login Items & Extensions. If the alert names <strong>node</strong>, it came from an older dongo CLI; remove that runner, update the CLI, and install it again.</p>
-                  <p class="security-note">The agent connection and runner use separate project-scoped credentials; never copy the dongo CLI credential into an agent. Local approval is required for every job by default. Use <code>dongo runner configure --approval automatic</code> only when this exact repository and computer are deliberately trusted. Then turn on Inbox pickup below. Automatic starts refuse a repository with uncommitted files. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects. Inspect, pause, or remove it anytime with <code>dongo runner status</code>, <code>dongo runner disable</code>, or <code>dongo runner remove</code>.</p>
+                  <p class="security-note">The agent connection and runner use separate project-scoped credentials; never copy the dongo CLI credential into an agent. Local approval is required for every job by default. Use <code>dongo runner configure --approval automatic</code> only when this exact repository and computer are deliberately trusted. Then turn on Inbox pickup below. Each active job gets its own local Git worktree and agent session; eligible jobs run concurrently up to this project's safety cap without sharing uncommitted files. dongo does not wake a sleeping or powered-off computer; queued work waits durably until the runner reconnects. Inspect, pause, or remove it anytime with <code>dongo runner status</code>, <code>dongo runner disable</code>, or <code>dongo runner remove</code>.</p>
                 </section>
                 <section class="settings-section">
                   <div class="settings-section__title">Computers allowed to run dongo</div>

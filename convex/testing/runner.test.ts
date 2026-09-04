@@ -179,6 +179,63 @@ describe("local runner delivery", () => {
     expect(cancelled).toMatchObject({ state: "cancelled", safeCode: "user_cancelled" });
   });
 
+  it("dispatches parallel jobs to one runner up to the project cap while legacy waits stay serial", async () => {
+    const fixture = await runnerFixture();
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(fixture.projectId, {
+        parallelExecutionEnabled: true,
+        maxConcurrentRuns: 2,
+      });
+    });
+    const token = runnerToken("r", "t");
+    const registration = await register(fixture, token, "Parallel Mac", "automatic");
+    const queued = [];
+    for (const [index, title] of ["First parallel job", "Second parallel job", "Waiting job"].entries()) {
+      const work = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+        projectId: fixture.projectId,
+        title,
+        kind: "task",
+        idempotencyKey: `runner-parallel-work-${index}`,
+      });
+      queued.push(await fixture.human.mutation(api.domains.runner.index.enqueue, {
+        projectId: fixture.projectId,
+        workItemId: work.workItemId,
+        harness: "codex",
+        idempotencyKey: `runner-parallel-enqueue-${index}`,
+      }));
+    }
+
+    const first = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+    });
+    expect(first.job?.id).toBe(queued[0]?.id);
+
+    const legacy = await fixture.root.mutation(
+      internal.domains.runner.index.reserve,
+      waitArgs(fixture.authorization, registration.id, token, "automatic"),
+    );
+    expect(legacy.job?.id).toBe(first.job?.id);
+
+    const second = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [first.job!.id as Id<"runnerJobs">],
+    });
+    expect(second.job?.id).toBe(queued[1]?.id);
+
+    const atCapacity = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [first.job!.id as Id<"runnerJobs">, second.job!.id as Id<"runnerJobs">],
+    });
+    expect(atCapacity.job).toBeUndefined();
+
+    const inspected = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      inspectJobId: second.job!.id as Id<"runnerJobs">,
+    });
+    expect(inspected.job?.id).toBe(second.job?.id);
+  });
+
   it("replays an unacknowledged delivery to another registered machine", async () => {
     const fixture = await runnerFixture();
     const first = await register(fixture, runnerToken("c", "d"), "First Mac");
