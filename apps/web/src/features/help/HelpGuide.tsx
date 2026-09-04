@@ -2,6 +2,8 @@ import { A } from "@solidjs/router";
 import { createSignal, For, onCleanup, onMount } from "solid-js";
 import { Brand } from "../../components/Brand";
 import { PageTitle } from "../../components/PageTitle";
+import { ProjectBreadcrumbs } from "../../components/ProjectBreadcrumbs";
+import { ProjectDataConnection } from "../../lib/project-data";
 import { projectPageTitle } from "../../lib/page-title";
 import { DONGO_SHORTCUTS } from "./shortcuts";
 import "./help.css";
@@ -9,7 +11,10 @@ import "./help.css";
 export type HelpGuideProps = {
   orgSlug: string;
   projectSlug: string;
-  resolveProjectName?: (orgSlug: string, projectSlug: string) => Promise<string>;
+  connect?: (orgSlug: string, projectSlug: string) => Promise<{
+    projectName: string;
+    close: () => Promise<void>;
+  }>;
 };
 
 const GUIDE_STEPS = [
@@ -38,30 +43,43 @@ const GUIDE_STEPS = [
 export function HelpGuide(props: HelpGuideProps) {
   const overviewHref = `/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}`;
   const [projectName, setProjectName] = createSignal(props.projectSlug);
+  let connection: { close: () => Promise<void> } | undefined;
   let disposed = false;
 
   onMount(() => {
-    if (!props.resolveProjectName) return;
-    void props.resolveProjectName(props.orgSlug, props.projectSlug)
-      .then((name) => {
-        if (!disposed) setProjectName(name);
+    const connect = props.connect ?? ProjectDataConnection.connect;
+    void connect(props.orgSlug, props.projectSlug)
+      .then((connected) => {
+        if (disposed) {
+          void connected.close();
+          return;
+        }
+        connection = connected;
+        setProjectName(connected.projectName);
       })
       .catch(() => undefined);
   });
 
   onCleanup(() => {
     disposed = true;
+    void connection?.close();
   });
 
   return (
     <>
       <PageTitle value={projectPageTitle(projectName(), "Help")} />
       <main class="help-page">
-      <header class="app-header">
+      <header class="app-header project-header">
         <Brand compact href={overviewHref} />
-        <div class="help-header__path">/ {props.projectSlug} / help</div>
-        <div class="header-spacer" />
-        <A class="button button--quiet" href={overviewHref}>← Overview</A>
+        <ProjectBreadcrumbs
+          orgSlug={props.orgSlug}
+          projectSlug={props.projectSlug}
+          projectName={projectName()}
+          current="help"
+        />
+        <div class="project-header__actions">
+          <A class="button button--quiet" href={overviewHref}>← Overview</A>
+        </div>
       </header>
 
       <div class="help-scroll">

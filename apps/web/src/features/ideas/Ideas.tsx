@@ -4,6 +4,7 @@ import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show }
 import { Brand } from "../../components/Brand";
 import { PageTitle } from "../../components/PageTitle";
 import { MarkdownContent } from "../../components/MarkdownContent";
+import { ProjectBreadcrumbs } from "../../components/ProjectBreadcrumbs";
 import { formatAttachmentBytes } from "../../lib/attachment-upload";
 import {
   IDEA_FILTERS,
@@ -285,11 +286,17 @@ export function Ideas(props: IdeasProps) {
     <>
       <PageTitle value={pageTitle()} />
       <main class="app-page ideas-page">
-      <header class="app-header">
+      <header class="app-header project-header">
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
-        <div class="ideas-header__trail">/ {connection()?.projectName ?? props.projectSlug} / ideas</div>
-        <div class="header-spacer" />
-        <A class="button button--quiet" href={`/app/${props.orgSlug}/${props.projectSlug}`}>← Overview</A>
+        <ProjectBreadcrumbs
+          orgSlug={props.orgSlug}
+          projectSlug={props.projectSlug}
+          projectName={connection()?.projectName ?? props.projectSlug}
+          current="ideas"
+        />
+        <div class="project-header__actions">
+          <A class="button button--quiet" href={`/app/${props.orgSlug}/${props.projectSlug}`}>← Overview</A>
+        </div>
       </header>
 
       <div class="ideas-shell">

@@ -2,6 +2,7 @@ import { A } from "@solidjs/router";
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
 import { PageTitle } from "../../components/PageTitle";
+import { ProjectBreadcrumbs } from "../../components/ProjectBreadcrumbs";
 import { SignOutButton } from "../../components/SignOutButton";
 import {
   ProjectDataConnection,
@@ -78,12 +79,18 @@ export function UpgradePlan(props: UpgradePlanProps) {
     <>
       <PageTitle value={projectPageTitle(administration()?.project.name ?? props.projectSlug, "Upgrade")} />
       <main class="settings-page">
-      <header class="settings-header">
+      <header class="settings-header project-header">
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
-        <div class="settings-header__title">/ {props.projectSlug} / upgrade</div>
-        <div style={{ flex: 1 }} />
-        <A class="button button--quiet" href={`/app/${props.orgSlug}/${props.projectSlug}/settings?tab=Plan%20%26%20storage`}>Plan &amp; storage</A>
-        <SignOutButton />
+        <ProjectBreadcrumbs
+          orgSlug={props.orgSlug}
+          projectSlug={props.projectSlug}
+          projectName={administration()?.project.name ?? props.projectSlug}
+          current="upgrade"
+        />
+        <div class="project-header__actions">
+          <A class="button button--quiet" href={`/app/${props.orgSlug}/${props.projectSlug}/settings?tab=Plan%20%26%20storage`}>Plan &amp; storage</A>
+          <SignOutButton />
+        </div>
       </header>
 
       <div class="upgrade-layout">
