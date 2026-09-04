@@ -2,6 +2,32 @@
 
 This file records failure modes observed while operating the local runner and releasing work. It is an operational supplement to the runbooks, not a substitute for their gates.
 
+## 2026-09-04 incident: why an enabled runner left work idle or blocked
+
+The failures observed during the dongo and wiwi releases were a chain of independent capability and reconciliation gaps. The repeated prompts made them look like one authentication problem, while the idle capacity made them look like an agent limitation. Neither explanation was complete.
+
+### Causal chain
+
+1. **The local dispatcher was serial.** The runner advertised the project's multi-Run capacity but awaited one job handler before reserving another job. The service also returned a registration's existing job from the general reserve path. A single registered computer therefore used zero or one slot even when isolated worktrees and additional Ready work were available.
+2. **A transient service failure did not lead to useful recovery feedback.** The runner reported `temporarily_unavailable`, later recovered to `waiting`, and had no current jobs, but the UI did not explain the recovery or why Ready work was still not being consumed.
+3. **Authentication was checked too late and at the wrong scope.** GitHub CLI, Wrangler, dongo CLI, repository binding, and browser access are separate capabilities. Jobs discovered invalid or invisible credentials only at integration or release time, after substantial work, and then each emitted its own authentication request.
+4. **Isolated worktrees lacked an explicit trusted-configuration bridge.** Git history is shared, but ignored deployment configuration is not. Release jobs could see source code yet fail to resolve the same Convex, Cloudflare, GitHub, or npm context as the owner's checkout.
+5. **Browser authorization had three disagreeing layers.** Runner read-only mode, global Chrome site permission, and a task's cached Browser Use decision could disagree. Already-running tasks retained a stale denial after the global allow-list was correct, causing repeated requests and preventing self-review.
+6. **Shared review and release resources were uncoordinated.** Parallel source work reused browser profiles, ports, Playwright processes, live-provider conversations, and deployment targets. This produced crashes, host-load timeouts, and unnecessary serialization or blocking.
+7. **Milestones were mistaken for terminal state.** Agent comments correctly said code was integrated or live, but the Run was not explicitly finished or its exit was not reconciled. Answered Attention remained visually dominant, and stale Runs continued to consume or appear to consume capacity.
+8. **The UI compressed distinct states into `Running`, `Local run failed`, or `waiting for your blocked`.** It did not identify whether the process was alive, whether implementation was done, which external gate remained, whether the owner had already responded, or whether automatic recovery would occur.
+
+### Product requirements derived from the incident
+
+- Run a startup preflight before claiming release-bound work. Report each capability independently and authenticate only the layer proven invalid.
+- Give runner jobs a non-echoing, allow-listed bridge to the owner's existing GitHub, Cloudflare, deployment, and browser-review capabilities. Verify the bridge inside the exact job process and worktree.
+- Dispatch multiple jobs concurrently with one isolated worktree and one dongo session per WorkItem. Refill capacity automatically, while separately leasing genuinely shared resources.
+- Use additive runner protocol changes so installed serial clients continue to work while newer dispatchers reserve and poll exact jobs independently.
+- Reconcile process exit, Run state, runner-job state, Work state, Attention resolution, and cached UI queries within bounded time. A terminal job must release capacity without manual cleanup.
+- Make recovery visible: show the failed component, last successful transition, retry policy, current process liveness, next automatic action, and exact owner action only when one is genuinely required.
+- Test a clean-account installation as a product journey: already-authenticated, expired-auth, absent-auth, dirty checkout, multiple Ready items, six-slot fan-out, restart during work, stale browser decision, shared-resource contention, completion, and upgrade compatibility.
+- Do not advertise six usable slots from a registered runner until an end-to-end probe has demonstrated concurrent reservation, isolated worktrees, independent sessions, and prompt refill on that installation.
+
 ## Check state before starting authentication
 
 - Do not treat “use dongo” as a request to run `dongo connect` or open a login flow.
