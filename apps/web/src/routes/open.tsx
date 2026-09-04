@@ -1,9 +1,11 @@
 import { useNavigate } from "@solidjs/router";
 import { onMount } from "solid-js";
 import { AuthFrame } from "../components/AuthFrame";
+import { PageTitle } from "../components/PageTitle";
 import { humanSession } from "../lib/auth-client";
 import { bootstrapHumanIdentity, listAuthorizableProjects } from "../lib/authorization-client";
 import { LAST_APP_ROUTE_KEY, safeReturnTo } from "../lib/auth-flow";
+import { dongoPageTitle } from "../lib/page-title";
 
 export type OpenRouteDependencies = {
   humanSession: () => Promise<unknown | null>;
@@ -44,5 +46,5 @@ export default function OpenRoute(props: OpenRouteProps = {}) {
     }
   });
 
-  return <AuthFrame><div class="callback" role="status"><span class="spinner" aria-hidden="true" /><span>Checking your session…</span></div></AuthFrame>;
+  return <AuthFrame><PageTitle value={dongoPageTitle("Opening dongo")} /><div class="callback" role="status"><span class="spinner" aria-hidden="true" /><span>Checking your session…</span></div></AuthFrame>;
 }

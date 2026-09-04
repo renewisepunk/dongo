@@ -3,12 +3,14 @@ import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { AuthFrame } from "../components/AuthFrame";
 import { AgentIdentity } from "../components/AgentIdentity";
 import { AgentIcon } from "../components/AgentIcon";
+import { PageTitle } from "../components/PageTitle";
 import { RequireHumanSession } from "../components/RequireHumanSession";
 import {
   ProjectDataConnection,
   type ProjectInfo,
   type ProjectInstallation,
 } from "../lib/project-data";
+import { dongoPageTitle } from "../lib/page-title";
 
 type Host = "Codex" | "Claude Code" | "AGENTS.md";
 const HOSTS: readonly Host[] = ["Codex", "Claude Code", "AGENTS.md"];
@@ -208,6 +210,7 @@ export default function ConnectRoute(props: ConnectRouteProps = {}) {
 
   return (
     <RequireHumanSession dependencies={props.dependencies}><AuthFrame>
+      <PageTitle value={dongoPageTitle("Connect an agent")} />
       <div class="auth-stack" style={{ gap: "22px" }}>
         <Show
           when={verifiedInstallation()}

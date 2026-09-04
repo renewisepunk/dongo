@@ -1,10 +1,12 @@
-import { Meta, Title } from "@solidjs/meta";
+import { Meta } from "@solidjs/meta";
 import { useNavigate } from "@solidjs/router";
 import { onMount } from "solid-js";
 import { MarketingHome } from "../features/marketing/MarketingHome";
+import { PageTitle } from "../components/PageTitle";
 import { humanSession } from "../lib/auth-client";
 import { bootstrapHumanIdentity, listAuthorizableProjects } from "../lib/authorization-client";
 import { LAST_APP_ROUTE_KEY, safeReturnTo } from "../lib/auth-flow";
+import { dongoPageTitle } from "../lib/page-title";
 
 export type IndexRouteDependencies = {
   humanSession: () => Promise<unknown | null>;
@@ -44,7 +46,7 @@ export default function IndexRoute(props: IndexRouteProps = {}) {
 
   return (
     <>
-      <Title>dongo — ideas into visible agent work</Title>
+      <PageTitle value={dongoPageTitle("Ideas into visible agent work")} />
       <Meta
         name="description"
         content="Capture ideas, work with coding agents, and keep progress and decisions visible."

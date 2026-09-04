@@ -6,4 +6,3 @@ export default function ProjectHelpRoute() {
   const params = useParams<{ orgSlug: string; projectSlug: string }>();
   return <RequireHumanSession><HelpGuide orgSlug={params.orgSlug} projectSlug={params.projectSlug} /></RequireHumanSession>;
 }
-

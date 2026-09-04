@@ -1,3 +1,5 @@
+import { dongoPageTitle, withAttentionCount } from "./page-title";
+
 export type DesktopAlertPermission = NotificationPermission | "unsupported";
 
 const PREFERENCE_PREFIX = "dongo:desktop-attention-alerts:v1";
@@ -15,8 +17,11 @@ export function seenAttentionStorageKey(orgSlug: string, projectSlug: string): s
   return scopedKey(SEEN_PREFIX, orgSlug, projectSlug);
 }
 
-export function attentionPageTitle(count: number): string {
-  return count > 0 ? `(${count}) needs you — dongo` : "overview — dongo";
+export function attentionPageTitle(
+  count: number,
+  title = dongoPageTitle("Overview"),
+): string {
+  return withAttentionCount(title, count);
 }
 
 export function attentionNotificationBody(count: number): string {

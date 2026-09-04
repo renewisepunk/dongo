@@ -2,6 +2,7 @@ import { A, useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
 import { AgentIdentity } from "../../components/AgentIdentity";
+import { PageTitle } from "../../components/PageTitle";
 import { ProjectBreadcrumbs } from "../../components/ProjectBreadcrumbs";
 import { SignOutButton } from "../../components/SignOutButton";
 import { ChangelogPublisher, type ChangelogPublisherProps } from "./ChangelogPublisher";
@@ -19,6 +20,7 @@ import {
 } from "../../lib/project-data";
 import { lowercaseDongoBrand } from "../../lib/brand-case";
 import { projectCreationAction } from "../../lib/plans";
+import { projectPageTitle } from "../../lib/page-title";
 import {
   DEFAULT_PARALLEL_RUN_LIMIT,
   parallelExecutionPolicy,
@@ -597,7 +599,9 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   };
 
   return (
-    <main class="settings-page">
+    <>
+      <PageTitle value={projectPageTitle(project()?.name ?? props.projectSlug, "Settings")} />
+      <main class="settings-page">
       <header class="settings-header project-header">
         <Brand compact href={project()?.archivedAt ? "/open" : `/app/${props.orgSlug}/${props.projectSlug}`} />
         <ProjectBreadcrumbs
@@ -923,6 +927,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
           )}</Show>
         </div>
       </div>
-    </main>
+      </main>
+    </>
   );
 }

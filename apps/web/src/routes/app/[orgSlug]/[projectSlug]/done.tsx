@@ -1,6 +1,7 @@
 import { A, useParams } from "@solidjs/router";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../../../components/Brand";
+import { PageTitle } from "../../../../components/PageTitle";
 import { ProjectBreadcrumbs } from "../../../../components/ProjectBreadcrumbs";
 import { RequireHumanSession } from "../../../../components/RequireHumanSession";
 import type { WorkItem } from "../../../../features/overview/model";
@@ -8,6 +9,7 @@ import {
   ProjectDataConnection,
   type ProjectCompletedPage,
 } from "../../../../lib/project-data";
+import { projectPageTitle } from "../../../../lib/page-title";
 import "../../../../features/admin/admin.css";
 import "../../../../features/overview/overview.css";
 
@@ -84,7 +86,9 @@ export function CompletedWork(props: CompletedWorkProps) {
   });
 
   return (
-    <main class="app-page" style={{ overflow: "auto" }}>
+    <>
+      <PageTitle value={projectPageTitle(projectName(), "Completed")} />
+      <main class="app-page" style={{ overflow: "auto" }}>
       <header class="app-header project-header">
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
         <ProjectBreadcrumbs
@@ -127,7 +131,8 @@ export function CompletedWork(props: CompletedWorkProps) {
           </section>
         </div>
       </div>
-    </main>
+      </main>
+    </>
   );
 }
 

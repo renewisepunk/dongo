@@ -1,8 +1,10 @@
 import { A } from "@solidjs/router";
 import { createSignal, For, onCleanup, onMount } from "solid-js";
 import { Brand } from "../../components/Brand";
+import { PageTitle } from "../../components/PageTitle";
 import { ProjectBreadcrumbs } from "../../components/ProjectBreadcrumbs";
 import { ProjectDataConnection } from "../../lib/project-data";
+import { projectPageTitle } from "../../lib/page-title";
 import { DONGO_SHORTCUTS } from "./shortcuts";
 import "./help.css";
 
@@ -64,7 +66,9 @@ export function HelpGuide(props: HelpGuideProps) {
   });
 
   return (
-    <main class="help-page">
+    <>
+      <PageTitle value={projectPageTitle(projectName(), "Help")} />
+      <main class="help-page">
       <header class="app-header project-header">
         <Brand compact href={overviewHref} />
         <ProjectBreadcrumbs
@@ -151,6 +155,7 @@ export function HelpGuide(props: HelpGuideProps) {
           </footer>
         </div>
       </div>
-    </main>
+      </main>
+    </>
   );
 }

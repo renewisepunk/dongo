@@ -1,8 +1,10 @@
 import { A, useNavigate, useSearchParams } from "@solidjs/router";
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { AuthFrame } from "../../components/AuthFrame";
+import { PageTitle } from "../../components/PageTitle";
 import { requestEmailOtp, verifyEmailOtp } from "../../lib/auth-client";
 import { AUTH_EMAIL_KEY, callbackHref, loginHref, normalizeOtp, safeAuthMessage, safeReturnTo } from "../../lib/auth-flow";
+import { dongoPageTitle } from "../../lib/page-title";
 
 export type EmailCodeRouteDependencies = {
   requestEmailOtp: typeof requestEmailOtp;
@@ -77,6 +79,7 @@ export default function EmailCodeRoute(props: EmailCodeRouteProps = {}) {
 
   return (
     <AuthFrame>
+      <PageTitle value={dongoPageTitle("Check your email")} />
       <form class="auth-stack" onSubmit={verify} novalidate>
         <A class="button button--quiet" href={loginHref(returnTo())}>← back to sign in</A>
         <div class="title-group">

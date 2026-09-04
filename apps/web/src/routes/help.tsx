@@ -1,6 +1,7 @@
-import { Title } from "@solidjs/meta";
+import { PageTitle } from "../components/PageTitle";
 import { PublicHelpGuide } from "../features/public-guides/PublicHelpGuide";
+import { dongoPageTitle } from "../lib/page-title";
 
 export default function HelpRoute() {
-  return <><Title>Help — dongo</Title><PublicHelpGuide /></>;
+  return <><PageTitle value={dongoPageTitle("Help")} /><PublicHelpGuide /></>;
 }

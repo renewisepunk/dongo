@@ -2,6 +2,7 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
 import { AgentIdentity } from "../../components/AgentIdentity";
+import { PageTitle } from "../../components/PageTitle";
 import { MarkdownContent } from "../../components/MarkdownContent";
 import { SignOutButton } from "../../components/SignOutButton";
 import {
@@ -47,6 +48,7 @@ import type {
 } from "../../lib/project-data";
 import { searchHighlightSegments } from "../../lib/search-highlight";
 import { projectCapacityLabel, projectCreationAction } from "../../lib/plans";
+import { overviewPageSurface, projectPageTitle } from "../../lib/page-title";
 import {
   attentionNotificationBody,
   attentionPageTitle,
@@ -361,7 +363,6 @@ export function Overview(props: OverviewProps) {
   let searchGeneration = 0;
   let fileDragDepth = 0;
   let pendingRouteState: OverviewRouteState | undefined;
-  const originalPageTitle = typeof document === "undefined" ? undefined : document.title;
   let previousAttentionIds: Set<string> | undefined;
   let seenAttentionIds = new Set<string>();
   const alertPreferenceKey = desktopAlertPreferenceKey(props.orgSlug, props.projectSlug);
@@ -382,6 +383,15 @@ export function Overview(props: OverviewProps) {
 
   const needs = createMemo(() => work().filter((item) => item.state === "needs"));
   const attentionCount = createMemo(() => needs().length + ownerAttention().length);
+  const pageTitle = createMemo(() => attentionPageTitle(
+    attentionCount(),
+    projectPageTitle(projectName(), overviewPageSurface({
+      workOpen: Boolean(selectedWorkId()),
+      intakeOpen: Boolean(selectedIntakeId()),
+      searchOpen: searchOpen(),
+      composerOpen: composerOpen(),
+    })),
+  ));
   const actionableAttentionIds = createMemo(() => [
     ...ownerAttention().map((item) => item.attention.id),
     ...needs().flatMap((item) => item.attention?.id ? [item.attention.id] : [item.id]),
@@ -471,11 +481,6 @@ export function Overview(props: OverviewProps) {
       ? selectedIntakeDetail()
       : visibleIntakes().find((item) => item.id === selectedIntakeId()),
   );
-
-  createEffect(() => {
-    const title = attentionPageTitle(attentionCount());
-    if (typeof document !== "undefined") document.title = title;
-  });
 
   createEffect(() => {
     const ids = actionableAttentionIds();
@@ -1832,7 +1837,6 @@ export function Overview(props: OverviewProps) {
 
   onCleanup(() => {
     disposed = true;
-    if (originalPageTitle !== undefined) document.title = originalPageTitle;
     const connected = connection;
     const unattachedIds = availableAttachmentIds();
     for (const attachment of draftAttachments()) {
@@ -1859,11 +1863,13 @@ export function Overview(props: OverviewProps) {
   });
 
   return (
-    <main
-      class="app-page"
-      data-detail-open={Boolean(selectedWorkId() || selectedIntakeId())}
-      data-wide-detail={wideDetailLayout()}
-    >
+    <>
+      <PageTitle value={pageTitle()} />
+      <main
+        class="app-page"
+        data-detail-open={Boolean(selectedWorkId() || selectedIntakeId())}
+        data-wide-detail={wideDetailLayout()}
+      >
       <Show when={fileDropActive()}>
         <div class="file-drop-zone" role="status" aria-live="polite">
           <div class="file-drop-zone__message">
@@ -2709,7 +2715,8 @@ export function Overview(props: OverviewProps) {
           <div class="toast"><span class="toast__check">✓</span><span>{toast()}</span></div>
         </div>
       </Show>
-    </main>
+      </main>
+    </>
   );
 }
 

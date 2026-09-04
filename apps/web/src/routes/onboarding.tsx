@@ -1,6 +1,7 @@
 import { A, useNavigate, useSearchParams } from "@solidjs/router";
 import { createMemo, createSignal, onMount, Show } from "solid-js";
 import { AuthFrame } from "../components/AuthFrame";
+import { PageTitle } from "../components/PageTitle";
 import { RequireHumanSession } from "../components/RequireHumanSession";
 import { SignOutButton } from "../components/SignOutButton";
 import { humanSession } from "../lib/auth-client";
@@ -18,6 +19,7 @@ import {
 } from "../lib/parallel-execution";
 import { organizationSlugify, slugify } from "../lib/slug";
 import { upgradePath } from "../lib/plans";
+import { dongoPageTitle } from "../lib/page-title";
 
 type ExecutionMode = "manual" | "autonomous";
 
@@ -195,6 +197,7 @@ export default function OnboardingRoute(props: OnboardingRouteProps = {}) {
 
   return (
     <RequireHumanSession dependencies={props.dependencies}><AuthFrame>
+      <PageTitle value={dongoPageTitle("Set up a project")} />
       <form class="auth-stack" onSubmit={createProject}>
         <div class="title-group">
           <div class="eyebrow eyebrow--amber">Set up your workspace</div>

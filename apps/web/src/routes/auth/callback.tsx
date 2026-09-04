@@ -1,9 +1,11 @@
 import { A, useNavigate, useSearchParams } from "@solidjs/router";
 import { createSignal, onMount, Show } from "solid-js";
 import { AuthFrame } from "../../components/AuthFrame";
+import { PageTitle } from "../../components/PageTitle";
 import { consumeCrossDomainOneTimeToken, humanSession } from "../../lib/auth-client";
 import { bootstrapHumanIdentity, bridgeAuthorizationSession, listAuthorizableProjects } from "../../lib/authorization-client";
 import { isAuthorizationReturnTo, LAST_APP_ROUTE_KEY, safeReturnTo } from "../../lib/auth-flow";
+import { dongoPageTitle } from "../../lib/page-title";
 
 export type AuthCallbackRouteDependencies = {
   consumeCrossDomainOneTimeToken: typeof consumeCrossDomainOneTimeToken;
@@ -58,6 +60,7 @@ export default function AuthCallbackRoute(props: AuthCallbackRouteProps = {}) {
 
   return (
     <AuthFrame>
+      <PageTitle value={dongoPageTitle(error() ? "Sign-in unavailable" : "Signing in")} />
       <Show when={error()} fallback={<div class="callback" role="status" aria-live="polite"><div class="spinner" aria-hidden="true" /><span>Signing you in…</span></div>}>
         <div class="auth-stack">
           <div class="title-group"><h1 class="auth-title">We couldn’t complete sign-in</h1><p class="auth-lede">{error()}</p></div>

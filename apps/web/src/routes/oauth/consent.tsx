@@ -2,6 +2,7 @@ import { useLocation, useNavigate, useSearchParams } from "@solidjs/router";
 import { createMemo, createSignal, For, onMount, Show } from "solid-js";
 
 import { AuthFrame } from "../../components/AuthFrame";
+import { PageTitle } from "../../components/PageTitle";
 import { lowercaseDongoBrand } from "../../lib/brand-case";
 import { humanSession } from "../../lib/auth-client";
 import {
@@ -16,6 +17,7 @@ import {
   type OAuthClientSummary,
 } from "../../lib/authorization-client";
 import { loginHref, signedOAuthQuery } from "../../lib/auth-flow";
+import { dongoPageTitle } from "../../lib/page-title";
 
 const scopeCopy: Record<string, string> = {
   "dongo:work:read": "Read project context, work, comments, and attachment metadata.",
@@ -110,6 +112,7 @@ export default function OAuthConsentRoute(props: OAuthConsentRouteProps = {}) {
 
   return (
     <AuthFrame>
+      <PageTitle value={dongoPageTitle(state() === "error" ? "Authorization unavailable" : "Authorize access")} />
       <Show when={state() !== "loading" && state() !== "submitting"} fallback={<div class="callback" role="status"><span class="spinner" aria-hidden="true" /><span>{state() === "submitting" ? "Saving your decision…" : "Checking the OAuth request…"}</span></div>}>
         <Show when={state() === "review" && client()} fallback={
           <div class="auth-stack">

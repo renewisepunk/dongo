@@ -5,10 +5,7 @@ import { render } from "solid-js/web";
 import { Overview, type OverviewConnection } from "../../src/features/overview/Overview";
 import { AllProjectsOverview } from "../../src/features/overview/AllProjectsOverview";
 import { HelpGuide } from "../../src/features/help/HelpGuide";
-import { GetStartedGuide } from "../../src/features/public-guides/GetStartedGuide";
-import { PublicHelpGuide } from "../../src/features/public-guides/PublicHelpGuide";
 import { PublicChangelog } from "../../src/features/public-guides/PublicChangelog";
-import { SecurityOverview } from "../../src/features/security/SecurityOverview";
 import { ProjectSettings } from "../../src/features/admin/ProjectSettings";
 import { UpgradePlan } from "../../src/features/admin/UpgradePlan";
 import { PlatformAdmin } from "../../src/features/admin/PlatformAdmin";
@@ -31,6 +28,11 @@ import OAuthConsentRoute from "../../src/routes/oauth/consent";
 import OAuthProjectRoute from "../../src/routes/oauth/project";
 import OpenRoute from "../../src/routes/open";
 import IndexRoute from "../../src/routes/index";
+import GetStartedRoute from "../../src/routes/get-started";
+import PublicHelpRoute from "../../src/routes/help";
+import SecurityRoute from "../../src/routes/security";
+import { dongoPageTitle } from "../../src/lib/page-title";
+import { PageTitle } from "../../src/components/PageTitle";
 import { connectFixtureProject, fixtureSession } from "./project-fixture";
 import { connectFixtureIdeas } from "./ideas-fixture";
 import "../../src/styles/global.css";
@@ -852,10 +854,17 @@ const helpDependencies = {
 };
 
 function FixtureOverview() {
+  const [, surface, encodedOrgSlug, encodedProjectSlug] = window.location.pathname.split("/");
+  const orgSlug = surface === "app" && encodedOrgSlug
+    ? decodeURIComponent(encodedOrgSlug)
+    : "fixture-studio";
+  const projectSlug = surface === "app" && encodedProjectSlug
+    ? decodeURIComponent(encodedProjectSlug)
+    : "dongo";
   return (
     <Overview
-      orgSlug="fixture-studio"
-      projectSlug="dongo"
+      orgSlug={orgSlug}
+      projectSlug={projectSlug}
       connect={async (orgSlug, projectSlug): Promise<OverviewConnection> => {
         if (oauthScenario() === "overview-connect-error") {
           throw new Error("fixture overview connection detail must stay hidden");
@@ -1037,7 +1046,9 @@ const platformDashboard: PlatformDashboard = {
 
 function FixturePlatformAdmin() {
   return (
-    <PlatformAdmin
+    <>
+      <PageTitle value={dongoPageTitle("Platform administration")} />
+      <PlatformAdmin
       connect={async (): Promise<PlatformAdminConnection> => {
         if (oauthScenario() === "admin-error") throw new Error("private fixture detail");
         let current = structuredClone(platformDashboard);
@@ -1102,7 +1113,8 @@ function FixturePlatformAdmin() {
           },
         };
       }}
-    />
+      />
+    </>
   );
 }
 
@@ -1182,10 +1194,12 @@ function FixtureChangelogPublisher() {
 function FixtureChangelog() {
   const scenario = new URLSearchParams(window.location.search).get("scenario");
   return (
-    <PublicChangelog
-      load={async () => {
-        if (scenario === "changelog-error") throw new Error("fixture load failure");
-        return scenario === "changelog-empty" ? [] : [
+    <>
+      <PageTitle value={dongoPageTitle("Changelog")} />
+      <PublicChangelog
+        load={async () => {
+          if (scenario === "changelog-error") throw new Error("fixture load failure");
+          return scenario === "changelog-empty" ? [] : [
         {
           entryId: "entry-newer",
           title: "Owners can name their organization",
@@ -1198,8 +1212,9 @@ function FixtureChangelog() {
           summary: "Every organization now lists its people beside its allowances.",
           publishedAt: Date.UTC(2026, 1, 27),
         },
-      ]; }}
-    />
+          ]; }}
+      />
+    </>
   );
 }
 
@@ -1231,9 +1246,9 @@ render(
       <Router>
         <Route path="/" component={FixtureIndex} />
         <Route path="/open" component={FixtureOpen} />
-        <Route path="/get-started" component={GetStartedGuide} />
-        <Route path="/help" component={PublicHelpGuide} />
-        <Route path="/security" component={SecurityOverview} />
+        <Route path="/get-started" component={GetStartedRoute} />
+        <Route path="/help" component={PublicHelpRoute} />
+        <Route path="/security" component={SecurityRoute} />
         <Route path="/changelog" component={FixtureChangelog} />
         <Route path="/changelog-publisher" component={FixtureChangelogPublisher} />
         <Route path="/login" component={FixtureLogin} />

@@ -2,6 +2,7 @@ import { A, useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 
 import { Brand } from "../../components/Brand";
+import { PageTitle } from "../../components/PageTitle";
 import { MarkdownContent } from "../../components/MarkdownContent";
 import { ProjectBreadcrumbs } from "../../components/ProjectBreadcrumbs";
 import { formatAttachmentBytes } from "../../lib/attachment-upload";
@@ -22,6 +23,7 @@ import {
   type IdeaSummary,
   type IdeaUpdateInput,
 } from "../../lib/project-data";
+import { projectPageTitle } from "../../lib/page-title";
 import { IdeaEditor } from "./IdeaEditor";
 import "./ideas.css";
 
@@ -120,6 +122,10 @@ export function Ideas(props: IdeasProps) {
   ])) as Record<IdeaState, number>);
   const selectedSummary = createMemo(() => ideas().find((idea) => idea._id === route.idea));
   const creating = createMemo(() => route.idea === "new");
+  const pageTitle = createMemo(() => projectPageTitle(
+    connection()?.projectName ?? props.projectSlug,
+    creating() ? "New Idea" : route.idea ? "Idea" : "Ideas",
+  ));
 
   const selectIdea = (ideaId: string | undefined, nextFilter = filter()) => {
     setRoute({ filter: nextFilter === "open" ? undefined : nextFilter, idea: ideaId });
@@ -277,7 +283,9 @@ export function Ideas(props: IdeasProps) {
   const inboxHref = (intakeId: string) => `/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}?intake=${encodeURIComponent(intakeId)}`;
 
   return (
-    <main class="app-page ideas-page">
+    <>
+      <PageTitle value={pageTitle()} />
+      <main class="app-page ideas-page">
       <header class="app-header project-header">
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
         <ProjectBreadcrumbs
@@ -431,6 +439,7 @@ export function Ideas(props: IdeasProps) {
         </div>
       </div>
       <div class="visually-hidden" role="status" aria-live="polite">{announce()}</div>
-    </main>
+      </main>
+    </>
   );
 }

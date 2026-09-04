@@ -2,6 +2,7 @@ import { A, useLocation, useNavigate, useSearchParams } from "@solidjs/router";
 import { createMemo, createSignal, For, onMount, Show } from "solid-js";
 
 import { AuthFrame } from "../../components/AuthFrame";
+import { PageTitle } from "../../components/PageTitle";
 import { humanSession } from "../../lib/auth-client";
 import {
   AuthorizationFlowError,
@@ -24,6 +25,7 @@ import {
 } from "../../lib/parallel-execution";
 import { organizationSlugify, slugify } from "../../lib/slug";
 import { upgradePath } from "../../lib/plans";
+import { dongoPageTitle } from "../../lib/page-title";
 
 type ApprovalState = "entry" | "loading" | "review" | "approved" | "denied" | "error";
 
@@ -355,6 +357,15 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
 
   return (
     <AuthFrame>
+      <PageTitle value={dongoPageTitle(
+        state() === "approved"
+          ? "Authorization approved"
+          : state() === "denied"
+            ? "Authorization denied"
+            : state() === "error"
+              ? "Authorization unavailable"
+              : "Authorize terminal",
+      )} />
       <Show when={state() === "entry"}>
         <form class="auth-stack" onSubmit={(event) => { event.preventDefault(); void load(); }}>
           <div class="title-group">
