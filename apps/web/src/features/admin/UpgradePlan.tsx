@@ -1,12 +1,14 @@
 import { A } from "@solidjs/router";
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
+import { PageTitle } from "../../components/PageTitle";
 import { SignOutButton } from "../../components/SignOutButton";
 import {
   ProjectDataConnection,
   type ProjectAdministration,
 } from "../../lib/project-data";
 import { PLANNED_UNLIMITED_PLAN, projectCreationAction } from "../../lib/plans";
+import { projectPageTitle } from "../../lib/page-title";
 import "./admin.css";
 
 type UpgradePlanConnection = {
@@ -73,7 +75,9 @@ export function UpgradePlan(props: UpgradePlanProps) {
   });
 
   return (
-    <main class="settings-page">
+    <>
+      <PageTitle value={projectPageTitle(administration()?.project.name ?? props.projectSlug, "Upgrade")} />
+      <main class="settings-page">
       <header class="settings-header">
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
         <div class="settings-header__title">/ {props.projectSlug} / upgrade</div>
@@ -148,6 +152,7 @@ export function UpgradePlan(props: UpgradePlanProps) {
           </>
         )}</Show>
       </div>
-    </main>
+      </main>
+    </>
   );
 }

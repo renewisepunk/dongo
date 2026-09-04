@@ -2,6 +2,7 @@ import { A, useLocation, useNavigate } from "@solidjs/router";
 import { createSignal, For, onMount, Show } from "solid-js";
 
 import { AuthFrame } from "../../components/AuthFrame";
+import { PageTitle } from "../../components/PageTitle";
 import { humanSession } from "../../lib/auth-client";
 import {
   AuthorizationFlowError,
@@ -13,6 +14,7 @@ import {
   type AuthorizableProject,
 } from "../../lib/authorization-client";
 import { loginHref } from "../../lib/auth-flow";
+import { dongoPageTitle } from "../../lib/page-title";
 
 export type OAuthProjectRouteDependencies = {
   humanSession: () => Promise<unknown | null>;
@@ -78,6 +80,7 @@ export default function OAuthProjectRoute(props: OAuthProjectRouteProps = {}) {
 
   return (
     <AuthFrame>
+      <PageTitle value={dongoPageTitle(error() ? "Project selection unavailable" : "Choose a project")} />
       <Show when={!pending()} fallback={<div class="callback" role="status"><span class="spinner" aria-hidden="true" /><span>Loading your projects…</span></div>}>
         <div class="auth-stack">
           <div class="title-group">

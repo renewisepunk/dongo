@@ -1,6 +1,7 @@
 import { A, useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
+import { PageTitle } from "../../components/PageTitle";
 import { SignOutButton } from "../../components/SignOutButton";
 import { ChangelogPublisher, type ChangelogPublisherProps } from "./ChangelogPublisher";
 import { dongoPublicOrigin } from "../../lib/auth-config";
@@ -17,6 +18,7 @@ import {
 } from "../../lib/project-data";
 import { lowercaseDongoBrand } from "../../lib/brand-case";
 import { projectCreationAction } from "../../lib/plans";
+import { projectPageTitle } from "../../lib/page-title";
 import {
   DEFAULT_PARALLEL_RUN_LIMIT,
   parallelExecutionPolicy,
@@ -591,7 +593,9 @@ export function ProjectSettings(props: ProjectSettingsProps) {
   };
 
   return (
-    <main class="settings-page">
+    <>
+      <PageTitle value={projectPageTitle(project()?.name ?? props.projectSlug, "Settings")} />
+      <main class="settings-page">
       <header class="settings-header">
         <Brand compact href={project()?.archivedAt ? "/open" : `/app/${props.orgSlug}/${props.projectSlug}`} />
         <div class="settings-header__title">/ {props.projectSlug} / settings</div>
@@ -904,6 +908,7 @@ export function ProjectSettings(props: ProjectSettingsProps) {
           )}</Show>
         </div>
       </div>
-    </main>
+      </main>
+    </>
   );
 }

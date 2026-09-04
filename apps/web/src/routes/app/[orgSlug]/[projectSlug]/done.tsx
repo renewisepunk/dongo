@@ -1,16 +1,19 @@
 import { A, useParams } from "@solidjs/router";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../../../components/Brand";
+import { PageTitle } from "../../../../components/PageTitle";
 import { RequireHumanSession } from "../../../../components/RequireHumanSession";
 import type { WorkItem } from "../../../../features/overview/model";
 import {
   ProjectDataConnection,
   type ProjectCompletedPage,
 } from "../../../../lib/project-data";
+import { projectPageTitle } from "../../../../lib/page-title";
 import "../../../../features/admin/admin.css";
 import "../../../../features/overview/overview.css";
 
 type CompletedConnection = {
+  readonly projectName?: string;
   listCompleted: (cursor?: string | null) => Promise<ProjectCompletedPage>;
   close: () => Promise<void>;
 };
@@ -31,6 +34,7 @@ export function CompletedWork(props: CompletedWorkProps) {
   const [loadingMore, setLoadingMore] = createSignal(false);
   const [nextCursor, setNextCursor] = createSignal<string>();
   const [error, setError] = createSignal("");
+  const [projectName, setProjectName] = createSignal(props.projectSlug);
   let connection: CompletedConnection | undefined;
   let disposed = false;
   const connect = props.dependencies?.connect ?? ProjectDataConnection.connect;
@@ -66,6 +70,7 @@ export function CompletedWork(props: CompletedWorkProps) {
           return;
         }
         connection = connected;
+        setProjectName(connected.projectName ?? props.projectSlug);
         void loadPage(null, false);
       })
       .catch(() => {
@@ -80,7 +85,9 @@ export function CompletedWork(props: CompletedWorkProps) {
   });
 
   return (
-    <main class="app-page" style={{ overflow: "auto" }}>
+    <>
+      <PageTitle value={projectPageTitle(projectName(), "Completed")} />
+      <main class="app-page" style={{ overflow: "auto" }}>
       <header class="app-header">
         <Brand compact href={`/app/${props.orgSlug}/${props.projectSlug}`} />
         <div class="settings-header__title">/ {props.projectSlug} / completed</div>
@@ -117,7 +124,8 @@ export function CompletedWork(props: CompletedWorkProps) {
           </section>
         </div>
       </div>
-    </main>
+      </main>
+    </>
   );
 }
 

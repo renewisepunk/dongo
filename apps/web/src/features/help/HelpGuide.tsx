@@ -1,12 +1,15 @@
 import { A } from "@solidjs/router";
-import { For } from "solid-js";
+import { createSignal, For, onCleanup, onMount } from "solid-js";
 import { Brand } from "../../components/Brand";
+import { PageTitle } from "../../components/PageTitle";
+import { projectPageTitle } from "../../lib/page-title";
 import { DONGO_SHORTCUTS } from "./shortcuts";
 import "./help.css";
 
 export type HelpGuideProps = {
   orgSlug: string;
   projectSlug: string;
+  resolveProjectName?: (orgSlug: string, projectSlug: string) => Promise<string>;
 };
 
 const GUIDE_STEPS = [
@@ -34,9 +37,26 @@ const GUIDE_STEPS = [
 
 export function HelpGuide(props: HelpGuideProps) {
   const overviewHref = `/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}`;
+  const [projectName, setProjectName] = createSignal(props.projectSlug);
+  let disposed = false;
+
+  onMount(() => {
+    if (!props.resolveProjectName) return;
+    void props.resolveProjectName(props.orgSlug, props.projectSlug)
+      .then((name) => {
+        if (!disposed) setProjectName(name);
+      })
+      .catch(() => undefined);
+  });
+
+  onCleanup(() => {
+    disposed = true;
+  });
 
   return (
-    <main class="help-page">
+    <>
+      <PageTitle value={projectPageTitle(projectName(), "Help")} />
+      <main class="help-page">
       <header class="app-header">
         <Brand compact href={overviewHref} />
         <div class="help-header__path">/ {props.projectSlug} / help</div>
@@ -117,6 +137,7 @@ export function HelpGuide(props: HelpGuideProps) {
           </footer>
         </div>
       </div>
-    </main>
+      </main>
+    </>
   );
 }

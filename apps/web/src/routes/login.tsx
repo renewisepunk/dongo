@@ -1,6 +1,7 @@
 import { A, useLocation, useNavigate, useSearchParams } from "@solidjs/router";
 import { createSignal, onMount, Show } from "solid-js";
 import { AuthFrame } from "../components/AuthFrame";
+import { PageTitle } from "../components/PageTitle";
 import { googleAuthConfigured } from "../lib/auth-config";
 import { humanSession, requestEmailOtp, startGoogleSignIn } from "../lib/auth-client";
 import {
@@ -12,6 +13,7 @@ import {
   safeAuthMessage,
   safeReturnTo,
 } from "../lib/auth-flow";
+import { dongoPageTitle } from "../lib/page-title";
 
 export type LoginRouteDependencies = {
   googleAuthConfigured: boolean;
@@ -75,6 +77,7 @@ export default function LoginRoute(props: LoginRouteProps = {}) {
 
   return (
     <AuthFrame>
+      <PageTitle value={dongoPageTitle("Sign in")} />
       <div class="auth-stack auth-stack--roomy">
         <p class="auth-promise">
           See what your coding agents are doing, give them work, and answer when they need you.

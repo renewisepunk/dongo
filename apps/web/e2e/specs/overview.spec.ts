@@ -47,7 +47,7 @@ test("keeps Needs You first and carries its live count in the page title", async
   const composer = page.getByRole("region", { name: "Add something" });
   const activity = page.getByRole("region", { name: "agent activity" });
 
-  await expect(page).toHaveTitle("(1) needs you — dongo");
+  await expect(page).toHaveTitle("(1) dongo · New Intake — dongo");
   await expect.poll(async () => await needsYou.evaluate((element) => {
     const needsTop = element.getBoundingClientRect().top;
     const composerTop = document.querySelector(".composer")?.getBoundingClientRect().top ?? Infinity;
@@ -60,7 +60,7 @@ test("keeps Needs You first and carries its live count in the page title", async
   await detail.getByRole("button", { name: "Approve staging" }).click();
   await detail.getByRole("button", { name: "Respond", exact: true }).click();
   await expect(needsYou).toBeHidden();
-  await expect(page).toHaveTitle("overview — dongo");
+  await expect(page).toHaveTitle("dongo · Work — dongo");
 });
 
 test("requests desktop permission from a gesture and deduplicates private native alerts", async ({ page }) => {
@@ -133,7 +133,7 @@ test("requests desktop permission from a gesture and deduplicates private native
     body: "A new action is waiting. Open dongo to review it.",
     tag: "dongo-needs-you",
   });
-  await expect(page).toHaveTitle("(2) needs you — dongo");
+  await expect(page).toHaveTitle("(2) dongo · Overview — dongo");
 });
 
 test("does not repeat a denied desktop notification request", async ({ page }) => {

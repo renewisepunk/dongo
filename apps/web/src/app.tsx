@@ -3,11 +3,14 @@ import { Router } from "@solidjs/router";
 import { FileRoutes } from "@solidjs/start/router";
 import { ErrorBoundary, Show, Suspense } from "solid-js";
 import { AuthFrame } from "./components/AuthFrame";
+import { PageTitle } from "./components/PageTitle";
+import { dongoPageTitle } from "./lib/page-title";
 import globalStyles from "./styles/global.css?inline";
 
 function SafeApplicationError() {
   return (
     <AuthFrame>
+      <PageTitle value={dongoPageTitle("Could not load")} />
       <div class="auth-stack">
         <div class="title-group">
           <div class="eyebrow eyebrow--amber">Recovery</div>

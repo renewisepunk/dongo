@@ -1,6 +1,7 @@
-import { Title } from "@solidjs/meta";
+import { PageTitle } from "../components/PageTitle";
 import { PublicChangelog } from "../features/public-guides/PublicChangelog";
+import { dongoPageTitle } from "../lib/page-title";
 
 export default function ChangelogRoute() {
-  return <><Title>Changelog — dongo</Title><PublicChangelog /></>;
+  return <><PageTitle value={dongoPageTitle("Changelog")} /><PublicChangelog /></>;
 }

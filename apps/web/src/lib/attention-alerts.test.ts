@@ -25,9 +25,11 @@ function memoryStorage(): Storage {
 
 describe("owner Attention alerts", () => {
   it("keeps the page title truthful", () => {
-    expect(attentionPageTitle(0)).toBe("overview — dongo");
-    expect(attentionPageTitle(1)).toBe("(1) needs you — dongo");
-    expect(attentionPageTitle(3)).toBe("(3) needs you — dongo");
+    expect(attentionPageTitle(0)).toBe("Overview — dongo");
+    expect(attentionPageTitle(1)).toBe("(1) Overview — dongo");
+    expect(attentionPageTitle(3, "Project · Search — dongo")).toBe(
+      "(3) Project · Search — dongo",
+    );
   });
 
   it("uses generic native notification copy that does not expose Work content", () => {

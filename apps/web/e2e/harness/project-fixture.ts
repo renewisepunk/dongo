@@ -936,7 +936,10 @@ export async function connectFixtureProject(
   orgSlug: string,
   projectSlug: string,
 ): Promise<OverviewConnection> {
-  if (orgSlug !== currentProject.organizationSlug || projectSlug !== currentProject.slug) {
+  const requestedProject = availableProjects.find((project) =>
+    project.organizationSlug === orgSlug && project.slug === projectSlug
+  );
+  if (!requestedProject) {
     throw new Error("Fixture project not found");
   }
   if (fixtureScenario() === "live-agent-update") {
@@ -950,7 +953,21 @@ export async function connectFixtureProject(
       }));
     }, 600);
   }
-  return connection;
+  if (requestedProject.id === currentProject.id) return connection;
+  return {
+    ...connection,
+    projectName: requestedProject.name,
+    subscribeOverview(onUpdate, onError) {
+      return connection.subscribeOverview(
+        (snapshot) => onUpdate({
+          ...snapshot,
+          projectId: requestedProject.id,
+          projectName: requestedProject.name,
+        }),
+        onError,
+      );
+    },
+  };
 }
 
 export async function fixtureSession(): Promise<OverviewSession> {
