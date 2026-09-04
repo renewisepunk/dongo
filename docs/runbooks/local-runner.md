@@ -94,6 +94,19 @@ truthful restart failure instead of guessing or resuming the most recent task.
 Saved Codex authentication is resolved by Codex itself and is never copied into
 dongo status or logs.
 
+The Codex workspace sandbox cannot read the macOS Keychain entry used by an
+interactive GitHub CLI, even though the login-scoped runner can. For a repository
+whose `origin` host is authenticated in `gh`, the runner therefore resolves the
+current token with `gh auth token --hostname` immediately before each harness
+launch and passes it only in that child process environment. This lets `gh` and
+the configured Git credential helper use the owner's current CLI identity without
+weakening the harness sandbox. The token is never placed in a job, prompt,
+argument, worktree, dongo state, or runner log. Missing `git`, missing `gh`, an
+unknown remote shape, an unauthenticated host, a malformed result, or a bounded
+probe failure produces no credential environment and preserves the normal
+fail-closed agent workflow. Re-authentication takes effect on the next launch;
+the runner does not need to be reinstalled.
+
 ### Claude Code execution
 
 The Claude Code adapter resolves and records the exact local `claude`

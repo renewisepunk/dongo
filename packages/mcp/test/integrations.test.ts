@@ -56,7 +56,7 @@ test("all host instruction blocks exactly match canonical server instructions", 
   assert.match(DONGO_MCP_INSTRUCTIONS, /Humans may enrich waiting or claimed Intake/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /save preserves the claim but advances the Intake revision/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /review the current text, context, links, and finalized attachments/u);
-  assert.match(DONGO_MCP_INSTRUCTIONS, /@wisepunk\/dongo@0\.2\.9/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /@wisepunk\/dongo@0\.2\.10/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /ask whether they want to install it/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /Never install automatically/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /next eligible successful tool result/u);
