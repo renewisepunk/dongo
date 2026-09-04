@@ -543,10 +543,25 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
             title: option(parsed, "title"),
             goal: option(parsed, "goal"),
             latestUpdate: option(parsed, "latest-update"),
+            activity: option(parsed, "activity-kind")
+              ? {
+                  kind: option(parsed, "activity-kind") as
+                    | "executing"
+                    | "verification"
+                    | "release"
+                    | "waiting_for_resource"
+                    | "paused",
+                  label: option(parsed, "activity-label"),
+                  nextStep: option(parsed, "activity-next-step"),
+                }
+              : undefined,
             artifact: artifacts[0] ? artifact(artifacts[0]) : undefined,
           };
-          if (!update.title && !update.goal && !update.latestUpdate && !update.artifact) {
-            throw new CliCoreError({ code: "validation", message: "work update requires a title, goal, latest update, or artifact.", exitCode: 2 });
+          if ((option(parsed, "activity-label") || option(parsed, "activity-next-step")) && !update.activity) {
+            throw new CliCoreError({ code: "validation", message: "--activity-label and --activity-next-step require --activity-kind.", exitCode: 2 });
+          }
+          if (!update.title && !update.goal && !update.latestUpdate && !update.activity && !update.artifact) {
+            throw new CliCoreError({ code: "validation", message: "work update requires a title, goal, latest update, activity, or artifact.", exitCode: 2 });
           }
           data = await service.execute("update_work", {
             idempotencyKey: commandMutationKey(),

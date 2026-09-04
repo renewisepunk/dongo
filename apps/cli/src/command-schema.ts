@@ -150,8 +150,19 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
   "work update": {
     command: "work update",
     summary: "Record WorkItem details or Run progress.",
-    usage: "dongo work update --work-id ID --revision N (--title TEXT | --goal TEXT | --latest-update TEXT | --artifact JSON)",
-    options: [workId, revision, { name: "title", description: "Updated title." }, { name: "goal", description: "Updated goal." }, { name: "latest-update", description: "Meaningful Run progress or blocker." }, artifact, idempotency],
+    usage: "dongo work update --work-id ID --revision N (--title TEXT | --goal TEXT | --latest-update TEXT | --activity-kind KIND | --artifact JSON)",
+    options: [
+      workId,
+      revision,
+      { name: "title", description: "Updated title." },
+      { name: "goal", description: "Updated goal." },
+      { name: "latest-update", description: "Meaningful Run progress or blocker." },
+      { name: "activity-kind", description: "Current Run phase.", allowed: ["executing", "verification", "release", "waiting_for_resource", "paused"] },
+      { name: "activity-label", description: "Plain-language current gate or named resource." },
+      { name: "activity-next-step", description: "What will happen next." },
+      artifact,
+      idempotency,
+    ],
   },
   "work renew": { command: "work renew", summary: "Renew the active WorkItem claim.", usage: "dongo work renew --work-id ID --revision N [--lease-seconds N]", options: [workId, revision, lease, idempotency] },
   "work finish": {
@@ -377,8 +388,8 @@ export function validateCommand(parsed: ParsedArgs): { name: string; schema: Com
     const count = Number(Boolean(parsed.values["work-id"]?.[0])) + Number(Boolean(parsed.values.identifier?.[0]));
     if (count !== 1) issues.push("Provide exactly one of --work-id or --identifier.");
   }
-  if (name === "work update" && !["title", "goal", "latest-update", "artifact"].some((option) => parsed.values[option]?.[0])) {
-    issues.push("Provide at least one of --title, --goal, --latest-update, or --artifact.");
+  if (name === "work update" && !["title", "goal", "latest-update", "activity-kind", "artifact"].some((option) => parsed.values[option]?.[0])) {
+    issues.push("Provide at least one of --title, --goal, --latest-update, --activity-kind, or --artifact.");
   }
   if (name === "session-start" || name === "session start") {
     const parallel = parsed.values["parallel-capability"]?.[0];

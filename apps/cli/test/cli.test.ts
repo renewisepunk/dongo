@@ -440,7 +440,7 @@ test("CLI routes every remaining v1 operation with stable JSON and reusable muta
     { operation: "create_work", argv: ["work", "create", "--title", "Title", "--goal", "Goal"] },
     { operation: "get_work", argv: ["work", "get", "--identifier", "DON-1"] },
     { operation: "start_work", argv: ["work", "start", "--work-id", "work_1", "--revision", "1", "--session-id", "session_1"] },
-    { operation: "update_work", argv: ["work", "update", "--work-id", "work_1", "--revision", "2", "--latest-update", "Progress"] },
+    { operation: "update_work", argv: ["work", "update", "--work-id", "work_1", "--revision", "2", "--activity-kind", "verification", "--activity-label", "Browser acceptance", "--activity-next-step", "Release the candidate"] },
     { operation: "renew_claim", argv: ["work", "renew", "--work-id", "work_1", "--revision", "3"] },
     { operation: "finish_work", argv: ["work", "finish", "--work-id", "work_1", "--revision", "4", "--outcome", "Done"] },
     { operation: "add_comment", argv: ["comment", "add", "--work-id", "work_1", "--body", "Context"] },

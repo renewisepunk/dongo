@@ -3187,22 +3187,36 @@ function WorkDetail(props: WorkDetailProps) {
               <AgentIdentity agentName={props.item.agent} agentType={props.item.agentType} />
             </Show>
           </div>
+          <Show when={props.item.activity}>{(activity) => (
+            <div class="detail__activity" data-state={activity().kind}>
+              <div class="detail__current-step">
+                <span class="mono">Current step</span>
+                <strong>{activity().label}</strong>
+              </div>
+              <Show when={activity().nextStep}>{(nextStep) => (
+                <div class="detail__current-next"><span class="mono">Next</span>{nextStep()}</div>
+              )}</Show>
+            </div>
+          )}</Show>
         </div>
 
         <Show when={props.item.attention}>{(attention) => (
           <div class="attention-card" data-resolved={Boolean(attention().response)}>
             <div class="attention-card__head">
-              <span class="attention-kind">{attention().kind}</span>
+              <span class="attention-kind">{attention().response ? "Resolved" : attention().kind}</span>
               <Show when={attention().important && !attention().response}><span class="attention-important mono">important</span></Show>
               <span class="attention-card__when">{props.item.age}</span>
             </div>
             <div class="attention-card__title">{attention().title}</div>
-            <MarkdownContent source={attention().body} class="attention-card__body" />
             <Show when={!attention().response} fallback={
               <div class="resolved-response">
-                <div class="resolved-response__status">✓ answered</div>
+                <div class="resolved-response__status">✓ resolved — no action needed</div>
                 <MarkdownContent source={attention().response ?? ""} class="detail-section__body" />
                 <div class="note">Your agent will see this on its next explicit pull. An active dongo waiter checks with backoff for up to five minutes; a stopped agent will not restart itself.</div>
+                <details class="resolved-attention__history">
+                  <summary>View the original request</summary>
+                  <MarkdownContent source={attention().body} class="attention-card__body" />
+                </details>
                 <Show when={response().trim() || choice()}>
                   <div class="detail-card" role="note">
                     <strong>Your unsent response draft was kept.</strong>
@@ -3222,6 +3236,9 @@ function WorkDetail(props: WorkDetailProps) {
                 </Show>
               </div>
             }>
+              <div class="attention-card__body">
+                <MarkdownContent source={attention().body} />
+              </div>
               <div class="attention-options">
                 <For each={attention().options ?? []}>{(option) => (
                   <button class="attention-option" data-selected={choice() === option} type="button" onClick={() => {

@@ -392,6 +392,10 @@ type RunDoc = {
   actorId: string;
   status: "running" | "waiting" | "completed" | "failed" | "cancelled";
   summary?: string;
+  activityKind?: "executing" | "verification" | "release" | "waiting_for_resource" | "paused";
+  activityLabel?: string;
+  activityNextStep?: string;
+  activityUpdatedAt?: number;
   startedAt: number;
   lastHeartbeatAt: number;
   finishedAt?: number;
@@ -572,6 +576,19 @@ export type ProjectConcurrencySnapshot = {
       machineLabel?: string;
     };
     state: "running" | "waiting";
+    activity: {
+      kind:
+        | "executing"
+        | "verification"
+        | "release"
+        | "waiting_for_owner"
+        | "waiting_for_resource"
+        | "paused"
+        | "process_exited";
+      label: string;
+      nextStep?: string;
+      updatedAt: number;
+    };
     latestProgress?: string;
     startedAt: number;
     lastHeartbeatAt: number;
@@ -1287,6 +1304,24 @@ export function mapWorkDetail(base: WorkItem, detail: WorkDetailSnapshot): WorkI
     attention: mappedAttention,
     goal: detail.work.description || detail.work.title,
     latest: latestRun?.summary || base.latest,
+    activity: latestRun?.activityKind
+      ? {
+          kind: latestRun.activityKind,
+          label: latestRun.activityLabel || (
+            latestRun.activityKind === "verification"
+              ? "Verifying the candidate"
+              : latestRun.activityKind === "release"
+                ? "Releasing the accepted candidate"
+                : latestRun.activityKind === "waiting_for_resource"
+                  ? "Waiting for a shared resource"
+                  : latestRun.activityKind === "paused"
+                    ? "Paused locally"
+                    : "Agent is executing"
+          ),
+          nextStep: latestRun.activityNextStep,
+          updatedAt: latestRun.activityUpdatedAt,
+        }
+      : undefined,
     agent: latestRun ? actorDisplayIdentity(actors.get(latestRun.actorId)) : base.agent,
     elapsed:
       latestRun?.status === "running"
