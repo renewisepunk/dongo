@@ -41,6 +41,9 @@ worktrees. The continuing failures were therefore downstream of dispatch:
 7. public smoke checks proved health and metadata but did not exercise a live
    device-authorization control-plane mutation, so a transient production auth
    500 was not detected by the advertised green smoke result.
+8. the runner advertised a 20-second dispatcher long poll, but the API's
+   internal Convex request timed out after 15 seconds, turning healthy idle and
+   refill waits into repeated `temporarily_unavailable` recovery cycles.
 
 No single retry, re-login, browser permission change, or queue restart could
 repair that whole chain. Repeated retries instead created more historical jobs,
@@ -442,6 +445,37 @@ cleanup. Alert separately from broad service readiness.
 reversible transaction through every critical control-plane dependency, not
 only health, readiness, and discovery documents.
 
+### RC13 — the internal timeout was shorter than the runner long poll
+
+**Symptom.** The wiwi runner preserved its exact active job and process but
+cycled through `temporarily_unavailable`, reaching 56 consecutive failures.
+The same installation could appear `running` while a new request was in flight,
+then return to `recovering` when that request reached the same bound.
+
+**Mechanism.** The CLI requests `runner_wait` with `waitSeconds=20`. The Convex
+gateway may legitimately keep that operation open for the full 20 seconds while
+checking for a refill job. `ApiConvexOperationExecutor` used its generic
+15-second upstream timeout for `runner_wait`; it extended the timeout only for
+`get_updates`. A healthy wait with no job therefore could not complete through
+the API and was translated to a retryable 503.
+
+**Why detection failed.** Contract and runner tests covered the 20-second
+advertised bound, and API tests covered signed forwarding, but no test composed
+the runner wait with the API executor's upstream timeout. The local health file
+retained only the safe error code, so the timeout looked like auth, capacity, or
+transaction contention until the full call chain was inspected. Production
+Convex history for the affected window showed no failed, retried, or optimistic-
+concurrency executions.
+
+**Correction.** Treat `runner_wait` as a bounded long-poll operation in the API
+executor. Its upstream budget is the greater of the ordinary timeout and the
+requested wait plus a five-second completion margin, matching `get_updates`.
+Exact-job zero-second polls retain the ordinary timeout.
+
+**Invariant.** Every public long-poll duration must fit inside every downstream
+timeout on its path, with bounded completion margin. A successful empty wait is
+normal liveness, not a service failure.
+
 ## Systemic causes
 
 The individual defects shared five organizational causes:
@@ -495,6 +529,8 @@ These invariants are release gates, not documentation suggestions:
     health or metadata.
 14. A retry is never the default response to an ownership conflict. Operators
     pause the Work until the invariant violation is fixed.
+15. Every advertised long-poll duration is shorter than its API and internal
+    gateway budgets, and an empty maximum-duration wait completes successfully.
 
 ## Safe operator response
 
@@ -573,6 +609,7 @@ These invariants are release gates, not documentation suggestions:
 | Auth synthetic | Device-code request reaches live backing store and is safely expired/denied | Green smoke during auth 500 |
 | Restart during active work | Exact jobs recover or fail once; no duplicates and no ownership drift | Restart amplification |
 | Serial old client | Additive protocol preserves one-job behavior | Upgrade breakage |
+| Empty 20-second runner wait | API and Convex complete normally without incrementing runner failures | False `temporarily_unavailable` recovery loop |
 
 The matrix must run on macOS and Linux where service behavior differs, and at
 least the launchd, Codex sandbox, Chrome extension, and live auth rows require
@@ -587,6 +624,7 @@ real-system acceptance rather than only in-process fakes.
 | P0 | Grant exactly the validated Git common directory to new Codex jobs; conservatively restart unprovable resumed sessions | dong085 | In progress |
 | P0 | Make development and production targets fail closed before any mutation | dong084, PR #24 | Ready for integration |
 | P0 | Add transactional production auth synthetic and alerting | Follow-up required | Unassigned |
+| P0 | Carry the bounded `runner_wait` duration into the API-to-Convex timeout and verify both live runners remain stable | dong085 | Fix in progress |
 | P1 | Keep terminal reconciliation and Agent Activity truthful after the exact ownership fix | dong083 | Implementation integrated; final acceptance pending |
 | P1 | Render runner registration, liveness, busy, host capacity, project capacity, compatibility, and eligibility separately | Follow-up required; adjacent to dong083/dong085 | Unassigned |
 | P1 | Use state-first, single-flight repository connection across linked worktrees | dong077 and dong078 | Implementation integrated; release follow-through pending |

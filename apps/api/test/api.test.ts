@@ -420,6 +420,51 @@ describe("Convex signed executor", () => {
       }
     }
   });
+
+  it("keeps the internal gateway open for a bounded runner long poll", async () => {
+    let abortedBeforeResponse = false;
+    const executor = new ApiConvexOperationExecutor({
+      convexSiteUrl: new URL("https://wandering-camel-662.convex.site/"),
+      resource: RESOURCE,
+      secret: SECRET,
+      timeoutMs: 20,
+      nowMs: () => NOW_MS,
+      nonce: () => NONCE,
+      fetch: async (_input, init) => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        abortedBeforeResponse = init?.signal?.aborted ?? false;
+        return Response.json({
+          ok: false,
+          apiVersion: "v1",
+          requestId: "runner-wait-request",
+          error: {
+            code: "temporarily_unavailable",
+            message: "Synthetic upstream response",
+            retryable: true,
+          },
+        });
+      },
+    });
+
+    const result = await executor.execute(
+      "runner_wait",
+      { waitSeconds: 20 },
+      {
+        principal: principal(),
+        requestId: "runner-wait-request",
+        signal: new AbortController().signal,
+      },
+    );
+
+    expect(abortedBeforeResponse).toBe(false);
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "temporarily_unavailable",
+        message: "Synthetic upstream response",
+      },
+    });
+  });
 });
 
 class FakeVerifier implements ApiTokenVerifier {

@@ -1,7 +1,7 @@
+import type { OperationName } from "@dongo/contracts";
 import type {
   DongoDomainError,
   DongoInstallationPrincipal,
-  DongoOperationName,
   JsonRecord,
   OperationExecutionResult,
 } from "@dongo/mcp";
@@ -9,10 +9,10 @@ import type {
 export type {
   DongoDomainError,
   DongoInstallationPrincipal,
-  DongoOperationName,
   JsonRecord,
   OperationExecutionResult,
 };
+export type DongoOperationName = OperationName;
 
 export type ApiInstallationPrincipal = Omit<
   DongoInstallationPrincipal,
