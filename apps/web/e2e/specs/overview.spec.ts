@@ -239,7 +239,7 @@ test("keeps Working usable when live agent activity is unavailable", async ({ pa
 
 test("uses a still amber signal when no agents are active", async ({ page }) => {
   const signal = page.locator(".concurrent-activity__signal");
-  await expect(page.getByText("No active agent runs.")).toBeVisible();
+  await expect(page.getByText("No agent work is in progress. Ready work can start in an available slot.")).toBeVisible();
   await expect(signal).toHaveAttribute("data-state", "idle");
   await expect.poll(async () => signal.evaluate((element) => ({
     animation: getComputedStyle(element).animationName,
