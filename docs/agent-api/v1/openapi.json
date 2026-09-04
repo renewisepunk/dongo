@@ -4394,6 +4394,20 @@
               "ask",
               "automatic"
             ]
+          },
+          "activeJobIds": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "inspectJobId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
         },
         "required": [

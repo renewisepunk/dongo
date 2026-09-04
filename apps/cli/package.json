@@ -1,6 +1,6 @@
 {
   "name": "@wisepunk/dongo",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Agent-first project management from the terminal and MCP hosts.",
   "type": "module",
   "homepage": "https://dongo.so/get-started",

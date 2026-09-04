@@ -43,6 +43,8 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
     jobId: "job-1",
     kind: "work" as const,
     workIdentifier: "dong027",
+    worktreeName: "dong027-12345678",
+    branch: "codex/dongo-runner-dong027-123456789abc",
     signal: new AbortController().signal,
     log: async () => undefined,
   };
@@ -61,6 +63,9 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
   ]);
   assert.match(executionCalls[0]?.input ?? "", /exact dongo WorkItem dong027/u);
   assert.ok(executionCalls[0]?.input.includes(DONGO_COMPLETION_INSTRUCTIONS));
+  assert.match(executionCalls[0]?.input ?? "", /externalSessionId dongo-runner-job-1/u);
+  assert.match(executionCalls[0]?.input ?? "", /workspace\.worktreeName as dong027-12345678/u);
+  assert.match(executionCalls[0]?.input ?? "", /workspace\.branch as codex\/dongo-runner-dong027-123456789abc/u);
   assert.doesNotMatch(executionCalls[0]?.args.join(" ") ?? "", /dong027/u);
   assert.equal(executionCalls[0]?.args.some((value) => value.includes("dangerously")), false);
   assert.equal(await adapter.canResume(input), true);

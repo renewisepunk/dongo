@@ -1,9 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { chmod, lstat, mkdir, open, realpath, rename, rm } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import type { DongoClient } from "@dongo/client";
 import { DongoClientError } from "@dongo/client";
@@ -14,16 +12,15 @@ import type {
   RunnerPlatform,
 } from "@dongo/contracts";
 import { CliCoreError } from "./errors.ts";
-import { sanitizedChildEnvironment } from "./process-environment.ts";
 import type { SecretStore } from "./secret-store.ts";
 import { FileSecretStore } from "./secret-store.ts";
 import type { RunnerServiceController, RunnerServiceSpec } from "./runner-service.ts";
+import { RunnerWorkspaceManager, type RunnerWorkspace } from "./runner-workspaces.ts";
 
 const RUNNER_SCHEMA_VERSION = 1;
-const RUNNER_VERSION = "0.1.1";
+const RUNNER_VERSION = "0.2.0";
 const MAX_LOG_BYTES = 5 * 1_024 * 1_024;
 const MAX_LOG_FILES = 3;
-const execFileAsync = promisify(execFile);
 
 export interface RunnerConfig {
   schemaVersion: 1;
@@ -49,7 +46,7 @@ export interface RunnerConfig {
 }
 
 export interface RunnerLocalState {
-  schemaVersion: 1;
+  schemaVersion: 2;
   status:
     | "disabled"
     | "starting"
@@ -70,7 +67,20 @@ export interface RunnerLocalState {
     harness: RunnerHarness;
     state: RunnerJob["state"];
     revision: number;
+    worktreeName?: string;
+    branch?: string;
   };
+  currentJobs: Array<{
+    id: string;
+    kind: RunnerJob["kind"];
+    workIdentifier?: string;
+    intakeId?: string;
+    harness: RunnerHarness;
+    state: RunnerJob["state"];
+    revision: number;
+    worktreeName?: string;
+    branch?: string;
+  }>;
   lastSeenAt?: string;
   lastErrorCode?: string;
   updatedAt: string;
@@ -104,6 +114,8 @@ export interface RunnerHarnessAdapter {
     kind: RunnerJob["kind"];
     workIdentifier?: string;
     intakeId?: string;
+    worktreeName: string;
+    branch: string;
     signal: AbortSignal;
     log: (chunk: string) => Promise<void>;
   }): Promise<RunnerHarnessResult>;
@@ -158,6 +170,8 @@ export class LocalRunnerManager {
   readonly #sleep: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
   readonly #random: () => number;
   readonly #adapter?: RunnerAdapterResolver;
+  readonly #activeJobs = new Map<string, { job: RunnerJob; workspace?: RunnerWorkspace }>();
+  #stateWrite: Promise<void> = Promise.resolve();
 
   constructor(options: RunnerManagerOptions) {
     this.#api = options.api;
@@ -260,11 +274,12 @@ export class LocalRunnerManager {
         ...this.#runtime,
       });
       await this.#writeState({
-        schemaVersion: 1,
+        schemaVersion: 2,
         status: "starting",
         projectRef: this.#projectRef,
         registrationId: registration.id,
         version: RUNNER_VERSION,
+        currentJobs: [],
         updatedAt: now,
       });
       return {
@@ -314,10 +329,10 @@ export class LocalRunnerManager {
   async approve(jobId: string) {
     const config = await this.#readConfig(true);
     const state = await this.#readState();
+    const job = state?.currentJobs.find((candidate) => candidate.id === jobId);
     if (
-      state?.status !== "awaiting_local_approval" ||
-      state.currentJob?.id !== jobId ||
-      state.registrationId !== config.registrationId
+      job?.state !== "awaiting_local_approval" ||
+      state?.registrationId !== config.registrationId
     ) {
       throw new CliCoreError({
         code: "runner_job_not_waiting",
@@ -335,16 +350,16 @@ export class LocalRunnerManager {
     return {
       approved: true,
       jobId,
-      kind: state.currentJob.kind,
-      workIdentifier: state.currentJob.workIdentifier,
-      intakeId: state.currentJob.intakeId,
+      kind: job.kind,
+      workIdentifier: job.workIdentifier,
+      intakeId: job.intakeId,
     };
   }
 
   async configureApproval(approvalMode: RunnerApprovalMode) {
     const config = await this.#readConfig(true);
     const state = await this.#readState();
-    if (state?.currentJob) {
+    if (state?.currentJobs.length) {
       throw new CliCoreError({
         code: "runner_busy",
         message: "Wait for the current runner job to finish before changing automatic-start approval.",
@@ -371,11 +386,12 @@ export class LocalRunnerManager {
         ...this.#runtime,
       });
       await this.#writeState({
-        schemaVersion: 1,
+        schemaVersion: 2,
         status: "starting",
         projectRef: this.#projectRef,
         registrationId: config.registrationId,
         version: config.version,
+        currentJobs: [],
         updatedAt: now,
       });
       return {
@@ -402,11 +418,12 @@ export class LocalRunnerManager {
     const now = new Date(this.#now()).toISOString();
     await this.#writeConfig({ ...config, enabled: false, updatedAt: now });
     await this.#writeState({
-      schemaVersion: 1,
+      schemaVersion: 2,
       status: "disabled",
       projectRef: this.#projectRef,
       registrationId: config.registrationId,
       version: config.version,
+      currentJobs: [],
       updatedAt: now,
     });
     return { disabled: true, service };
@@ -433,19 +450,19 @@ export class LocalRunnerManager {
         config.environmentPath,
       )?.discardRegistration?.(config.registrationId);
     }
-    if (state?.currentJob) {
+    for (const job of state?.currentJobs ?? []) {
       await this.#adapter?.(
-        state.currentJob.harness,
-        config.executablePaths[state.currentJob.harness],
+        job.harness,
+        config.executablePaths[job.harness],
         config.environmentPath,
       )?.discardSession?.({
         repositoryRoot: config.repositoryRoot,
         registrationId: config.registrationId,
-        jobId: state.currentJob.id,
+        jobId: job.id,
       });
       await Promise.all([
-        this.#store.delete(approvalKey(config.projectRef, state.currentJob.id)),
-        this.#store.delete(resultKey(config.projectRef, state.currentJob.id)),
+        this.#store.delete(approvalKey(config.projectRef, job.id)),
+        this.#store.delete(resultKey(config.projectRef, job.id)),
       ]);
     }
     await this.#removeLogs(config.projectRef);
@@ -484,50 +501,109 @@ export class LocalRunnerManager {
       config.updatedAt = new Date(this.#now()).toISOString();
       await this.#writeConfig(config);
     }
-    await this.#writeState(this.#state(config, "starting"));
+    if (config.version !== RUNNER_VERSION) {
+      config.version = RUNNER_VERSION;
+      config.updatedAt = new Date(this.#now()).toISOString();
+      await this.#writeConfig(config);
+    }
+    const workspaceManager = new RunnerWorkspaceManager({
+      repositoryRoot: config.repositoryRoot,
+      configDirectory: this.#configDirectory,
+      projectRef: config.projectRef,
+      environmentPath: config.environmentPath,
+    });
+    await this.#publishState(config, "starting");
     let failureAttempt = 0;
+    const workers = new Map<string, Promise<void>>();
     while (!signal?.aborted) {
       try {
-        await this.#writeState(this.#state(config, "waiting", undefined, {
+        await this.#publishState(config, workers.size > 0 ? "running" : "waiting", {
           lastSeenAt: new Date(this.#now()).toISOString(),
-        }));
+        });
         const result = await this.#api.runnerWait({
           idempotencyKey: randomUUID(),
           registrationId: config.registrationId,
           token: config.token,
-          waitSeconds: 20,
+          waitSeconds: workers.size === 0 ? 20 : 0,
           platform: config.platform,
           version: config.version,
           harnesses: config.harnesses,
           approvalMode: config.approvalMode,
+          activeJobIds: [...workers.keys()],
         }, { signal });
         failureAttempt = 0;
-        if (result.job) await this.#handleJob(config, result.job, signal);
+        if (result.job && !workers.has(result.job.id)) {
+          this.#activeJobs.set(result.job.id, { job: result.job });
+          const worker = this.#runJob(config, result.job, workspaceManager, signal)
+            .finally(async () => {
+              workers.delete(result.job!.id);
+              this.#activeJobs.delete(result.job!.id);
+              await this.#publishState(config, workers.size > 0 ? "running" : "waiting");
+            });
+          workers.set(result.job.id, worker);
+          continue;
+        }
+        if (workers.size > 0) {
+          await Promise.race([
+            ...workers.values(),
+            abortableSleep(250, signal),
+          ]).catch(() => undefined);
+        }
       } catch (error) {
         if (signal?.aborted || isCancellation(error)) break;
         failureAttempt += 1;
         const code = safeErrorCode(error);
-        await this.#writeState(this.#state(config, "error", undefined, {
+        await this.#publishState(config, "error", {
           lastErrorCode: code,
-        }));
+        });
         if (code === "unauthorized" || code === "forbidden" || code === "insufficient_scope") {
-          return { stopped: true };
+          break;
         }
         const delay = backoffMilliseconds(failureAttempt, this.#random);
         await this.#sleep(delay, signal).catch(() => undefined);
       }
     }
-    await this.#writeState(this.#state(config, "stopped"));
+    await Promise.allSettled(workers.values());
+    await this.#publishState(config, "stopped");
     return { stopped: true };
   }
 
-  async #handleJob(config: RunnerConfig, initialJob: RunnerJob, signal?: AbortSignal) {
+  async #runJob(
+    config: RunnerConfig,
+    initialJob: RunnerJob,
+    workspaceManager: RunnerWorkspaceManager,
+    signal?: AbortSignal,
+  ) {
+    try {
+      await this.#handleJob(config, initialJob, workspaceManager, signal);
+    } catch (error) {
+      if (signal?.aborted || isCancellation(error)) return;
+      const current = this.#activeJobs.get(initialJob.id)?.job;
+      if (current && await this.#readPendingResult(config, current)) return;
+      if (current && !["cancelled", "failed", "completed", "expired"].includes(current.state)) {
+        const code = safeErrorCode(error);
+        await this.#updateJob(config, current, "failed", {
+          safeCode: code === "worktree_setup_failed" ? code : "harness_failed",
+          safeSummary: "The local runner could not complete this job. Review the owner-only runner log.",
+        }, signal).catch(() => undefined);
+      }
+    }
+  }
+
+  async #handleJob(
+    config: RunnerConfig,
+    initialJob: RunnerJob,
+    workspaceManager: RunnerWorkspaceManager,
+    signal?: AbortSignal,
+  ) {
     let job = initialJob;
     if (job.state === "cancel_requested") {
       await this.#updateJob(config, job, "cancelled", { safeCode: "cancelled_before_start" }, signal);
       return;
     }
     const recovering = job.state === "running" || job.state === "blocked";
+    let workspace = recovering ? await workspaceManager.prepare(job) : undefined;
+    if (workspace) this.#activeJobs.set(job.id, { job, workspace });
     if (recovering) {
       const pending = await this.#readPendingResult(config, job);
       if (pending) {
@@ -538,10 +614,11 @@ export class LocalRunnerManager {
           config.executablePaths[job.harness],
           config.environmentPath,
         )?.discardSession?.({
-          repositoryRoot: config.repositoryRoot,
+          repositoryRoot: workspace!.repositoryRoot,
           registrationId: config.registrationId,
           jobId: job.id,
         });
+        if (pending.outcome === "completed") await workspaceManager.cleanup(workspace!);
         return;
       }
     }
@@ -566,17 +643,18 @@ export class LocalRunnerManager {
           config.executablePaths[job.harness],
           config.environmentPath,
         )?.discardSession?.({
-          repositoryRoot: config.repositoryRoot,
+          repositoryRoot: workspace!.repositoryRoot,
           registrationId: config.registrationId,
           jobId: job.id,
         });
+        await workspaceManager.cleanup(workspace!);
         return;
       }
       const waitingForAttention = job.kind === "work"
         ? "openAttention" in target && Boolean(target.openAttention)
         : "hasOpenAttention" in target && Boolean(target.hasOpenAttention);
       if (waitingForAttention) {
-        await this.#writeState(this.#state(config, "blocked", job));
+        await this.#recordJob(config, job, workspace);
         await this.#sleep(15_000, signal);
         return;
       }
@@ -588,17 +666,6 @@ export class LocalRunnerManager {
     if (job.state === "awaiting_local_approval") {
       job = await this.#awaitApproval(config, job, signal);
       if (job.state === "cancelled" || job.state === "expired") return;
-    }
-    if (
-      job.state === "delivered" &&
-      config.approvalMode === "automatic" &&
-      !(await repositoryIsClean(config.repositoryRoot, config.environmentPath))
-    ) {
-      await this.#updateJob(config, job, "failed", {
-        safeCode: "dirty_repository",
-        safeSummary: "Automatic execution requires a clean repository. Review local changes or use ask-before-run mode.",
-      }, signal);
-      return;
     }
     if (job.state === "delivered") {
       job = await this.#updateJob(config, job, "starting", {}, signal);
@@ -614,6 +681,8 @@ export class LocalRunnerManager {
       }, signal);
       return;
     }
+    workspace ??= await workspaceManager.prepare(job);
+    this.#activeJobs.set(job.id, { job, workspace });
     const adapter = this.#adapter?.(
       job.harness,
       config.executablePaths[job.harness],
@@ -627,7 +696,7 @@ export class LocalRunnerManager {
       return;
     }
     if (recovering && !(await adapter.canResume?.({
-      repositoryRoot: config.repositoryRoot,
+      repositoryRoot: workspace.repositoryRoot,
       registrationId: config.registrationId,
       jobId: job.id,
     }))) {
@@ -642,15 +711,17 @@ export class LocalRunnerManager {
     const relayAbort = () => controller.abort(signal?.reason);
     signal?.addEventListener("abort", relayAbort, { once: true });
     let current = await this.#updateJob(config, job, "running", {}, signal);
-    await this.#writeState(this.#state(config, "running", current));
+    await this.#recordJob(config, current, workspace);
     let executionFinished = false;
     const execution = adapter.execute({
-      repositoryRoot: config.repositoryRoot,
+      repositoryRoot: workspace.repositoryRoot,
       registrationId: config.registrationId,
       jobId: current.id,
       kind: current.kind,
       workIdentifier: current.workIdentifier,
       intakeId: current.intakeId,
+      worktreeName: workspace.worktreeName,
+      branch: workspace.branch,
       signal: controller.signal,
       log: (chunk) => log.append(chunk),
     }).then(
@@ -689,7 +760,7 @@ export class LocalRunnerManager {
               safeSummary: "The agent is waiting for a response in dongo.",
               sessionReferencePresent: settled.value.sessionReferencePresent,
             }, signal);
-            await this.#writeState(this.#state(config, "blocked", current));
+            await this.#recordJob(config, current, workspace);
             return;
           }
           const targetCompleted = current.kind === "work"
@@ -723,10 +794,11 @@ export class LocalRunnerManager {
           await this.#updateJob(config, current, state, pending, signal);
           await this.#store.delete(resultKey(config.projectRef, current.id));
           await adapter.discardSession?.({
-            repositoryRoot: config.repositoryRoot,
+            repositoryRoot: workspace.repositoryRoot,
             registrationId: config.registrationId,
             jobId: current.id,
           });
+          if (state === "completed") await workspaceManager.cleanup(workspace);
           return;
         }
         const polled = await this.#api.runnerWait({
@@ -738,6 +810,7 @@ export class LocalRunnerManager {
           version: config.version,
           harnesses: config.harnesses,
           approvalMode: config.approvalMode,
+          inspectJobId: current.id,
         }, { signal });
         if (!polled.job || polled.job.id !== current.id) {
           controller.abort(new Error("runner job lease was lost"));
@@ -749,6 +822,11 @@ export class LocalRunnerManager {
           controller.abort(new Error("runner job cancelled"));
           await execution.catch(() => undefined);
           await this.#updateJob(config, current, "cancelled", { safeCode: "user_cancelled" }, signal);
+          return;
+        }
+        if (["cancelled", "failed", "completed", "expired"].includes(current.state)) {
+          controller.abort(new Error("runner job is no longer active"));
+          await execution.catch(() => undefined);
           return;
         }
         current = await this.#updateJob(config, current, "running", {}, signal);
@@ -764,7 +842,7 @@ export class LocalRunnerManager {
 
   async #awaitApproval(config: RunnerConfig, initial: RunnerJob, signal?: AbortSignal) {
     let job = initial;
-    await this.#writeState(this.#state(config, "awaiting_local_approval", job));
+    await this.#recordJob(config, job);
     let interval = 2_000;
     while (!signal?.aborted) {
       const approval = await this.#store.get(approvalKey(config.projectRef, job.id));
@@ -783,6 +861,7 @@ export class LocalRunnerManager {
         version: config.version,
         harnesses: config.harnesses,
         approvalMode: config.approvalMode,
+        inspectJobId: job.id,
       }, { signal });
       if (!polled.job || polled.job.id !== job.id) {
         throw new CliCoreError({ code: "runner_lease_lost", message: "Runner approval job was lost.", exitCode: 6 });
@@ -791,8 +870,8 @@ export class LocalRunnerManager {
       if (job.state === "cancel_requested") {
         return await this.#updateJob(config, job, "cancelled", { safeCode: "user_cancelled" }, signal);
       }
-      if (job.state === "expired") return job;
-      await this.#writeState(this.#state(config, "awaiting_local_approval", job));
+      if (["cancelled", "failed", "completed", "expired"].includes(job.state)) return job;
+      await this.#recordJob(config, job);
     }
     throw new CliCoreError({ code: "cancelled", message: "Runner approval wait was cancelled.", exitCode: 130 });
   }
@@ -808,7 +887,7 @@ export class LocalRunnerManager {
     },
     signal?: AbortSignal,
   ) {
-    return await this.#api.runnerUpdateJob({
+    const updated = await this.#api.runnerUpdateJob({
       idempotencyKey: randomUUID(),
       registrationId: config.registrationId,
       token: config.token,
@@ -818,21 +897,28 @@ export class LocalRunnerManager {
       leaseSeconds: state === "starting" || state === "running" ? 90 : undefined,
       ...detail,
     }, { signal });
+    const active = this.#activeJobs.get(job.id);
+    if (active) this.#activeJobs.set(job.id, { ...active, job: updated });
+    return updated;
   }
 
-  #state(
+  async #recordJob(
+    config: RunnerConfig,
+    job: RunnerJob,
+    workspace?: RunnerWorkspace,
+  ) {
+    const active = this.#activeJobs.get(job.id);
+    this.#activeJobs.set(job.id, { job, workspace: workspace ?? active?.workspace });
+    await this.#publishState(config, job.state === "blocked" ? "blocked" : job.state === "awaiting_local_approval" ? "awaiting_local_approval" : "running");
+  }
+
+  async #publishState(
     config: RunnerConfig,
     status: RunnerLocalState["status"],
-    job?: RunnerJob,
     extra: Pick<RunnerLocalState, "lastSeenAt" | "lastErrorCode"> = {},
-  ): RunnerLocalState {
-    return {
-      schemaVersion: 1,
-      status,
-      projectRef: config.projectRef,
-      registrationId: config.registrationId,
-      version: config.version,
-      currentJob: job ? {
+  ) {
+    const write = async () => {
+      const currentJobs = [...this.#activeJobs.values()].map(({ job, workspace }) => ({
         id: job.id,
         kind: job.kind,
         workIdentifier: job.workIdentifier,
@@ -840,10 +926,23 @@ export class LocalRunnerManager {
         harness: job.harness,
         state: job.state,
         revision: job.revision,
-      } : undefined,
-      ...extra,
-      updatedAt: new Date(this.#now()).toISOString(),
+        worktreeName: workspace?.worktreeName,
+        branch: workspace?.branch,
+      }));
+      await this.#writeState({
+        schemaVersion: 2,
+        status,
+        projectRef: config.projectRef,
+        registrationId: config.registrationId,
+        version: config.version,
+        currentJob: currentJobs.length === 1 ? currentJobs[0] : undefined,
+        currentJobs,
+        ...extra,
+        updatedAt: new Date(this.#now()).toISOString(),
+      });
     };
+    this.#stateWrite = this.#stateWrite.then(write, write);
+    await this.#stateWrite;
   }
 
   async #readConfig(required: true): Promise<RunnerConfig>;
@@ -867,10 +966,17 @@ export class LocalRunnerManager {
     const raw = await this.#store.get(stateKey(this.#projectRef));
     if (!raw) return undefined;
     try {
-      const value = JSON.parse(raw) as RunnerLocalState;
-      return value.schemaVersion === 1 && value.projectRef === this.#projectRef
-        ? value
-        : undefined;
+      const value = JSON.parse(raw) as RunnerLocalState | (Omit<RunnerLocalState, "schemaVersion" | "currentJobs"> & { schemaVersion: 1 });
+      if (value.projectRef !== this.#projectRef) return undefined;
+      if (value.schemaVersion === 2 && Array.isArray(value.currentJobs)) return value;
+      if (value.schemaVersion === 1) {
+        return {
+          ...value,
+          schemaVersion: 2,
+          currentJobs: value.currentJob ? [value.currentJob] : [],
+        };
+      }
+      return undefined;
     } catch {
       return undefined;
     }
@@ -1165,28 +1271,6 @@ function assertSafeRepositoryIdentityPaths(
     (!gitInfo.isDirectory() && !gitInfo.isFile())
   ) {
     throw new CliCoreError({ code: "unsafe_path", message: "Runner repository Git metadata is not safe.", exitCode: 4 });
-  }
-}
-
-async function repositoryIsClean(repositoryRoot: string, environmentPath: string): Promise<boolean> {
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["-C", repositoryRoot, "status", "--porcelain=v1", "-z", "--untracked-files=normal"],
-      {
-        encoding: "buffer",
-        env: sanitizedChildEnvironment({ PATH: environmentPath }),
-        maxBuffer: 1 * 1_024 * 1_024,
-        timeout: 10_000,
-      },
-    );
-    return stdout.byteLength === 0;
-  } catch {
-    throw new CliCoreError({
-      code: "unsafe_repository",
-      message: "The approved repository could not be checked safely.",
-      exitCode: 4,
-    });
   }
 }
 

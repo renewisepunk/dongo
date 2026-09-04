@@ -376,7 +376,30 @@ describe("operation registry", () => {
       version: "0.1.0",
       harnesses: ["codex"],
       approvalMode: "ask",
+      activeJobIds: ["job-1", "job-2"],
     }).success).toBe(true);
+    expect(operationRegistry.runner_wait.inputSchema.safeParse({
+      idempotencyKey: "runner-inspect-1",
+      registrationId: "registration-1",
+      token,
+      waitSeconds: 0,
+      platform: "darwin",
+      version: "0.1.0",
+      harnesses: ["codex"],
+      approvalMode: "automatic",
+      inspectJobId: "job-1",
+    }).success).toBe(true);
+    expect(operationRegistry.runner_wait.inputSchema.safeParse({
+      idempotencyKey: "runner-invalid-mode",
+      registrationId: "registration-1",
+      token,
+      platform: "darwin",
+      version: "0.1.0",
+      harnesses: ["codex"],
+      approvalMode: "automatic",
+      activeJobIds: [],
+      inspectJobId: "job-1",
+    }).success).toBe(false);
     const runnerJob = {
       id: "job-1",
       projectId: "project-1",

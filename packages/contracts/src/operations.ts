@@ -100,7 +100,7 @@ export type OperationMap = {
   runner_register: { input: MutationInput & { token: string; label: string; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic" }; output: RunnerRegistration };
   runner_rotate: { input: MutationInput & { registrationId: string; token: string; replacementToken: string }; output: RunnerRegistration };
   runner_revoke: { input: MutationInput & { registrationId: string; token: string }; output: RunnerRegistration };
-  runner_wait: { input: MutationInput & { registrationId: string; token: string; waitSeconds?: number; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic" }; output: RunnerWait };
+  runner_wait: { input: MutationInput & { registrationId: string; token: string; waitSeconds?: number; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic"; activeJobIds?: string[]; inspectJobId?: string }; output: RunnerWait };
   runner_update_job: { input: MutationInput & { registrationId: string; token: string; jobId: string; expectedRevision: number; state: RunnerJob["state"]; leaseSeconds?: number; safeCode?: string; safeMessage?: string; safeSummary?: string; sessionReferencePresent?: boolean }; output: RunnerJob };
 };
 
@@ -361,7 +361,24 @@ export const operationRegistry = {
       version: z.string().trim().min(1).max(64),
       harnesses: z.array(runnerHarnessSchema).min(1).max(2),
       approvalMode: runnerApprovalModeSchema,
-    }).strict(), runnerWaitSchema, false, false,
+      activeJobIds: z.array(identifier).max(8).optional(),
+      inspectJobId: identifier.optional(),
+    }).strict().superRefine((input, context) => {
+      if (input.activeJobIds !== undefined && input.inspectJobId !== undefined) {
+        context.addIssue({
+          code: "custom",
+          message: "activeJobIds and inspectJobId are mutually exclusive",
+          path: ["inspectJobId"],
+        });
+      }
+      if (input.inspectJobId !== undefined && (input.waitSeconds ?? 0) !== 0) {
+        context.addIssue({
+          code: "custom",
+          message: "inspectJobId requires waitSeconds 0",
+          path: ["waitSeconds"],
+        });
+      }
+    }), runnerWaitSchema, false, false,
   ),
   runner_update_job: spec(
     "runner_update_job", "POST", write, false, true,

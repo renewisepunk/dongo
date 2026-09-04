@@ -136,6 +136,7 @@ test("runner waits keep credentials in a bounded POST body", async () => {
     version: "0.1.0",
     harnesses: ["codex" as const],
     approvalMode: "ask" as const,
+    activeJobIds: ["job-1"],
   };
   await client.runnerWait(input);
   assert.equal(request?.method, "POST");

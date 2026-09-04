@@ -168,7 +168,7 @@ test("finish help exposes host-verified integration and release preconditions wi
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.2.8\n");
+  assert.equal(human.values().stdout, "dongo 0.2.9\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -176,7 +176,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.2.8" },
+    data: { version: "0.2.9" },
   });
   assert.equal(json.values().stderr, "");
 });
@@ -908,7 +908,7 @@ test("runner commands explain outcomes without dumping implementation details", 
     approvalMode: "ask",
     servicePlatform: "darwin",
     state: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       status: "awaiting_local_approval",
       projectRef: "project_internal",
       registrationId: "registration_internal",
@@ -918,9 +918,19 @@ test("runner commands explain outcomes without dumping implementation details", 
         kind: "work",
         workIdentifier: "dong062",
         harness: "codex",
-        state: "delivered",
+        state: "awaiting_local_approval",
         revision: 1,
       },
+      currentJobs: [{
+        id: "job_actionable",
+        kind: "work",
+        workIdentifier: "dong062",
+        harness: "codex",
+        state: "awaiting_local_approval",
+        revision: 1,
+        worktreeName: "dong062-12345678",
+        branch: "codex/dongo-runner-dong062-123456789abc",
+      }],
       updatedAt: "2026-09-03T18:00:00.000Z",
     },
   };
@@ -961,7 +971,7 @@ test("runner commands explain outcomes without dumping implementation details", 
   assert.equal(install.values().stdout, [
     "dongo runner is ready.",
     "",
-    "This computer can now run queued dongo work with Codex in this repository—even after you close this terminal.",
+    "This computer can now run queued dongo work with Codex in this repository—even after you close this terminal. Eligible jobs run concurrently in separate Git worktrees, up to the project safety limit.",
     "You’ll be asked on this computer before an agent starts working.",
     "macOS may show “Background Items Added” for “dongo.” That is this user-level dongo runner, not an unknown Node.js service.",
     "Manage it in System Settings → General → Login Items & Extensions, or use dongo runner disable and dongo runner remove.",
@@ -979,7 +989,7 @@ test("runner commands explain outcomes without dumping implementation details", 
     serviceFactory: () => service as never,
   }), 0);
   assert.match(status.values().stdout, /^dongo runner is on\./u);
-  assert.match(status.values().stdout, /A job for dong062 is waiting for your approval\./u);
+  assert.match(status.values().stdout, /1 agent job is active in separate worktrees \(1 awaiting local approval\)\./u);
   assert.match(status.values().stdout, /dongo runner approve --job-id job_actionable/u);
   assert.match(status.values().stdout, /Background Items Added/u);
   assert.match(status.values().stdout, /System Settings → General → Login Items & Extensions/u);
@@ -994,7 +1004,7 @@ test("runner commands explain outcomes without dumping implementation details", 
   assert.equal(configure.values().stdout, [
     "Automatic starts are allowed for this repository.",
     "",
-    "Codex can now start without a separate approval when this repository is clean.",
+    "Codex can now start without a separate approval in an isolated Git worktree.",
     "To receive Inbox items, return to Project settings → Local runner and turn on automatic Inbox processing.",
     "",
   ].join("\n"));
