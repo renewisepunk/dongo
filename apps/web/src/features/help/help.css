@@ -6,15 +6,6 @@
   background: var(--bg);
 }
 
-.help-header__path {
-  overflow: hidden;
-  color: var(--text-quiet);
-  font-family: var(--mono);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .help-scroll {
   flex: 1;
   overflow: auto;
@@ -240,7 +231,6 @@
   .shortcut-reference__description {
     grid-column: 2;
   }
-  .help-header__path { display: none; }
 }
 
 @media (max-width: 390px) {

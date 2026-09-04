@@ -1,6 +1,7 @@
 import { A, useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Brand } from "../../components/Brand";
+import { ProjectBreadcrumbs } from "../../components/ProjectBreadcrumbs";
 import { SignOutButton } from "../../components/SignOutButton";
 import { ChangelogPublisher, type ChangelogPublisherProps } from "./ChangelogPublisher";
 import { dongoPublicOrigin } from "../../lib/auth-config";
@@ -592,14 +593,21 @@ export function ProjectSettings(props: ProjectSettingsProps) {
 
   return (
     <main class="settings-page">
-      <header class="settings-header">
+      <header class="settings-header project-header">
         <Brand compact href={project()?.archivedAt ? "/open" : `/app/${props.orgSlug}/${props.projectSlug}`} />
-        <div class="settings-header__title">/ {props.projectSlug} / settings</div>
-        <div style={{ flex: 1 }} />
-        <Show when={!project()?.archivedAt}>
-          <A class="button button--quiet" href={`/app/${props.orgSlug}/${props.projectSlug}`}>← Overview</A>
-        </Show>
-        <SignOutButton />
+        <ProjectBreadcrumbs
+          orgSlug={props.orgSlug}
+          projectSlug={props.projectSlug}
+          projectName={project()?.name ?? props.projectSlug}
+          current="settings"
+          projectHref={project()?.archivedAt ? "/open" : undefined}
+        />
+        <div class="project-header__actions">
+          <Show when={!project()?.archivedAt}>
+            <A class="button button--quiet" href={`/app/${props.orgSlug}/${props.projectSlug}`}>← Overview</A>
+          </Show>
+          <SignOutButton />
+        </div>
       </header>
       <div class="settings-layout">
         <nav class="settings-nav" aria-label="Project settings">

@@ -483,7 +483,7 @@ function fixtureAdministration() {
   const freePlan = memberRole || freeLimitOwner || oauthScenario() === "capacity-override";
   return {
     project: {
-      name: "dongo",
+      name: oauthScenario() === "breadcrumb-project-name" ? "R&D / Launch" : "dongo",
       slug: "dongo",
       repositoryUrl: "https://github.com/renewisepunk/dongo",
       identifierPrefix: "DONGO",
@@ -814,6 +814,7 @@ const completedDependencies = {
     }
     let listCalls = 0;
     return {
+      projectName: oauthScenario() === "breadcrumb-project-name" ? "R&D / Launch" : "dongo",
       async listCompleted(cursor: string | null = null) {
         listCalls += 1;
         if (oauthScenario() === "completed-retry" && listCalls === 1) {
@@ -831,6 +832,18 @@ const completedDependencies = {
       },
       async close() {
         document.documentElement.dataset.fixtureCompletedClosed = "true";
+      },
+    };
+  },
+};
+
+const helpDependencies = {
+  async connect(orgSlug: string, projectSlug: string) {
+    document.documentElement.dataset.fixtureHelpTarget = `${orgSlug}/${projectSlug}`;
+    return {
+      projectName: oauthScenario() === "breadcrumb-project-name" ? "R&D / Launch" : "dongo",
+      async close() {
+        document.documentElement.dataset.fixtureHelpClosed = "true";
       },
     };
   },
@@ -1168,7 +1181,13 @@ render(
         />
         <Route
           path="/app/:orgSlug/:projectSlug/help"
-          component={() => <HelpGuide orgSlug="fixture-studio" projectSlug="dongo" />}
+          component={() => (
+            <HelpGuide
+              orgSlug="fixture-studio"
+              projectSlug="dongo"
+              connect={helpDependencies.connect}
+            />
+          )}
         />
         <Route
           path="/app/:orgSlug/:projectSlug/ideas"
