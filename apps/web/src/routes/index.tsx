@@ -46,10 +46,10 @@ export default function IndexRoute(props: IndexRouteProps = {}) {
 
   return (
     <>
-      <PageTitle value={dongoPageTitle("Ideas into visible agent work")} />
+      <PageTitle value={dongoPageTitle("Agent work, visible")} />
       <Meta
         name="description"
-        content="Capture ideas, work with coding agents, and keep progress and decisions visible."
+        content="See what your coding agents are working on, what shipped, and when they need you — from your phone or browser."
       />
       <MarketingHome />
     </>
