@@ -476,6 +476,29 @@ Exact-job zero-second polls retain the ordinary timeout.
 timeout on its path, with bounded completion margin. A successful empty wait is
 normal liveness, not a service failure.
 
+### RC14 — process-tree diagnostics crossed the secret-output boundary
+
+**Symptom.** During follow-up diagnosis, a macOS `pgrep -fl` process-tree check
+included a live provider credential in the child process's rendered command
+string. The value was not written to either repository or committed, but it
+entered an internal task trace and therefore required rotation.
+
+**Mechanism.** A release harness may launch a child with credential-bearing
+environment assignments represented in the process command string. Tools and
+flags that promise a “full” process listing report that string verbatim. A
+process-tree query that appears read-only can therefore cross the same secret
+boundary as shell tracing or an environment dump.
+
+**Correction.** The active release was stopped at a safe boundary and durable
+owner Attention recorded the exact rotation and verification path without the
+credential value. Future diagnostics use an explicit allow-list of PID, PPID,
+process group, state, elapsed time, and executable name only. Full argv,
+environment, and broad process listings are prohibited during secret-bearing
+release work.
+
+**Invariant.** Operational process inspection is schema-bound and redacted.
+“Read-only” does not make argv or environment safe to retain.
+
 ## Systemic causes
 
 The individual defects shared five organizational causes:
@@ -531,6 +554,8 @@ These invariants are release gates, not documentation suggestions:
     pause the Work until the invariant violation is fixed.
 15. Every advertised long-poll duration is shorter than its API and internal
     gateway budgets, and an empty maximum-duration wait completes successfully.
+16. Release diagnostics never retain full process argv or environment; an
+    allow-listed process identity view is the only accepted evidence.
 
 ## Safe operator response
 
@@ -610,6 +635,7 @@ These invariants are release gates, not documentation suggestions:
 | Restart during active work | Exact jobs recover or fail once; no duplicates and no ownership drift | Restart amplification |
 | Serial old client | Additive protocol preserves one-job behavior | Upgrade breakage |
 | Empty 20-second runner wait | API and Convex complete normally without incrementing runner failures | False `temporarily_unavailable` recovery loop |
+| Secret-bearing release process | PID/PPID/group/state/executable-only inspection; no argv or environment | Credential disclosure through diagnostic logs |
 
 The matrix must run on macOS and Linux where service behavior differs, and at
 least the launchd, Codex sandbox, Chrome extension, and live auth rows require
