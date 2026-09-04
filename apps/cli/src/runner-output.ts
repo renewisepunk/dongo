@@ -1,10 +1,10 @@
-import type { CoreService, RunnerLocalState } from "@dongo/cli-core";
+import type { CoreService, RunnerBrowserReviewMode, RunnerLocalState } from "@dongo/cli-core";
 import type { RunnerApprovalMode, RunnerHarness } from "@dongo/contracts";
 
 type RunnerInstallResult = Awaited<ReturnType<CoreService["runnerInstall"]>>;
 type RunnerStatusResult = Awaited<ReturnType<CoreService["runnerStatus"]>>;
 type RunnerApproveResult = Awaited<ReturnType<CoreService["runnerApprove"]>>;
-type RunnerConfigureResult = Awaited<ReturnType<CoreService["runnerConfigureApproval"]>>;
+type RunnerConfigureResult = Awaited<ReturnType<CoreService["runnerConfigure"]>>;
 
 function harnessLabel(harness: RunnerHarness): string {
   return harness === "codex" ? "Codex" : "Claude Code";
@@ -24,6 +24,12 @@ function approvalExplanation(mode: RunnerApprovalMode | undefined): string {
   return mode === "automatic"
     ? "Your agents can start automatically in isolated Git worktrees."
     : "You’ll be asked on this computer before an agent starts working.";
+}
+
+function browserReviewExplanation(mode: RunnerBrowserReviewMode | undefined): string {
+  return mode === "read_only"
+    ? "Read-only browser self-review is on. Codex may inspect this app in your existing signed-in browser session, but may not change data, access unrelated tabs, or bypass browser safety decisions."
+    : "Browser self-review is off. An agent will ask you when live browser verification is required.";
 }
 
 function backgroundServiceExplanation(platform: "darwin" | "linux" | undefined): string[] {
@@ -85,6 +91,7 @@ export function renderRunnerInstallOutput(result: RunnerInstallResult): string {
     "",
     `This computer can now run queued dongo work with ${agentLabel(result.harnesses)} in this repository—even after you close this terminal. Eligible jobs run concurrently in separate Git worktrees, up to the project safety limit.`,
     approvalExplanation(result.approvalMode),
+    browserReviewExplanation(result.browserReviewMode),
     ...backgroundServiceExplanation(result.registration.platform),
     result.approvalMode === "automatic"
       ? "To receive new Inbox items automatically, finish setup in Project settings → Local runner."
@@ -110,6 +117,7 @@ export function renderRunnerStatusOutput(result: RunnerStatusResult): string {
     "",
     `This computer is set up to work on issues with ${agentLabel(result.harnesses)}.`,
     approvalExplanation(result.approvalMode),
+    browserReviewExplanation(result.browserReviewMode),
     ...backgroundServiceExplanation(result.servicePlatform),
     stateExplanation(result.state),
     result.approvalMode === "automatic"
@@ -128,22 +136,16 @@ export function renderRunnerApproveOutput(result: RunnerApproveResult): string {
 }
 
 export function renderRunnerConfigureOutput(result: RunnerConfigureResult): string {
-  if (result.approvalMode === "automatic") {
-    return [
-      result.changed
-        ? "Automatic starts are allowed for this repository."
-        : "Automatic starts were already allowed for this repository.",
-      "",
-      `${agentLabel(result.harnesses)} can now start without a separate approval in an isolated Git worktree.`,
-      "To receive Inbox items, return to Project settings → Local runner and turn on automatic Inbox processing.",
-    ].join("\n") + "\n";
-  }
   return [
     result.changed
-      ? "Local approval is now required before every runner job."
-      : "Local approval was already required before every runner job.",
+      ? "dongo runner settings were updated."
+      : "dongo runner settings were already configured this way.",
     "",
-    "Automatic Inbox processing is off for this computer.",
+    approvalExplanation(result.approvalMode),
+    browserReviewExplanation(result.browserReviewMode),
+    result.approvalMode === "automatic"
+      ? `${agentLabel(result.harnesses)} can start in isolated Git worktrees. Confirm Inbox routing in Project settings → Local runner.`
+      : "Automatic Inbox processing is off for this computer.",
   ].join("\n") + "\n";
 }
 

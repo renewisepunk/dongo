@@ -225,13 +225,16 @@ Each registration has an owner-only local record containing:
 - the exact repository root and repository identity captured during approval;
 - the selected `codex` or `claude` executable resolved locally;
 - approval mode, defaulting to `ask`;
+- browser self-review mode, defaulting to `disabled` and limited to local
+  `read_only` authorization for Work jobs;
 - the owner-only parent directory used for isolated runner worktrees;
 - the active job set, including each bounded worktree and branch label;
 - the last exact harness session ID created for each runner job, when available.
 
 Server state may display the locally reported mode but cannot raise its
 privilege. A remote request for automatic execution is ignored; only the local
-record decides. Changing the executable, repository identity, or automatic mode
+record decides. Hosted job data cannot enable browser review or widen its
+scope. Changing the executable, repository identity, automatic mode, or browser review mode
 requires local confirmation and rotates the policy revision.
 
 ## Harness adapters
@@ -267,6 +270,15 @@ allowlist, or a server-provided system prompt. Streaming JSON is parsed with the
 same bounds. The adapter captures the exact `session_id` and uses `--resume
 <id>` only for a later continuation of the same runner job and repository
 identity.
+
+When the local browser self-review mode is `read_only`, the fixed Work prompt
+records the owner's bounded authorization to inspect only the application under
+test in an available existing signed-in browser session. Navigation,
+screenshots, DOM/accessibility inspection, responsive checks, and non-mutating
+interactions are in scope. Intake jobs, unrelated tabs, new sign-ins,
+state-changing submissions, permission grants, and browser-policy bypasses are
+not. The mode is absent from the hosted job contract and defaults to disabled
+for existing configurations.
 
 For both adapters, missing authentication, unsupported versions, local approval
 denial, an unsafe repository, worktree setup failure, or an unavailable
@@ -361,7 +373,8 @@ restored.
   symlink, and response-loss paths pass on clean macOS and Linux environments.
 - Real Codex and Claude Code runs prove new session, exact-ID continuation,
   structured output bounds, local approval, automatic local opt-in, Attention,
-  cancellation, failure, completion, and attribution.
+  disabled and read-only browser self-review, cancellation, failure,
+  completion, and attribution.
 - Offline, reconnect, edge restart, computer restart, duplicate delivery,
   multiple runners, stale lease, dirty repository, unsafe path, and uninstall
   journeys pass without duplicate execution or secret/content disclosure.

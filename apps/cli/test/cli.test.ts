@@ -78,6 +78,7 @@ const fakeService = {
   runnerInstall: async (options: unknown) => ({ installed: true, options }),
   runnerStatus: async () => ({ installed: true, enabled: true }),
   runnerApprove: async (jobId: string) => ({ approved: true, jobId }),
+  runnerConfigure: async (options: unknown) => ({ changed: true, options }),
   runnerDisable: async () => ({ disabled: true }),
   runnerRemove: async () => ({ removed: true }),
   runnerRun: async (projectRef: string) => ({ stopped: true, projectRef }),
@@ -168,7 +169,7 @@ test("finish help exposes host-verified integration and release preconditions wi
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.2.10\n");
+  assert.equal(human.values().stdout, "dongo 0.2.11\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -176,7 +177,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.2.10" },
+    data: { version: "0.2.11" },
   });
   assert.equal(json.values().stderr, "");
 });
@@ -824,9 +825,9 @@ test("runner commands expose explicit local policy and stable JSON", async () =>
       calls.push({ method: "approve", input: jobId });
       return { approved: true, jobId };
     },
-    runnerConfigureApproval: async (approvalMode: string) => {
-      calls.push({ method: "configure", input: approvalMode });
-      return { changed: true, approvalMode, previousApprovalMode: "ask", harnesses: ["codex"] };
+    runnerConfigure: async (input: { approvalMode?: string; browserReviewMode?: string }) => {
+      calls.push({ method: "configure", input });
+      return { changed: true, approvalMode: input.approvalMode ?? "ask", previousApprovalMode: "ask", browserReviewMode: input.browserReviewMode ?? "disabled", previousBrowserReviewMode: "disabled", harnesses: ["codex"] };
     },
   };
   const install = capture();
@@ -839,6 +840,8 @@ test("runner commands expose explicit local policy and stable JSON", async () =>
     "claude",
     "--approval",
     "automatic",
+    "--browser-review",
+    "read-only",
     "--label",
     "Studio Mac",
     "--json",
@@ -849,6 +852,7 @@ test("runner commands expose explicit local policy and stable JSON", async () =>
       label: "Studio Mac",
       harnesses: ["codex", "claude"],
       approvalMode: "automatic",
+      browserReviewMode: "read_only",
     },
   });
   assert.equal(JSON.parse(install.values().stdout).command, "runner install");
@@ -871,7 +875,7 @@ test("runner commands expose explicit local policy and stable JSON", async () =>
     "automatic",
     "--json",
   ], { output: configure.output, serviceFactory: () => service as never }), 0);
-  assert.deepEqual(calls[2], { method: "configure", input: "automatic" });
+  assert.deepEqual(calls[2], { method: "configure", input: { approvalMode: "automatic", browserReviewMode: undefined } });
   assert.equal(JSON.parse(configure.values().stdout).command, "runner configure");
 });
 
@@ -896,6 +900,7 @@ test("runner commands explain outcomes without dumping implementation details", 
     },
     repositoryRoot: "/Users/Workspace/dongo",
     approvalMode: "ask",
+    browserReviewMode: "disabled",
     harnesses: ["codex"],
   };
   const waitingStatus = {
@@ -906,6 +911,7 @@ test("runner commands explain outcomes without dumping implementation details", 
     repositoryRoot: "/Users/Workspace/dongo",
     harnesses: ["codex"],
     approvalMode: "ask",
+    browserReviewMode: "disabled",
     servicePlatform: "darwin",
     state: {
       schemaVersion: 2,
@@ -945,10 +951,12 @@ test("runner commands explain outcomes without dumping implementation details", 
       workIdentifier: "dong062",
       intakeId: undefined,
     }),
-    runnerConfigureApproval: async (approvalMode: "ask" | "automatic") => ({
+    runnerConfigure: async ({ approvalMode, browserReviewMode }: { approvalMode?: "ask" | "automatic"; browserReviewMode?: "disabled" | "read_only" }) => ({
       changed: true,
-      approvalMode,
+      approvalMode: approvalMode ?? "ask",
       previousApprovalMode: approvalMode === "automatic" ? "ask" as const : "automatic" as const,
+      browserReviewMode: browserReviewMode ?? "disabled",
+      previousBrowserReviewMode: "disabled" as const,
       harnesses: ["codex" as const],
     }),
     runnerDisable: async () => ({
@@ -973,6 +981,7 @@ test("runner commands explain outcomes without dumping implementation details", 
     "",
     "This computer can now run queued dongo work with Codex in this repository—even after you close this terminal. Eligible jobs run concurrently in separate Git worktrees, up to the project safety limit.",
     "You’ll be asked on this computer before an agent starts working.",
+    "Browser self-review is off. An agent will ask you when live browser verification is required.",
     "macOS may show “Background Items Added” for “dongo.” That is this user-level dongo runner, not an unknown Node.js service.",
     "Manage it in System Settings → General → Login Items & Extensions, or use dongo runner disable and dongo runner remove.",
     "New Inbox items are not routed here automatically. To enable that, first run: dongo runner configure --approval automatic",
@@ -1002,10 +1011,11 @@ test("runner commands explain outcomes without dumping implementation details", 
     serviceFactory: () => service as never,
   }), 0);
   assert.equal(configure.values().stdout, [
-    "Automatic starts are allowed for this repository.",
+    "dongo runner settings were updated.",
     "",
-    "Codex can now start without a separate approval in an isolated Git worktree.",
-    "To receive Inbox items, return to Project settings → Local runner and turn on automatic Inbox processing.",
+    "Your agents can start automatically in isolated Git worktrees.",
+    "Browser self-review is off. An agent will ask you when live browser verification is required.",
+    "Codex can start in isolated Git worktrees. Confirm Inbox routing in Project settings → Local runner.",
     "",
   ].join("\n"));
 

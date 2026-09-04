@@ -29,6 +29,7 @@ supported harnesses:
 
 ```sh
 dongo runner install --harness codex --label "Studio Mac"
+dongo runner install --harness codex --browser-review read-only --label "Studio Mac"
 dongo runner install --harness codex --harness claude --label "Studio Mac"
 dongo runner status
 ```
@@ -54,6 +55,24 @@ into automatic starts with `--approval automatic`, or change an existing runner
 in place with `dongo runner configure --approval automatic`. The selection is kept in the
 owner-only local configuration and reported to the server for truthful status;
 the server cannot elevate an ask-mode runner to automatic execution.
+
+Browser self-review is a separate local permission and defaults to `disabled`.
+Enable it only from the runner's registered checkout:
+
+```sh
+dongo runner configure --browser-review read-only
+```
+
+This allows Codex Work jobs—not Intake triage—to reuse an available signed-in
+browser session for non-mutating inspection of the application under test. It
+covers navigation, screenshots, DOM and accessibility inspection, responsive
+checks, and other read-only interactions on a job-started local server or the
+repository-documented development and production deployments. It does not
+authorize signing in to another account, reading unrelated tabs, submitting a
+state-changing form, granting browser or site permissions, or bypassing a
+browser safety decision. The setting lives only in owner-readable local runner
+configuration; a hosted job cannot enable or widen it. Disable it with
+`dongo runner configure --browser-review disabled`.
 
 Automatic Inbox processing is a second, project-level opt-in and remains off
 after installation. Runner status and settings must say this explicitly;
@@ -84,8 +103,9 @@ verifies its version and required non-interactive features, and starts work in
 the job's isolated worktree with JSONL output and the `workspace-write`
 sandbox. The fixed instruction is sent over standard input, not exposed in the
 process list. It never uses approval or sandbox bypass flags. The only hosted
-value added to the local instruction is the validated dongo Work or Intake
-identifier.
+values added to the local instruction are the validated dongo Work or Intake
+identifier and, for Work only, the bounded browser self-review authorization
+when the owner explicitly enabled it in local runner configuration.
 
 The adapter records the stable `thread.started` identifier in owner-only local
 storage. After a runner restart it resumes only when that identifier matches
