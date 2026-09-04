@@ -28,13 +28,15 @@ export type AgentReleaseDelivery = Readonly<{
  */
 export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   schemaVersion: 1,
-  sequence: 14,
-  id: "dongo-cli-0.2.12-final",
-  title: "dongo CLI 0.2.12 is available",
+  sequence: 15,
+  id: "dongo-cli-0.2.13-runner-recovery",
+  title: "dongo CLI 0.2.13 is available",
   changes: [
-    "Runners now fill and refill six isolated worktree slots by default, with configurable 1–8 host/project bounds, serial compatibility, exact per-job recovery, and lease/cancel safety.",
-    "Connections self-reconcile across linked worktrees and concurrent connects without repeated browser authorization.",
-    "Opt-in deployment access preflights approved GitHub, Convex, Cloudflare, and npm credentials and redacts job logs.",
+    "Runners now execute and refill up to six isolated jobs with serial-client compatibility and one-attempt lease recovery.",
+    "Exact job-session matching prevents old terminal jobs from tearing down newer Runs.",
+    "Codex worktrees can fetch, commit, and push through one validated Git metadata directory.",
+    "Login services restart after clean exits and disarm safely on removal or terminal authorization loss.",
+    "Deploys now fail before mutation unless the exact Convex target is selected.",
   ],
   hostedMcp: {
     status: "already_current",
@@ -42,9 +44,9 @@ export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   },
   cli: {
     packageName: "@wisepunk/dongo",
-    version: "0.2.12",
+    version: "0.2.13",
     checkCommand: "dongo --version",
-    installCommand: "npm install --global @wisepunk/dongo@0.2.12",
+    installCommand: "npm install --global @wisepunk/dongo@0.2.13",
     consentRequired: true,
   },
 } satisfies AgentReleaseNotice);
