@@ -17,6 +17,7 @@ export interface ProjectMarker {
   projectName: string;
   installationId: string;
   credentialProfile: string;
+  repositoryUrl?: string;
   connectedAt: string;
 }
 
@@ -65,6 +66,7 @@ export async function readProjectMarker(repositoryRoot: string): Promise<Project
       projectName: requireString(record, "projectName"),
       installationId: requireString(record, "installationId"),
       credentialProfile: requireString(record, "credentialProfile"),
+      repositoryUrl: typeof record.repositoryUrl === "string" ? record.repositoryUrl : undefined,
       connectedAt: requireString(record, "connectedAt"),
     };
   } catch (error) {

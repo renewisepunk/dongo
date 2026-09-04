@@ -5,10 +5,23 @@
 Expected flow:
 
 ```sh
-dongo connect --agent-host codex # when Codex MCP should be approved in the same step
 dongo auth status --json
 dongo doctor --json
+# Only when the checks say this repository needs authorization:
+dongo connect --agent-host codex # when Codex MCP should be approved in the same step
+dongo doctor --json
 ```
+
+Do not start with browser authorization. Inspect the binding first. A healthy
+connection is authoritative and `dongo connect` returns it without a new device
+flow. Linked Git worktrees reconcile to the same repository-scoped CLI grant;
+an independent clone or different repository remains a separate trust boundary.
+If another connect is already pending, wait for it: the CLI serializes attempts,
+recovers an abandoned lock, and rechecks marker, credential, project, and
+installation state before deciding whether another approval is necessary. If
+the owning attempt ends without a healthy binding, waiters report that outcome
+without silently starting another approval; inspect status and doctor before an
+explicit retry.
 
 The terminal opens one `verification_uri_complete` link, displays a comparison code, and polls. The browser must show the same code, dongo CLI client, intended account, project, API resource, and requested scopes. Approval is not connection: the terminal reports success only after secure credential storage, repository marker creation, and doctor checks pass.
 
@@ -88,7 +101,7 @@ session ID, reusing a claim, restarting login, or binding another project.
 - `slow_down` must increase the polling interval. Repeated `slow_down` after the client has backed off indicates an authorization-server regression.
 - `access_denied` stores nothing. Confirm the user deliberately denied it, then start a new request if needed.
 - `authorization_expired` stores nothing. Run `dongo connect` again; never reuse the old code.
-- If the browser says Approved but the terminal fails, run `dongo auth status --json` and `dongo doctor --json`. Do not approve a second installation until the first result is understood.
+- If the browser says Approved but the terminal fails, run `dongo auth status --json` and `dongo doctor --json`. Do not approve a second installation until the first result is understood. A cancelled redundant waiter is not evidence that the owning approval failed.
 
 ### Credential-file or marker failure
 

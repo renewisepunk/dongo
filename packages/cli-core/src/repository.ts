@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { lstat } from "node:fs/promises";
+import { lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -38,6 +38,62 @@ export async function findRepositoryRoot(start = process.cwd()): Promise<string>
 export function credentialProfile(productOrigin: string, repositoryRoot: string): string {
   const digest = createHash("sha256").update(productOrigin).update("\0").update(path.resolve(repositoryRoot)).digest("hex");
   return `repo-${digest.slice(0, 32)}`;
+}
+
+/**
+ * Resolve the stable checkout which owns Git's common directory. Linked
+ * worktrees have different top-level paths but the same common Git directory,
+ * so they must share the repository-scoped credential created by the primary
+ * checkout. An unrelated clone has a different common directory and therefore
+ * remains isolated even when it has the same remote URL.
+ */
+export async function canonicalRepositoryRoot(repositoryRoot: string): Promise<string> {
+  const resolvedRoot = await realpath(repositoryRoot);
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["-C", resolvedRoot, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+      { encoding: "utf8", maxBuffer: 4_096, timeout: 5_000 },
+    );
+    const commonDirectory = await realpath(path.resolve(resolvedRoot, stdout.trim()));
+    return path.basename(commonDirectory) === ".git"
+      ? path.dirname(commonDirectory)
+      : resolvedRoot;
+  } catch {
+    return resolvedRoot;
+  }
+}
+
+export async function repositoryCredentialProfiles(
+  productOrigin: string,
+  repositoryRoot: string,
+): Promise<{ preferred: string; accepted: string[]; linked: Array<{ root: string; profile: string }> }> {
+  const [resolvedRoot, canonicalRoot] = await Promise.all([
+    realpath(repositoryRoot),
+    canonicalRepositoryRoot(repositoryRoot),
+  ]);
+  const linkedRoots: string[] = [];
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["-C", resolvedRoot, "worktree", "list", "--porcelain", "-z"],
+      { encoding: "utf8", maxBuffer: 1024 * 1024, timeout: 5_000 },
+    );
+    for (const field of stdout.split("\0")) {
+      if (!field.startsWith("worktree ")) continue;
+      linkedRoots.push(await realpath(field.slice("worktree ".length)));
+    }
+  } catch {
+    linkedRoots.push(resolvedRoot);
+  }
+  const linked = [...new Set([canonicalRoot, resolvedRoot, ...linkedRoots])]
+    .map((root) => ({ root, profile: credentialProfile(productOrigin, root) }));
+  const preferred = credentialProfile(productOrigin, canonicalRoot);
+  return {
+    preferred,
+    accepted: [...new Set(linked.map(({ profile }) => profile))],
+    linked,
+  };
 }
 
 export function repositoryName(repositoryRoot: string): string {

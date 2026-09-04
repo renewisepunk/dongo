@@ -18,6 +18,7 @@ import { fetchAttachmentFile } from "./attachments.ts";
 import type { AttachmentFetchResult } from "./attachments.ts";
 import type { BrowserOpener } from "./browser.ts";
 import { SystemBrowserOpener } from "./browser.ts";
+import { acquireConnectionLock } from "./connection-lock.ts";
 import { DeviceAuthorizationClient } from "./device-auth.ts";
 import type { DeviceAuthorizationEvents, DeviceAuthClock } from "./device-auth.ts";
 import type { DongoEnvironment, EnvironmentConfig } from "./environment.ts";
@@ -26,7 +27,7 @@ import { CliCoreError } from "./errors.ts";
 import { configureIntegration } from "./integrations.ts";
 import type { IntegrationHost, IntegrationResult } from "./integrations.ts";
 import type { ProjectMarker } from "./marker.ts";
-import { readProjectMarker, writeProjectMarker } from "./marker.ts";
+import { markerPath, readProjectMarker, writeProjectMarker } from "./marker.ts";
 import { createRunnerAdapterResolver } from "./runner-adapters.ts";
 import {
   createRunnerStore,
@@ -39,9 +40,9 @@ import {
   type RunnerServiceController,
 } from "./runner-service.ts";
 import {
-  credentialProfile,
   findRepositoryRoot,
   normalizeRepositoryUrl,
+  repositoryCredentialProfiles,
   repositoryOriginUrl,
   suggestedProjectName,
 } from "./repository.ts";
@@ -183,7 +184,13 @@ export class CoreService {
     if (options.repositoryUrl !== undefined && !repositoryUrl) {
       throw new CliCoreError({ code: "validation", message: "--repository-url must be a safe HTTP, HTTPS, or SSH repository URL.", exitCode: 2 });
     }
-    const profile = credentialProfile(environment.productOrigin, repositoryRoot);
+    const profiles = await repositoryCredentialProfiles(environment.productOrigin, repositoryRoot);
+    const connectionLock = await acquireConnectionLock({
+      directory: this.#configDirectory,
+      key: profiles.preferred,
+      signal: options.signal,
+    });
+    try {
     const requestedProjectRef = options.projectRef?.trim();
     if (options.createProject && requestedProjectRef) {
       throw new CliCoreError({
@@ -201,11 +208,41 @@ export class CoreService {
       && existingMarker.issuer === environment.issuer
       && existingMarker.apiBaseUrl === environment.apiBaseUrl
       && existingMarker.apiResource === environment.apiResource
-      && existingMarker.credentialProfile === profile;
+      && profiles.accepted.includes(existingMarker.credentialProfile);
+    const matchingProfiles = markerMatchesEnvironment
+      ? await this.#matchingCredentialProfiles(repositoryRoot, existingMarker, profiles)
+      : [];
+    const profile = markerMatchesEnvironment
+      ? matchingProfiles[0] ?? existingMarker.credentialProfile
+      : profiles.preferred;
     const projectRef = options.createProject
       ? undefined
       : requestedProjectRef || (markerMatchesEnvironment ? existingMarker.publicProjectRef : undefined);
     const store = this.#secretStore();
+    if (
+      markerMatchesEnvironment
+      && !options.createProject
+      && (!requestedProjectRef || requestedProjectRef === existingMarker.publicProjectRef)
+    ) {
+      for (const candidate of matchingProfiles) {
+        const existing = await this.#reuseExistingConnection(
+          repositoryRoot,
+          { ...existingMarker, credentialProfile: candidate },
+          environment,
+          repositoryUrl,
+          store,
+          options.signal,
+        );
+        if (existing) return existing;
+      }
+    }
+    if (connectionLock.waitedForOwner) {
+      throw new CliCoreError({
+        code: "connection_attempt_incomplete",
+        message: "The earlier dongo connect ended without a healthy repository binding. Run dongo auth status and dongo doctor before explicitly retrying; this waiting command did not start another authorization.",
+        exitCode: 4,
+      });
+    }
     const auth = new DeviceAuthorizationClient({
       deviceAuthorizationEndpoint: environment.deviceAuthorizationEndpoint,
       tokenEndpoint: environment.tokenEndpoint,
@@ -268,6 +305,7 @@ export class CoreService {
       projectName: session.project.name,
       installationId: session.installation.id,
       credentialProfile: profile,
+      repositoryUrl,
       connectedAt: new Date(this.#now()).toISOString(),
     };
     const writtenMarker = await writeProjectMarker(repositoryRoot, marker);
@@ -279,6 +317,9 @@ export class CoreService {
       scopes: tokenSet.scope,
       credentialStore: store.kind,
     };
+    } finally {
+      await connectionLock.release();
+    }
   }
 
   async createProject(options: CreateProjectOptions = {}): Promise<ConnectResult> {
@@ -310,7 +351,8 @@ export class CoreService {
     const environment = resolveEnvironment({
       environment: options.environment ?? "production",
     });
-    const profile = credentialProfile(environment.productOrigin, repositoryRoot);
+    const profile = (await repositoryCredentialProfiles(environment.productOrigin, repositoryRoot)).preferred;
+    const repositoryUrl = await repositoryOriginUrl(repositoryRoot);
     const bootstrapClient = new DongoClient({
       baseUrl: environment.apiBaseUrl,
       tokenProvider: { getAccessToken: async () => token },
@@ -334,6 +376,7 @@ export class CoreService {
       projectName: session.project.name,
       installationId: session.installation.id,
       credentialProfile: profile,
+      repositoryUrl,
       connectedAt: new Date(this.#now()).toISOString(),
     };
     const writtenMarker = await writeProjectMarker(repositoryRoot, marker);
@@ -453,7 +496,7 @@ export class CoreService {
     if (!marker) {
       throw new CliCoreError({ code: "authentication_required", message: "This repository is not connected. Run dongo connect.", exitCode: 3 });
     }
-    this.#validateMarker(repositoryRoot, marker);
+    await this.#validateMarker(repositoryRoot, marker);
     return configureIntegration({
       repositoryRoot,
       productOrigin: marker.productOrigin,
@@ -574,9 +617,20 @@ export class CoreService {
       if (!required) return undefined;
       throw new CliCoreError({ code: "authentication_required", message: "This repository is not connected. Run dongo connect.", exitCode: 3 });
     }
-    const environment = this.#validateMarker(repositoryRoot, marker);
+    const environment = await this.#validateMarker(repositoryRoot, marker);
     const store = this.#secretStore();
-    const manager = this.#tokenManager(marker.credentialProfile, store);
+    const profiles = await repositoryCredentialProfiles(environment.productOrigin, repositoryRoot);
+    const matchingProfiles = await this.#matchingCredentialProfiles(repositoryRoot, marker, profiles);
+    let manager = this.#tokenManager(marker.credentialProfile, store);
+    let selectedProfile = marker.credentialProfile;
+    for (const profile of matchingProfiles) {
+      const candidate = this.#tokenManager(profile, store);
+      if (await candidate.load()) {
+        manager = candidate;
+        selectedProfile = profile;
+        break;
+      }
+    }
     if (process.env.DONGO_TOKEN && marker.environment === "custom") {
       throw new CliCoreError({
         code: "validation",
@@ -598,6 +652,22 @@ export class CoreService {
         message: "Stored dongo authorization does not match this repository marker. Run dongo connect again.",
         exitCode: 3,
       });
+    }
+    if (required && selectedProfile !== marker.credentialProfile) {
+      const session = await this.#client(environment.apiBaseUrl, manager).sessionStart({
+        externalSessionId: randomUUID(),
+      });
+      this.#validateSession(session);
+      if (
+        session.project.publicRef !== marker.publicProjectRef
+        || session.installation.id !== marker.installationId
+      ) {
+        throw new CliCoreError({
+          code: "authentication_required",
+          message: "The linked-worktree dongo authorization belongs to a different project or installation. Run dongo auth logout before reconnecting this repository.",
+          exitCode: 3,
+        });
+      }
     }
     return { repositoryRoot, marker, environment, store, manager };
   }
@@ -639,7 +709,7 @@ export class CoreService {
     return new DongoClient({ baseUrl, tokenProvider: manager, fetch: this.#fetch });
   }
 
-  #validateMarker(repositoryRoot: string, marker: ProjectMarker): EnvironmentConfig {
+  async #validateMarker(repositoryRoot: string, marker: ProjectMarker): Promise<EnvironmentConfig> {
     if (!this.#allowNonProduction && marker.environment !== "production") {
       throw new CliCoreError({
         code: "validation",
@@ -651,13 +721,18 @@ export class CoreService {
       marker.environment === "custom"
         ? resolveEnvironment({ origin: marker.productOrigin })
         : resolveEnvironment({ environment: marker.environment });
-    const expectedProfile = credentialProfile(environment.productOrigin, repositoryRoot);
+    const profiles = await repositoryCredentialProfiles(environment.productOrigin, repositoryRoot);
+    const currentRepositoryUrl = await repositoryOriginUrl(repositoryRoot);
+    const markerRepositoryUrl = marker.repositoryUrl
+      ? normalizeRepositoryUrl(marker.repositoryUrl)
+      : undefined;
     const matches =
       marker.productOrigin === environment.productOrigin &&
       marker.issuer === environment.issuer &&
       marker.apiBaseUrl === environment.apiBaseUrl &&
       marker.apiResource === environment.apiResource &&
-      marker.credentialProfile === expectedProfile;
+      profiles.accepted.includes(marker.credentialProfile) &&
+      (!marker.repositoryUrl || !currentRepositoryUrl || markerRepositoryUrl === currentRepositoryUrl);
     if (!matches) {
       throw new CliCoreError({
         code: "validation",
@@ -666,6 +741,105 @@ export class CoreService {
       });
     }
     return environment;
+  }
+
+  async #reuseExistingConnection(
+    repositoryRoot: string,
+    marker: ProjectMarker,
+    environment: EnvironmentConfig,
+    repositoryUrl: string | undefined,
+    store: SecretStore,
+    signal?: AbortSignal,
+  ): Promise<ConnectResult | undefined> {
+    const manager = this.#tokenManager(marker.credentialProfile, store);
+    let credential: StoredCredential | undefined;
+    try {
+      credential = await manager.load();
+    } catch (error) {
+      if (error instanceof CliCoreError && error.code === "authentication_required") return undefined;
+      throw error;
+    }
+    if (!credential) return undefined;
+    if (
+      credential.clientId !== environment.cliClientId
+      || credential.issuer !== environment.issuer
+      || credential.resource !== environment.apiResource
+      || credential.tokenEndpoint !== environment.tokenEndpoint
+      || credential.revocationEndpoint !== environment.revocationEndpoint
+    ) {
+      throw new CliCoreError({
+        code: "authentication_required",
+        message: "Stored dongo authorization does not match this repository marker. Run dongo auth logout before reconnecting this repository.",
+        exitCode: 3,
+      });
+    }
+    let session: SessionStartData;
+    try {
+      session = await this.#client(environment.apiBaseUrl, manager).sessionStart(
+        { externalSessionId: randomUUID() },
+        { signal },
+      );
+    } catch (error) {
+      if (
+        (error instanceof DongoClientError && error.code === "unauthorized")
+        || (error instanceof CliCoreError && error.code === "authentication_required")
+      ) return undefined;
+      throw error;
+    }
+    this.#validateSession(session);
+    const serverRepositoryUrl = session.project.repositoryUrl
+      ? normalizeRepositoryUrl(session.project.repositoryUrl)
+      : undefined;
+    if (repositoryUrl && serverRepositoryUrl && repositoryUrl !== serverRepositoryUrl) {
+      throw new CliCoreError({
+        code: "authentication_required",
+        message: "The repository remote does not match the dongo project binding. Confirm the intended repository before reconnecting.",
+        exitCode: 3,
+      });
+    }
+    if (
+      session.project.publicRef !== marker.publicProjectRef
+      || session.installation.id !== marker.installationId
+    ) {
+      throw new CliCoreError({
+        code: "authentication_required",
+        message: "Stored dongo authorization belongs to a different project or installation. Run dongo auth logout before reconnecting this repository.",
+        exitCode: 3,
+      });
+    }
+    return {
+      repositoryRoot,
+      markerPath: markerPath(repositoryRoot),
+      project: session.project,
+      installation: session.installation,
+      scopes: credential.scopes,
+      credentialStore: store.kind,
+    };
+  }
+
+  async #matchingCredentialProfiles(
+    repositoryRoot: string,
+    marker: ProjectMarker,
+    profiles: Awaited<ReturnType<typeof repositoryCredentialProfiles>>,
+  ): Promise<string[]> {
+    const matches: Array<{ profile: string; connectedAt: number }> = [];
+    for (const linked of profiles.linked) {
+      const candidate = await readProjectMarker(linked.root).catch(() => undefined);
+      if (
+        !candidate
+        || candidate.productOrigin !== marker.productOrigin
+        || candidate.publicProjectRef !== marker.publicProjectRef
+        || candidate.projectId !== marker.projectId
+        || candidate.installationId !== marker.installationId
+        || !profiles.accepted.includes(candidate.credentialProfile)
+      ) continue;
+      matches.push({
+        profile: candidate.credentialProfile,
+        connectedAt: Date.parse(candidate.connectedAt) || 0,
+      });
+    }
+    matches.sort((left, right) => right.connectedAt - left.connectedAt);
+    return [...new Set([...matches.map(({ profile }) => profile), marker.credentialProfile])];
   }
 
   #validateSession(session: SessionStartData): void {
