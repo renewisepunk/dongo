@@ -1,12 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-test("explains dongo as the work tracker for coding agents", async ({ page }) => {
+test("explains dongo as the work tracker built for coding agents", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Ideas become visible work." })).toBeVisible();
-  await expect(page.getByText("Start in the agent you already use.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Not every thought is ready for an agent." })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "People set direction. Agents move the work." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "dongo is Linear if it were built for agents, not humans." })).toBeVisible();
+  await expect(page.getByText("Stop following agent work across terminals and endless chats.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "From one prompt to shipped work." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Several agents can move separate issues at once." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Follow the exact change all the way to production." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy setup prompt" }).first()).toBeVisible();
   await expect(page.getByText("Paste the prompt into Codex, Claude Code, or another Agent Skills host.")).toBeVisible();
 });
