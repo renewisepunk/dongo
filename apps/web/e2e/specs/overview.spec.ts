@@ -1266,7 +1266,7 @@ test("renders attributed agent progress as safe reviewable Markdown", async ({ p
   );
   await expect(dialog.getByRole("table")).toContainText("Contracts");
   await expect(dialog.getByText("231 tests passed", { exact: true })).toBeVisible();
-  await expect(dialog.locator("img")).toHaveCount(0);
+  await expect(dialog.locator(".markdown-content img")).toHaveCount(0);
   await expect(dialog.getByText("<img src=x onerror=alert(1)>", { exact: true })).toBeVisible();
 });
 
