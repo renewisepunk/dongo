@@ -44,6 +44,7 @@ gate has passed.
 | GitHub credential exposure | Resolve only the current `origin` host through the owner's local `gh` CLI immediately before harness launch. Keep the token in memory and the child environment only; never place it in hosted jobs, arguments, prompts, worktrees, durable state, or logs. Bound output and time, reject malformed values, and inject nothing when resolution fails. |
 | Ignored configuration absent from worktrees | Keep deployment access disabled by default. Require local approval of a fixed provider and filename policy, reread only `.env` and `.env.local` from the canonical checkout, accept only the fixed deployment variable allow-list, reject symlinks and unsafe ownership or permissions, and never copy a configuration file into a worktree. |
 | Credential accepted but unusable | Probe every detected provider from the exact isolated worktree before harness launch. Return one provider-specific safe failure for missing or expired access; never initiate login, choose a fallback environment, or let the agent discover the failure at release time. |
+| Deployment tool infers a local or wrong target | Treat launcher preflight as defense in depth, not the final boundary. Before any release child command, the repository deploy script must resolve the exact named Convex target from the in-memory bridge or an owner-controlled ignored file, verify any deploy key names the same target, and reject missing, local, cross-environment, or unknown selectors without logging credential values. |
 | Secret disclosure through agent output | Keep injected values out of prompts, arguments, policy state, artifacts, and hosted events. Redact every exact injected secret from local stdout and stderr, use an owner-only npm placeholder file with an environment reference, and remove temporary material on all exit paths. |
 | Prompt injection | Treat all project content as untrusted; the fixed launcher instruction requires normal dongo retrieval and repository policy, not obedience to queue metadata. |
 | Data exfiltration | Upload structured bounded state only; redact before transport; keep raw process output local and bounded. |
@@ -70,6 +71,9 @@ gate has passed.
 10. A release-capable harness cannot start unless the current approved source
     discovery matches local policy and every detected provider probe succeeds
     in that job's worktree.
+11. Development and production release scripts perform their own exact named
+    target check before spawning any command; provider defaults can never choose
+    a local or cross-environment backend.
 
 ## Release-blocking tests
 
@@ -90,6 +94,9 @@ gate has passed.
 - cover clean installation and upgrade defaults, separate approved and isolated
   worktrees, changed or unsafe source files, absent and expired provider access,
   stdout/stderr secret redaction, and temporary-file cleanup;
+- prove absent, local, cross-environment, mismatched-key, and unsafe-file target
+  states exit before Git, Convex, Wrangler, npm, or another release command can
+  run, while adjacent ignored secrets never appear in output;
 - install, reboot, disable, remove, and repair on clean macOS and Linux users
   without elevated privileges.
 - on a clean installation, reserve six independent jobs into six deterministic
