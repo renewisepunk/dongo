@@ -383,7 +383,9 @@ test("a waiter does not repeat a failed connection authorization", async (contex
   const first = makeService().connect({ origin: "http://localhost:8787" });
   while (browserOpens === 0) await new Promise((resolve) => setTimeout(resolve, 1));
   const second = makeService().connect({ origin: "http://localhost:8787" });
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  // Keep the owner blocked for longer than one connection-lock polling interval
+  // so a loaded parallel test run cannot release it before the waiter observes it.
+  await new Promise((resolve) => setTimeout(resolve, 300));
   releaseFailure();
 
   const [ownerResult, waiterResult] = await Promise.allSettled([first, second]);
