@@ -47,6 +47,10 @@ import type {
   RunnerSnapshot,
 } from "../../lib/project-data";
 import { searchHighlightSegments } from "../../lib/search-highlight";
+import {
+  intakeRunnerEligibility,
+  type IntakeRunnerEligibility,
+} from "../../lib/runner-eligibility";
 import { projectCapacityLabel, projectCreationAction } from "../../lib/plans";
 import { overviewPageSurface, projectPageTitle } from "../../lib/page-title";
 import {
@@ -481,6 +485,8 @@ export function Overview(props: OverviewProps) {
       ? selectedIntakeDetail()
       : visibleIntakes().find((item) => item.id === selectedIntakeId()),
   );
+  const runnerEligibilityFor = (intakeId: string) =>
+    intakeRunnerEligibility(intakeId, runnerSnapshot(), concurrency());
 
   createEffect(() => {
     const ids = actionableAttentionIds();
@@ -2438,7 +2444,9 @@ export function Overview(props: OverviewProps) {
               <div class="section-heading" id="inbox-heading">
                 <span>inbox</span><span class="section-heading__count">{visibleIntakes().length}</span>
               </div>
-              <For each={visibleIntakes()}>{(intake) => (
+              <For each={visibleIntakes()}>{(intake) => {
+                const runnerEligibility = () => runnerEligibilityFor(intake.id);
+                return (
                 <a
                   class="work-row"
                   href={intakeDetailHref(intake.id)}
@@ -2454,11 +2462,11 @@ export function Overview(props: OverviewProps) {
                 >
                   <span class="work-row__summary">{intake.text}</span>
                   <span class="work-row__meta">
-                    <span style={{ color: intake.status === "processed" ? "var(--green)" : "var(--amber)" }}>
+                    <span style={{ color: intake.status === "processed" ? "var(--green)" : runnerEligibility().tone === "danger" ? "var(--danger)" : "var(--amber)" }}>
                       {intake.optimistic
                         ? "sending securely…"
                         : intake.status === "waiting"
-                          ? "waiting for local agent"
+                          ? runnerEligibility().label
                           : intake.status === "triaging"
                             ? "agent is triaging"
                             : "processed"}
@@ -2466,7 +2474,8 @@ export function Overview(props: OverviewProps) {
                     <span>·</span><span>{intake.attachmentCount ? `${intake.attachmentCount} attachment${intake.attachmentCount === 1 ? "" : "s"}` : "no attachment"}</span><span>·</span><span>{intake.age}</span>
                   </span>
                 </a>
-              )}</For>
+                );
+              }}</For>
             </section>
           </Show>
 
@@ -2618,6 +2627,8 @@ export function Overview(props: OverviewProps) {
           wide={wideDetailLayout()}
           initialFocus={detailInitialFocus()}
           intake={intake()}
+          runnerEligibility={runnerEligibilityFor(intake().id)}
+          runnerSettingsHref={`/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/settings?tab=Local%20runner`}
           ideasHref={`/app/${encodeURIComponent(props.orgSlug)}/${encodeURIComponent(props.projectSlug)}/ideas`}
           work={work()}
           onClose={closeDetail}
@@ -3566,6 +3577,8 @@ type IntakeDetailProps = {
   wide: boolean;
   initialFocus: DetailInitialFocus;
   intake: Intake;
+  runnerEligibility: IntakeRunnerEligibility;
+  runnerSettingsHref: string;
   ideasHref: string;
   work: WorkItem[];
   onClose: () => void;
@@ -3636,12 +3649,22 @@ function IntakeDetail(props: IntakeDetailProps) {
               ? `Processed · ${linked().length} work items created`
               : props.intake.status === "dismissed"
                 ? `Closed · ${props.intake.closedAt ?? props.intake.age}`
-                : props.intake.status === "triaging" ? "Agent triaging" : "Waiting for local agent"}</span>
+                : props.intake.status === "triaging" ? "Agent triaging" : props.runnerEligibility.label}</span>
           </div>
           <Show when={props.intake.sourceIdeaId}>{(ideaId) => (
             <a class="detail__provenance" href={`${props.ideasHref}?filter=promoted&idea=${encodeURIComponent(ideaId())}`}>Promoted from Ideas</a>
           )}</Show>
         </div>
+        <Show when={props.intake.status === "waiting"}>
+          <section class="detail-section">
+            <div class="detail-section__label">local agent pickup</div>
+            <div class="detail-card">
+              <strong>{props.runnerEligibility.label}</strong>
+              <p class="note">{props.runnerEligibility.detail}</p>
+              <a class="inline-link" href={props.runnerSettingsHref}>Open Local runner settings →</a>
+            </div>
+          </section>
+        </Show>
         <section class="detail-section">
           <div class="detail-section__label">submitted</div>
           <div class="detail-card">

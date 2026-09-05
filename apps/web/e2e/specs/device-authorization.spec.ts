@@ -6,7 +6,7 @@ test("reviews and approves the exact terminal and project without technical reso
   await expect(page.getByRole("heading", { name: "Authorize dongo CLI" })).toBeVisible();
   await expect(page.getByText("ABCD-EFGH", { exact: true })).toBeVisible();
   await expect(page.getByText("dongo CLI · official client", { exact: true })).toBeVisible();
-  await expect(page.getByText("fixture@example.test", { exact: true })).toBeHidden();
+  await expect(page.getByText("Fixture Owner · fixture@example.test", { exact: true })).toBeVisible();
   await expect(page.getByText("https://dev.dongo.so/api/agent/v1", { exact: true })).toBeHidden();
   await expect(page.getByText("Read this project’s Intake, work, comments, and artifacts.")).toBeVisible();
   await expect(page.getByText("Stay signed in securely until you revoke this installation.")).toBeVisible();
@@ -67,9 +67,27 @@ test("matches the agent proposal by repository and fails closed when context is 
 
   await page.goto("/device?user_code=ABCD-EFGH");
   await expect(page.getByText("No unambiguous project match", { exact: true })).toBeVisible();
-  await expect(page.getByRole("alert")).toContainText("could not match this repository");
+  await expect(page.getByRole("alert")).toContainText("cannot access the exact project or repository requested by the terminal");
   await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
   await expect(page.getByRole("combobox")).toHaveCount(0);
+});
+
+test("does not substitute the only project available to the wrong browser account", async ({ page }) => {
+  await page.goto("/device?user_code=WRON-GAC1&project_name=dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo");
+
+  await expect(page.getByText("No unambiguous project match", { exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("cannot access the exact project or repository requested by the terminal");
+  await expect(page.getByRole("alert")).toContainText("dongo will not substitute another project");
+  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
+  await expect(page.getByText("Fixture Studio / Companion", { exact: true })).toBeHidden();
+});
+
+test("blocks approval when an exact project reference conflicts with the checkout repository", async ({ page }) => {
+  await page.goto("/device?user_code=ABCD-EFGH&project_ref=companion-project&project_name=dongo&repository_url=https%3A%2F%2Fgithub.com%2Frenewisepunk%2Fdongo");
+
+  await expect(page.getByText("Fixture Studio / Companion", { exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("bound to a different repository");
+  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
 });
 
 test("denies without binding a project or issuing a token", async ({ page }) => {
@@ -113,7 +131,7 @@ test("creates the CLI-proposed first project and approves the same terminal requ
   await expect(page.getByLabel("Organization name")).toHaveValue("Fixture Owner");
   await page.getByLabel("Organization name").fill("Fixture Labs");
   await expect(page.getByText("fixture-labs", { exact: true })).toBeVisible();
-  await expect(page.getByText("https://github.com/renewisepunk/dongo", { exact: true })).toBeHidden();
+  await expect(page.getByText("https://github.com/renewisepunk/dongo", { exact: true })).toBeVisible();
   await expect(page.getByText("Create “dongo” as this account’s first project and bind this terminal to it.")).toBeVisible();
   await page.getByLabel("Allow parallel work").check();
   await page.getByLabel("Maximum concurrent runs").selectOption("5");

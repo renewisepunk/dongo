@@ -200,9 +200,26 @@ computer.
 
 ## Diagnosis
 
-1. Run `dongo runner status`. Record only the registration ID, safe state,
+Overview is server-subscribed in real time, while a local runner checks for work
+with a bounded outbound pull. A live Inbox item therefore does not prove that a
+runner can claim it. Overview and Intake detail name the current-project cause:
+no runner, automatic pickup off, offline or stale heartbeat, local approval,
+incompatible harness, full agent capacity, queued delivery, startup, or active
+execution. A sleeping or absent process cannot be woken by the web app.
+
+When two browser profiles use different dongo accounts, always open the complete
+`dongo connect` link in the profile that can access the project requested by the
+terminal. The approval page shows the signed-in identity, organization, project,
+and repository. It refuses to substitute another account's sole project. Deny a
+mismatch; do not approve and repair it afterward.
+
+1. Run `dongo doctor` in the exact checkout. A Git remote that differs from the
+   local project marker reports `repository-binding` and fails before credential
+   or network use. Reconnect with `dongo connect --project-ref
+   <intended-project-ref>`; dongo does not reuse the stale marker or overwrite it
+   before the server-authoritative repository agrees.
+2. Run `dongo runner status`. Record only the registration ID, safe state,
    version, harness list, and last safe error code. Never record the local token.
-2. Confirm `dongo doctor` succeeds in the same repository.
 3. Confirm the configured harness executable is installed and authenticated as
    the local OS user. Model-provider credentials remain local to that harness.
 4. Check the user service, not a system service:

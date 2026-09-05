@@ -201,7 +201,7 @@ const deviceDependencies = {
   async listAuthorizableProjects() {
     const code = new URLSearchParams(window.location.search).get("user_code")?.replace(/-/g, "");
     if (code === "NOPROJ00" || code === "ALTACCT1") return [];
-    return [
+    const projects = [
       {
         publicRef: "fixture-project",
         name: "dongo",
@@ -219,6 +219,7 @@ const deviceDependencies = {
         repositoryUrl: "https://github.com/renewisepunk/companion",
       },
     ];
+    return code === "WRONGAC1" ? projects.slice(1) : projects;
   },
   async getProjectCreationContext() {
     const code = new URLSearchParams(window.location.search).get("user_code")?.replace(/-/g, "");

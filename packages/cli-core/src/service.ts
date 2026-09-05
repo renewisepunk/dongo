@@ -210,18 +210,25 @@ export class CoreService {
       && existingMarker.apiBaseUrl === environment.apiBaseUrl
       && existingMarker.apiResource === environment.apiResource
       && profiles.accepted.includes(existingMarker.credentialProfile);
-    const matchingProfiles = markerMatchesEnvironment
+    const markerRepositoryUrl = existingMarker?.repositoryUrl
+      ? normalizeRepositoryUrl(existingMarker.repositoryUrl)
+      : undefined;
+    const markerMatchesRepository = !existingMarker?.repositoryUrl
+      || !repositoryUrl
+      || markerRepositoryUrl === repositoryUrl;
+    const markerCanBeReused = Boolean(markerMatchesEnvironment && markerMatchesRepository);
+    const matchingProfiles = markerCanBeReused
       ? await this.#matchingCredentialProfiles(repositoryRoot, existingMarker, profiles)
       : [];
-    const profile = markerMatchesEnvironment
+    const profile = markerCanBeReused
       ? matchingProfiles[0] ?? existingMarker.credentialProfile
       : profiles.preferred;
     const projectRef = options.createProject
       ? undefined
-      : requestedProjectRef || (markerMatchesEnvironment ? existingMarker.publicProjectRef : undefined);
+      : requestedProjectRef || (markerCanBeReused ? existingMarker.publicProjectRef : undefined);
     const store = this.#secretStore();
     if (
-      markerMatchesEnvironment
+      markerCanBeReused
       && !options.createProject
       && (!requestedProjectRef || requestedProjectRef === existingMarker.publicProjectRef)
     ) {
@@ -293,6 +300,7 @@ export class CoreService {
     );
     if (options.signal?.aborted) throw this.#cancellationError();
     this.#validateSession(session);
+    this.#validateRepositoryBinding(repositoryUrl, session.project.repositoryUrl, session.project.publicRef);
     await manager.save(credential);
     const marker: ProjectMarker = {
       schemaVersion: 1,
@@ -365,6 +373,7 @@ export class CoreService {
     );
     if (options.signal?.aborted) throw this.#cancellationError();
     this.#validateSession(session);
+    this.#validateRepositoryBinding(repositoryUrl, session.project.repositoryUrl, session.project.publicRef);
     const marker: ProjectMarker = {
       schemaVersion: 1,
       environment: environment.environment,
@@ -441,7 +450,13 @@ export class CoreService {
       if (signal?.aborted) throw this.#cancellationError();
       const detail =
         error instanceof CliCoreError || error instanceof DongoClientError ? error.message : "Unexpected local failure.";
-      checks.push({ name: "connectivity", ok: false, detail });
+      checks.push({
+        name: error instanceof CliCoreError && error.code === "repository_binding_mismatch"
+          ? "repository-binding"
+          : "connectivity",
+        ok: false,
+        detail,
+      });
       return { ok: false, checks };
     }
   }
@@ -737,21 +752,44 @@ export class CoreService {
     const markerRepositoryUrl = marker.repositoryUrl
       ? normalizeRepositoryUrl(marker.repositoryUrl)
       : undefined;
-    const matches =
+    const matchesEnvironment =
       marker.productOrigin === environment.productOrigin &&
       marker.issuer === environment.issuer &&
       marker.apiBaseUrl === environment.apiBaseUrl &&
       marker.apiResource === environment.apiResource &&
-      profiles.accepted.includes(marker.credentialProfile) &&
-      (!marker.repositoryUrl || !currentRepositoryUrl || markerRepositoryUrl === currentRepositoryUrl);
-    if (!matches) {
+      profiles.accepted.includes(marker.credentialProfile);
+    if (!matchesEnvironment) {
       throw new CliCoreError({
         code: "validation",
         message: "Project marker origins or credential binding are inconsistent. Run dongo connect to repair it.",
         exitCode: 2,
       });
     }
+    if (marker.repositoryUrl && currentRepositoryUrl && markerRepositoryUrl !== currentRepositoryUrl) {
+      throw new CliCoreError({
+        code: "repository_binding_mismatch",
+        message: `This checkout remote (${currentRepositoryUrl}) does not match the repository stored for ${marker.projectName} (${marker.publicProjectRef}): ${markerRepositoryUrl ?? marker.repositoryUrl}. Run dongo connect --project-ref <intended-project-ref> to bind this checkout explicitly.`,
+        exitCode: 3,
+      });
+    }
     return environment;
+  }
+
+  #validateRepositoryBinding(
+    repositoryUrl: string | undefined,
+    serverRepositoryUrl: string | undefined,
+    publicProjectRef: string,
+  ): void {
+    const normalizedServerRepositoryUrl = serverRepositoryUrl
+      ? normalizeRepositoryUrl(serverRepositoryUrl)
+      : undefined;
+    if (repositoryUrl && normalizedServerRepositoryUrl && repositoryUrl !== normalizedServerRepositoryUrl) {
+      throw new CliCoreError({
+        code: "repository_binding_mismatch",
+        message: `The approved dongo project (${publicProjectRef}) is bound to ${normalizedServerRepositoryUrl}, but this checkout uses ${repositoryUrl}. No local marker was changed. Deny or switch browser accounts, then run dongo connect --project-ref <intended-project-ref>.`,
+        exitCode: 3,
+      });
+    }
   }
 
   async #reuseExistingConnection(
@@ -798,16 +836,7 @@ export class CoreService {
       throw error;
     }
     this.#validateSession(session);
-    const serverRepositoryUrl = session.project.repositoryUrl
-      ? normalizeRepositoryUrl(session.project.repositoryUrl)
-      : undefined;
-    if (repositoryUrl && serverRepositoryUrl && repositoryUrl !== serverRepositoryUrl) {
-      throw new CliCoreError({
-        code: "authentication_required",
-        message: "The repository remote does not match the dongo project binding. Confirm the intended repository before reconnecting.",
-        exitCode: 3,
-      });
-    }
+    this.#validateRepositoryBinding(repositoryUrl, session.project.repositoryUrl, session.project.publicRef);
     if (
       session.project.publicRef !== marker.publicProjectRef
       || session.installation.id !== marker.installationId
