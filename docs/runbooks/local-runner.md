@@ -160,6 +160,15 @@ resumes only after the response is available.
 Lease loss, cancellation, runner shutdown, or an API failure stops and joins
 the local process before the manager may retry.
 
+Runner-launched Work must publish its first concise dongo update before
+substantive repository work, then update on each meaningful phase or next-step
+change and at least every five minutes during a long bounded check. An unchanged
+update must not be repeated just to reset its age, and progress must never be
+invented. Until the first agent-authored update arrives, Agent Activity shows a
+fixed redacted harness-liveness message backed by the matched runner heartbeat;
+it never uploads or summarizes raw harness output. Once the agent reports
+progress, that authored update and its own timestamp remain authoritative.
+
 ## Approve, disable, and remove
 
 When status shows `awaiting_local_approval`, approve the exact local job:

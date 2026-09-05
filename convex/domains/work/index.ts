@@ -569,6 +569,15 @@ export const concurrencyForHuman = query({
             ["cancelled", "failed", "completed", "expired"].includes(
               matchingRunnerJob.state,
             );
+          const activeRunnerJob = matchingRunnerJob !== undefined &&
+            ["starting", "running"].includes(matchingRunnerJob.state)
+              ? matchingRunnerJob
+              : undefined;
+          const runnerHarnessLabel = activeRunnerJob?.harness === "claude"
+            ? "Claude Code"
+            : activeRunnerJob?.harness === "codex"
+              ? "Codex"
+              : undefined;
           const activityKind = processExited
             ? "process_exited" as const
             : run.status === "waiting"
@@ -587,7 +596,9 @@ export const concurrencyForHuman = query({
                       ? "Waiting for a shared resource"
                       : run.activityKind === "paused"
                         ? "Paused locally"
-                        : "Agent is executing"
+                        : runnerHarnessLabel
+                          ? `${runnerHarnessLabel} is working`
+                          : "Agent is executing"
               );
           const leaseStatus = run.status === "waiting" || claimExpiresAt === undefined
             ? "released" as const
@@ -614,12 +625,14 @@ export const concurrencyForHuman = query({
               updatedAt:
                 processExited
                   ? matchingRunnerJob.updatedAt
-                  : run.activityUpdatedAt ?? run.lastHeartbeatAt,
+                  : run.activityUpdatedAt ?? activeRunnerJob?.updatedAt ?? run.lastHeartbeatAt,
             },
             startedAt: run.startedAt,
             lastHeartbeatAt: run.lastHeartbeatAt,
             elapsedMilliseconds: Math.max(0, serverTime - run.startedAt),
-            latestProgress: run.summary,
+            latestProgress: run.summary ?? (runnerHarnessLabel
+              ? `The local ${runnerHarnessLabel} harness is active. Detailed progress will appear after its first dongo update.`
+              : undefined),
             lease: {
               status: leaseStatus,
               expiresAt: claimExpiresAt,

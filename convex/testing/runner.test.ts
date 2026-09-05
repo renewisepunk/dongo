@@ -786,6 +786,43 @@ describe("local runner delivery", () => {
       await ctx.db.patch(active.runId as Id<"runs">, { startedAt: running.deliveredAt! });
     });
 
+    const activeWithoutAgentUpdate = await fixture.human.query(
+      api.domains.work.index.concurrencyForHuman,
+      { projectId: fixture.projectId },
+    );
+    expect(activeWithoutAgentUpdate.runs).toContainEqual(expect.objectContaining({
+      id: active.runId,
+      activity: expect.objectContaining({
+        kind: "executing",
+        label: "Codex is working",
+        updatedAt: running.updatedAt,
+      }),
+      latestProgress: "The local Codex harness is active. Detailed progress will appear after its first dongo update.",
+    }));
+
+    const agentUpdateAt = running.updatedAt! - 1;
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(active.runId as Id<"runs">, {
+        summary: "The agent is validating the focused runner tests.",
+        activityKind: "verification",
+        activityLabel: "Focused runner tests",
+        activityUpdatedAt: agentUpdateAt,
+      });
+    });
+    const activeWithAgentUpdate = await fixture.human.query(
+      api.domains.work.index.concurrencyForHuman,
+      { projectId: fixture.projectId },
+    );
+    expect(activeWithAgentUpdate.runs).toContainEqual(expect.objectContaining({
+      id: active.runId,
+      activity: expect.objectContaining({
+        kind: "verification",
+        label: "Focused runner tests",
+        updatedAt: agentUpdateAt,
+      }),
+      latestProgress: "The agent is validating the focused runner tests.",
+    }));
+
     await fixture.root.mutation(internal.domains.runner.index.updateJob, {
       authorization: fixture.authorization,
       registrationId: registration.id,
