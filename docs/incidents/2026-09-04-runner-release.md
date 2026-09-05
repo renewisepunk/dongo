@@ -107,6 +107,13 @@ to make the safe path reliable and understandable.
 9. A real production client encountered a transient auth control-plane 500
    while the public smoke suite remained green because it checked readiness and
    metadata, not a device-code request.
+10. During the later wiwi release stop, opening owner Attention and terminating
+    one observed child did not atomically quarantine the exact runner job. The
+    preserved harness still committed its correction at 23:59:38Z, Cloudflare
+    recorded an upload at 00:08:19Z, the live completion record was written at
+    00:18:15Z, and the Work finished at 00:25:50Z. Git and provider records bound
+    the worktree, source, account, and times, but did not prove which person
+    invoked the provider command.
 
 ### Causal map
 
@@ -131,6 +138,11 @@ late capability checks + compressed status model
   -> repeated generic auth/browser prompts
   -> owner cannot distinguish retryable wait from structural failure
   -> retries amplify historical-job and Attention noise
+
+advisory release stop
+  -> Attention plus one observed child termination
+  -> preserved exact job/session retains mutation authority
+  -> commit, provider upload, live completion, and Work finish continue
 ```
 
 ## Root-cause analysis
@@ -503,6 +515,41 @@ release work.
 **Invariant.** Operational process inspection is schema-bound and redacted.
 “Read-only” does not make argv or environment safe to retain.
 
+### RC15 — an Attention request was mistaken for a release quarantine
+
+**Symptom.** A project-wide credential-rotation Attention was open and one
+observed child process had been stopped, yet the preserved wiwi harness later
+committed, uploaded a Worker, recorded live completion, and finished its Work.
+
+**Mechanism.** Attention paused human decision-making but did not revoke the
+already-running job's mutation authority. Stopping one process did not
+atomically identify and terminalize the authoritative registration, runner job,
+Run, managed process tree, and resumable harness session. Supported release
+entry points also had no exact-job server guard to recheck immediately before
+each external mutation.
+
+**Why detection failed.** The recovery procedure treated a visible child and an
+open Attention request as the whole execution boundary. It did not prove that no
+saved session, sibling process, or resumed harness retained the same provider
+credentials and release authority. The original evidence was also insufficient
+to attribute the provider command to a person, so attribution must remain
+limited to the worktree, source revision, provider account, and timestamps.
+
+**Correction.** dong088 added an exact-job release quarantine and fail-closed
+mutation guard. Quarantine persists a server-visible reason, terminates and
+joins the managed process tree, rejects the saved session, and requires an
+explicitly authorized new job to resume. Supported development, production,
+CLI publication, changelog publication, and release-notice activation paths
+recheck the guard before mutation. PR #30 integrated the correction as
+`3d4bb2b2d10648b1e7af521d14fb8fbcd4d52459`.
+
+**Invariant.** Attention, a Work pause, or a signal to one observed process is
+never a quarantine. A stopped release has no further mutation authority only
+after the exact job is durably quarantined, its managed process tree is gone,
+its saved session is unusable, and every supported mutation boundary fails
+closed on that state. Provider requests accepted before quarantine remain
+in-flight and require provider-side inspection or rollback.
+
 ## Systemic causes
 
 The individual defects shared five organizational causes:
@@ -560,6 +607,9 @@ These invariants are release gates, not documentation suggestions:
     gateway budgets, and an empty maximum-duration wait completes successfully.
 16. Release diagnostics never retain full process argv or environment; an
     allow-listed process identity view is the only accepted evidence.
+17. A release stop atomically quarantines the exact runner job and invalidates
+    its resumable session; Attention or process signaling alone does not revoke
+    mutation authority.
 
 ## Safe operator response
 
@@ -591,6 +641,10 @@ These invariants are release gates, not documentation suggestions:
 10. For browser denial, compare runner read-only mode, global site permission,
     and a fresh task probe. Replace a stale task session instead of weakening a
     correct global policy.
+11. To stop release mutation, quarantine the exact runner job before opening
+    Attention or terminating processes. Verify the managed process tree is gone,
+    the saved session cannot resume, and supported release commands refuse the
+    quarantined identity. Inspect provider state for requests already accepted.
 
 ### Recovery after the corrective release
 
@@ -640,6 +694,7 @@ These invariants are release gates, not documentation suggestions:
 | Serial old client | Additive protocol preserves one-job behavior | Upgrade breakage |
 | Empty 20-second runner wait | API and Convex complete normally without incrementing runner failures | False `temporarily_unavailable` recovery loop |
 | Secret-bearing release process | PID/PPID/group/state/executable-only inspection; no argv or environment | Credential disclosure through diagnostic logs |
+| Active release quarantine | Exact job becomes server-quarantined, managed processes stop, saved session is rejected, and every supported mutation guard fails closed | Release continues after Attention or partial process stop |
 
 The matrix must run on macOS and Linux where service behavior differs, and at
 least the launchd, Codex sandbox, Chrome extension, and live auth rows require
@@ -669,6 +724,11 @@ No item is Done merely because its source commit is present. Each owner must
 record protected integration, exact-revision development acceptance, required
 production outcome, and clean shared-target proof under the repository's normal
 completion contract.
+
+Post-report integration note: dong088's exact-job quarantine was integrated by
+PR #30 at `3d4bb2b2d10648b1e7af521d14fb8fbcd4d52459`. That closes the missing
+mutation-authority mechanism identified by RC15; it does not by itself satisfy
+the incident-wide exit criteria below.
 
 ## Evidence reviewed
 
