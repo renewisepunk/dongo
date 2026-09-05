@@ -1,10 +1,15 @@
-import { For, type JSX } from "solid-js";
+import { For, Show, type JSX } from "solid-js";
 import { marked, type Token, type Tokens } from "marked";
 import { safeMarkdownHref } from "../lib/markdown";
 
 export type MarkdownContentProps = {
   source: string;
   class?: string;
+};
+
+export type MarkdownDraftPreviewProps = {
+  source: string;
+  label: string;
 };
 
 function inlineTokens(tokens: Token[]): JSX.Element {
@@ -134,4 +139,15 @@ function blockToken(token: Token): JSX.Element {
 export function MarkdownContent(props: MarkdownContentProps) {
   const tokens = () => marked.lexer(props.source, { breaks: true, gfm: true });
   return <div class={`markdown-content${props.class ? ` ${props.class}` : ""}`}>{blockTokens(tokens())}</div>;
+}
+
+export function MarkdownDraftPreview(props: MarkdownDraftPreviewProps) {
+  return (
+    <Show when={props.source.trim()}>
+      <details class="markdown-draft-preview">
+        <summary>Preview formatted {props.label}</summary>
+        <MarkdownContent source={props.source} />
+      </details>
+    </Show>
+  );
 }

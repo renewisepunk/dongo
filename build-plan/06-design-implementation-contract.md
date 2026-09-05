@@ -71,6 +71,7 @@ Implement the prototype's hierarchy and states for:
   parallel work** plus a 2–8 concurrent-Run safety cap (default 4), clearly
   separated from plan limits and host worktree creation;
 - human Attention response and comments, including pasted/dropped comment attachments with upload progress, failure recovery, and conversation-entry attachment rows;
+- Work goals, Run updates, Attention bodies/responses, and conversation comments render through one semantic safe-Markdown path. Raw HTML remains visible text, executable or protocol-relative links are inert, remote image syntax becomes an explicit outbound link instead of loading third-party content, tables and code scroll within the detail surface, and long tokens wrap without widening mobile layouts. Human comment and response composers disclose Markdown support and offer an optional formatted preview through that same renderer;
 - search overlay/sheet, command menu, shortcut reference dialog, route-backed Help guide, and toast/status feedback.
 
 The full journey document adds route-backed Completed, settings, installation access/revocation, members, plan/storage, archived/unavailable, offline/reconnecting/session-expired, conflict, and later native screens. Where the prototype omits one of those surfaces, extend its same typography, palette, spacing, borders, hierarchy, and interaction rules rather than introducing another visual system.

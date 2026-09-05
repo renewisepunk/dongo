@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 
+import { MarkdownDraftPreview } from "../../components/MarkdownContent";
 import {
   attachmentKind,
   attachmentSelectionError,
@@ -275,6 +276,8 @@ export function CommentComposer(props: CommentComposerProps) {
         rows={2}
       />
 
+      <MarkdownDraftPreview source={body()} label="comment" />
+
       <Show when={attachments().length > 0}>
         <div class="attachment-tray" aria-label="Comment attachments">
           <For each={attachments()}>{(attachment) => (
@@ -380,7 +383,7 @@ export function CommentComposer(props: CommentComposerProps) {
               ? "remove or retry failed uploads"
               : body()
                 ? "draft saved on this device · ⌘ enter to submit"
-                : "paste or drop files · ⌘ enter to submit"}
+                : "Markdown supported · paste or drop files · ⌘ enter to submit"}
         </span>
         <button
           class="button"

@@ -2015,6 +2015,21 @@
   gap: 5px;
 }
 
+.markdown-draft-preview {
+  border-left: 2px solid var(--amber);
+  background: var(--surface-0);
+  padding: 9px 12px;
+}
+
+.markdown-draft-preview summary {
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.markdown-draft-preview[open] summary { margin-bottom: 10px; }
+
 .conversation-entry__attachments {
   display: flex;
   flex-direction: column;
