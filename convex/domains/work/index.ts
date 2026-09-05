@@ -55,6 +55,7 @@ import {
   parallelExecutionPolicy,
   workspaceValidator,
 } from "./concurrency";
+import { releaseRunResourceClaims } from "../resources/service";
 
 const inlineArtifactValidator = v.object({
   type: artifactTypeValidator,
@@ -131,6 +132,13 @@ async function expireStaleWorkClaim(
   if (!work.claimedRunId || isLeaseActive(work.claimExpiresAt, now)) return work;
   const run = await ctx.db.get(work.claimedRunId);
   if (run && run.status === "running") {
+    const systemActor = await requireSystemActor(ctx, work.organizationId);
+    await releaseRunResourceClaims(ctx, {
+      runId: run._id,
+      actorId: systemActor._id,
+      now,
+      reason: "owner_inactive",
+    });
     await ctx.db.patch(run._id, {
       status: "failed",
       failureCode: "lease_expired",
@@ -1214,6 +1222,11 @@ export const wait = internalMutation({
         if (!isLeaseActive(work.claimExpiresAt, now)) {
           fail("lease_expired", "The WorkItem claim has expired");
         }
+        await releaseRunResourceClaims(ctx, {
+          runId: run._id,
+          actorId: principal.actor._id,
+          now,
+        });
         await ctx.db.patch(run._id, {
           status: "waiting",
           summary: optionalString(
@@ -1308,6 +1321,11 @@ export const finish = internalMutation({
         if (!isLeaseActive(work.claimExpiresAt, now)) {
           fail("lease_expired", "The WorkItem claim has expired");
         }
+        await releaseRunResourceClaims(ctx, {
+          runId: run._id,
+          actorId: principal.actor._id,
+          now,
+        });
         const state =
           args.result === "completed"
             ? "done"
@@ -1454,6 +1472,11 @@ export const cancelForHuman = mutation({
         if (work.claimedRunId) {
           const run = await ctx.db.get(work.claimedRunId);
           if (run && (run.status === "running" || run.status === "waiting")) {
+            await releaseRunResourceClaims(ctx, {
+              runId: run._id,
+              actorId: principal.actor._id,
+              now,
+            });
             await ctx.db.patch(run._id, {
               status: "cancelled",
               failureCode: "cancelled_by_human",
@@ -1548,6 +1571,11 @@ export const closeForHuman = mutation({
       if (work.claimedRunId) {
         const run = await ctx.db.get(work.claimedRunId);
         if (run && (run.status === "running" || run.status === "waiting")) {
+          await releaseRunResourceClaims(ctx, {
+            runId: run._id,
+            actorId: principal.actor._id,
+            now,
+          });
           await ctx.db.patch(run._id, {
             status: "cancelled",
             summary: note,

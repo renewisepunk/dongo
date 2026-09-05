@@ -5,6 +5,7 @@ import type {
   Intake,
   Overview,
   ProjectUpdates,
+  ResourceClaimResult,
   RunnerJob,
   RunnerRegistration,
   RunnerWait,
@@ -25,6 +26,7 @@ import {
   runnerPlatformSchema,
   runnerRegistrationSchema,
   runnerWaitSchema,
+  resourceClaimResultSchema,
   schemaFields,
   sessionStartSchema,
   syncSnapshotSchema,
@@ -95,6 +97,8 @@ export type OperationMap = {
   start_work: { input: MutationInput & { workItemId: string; expectedRevision: number; externalSessionId: string; leaseSeconds?: number; workspace?: RunWorkspaceInput }; output: WorkItem };
   update_work: { input: MutationInput & { workItemId: string; expectedRevision: number; title?: string; goal?: string; latestUpdate?: string; activity?: RunActivityInput; artifact?: AgentArtifactInput }; output: WorkItem };
   renew_claim: { input: MutationInput & { workItemId: string; expectedRevision: number; leaseSeconds?: number }; output: WorkItem };
+  acquire_resource: { input: MutationInput & { workItemId: string; expectedRevision: number; resourceKey: string; resourceLabel?: string; leaseSeconds?: number }; output: ResourceClaimResult };
+  release_resource: { input: MutationInput & { workItemId: string; expectedRevision: number; resourceKey: string }; output: ResourceClaimResult };
   finish_work: { input: MutationInput & { workItemId: string; expectedRevision: number; outcome: string; artifacts?: AgentArtifactInput[] }; output: WorkItem };
   add_comment: { input: MutationInput & { workItemId: string; body: string }; output: WorkItem };
   request_attention: { input: MutationInput & { workItemId: string; expectedRevision: number; kind: "review" | "decision" | "question" | "blocked"; title: string; body: string; important?: boolean; options?: string[] }; output: Attention };
@@ -285,6 +289,28 @@ export const operationRegistry = {
     "renew_claim", "POST", write, false, true,
     z.object({ ...mutationFields, workItemId: identifier, expectedRevision, leaseSeconds }).strict(),
     workItemSchema,
+  ),
+  acquire_resource: spec(
+    "acquire_resource", "POST", write, false, true,
+    z.object({
+      ...mutationFields,
+      workItemId: identifier,
+      expectedRevision,
+      resourceKey: z.string().trim().regex(/^[a-z0-9](?:[a-z0-9._:/-]{0,118}[a-z0-9])?$/u),
+      resourceLabel: z.string().trim().min(1).max(120).optional(),
+      leaseSeconds,
+    }).strict(),
+    resourceClaimResultSchema,
+  ),
+  release_resource: spec(
+    "release_resource", "POST", write, false, true,
+    z.object({
+      ...mutationFields,
+      workItemId: identifier,
+      expectedRevision,
+      resourceKey: z.string().trim().regex(/^[a-z0-9](?:[a-z0-9._:/-]{0,118}[a-z0-9])?$/u),
+    }).strict(),
+    resourceClaimResultSchema,
   ),
   finish_work: spec(
     "finish_work", "POST", write, false, true,

@@ -318,6 +318,8 @@ async function mutationRunId(
   operation:
     | "work.update"
     | "work.renew_claim"
+    | "resource.acquire"
+    | "resource.release"
     | "work.finish"
     | "attention.request",
   idempotencyKey: string,
@@ -612,6 +614,46 @@ async function dispatchAgentOperation(
         idempotencyKey,
       });
       return await workResult(ctx, baseAuthorization, workItemId);
+    }
+    case "acquire_resource": {
+      const workItemId = stringField(input, "workItemId") as Id<"workItems">;
+      const idempotencyKey = stringField(input, "idempotencyKey");
+      const runId = await mutationRunId(
+        ctx,
+        baseAuthorization,
+        workItemId,
+        "resource.acquire",
+        idempotencyKey,
+      );
+      return await ctx.runMutation(internal.domains.resources.index.acquire, {
+        authorization: baseAuthorization,
+        workItemId,
+        runId,
+        expectedRevision: numberField(input, "expectedRevision"),
+        resourceKey: stringField(input, "resourceKey"),
+        resourceLabel: optionalStringField(input, "resourceLabel"),
+        leaseSeconds: input.leaseSeconds as number | undefined,
+        idempotencyKey,
+      });
+    }
+    case "release_resource": {
+      const workItemId = stringField(input, "workItemId") as Id<"workItems">;
+      const idempotencyKey = stringField(input, "idempotencyKey");
+      const runId = await mutationRunId(
+        ctx,
+        baseAuthorization,
+        workItemId,
+        "resource.release",
+        idempotencyKey,
+      );
+      return await ctx.runMutation(internal.domains.resources.index.release, {
+        authorization: baseAuthorization,
+        workItemId,
+        runId,
+        expectedRevision: numberField(input, "expectedRevision"),
+        resourceKey: stringField(input, "resourceKey"),
+        idempotencyKey,
+      });
     }
     case "finish_work": {
       const workItemId = stringField(input, "workItemId") as Id<"workItems">;

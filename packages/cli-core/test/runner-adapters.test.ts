@@ -160,7 +160,7 @@ test("process-group confirmation failure propagates when the harness leader exit
 
 test("process-tree stop waits past a clean leader exit and kills a surviving descendant", async (context) => {
   if (process.platform === "win32") return;
-  const child = spawn("/bin/sh", ["-c", "trap 'exit 0' TERM; (trap '' TERM; exec sleep 30) & echo ready; wait"], {
+  const child = spawn("/bin/sh", ["-c", "trap 'exit 0' TERM; (trap '' TERM; echo ready; exec sleep 30) & wait"], {
     detached: true,
     stdio: ["pipe", "pipe", "pipe"],
   });

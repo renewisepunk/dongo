@@ -18,6 +18,7 @@ import {
   workCapacitySource,
 } from "../../lib/plans";
 import { measureOrganizationWorkItems } from "../../lib/workUsage";
+import { releaseRunResourceClaims } from "../resources/service";
 
 export type NewWorkInput = {
   title: string;
@@ -346,6 +347,11 @@ export async function pauseRunForAttention(
   if (work.claimExpiresAt === undefined || work.claimExpiresAt <= options.now) {
     fail("lease_expired", "The WorkItem claim has expired");
   }
+  await releaseRunResourceClaims(ctx, {
+    runId: run._id,
+    actorId: run.actorId,
+    now: options.now,
+  });
   await ctx.db.patch(run._id, {
     status: "waiting",
     lastHeartbeatAt: options.now,

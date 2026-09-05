@@ -465,6 +465,14 @@ export class DongoClient {
     return this.call("resolve_attention", input, options);
   }
 
+  acquireResource(input: OperationInput<"acquire_resource">, options?: CallOptions) {
+    return this.call("acquire_resource", input, options);
+  }
+
+  releaseResource(input: OperationInput<"release_resource">, options?: CallOptions) {
+    return this.call("release_resource", input, options);
+  }
+
   getAttachment(input: OperationInput<"get_attachment">, options?: CallOptions) {
     return this.call("get_attachment", input, options);
   }

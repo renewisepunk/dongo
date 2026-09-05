@@ -229,6 +229,23 @@ delivery is reserved for 60 seconds until acknowledged; running jobs renew a
 revocation outrank execution. A lost or expired lease requires the local process
 to stop and refetch; it must never continue by guessing.
 
+Before a live step uses a resource that repository instructions identify as
+shared, acquire its stable safe key with `dongo resource acquire`. Proceed only
+when the result is `held`. A `waiting` result is a normal FIFO wait: retain the
+returned Work revision, renew by acquiring again before the lease expires, and
+continue unrelated implementation or tests when possible. Release with
+`dongo resource release` in success and failure cleanup. Run completion,
+cancellation, failure, claim expiry, and runner reconciliation also release the
+claim server-side; the next eligible waiter is promoted automatically. Prefer
+unique worktree-local ports and profiles over leasing whenever they are truly
+isolated. Never put credentials, private conversation IDs, messages, local
+paths, or other sensitive data in resource keys or labels.
+
+When one live step needs multiple shared resources, acquire the stable keys in
+lexical order and release in reverse order. If any acquisition waits or fails,
+release every resource already acquired before retrying. This prevents two Runs
+from holding different fixtures while each waits indefinitely for the other.
+
 When an automatic-mode runner reconnects, the server may requeue the latest
 explicitly authorized Work job once if its only terminal reason is an expired
 runner lease and the Work is still Ready and unclaimed. The retry remains

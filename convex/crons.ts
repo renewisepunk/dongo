@@ -16,6 +16,12 @@ crons.interval(
   { limit: 100 },
 );
 crons.interval(
+  "reconcile expired shared resources",
+  { minutes: 1 },
+  internal.domains.resources.index.reconcileExpiredClaims,
+  { limit: 100 },
+);
+crons.interval(
   "reconcile expired intake claims",
   { minutes: 5 },
   internal.domains.intake.index.reconcileExpiredClaims,

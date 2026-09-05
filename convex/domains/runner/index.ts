@@ -17,6 +17,7 @@ import { fail, optionalString, requireString } from "../../lib/errors";
 import { runIdempotent } from "../../lib/idempotency";
 import { agentContextValidator } from "../../lib/validators";
 import { parallelExecutionPolicy } from "../work/concurrency";
+import { releaseRunResourceClaims } from "../resources/service";
 import {
   hashRunnerCredentialToken,
   runnerCredentialTokenPrefix,
@@ -147,6 +148,11 @@ async function reconcileTerminalRunnerWork(
   const failureCode = cancelled
     ? "runner_job_cancelled"
     : job.safeCode ?? `runner_job_${job.state}`;
+  await releaseRunResourceClaims(ctx, {
+    runId: run._id,
+    actorId,
+    now,
+  });
   await ctx.db.patch(run._id, {
     status: cancelled ? "cancelled" : "failed",
     summary: job.safeSummary ?? "The local runner process exited before the WorkItem finished.",

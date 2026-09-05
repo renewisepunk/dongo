@@ -40,7 +40,8 @@ const lease: OptionSchema = {
   name: "lease-seconds",
   description: "Requested lease duration in seconds.",
   type: "integer",
-  minimum: 1,
+  minimum: 30,
+  maximum: 3_600,
 };
 const artifact: OptionSchema = {
   name: "artifact",
@@ -171,6 +172,30 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
     usage: "dongo work finish --work-id ID --revision N --outcome TEXT [--artifact JSON ...]",
     options: [workId, revision, { name: "outcome", description: "Exact integrated revision and verified outcome, or explicit limited scope.", required: true }, { ...artifact, repeatable: true }, idempotency],
   },
+  "resource acquire": {
+    command: "resource acquire",
+    summary: "Acquire or renew one bounded project-scoped shared-resource claim.",
+    usage: "dongo resource acquire --work-id ID --revision N --resource-key KEY [--resource-label TEXT] [--lease-seconds N]",
+    options: [
+      workId,
+      revision,
+      { name: "resource-key", description: "Stable project-scoped resource key.", required: true },
+      { name: "resource-label", description: "Safe plain-language label shown while waiting." },
+      lease,
+      idempotency,
+    ],
+  },
+  "resource release": {
+    command: "resource release",
+    summary: "Release this Run's shared-resource claim and hand it to the next waiter.",
+    usage: "dongo resource release --work-id ID --revision N --resource-key KEY",
+    options: [
+      workId,
+      revision,
+      { name: "resource-key", description: "Stable project-scoped resource key.", required: true },
+      idempotency,
+    ],
+  },
   "comment add": { command: "comment add", summary: "Add a comment to a WorkItem.", usage: "dongo comment add --work-id ID --body TEXT", options: [workId, { name: "body", description: "Comment body.", required: true }, idempotency] },
   "attention request": {
     command: "attention request",
@@ -264,6 +289,7 @@ const GROUPS: Record<string, { summary: string; subcommands: string[] }> = {
   session: { summary: "Manage the current agent session.", subcommands: ["start"] },
   intake: { summary: "Inspect and triage Intake.", subcommands: ["get", "claim", "renew", "complete"] },
   work: { summary: "Create and execute WorkItems.", subcommands: ["create", "get", "start", "update", "renew", "finish"] },
+  resource: { summary: "Lease scarce project-scoped live-review resources.", subcommands: ["acquire", "release"] },
   comment: { summary: "Add WorkItem discussion.", subcommands: ["add"] },
   attention: { summary: "Request, inspect, wait for, or resolve Attention.", subcommands: ["request", "get", "wait", "resolve"] },
   updates: { summary: "Pull or wait for agent update signals.", subcommands: ["get", "wait"] },

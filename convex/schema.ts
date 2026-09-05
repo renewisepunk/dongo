@@ -568,6 +568,42 @@ export default defineSchema({
     .index("by_actor_status", ["actorId", "status"])
     .index("by_installation_status", ["installationId", "status"]),
 
+  resourceClaims: defineTable({
+    organizationId: v.id("organizations"),
+    projectId: v.id("projects"),
+    workItemId: v.id("workItems"),
+    runId: v.id("runs"),
+    actorId: v.id("actors"),
+    installationId: v.id("installations"),
+    resourceKey: v.string(),
+    resourceLabel: v.string(),
+    status: v.union(
+      v.literal("waiting"),
+      v.literal("held"),
+      v.literal("released"),
+    ),
+    requestedAt: v.number(),
+    acquiredAt: v.optional(v.number()),
+    leaseExpiresAt: v.number(),
+    releasedAt: v.optional(v.number()),
+    releaseReason: v.optional(v.union(
+      v.literal("released"),
+      v.literal("lease_expired"),
+      v.literal("owner_inactive"),
+      v.literal("run_finished"),
+    )),
+    updatedAt: v.number(),
+  })
+    .index("by_project_resource_status_requested", [
+      "projectId",
+      "resourceKey",
+      "status",
+      "requestedAt",
+    ])
+    .index("by_run_resource", ["runId", "resourceKey"])
+    .index("by_run_status", ["runId", "status"])
+    .index("by_status_lease", ["status", "leaseExpiresAt"]),
+
   attentionRequests: defineTable({
     organizationId: v.id("organizations"),
     projectId: v.id("projects"),

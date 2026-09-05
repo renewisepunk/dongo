@@ -38,6 +38,8 @@ import type * as domains_overview_index from "../domains/overview/index.js";
 import type * as domains_platformAdministration_index from "../domains/platformAdministration/index.js";
 import type * as domains_projects_actions from "../domains/projects/actions.js";
 import type * as domains_projects_index from "../domains/projects/index.js";
+import type * as domains_resources_index from "../domains/resources/index.js";
+import type * as domains_resources_service from "../domains/resources/service.js";
 import type * as domains_runner_credentialSecurity from "../domains/runner/credentialSecurity.js";
 import type * as domains_runner_index from "../domains/runner/index.js";
 import type * as domains_search_index from "../domains/search/index.js";
@@ -104,6 +106,8 @@ declare const fullApi: ApiFromModules<{
   "domains/platformAdministration/index": typeof domains_platformAdministration_index;
   "domains/projects/actions": typeof domains_projects_actions;
   "domains/projects/index": typeof domains_projects_index;
+  "domains/resources/index": typeof domains_resources_index;
+  "domains/resources/service": typeof domains_resources_service;
   "domains/runner/credentialSecurity": typeof domains_runner_credentialSecurity;
   "domains/runner/index": typeof domains_runner_index;
   "domains/search/index": typeof domains_search_index;

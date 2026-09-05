@@ -379,6 +379,21 @@ raw process logs are not server data.
   harness session, log, cancellation controller, and dongo external session ID.
 - Per-job polling names the exact job. A cancellation or lost lease interrupts
   only that job; the dispatcher and sibling jobs continue.
+- A harness claims a stable project-scoped key immediately before a genuinely
+  exclusive live-review or release step. The hosted claim is bound to its active
+  Run, not to the worktree or process, and returns `held` or a FIFO `waiting`
+  position plus the next Work revision. Waiting keeps both leases renewable and
+  appears as `waiting_for_resource`; it never pauses the Run or counts as owner
+  Attention. Release and every Run terminal path atomically promote the oldest
+  eligible waiter. A one-minute reconciler expires abandoned held and waiting
+  claims after their bounded lease.
+- Repository conventions choose non-sensitive keys and labels for resources
+  that cannot be isolated, including shared browser profiles/debug ports,
+  live-provider conversations, test senders, and deployment targets. Unique
+  per-worktree ports, profiles, and fixtures need no claim. Raw conversation
+  identifiers, credentials, local paths, and private content must never appear
+  in a key or label. Multi-resource steps acquire keys in lexical order and
+  release partial acquisitions on failure to avoid cross-Run deadlocks.
 - Delivery capacity is enforced across registrations. Active runner Work jobs
   and live Runs for the same WorkItem count once, so reservation cannot launch
   models ahead of the authoritative project safety cap.

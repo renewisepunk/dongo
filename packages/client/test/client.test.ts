@@ -50,6 +50,55 @@ test("session start follows the canonical POST contract", async () => {
   assert.deepEqual(JSON.parse((await request?.text()) ?? ""), { externalSessionId: "session-1" });
 });
 
+test("shared-resource methods use the canonical idempotent operation contracts", async () => {
+  const requests: Request[] = [];
+  const client = new DongoClient({
+    baseUrl: "https://dev.dongo.so/api/agent/v1",
+    tokenProvider,
+    fetch: async (input, init) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      const body = JSON.parse(await request.clone().text()) as {
+        resourceKey: string;
+        expectedRevision: number;
+      };
+      return Response.json({
+        ok: true,
+        data: {
+          resourceKey: body.resourceKey,
+          resourceLabel: "Shared browser profile",
+          state: requests.length === 1 ? "held" : "released",
+          requestedAt: 1,
+          workRevision: body.expectedRevision + 1,
+          workClaimExpiresAt: 120_001,
+        },
+        requestId: `req-resource-${requests.length}`,
+        apiVersion: "v1",
+      });
+    },
+  });
+
+  await client.acquireResource({
+    idempotencyKey: "acquire-browser",
+    workItemId: "work-1",
+    expectedRevision: 2,
+    resourceKey: "browser:shared-profile",
+    resourceLabel: "Shared browser profile",
+    leaseSeconds: 120,
+  });
+  await client.releaseResource({
+    idempotencyKey: "release-browser",
+    workItemId: "work-1",
+    expectedRevision: 3,
+    resourceKey: "browser:shared-profile",
+  });
+
+  assert.equal(requests[0]?.url, "https://dev.dongo.so/api/agent/v1/acquire_resource");
+  assert.equal(requests[1]?.url, "https://dev.dongo.so/api/agent/v1/release_resource");
+  assert.equal(requests[0]?.method, "POST");
+  assert.equal(requests[1]?.method, "POST");
+});
+
 test("project updates use bounded cursor query parameters", async () => {
   let request: Request | undefined;
   const client = new DongoClient({

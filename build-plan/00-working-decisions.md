@@ -206,6 +206,17 @@ metadata truthfully. Never transmit an absolute local path. Human live views are
 derived from authoritative active Runs and subscriptions, not inferred from
 transport labels, host presence, or generic CLI activity.
 
+Parallel source isolation does not make process-global or external acceptance
+fixtures independent. Agents claim only genuinely exclusive resources through
+the additive project-scoped resource operations. Keys are stable,
+non-sensitive repository conventions such as `browser:shared-profile`,
+`provider:conversation:test`, or `release:development`; labels are bounded safe
+display text. One Run holds a key at a time, waiters are FIFO, both held and
+waiting claims have short renewable leases, and terminal or expired Runs release
+all claims before the next eligible waiter is promoted. Waiting updates the Run
+to `waiting_for_resource` without consuming Attention or reducing unrelated
+project concurrency.
+
 ### D-22 — No generic agent-notification control
 
 Decided: the Inbox does not show a **Notify agent** action. dongo has no

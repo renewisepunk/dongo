@@ -1564,6 +1564,77 @@
       ],
       "additionalProperties": false
     },
+    "ResourceClaimResult": {
+      "type": "object",
+      "properties": {
+        "resourceKey": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9._:/-]{0,118}[a-z0-9])?$"
+        },
+        "resourceLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "waiting",
+            "held",
+            "released"
+          ]
+        },
+        "queuePosition": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "holderWorkIdentifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "requestedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "acquiredAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "leaseExpiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "releasedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "workRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "workClaimExpiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "resourceKey",
+        "resourceLabel",
+        "state",
+        "requestedAt",
+        "workRevision",
+        "workClaimExpiresAt"
+      ],
+      "additionalProperties": false
+    },
     "SessionStartInput": {
       "type": "object",
       "properties": {
@@ -2320,6 +2391,130 @@
         },
         "data": {
           "$ref": "#/$defs/WorkItem"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "AcquireResourceInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "resourceKey": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9._:/-]{0,118}[a-z0-9])?$"
+        },
+        "resourceLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "leaseSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 3600
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "workItemId",
+        "expectedRevision",
+        "resourceKey"
+      ],
+      "additionalProperties": false
+    },
+    "AcquireResourceSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/ResourceClaimResult"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "apiVersion": {
+          "const": "v1"
+        }
+      }
+    },
+    "ReleaseResourceInput": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "workItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "resourceKey": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9._:/-]{0,118}[a-z0-9])?$"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "workItemId",
+        "expectedRevision",
+        "resourceKey"
+      ],
+      "additionalProperties": false
+    },
+    "ReleaseResourceSuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "data",
+        "requestId",
+        "apiVersion"
+      ],
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "$ref": "#/$defs/ResourceClaimResult"
         },
         "requestId": {
           "type": "string",
@@ -3527,6 +3722,48 @@
       },
       "successResponse": {
         "$ref": "#/$defs/RenewClaimSuccessResponse"
+      }
+    },
+    "acquire_resource": {
+      "method": "POST",
+      "path": "/api/agent/v1/acquire_resource",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "mcpExposed": true,
+      "input": {
+        "$ref": "#/$defs/AcquireResourceInput"
+      },
+      "output": {
+        "$ref": "#/$defs/ResourceClaimResult"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/AcquireResourceSuccessResponse"
+      }
+    },
+    "release_resource": {
+      "method": "POST",
+      "path": "/api/agent/v1/release_resource",
+      "scopes": [
+        "dongo:work:write"
+      ],
+      "readOnly": false,
+      "idempotent": true,
+      "destructive": false,
+      "openWorld": false,
+      "mcpExposed": true,
+      "input": {
+        "$ref": "#/$defs/ReleaseResourceInput"
+      },
+      "output": {
+        "$ref": "#/$defs/ResourceClaimResult"
+      },
+      "successResponse": {
+        "$ref": "#/$defs/ReleaseResourceSuccessResponse"
       }
     },
     "finish_work": {
