@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { requireReleaseConvexTarget } from "./release-convex-target.mjs";
+import { requireRunnerMutationAllowed } from "./runner-mutation-guard.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const executable = (name) => process.platform === "win32" ? `${name}.cmd` : name;
@@ -72,6 +73,12 @@ if (status.status !== 0 || status.stdout.trim() !== "") {
 }
 
 for (const [label, command, args] of [...preflightSteps, ...steps]) {
+  try {
+    requireRunnerMutationAllowed(productionEnvironment);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "dongo runner mutation guard failed.");
+    process.exit(6);
+  }
   console.log(`\n==> ${label}`);
   const result = spawnSync(command, args, {
     cwd: root,

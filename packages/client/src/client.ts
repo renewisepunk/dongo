@@ -485,6 +485,10 @@ export class DongoClient {
     return this.call("runner_wait", input, options);
   }
 
+  runnerQuarantineJob(input: OperationInput<"runner_quarantine_job">, options?: CallOptions) {
+    return this.call("runner_quarantine_job", input, options);
+  }
+
   runnerUpdateJob(input: OperationInput<"runner_update_job">, options?: CallOptions) {
     return this.call("runner_update_job", input, options);
   }

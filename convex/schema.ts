@@ -325,6 +325,8 @@ export default defineSchema({
     reservationExpiresAt: v.optional(v.number()),
     leaseExpiresAt: v.optional(v.number()),
     cancellationRequestedAt: v.optional(v.number()),
+    mutationQuarantinedAt: v.optional(v.number()),
+    mutationQuarantinedByActorId: v.optional(v.id("actors")),
     terminalAt: v.optional(v.number()),
     updatedAt: v.number(),
   })

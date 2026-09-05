@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 
 import type { Intake, RunnerJob, RunnerRegistration, RunnerWait, WorkItem } from "@dongo/contracts";
 import { DongoClientError } from "@dongo/client";
+import { CliCoreError } from "../src/errors.ts";
 import { MemorySecretStore } from "../src/secret-store.ts";
 import {
   generateRunnerToken,
@@ -167,6 +168,128 @@ test("ask mode requires exact local approval before executing a command-free job
   const status = await manager.status();
   assert.equal(status.state?.status, "stopped");
   assert.doesNotMatch(JSON.stringify(api.transitions), /dng_run_|local output only/u);
+});
+
+test("quarantine flips local authority first and stops the exact managed harness", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  const service = new FakeService();
+  let started = false;
+  let stopped = false;
+  let guardPath: string | undefined;
+  const adapter: RunnerHarnessAdapter = {
+    harness: "codex",
+    validate: async () => "/bin/sh",
+    execute: async (input) => {
+      started = true;
+      guardPath = input.mutationGuardPath;
+      await new Promise<void>((resolve) => input.signal.addEventListener("abort", () => {
+        stopped = true;
+        resolve();
+      }, { once: true }));
+      return { outcome: "failed", safeCode: "cancelled" };
+    },
+  };
+  const manager = fixture.manager(api, service, { adapter: () => adapter });
+  await manager.install({ label: "Quarantine Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  api.job = runnerJob("delivered", 2);
+  api.onTerminal = () => controller.abort();
+  const running = manager.run(controller.signal);
+  try {
+    for (let attempt = 0; attempt < 100 && !started; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(started, true);
+    const result = await manager.quarantine(api.job.id);
+    assert.equal(result.quarantined, true);
+    assert.equal(result.remoteState, "cancel_requested");
+    assert.match(guardPath ?? "", /runner-quarantine/u);
+    for (let attempt = 0; attempt < 100 && !stopped; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(stopped, true);
+    assert.equal(api.transitions.at(-1)?.safeCode, "release_quarantined");
+  } finally {
+    controller.abort();
+    await running;
+  }
+});
+
+test("offline quarantine leaves the local guard active and still stops the managed harness", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  api.quarantineError = new DongoClientError({ code: "temporarily_unavailable", message: "offline", status: 503, retryable: true });
+  let started = false;
+  let stopped = false;
+  const adapter: RunnerHarnessAdapter = {
+    harness: "codex",
+    validate: async () => "/bin/sh",
+    execute: async (input) => {
+      started = true;
+      await new Promise<void>((resolve) => input.signal.addEventListener("abort", () => { stopped = true; resolve(); }, { once: true }));
+      return { outcome: "failed", safeCode: "cancelled" };
+    },
+  };
+  const manager = fixture.manager(api, new FakeService(), { adapter: () => adapter });
+  await manager.install({ label: "Offline quarantine Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  api.job = runnerJob("delivered", 2);
+  api.onTerminal = () => controller.abort();
+  const running = manager.run(controller.signal);
+  try {
+    for (let attempt = 0; attempt < 100 && !started; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    await assert.rejects(manager.quarantine(api.job.id), /offline/u);
+    for (let attempt = 0; attempt < 100 && !stopped; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(stopped, true);
+    assert.equal(api.transitions.at(-1)?.safeCode, "release_quarantined");
+  } finally {
+    controller.abort();
+    await running;
+  }
+});
+
+test("quarantine stays incomplete and retains the active job when process-group stop cannot be confirmed", async (context) => {
+  const fixture = await runnerFixture(context);
+  const controller = new AbortController();
+  const api = new FakeRunnerApi();
+  let started = false;
+  const adapter: RunnerHarnessAdapter = {
+    harness: "codex",
+    validate: async () => "/bin/sh",
+    execute: async (input) => {
+      started = true;
+      await new Promise<void>((resolve) => input.signal.addEventListener("abort", () => resolve(), { once: true }));
+      throw new CliCoreError({
+        code: "runner_quarantine_incomplete",
+        message: "The managed harness process group did not confirm termination.",
+        exitCode: 6,
+      });
+    },
+  };
+  const manager = fixture.manager(api, new FakeService(), {
+    adapter: () => adapter,
+    quarantineStopTimeoutMs: 500,
+  });
+  await manager.install({ label: "Incomplete quarantine Mac", harnesses: ["codex"], approvalMode: "automatic" });
+  api.job = runnerJob("delivered", 2);
+  const running = manager.run(controller.signal);
+  try {
+    for (let attempt = 0; attempt < 100 && !started; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(started, true);
+    await assert.rejects(manager.quarantine(api.job.id), (error: unknown) =>
+      error instanceof CliCoreError && error.code === "runner_quarantine_incomplete");
+    const status = await manager.status();
+    assert.equal(status.state?.status, "error");
+    assert.equal(status.state?.lastErrorCode, "runner_quarantine_incomplete");
+    assert.deepEqual(status.state?.currentJobs.map(({ id }) => id), [api.job.id]);
+  } finally {
+    controller.abort();
+    await Promise.race([
+      running,
+      new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error("runner did not stop after incomplete quarantine test")), 2_000)),
+    ]);
+  }
 });
 
 test("runner removal disables startup, revokes remotely, and deletes local material", async (context) => {
@@ -804,6 +927,7 @@ class FakeRunnerApi {
   dropInspectedJob = false;
   waitFailures = 0;
   waitError?: Error;
+  quarantineError?: Error;
 
   async getWork(input: { workItemId?: string }): Promise<WorkItem> {
     return {
@@ -863,6 +987,13 @@ class FakeRunnerApi {
     this.revocations += 1;
     if (this.revokeError) throw this.revokeError;
     return { ...registration({ label: "Fake", platform: "darwin", version: "0.1.0", harnesses: ["codex"], approvalMode: "ask" }), status: "revoked" as const };
+  }
+
+  async runnerQuarantineJob(): Promise<RunnerJob> {
+    if (this.quarantineError) throw this.quarantineError;
+    if (!this.job) throw new Error("missing job");
+    this.job = { ...this.job, state: "cancel_requested", mutationQuarantinedAt: Date.now(), revision: this.job.revision + 1 };
+    return this.job;
   }
 
   async runnerWait(input?: { activeJobIds?: string[]; inspectJobId?: string }): Promise<RunnerWait> {
@@ -1047,7 +1178,11 @@ async function runnerFixture(context: TestContext) {
     manager(
       api: FakeRunnerApi,
       service: FakeService,
-      options: { adapter?: RunnerAdapterResolver; sleep?: () => Promise<void> } = {},
+      options: {
+        adapter?: RunnerAdapterResolver;
+        sleep?: () => Promise<void>;
+        quarantineStopTimeoutMs?: number;
+      } = {},
     ) {
       return new LocalRunnerManager({
         api,
@@ -1066,6 +1201,7 @@ async function runnerFixture(context: TestContext) {
           execute: async () => ({ outcome: "completed" as const }),
         })),
         sleep: options.sleep,
+        quarantineStopTimeoutMs: options.quarantineStopTimeoutMs,
       });
     },
   };

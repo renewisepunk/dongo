@@ -20,6 +20,12 @@ import {
 import type { SecretStore } from "./secret-store.ts";
 import { FileSecretStore } from "./secret-store.ts";
 import type { RunnerServiceController, RunnerServiceSpec } from "./runner-service.ts";
+import {
+  assertRunnerMutationAllowed,
+  quarantineRunnerMutation,
+  runnerMutationGuardPath,
+  runnerMutationIsQuarantined,
+} from "./runner-mutation-guard.ts";
 import { RunnerWorkspaceManager, type RunnerWorkspace } from "./runner-workspaces.ts";
 
 const RUNNER_SCHEMA_VERSION = 1;
@@ -27,6 +33,7 @@ const RUNNER_VERSION = "0.3.0";
 const DEFAULT_MAX_CONCURRENT_JOBS = 6;
 const MAX_LOG_BYTES = 5 * 1_024 * 1_024;
 const MAX_LOG_FILES = 3;
+const TERMINAL_JOB_STATES = new Set<RunnerJob["state"]>(["cancelled", "failed", "completed", "expired"]);
 
 export type RunnerBrowserReviewMode = "disabled" | "read_only";
 
@@ -136,6 +143,7 @@ export interface RunnerHarnessAdapter {
     deploymentPolicy?: RunnerDeploymentPolicy;
     trustedRepositoryRoot?: string;
     signal: AbortSignal;
+    mutationGuardPath: string;
     log: (chunk: string) => Promise<void>;
   }): Promise<RunnerHarnessResult>;
 }
@@ -148,7 +156,7 @@ export type RunnerAdapterResolver = (
 
 type RunnerApi = Pick<
   DongoClient,
-  "getIntake" | "getWork" | "runnerRegister" | "runnerRotate" | "runnerRevoke" | "runnerWait" | "runnerUpdateJob"
+  "getIntake" | "getWork" | "runnerRegister" | "runnerRotate" | "runnerRevoke" | "runnerWait" | "runnerUpdateJob" | "runnerQuarantineJob"
 >;
 
 export interface RunnerManagerOptions {
@@ -165,6 +173,7 @@ export interface RunnerManagerOptions {
   sleep?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
   random?: () => number;
   adapter?: RunnerAdapterResolver;
+  quarantineStopTimeoutMs?: number;
 }
 
 export function createRunnerStore(configDirectory: string): SecretStore {
@@ -189,7 +198,9 @@ export class LocalRunnerManager {
   readonly #sleep: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
   readonly #random: () => number;
   readonly #adapter?: RunnerAdapterResolver;
+  readonly #quarantineStopTimeoutMs: number;
   readonly #activeJobs = new Map<string, { job: RunnerJob; workspace?: RunnerWorkspace }>();
+  readonly #incompleteStopJobs = new Set<string>();
   #stateWrite: Promise<void> = Promise.resolve();
 
   constructor(options: RunnerManagerOptions) {
@@ -206,6 +217,7 @@ export class LocalRunnerManager {
     this.#sleep = options.sleep ?? abortableSleep;
     this.#random = options.random ?? Math.random;
     this.#adapter = options.adapter;
+    this.#quarantineStopTimeoutMs = options.quarantineStopTimeoutMs ?? 10_000;
   }
 
   async install(input: {
@@ -390,6 +402,52 @@ export class LocalRunnerManager {
       workIdentifier: job.workIdentifier,
       intakeId: job.intakeId,
     };
+  }
+
+  async quarantine(jobId: string) {
+    const config = await this.#readConfig(true);
+    const state = await this.#readState();
+    const job = state?.currentJobs.find((candidate) => candidate.id === jobId);
+    if (!job || state?.registrationId !== config.registrationId) {
+      throw new CliCoreError({ code: "runner_job_not_active", message: "That exact runner job is not active on this computer.", exitCode: 6 });
+    }
+    const guardPath = await quarantineRunnerMutation({
+      configDirectory: this.#configDirectory,
+      projectRef: config.projectRef,
+      registrationId: config.registrationId,
+      jobId,
+      now: this.#now,
+    });
+    const remote = await this.#api.runnerQuarantineJob({
+      idempotencyKey: randomUUID(),
+      registrationId: config.registrationId,
+      token: config.token,
+      jobId,
+    });
+    const deadline = Date.now() + this.#quarantineStopTimeoutMs;
+    while (Date.now() < deadline) {
+      const latest = await this.#readState();
+      if (!latest?.currentJobs.some((candidate) => candidate.id === jobId)) {
+        return { quarantined: true, jobId, remoteState: remote.state, stopped: true };
+      }
+      await this.#sleep(50);
+    }
+    throw new CliCoreError({
+      code: "runner_quarantine_incomplete",
+      message: "Mutation authority is quarantined, but the managed harness has not confirmed it stopped. Keep the quarantine in place and inspect runner status.",
+      exitCode: 6,
+    });
+  }
+
+  async assertMutationAllowed(jobId: string) {
+    const config = await this.#readConfig(true);
+    const expected = runnerMutationGuardPath(this.#configDirectory, config.projectRef, jobId);
+    const supplied = process.env.DONGO_RUNNER_MUTATION_GUARD_FILE;
+    if (!supplied || path.resolve(supplied) !== expected) {
+      throw new CliCoreError({ code: "release_quarantine_unavailable", message: "The runner mutation guard does not match this exact job.", exitCode: 6 });
+    }
+    await assertRunnerMutationAllowed(expected);
+    return { allowed: true, jobId };
   }
 
   async configureApproval(approvalMode: RunnerApprovalMode) {
@@ -638,6 +696,7 @@ export class LocalRunnerManager {
             .finally(async () => {
               workers.delete(result.job!.id);
               this.#activeJobs.delete(result.job!.id);
+              this.#incompleteStopJobs.delete(result.job!.id);
               await this.#publishState(config, workers.size > 0 ? "running" : "waiting");
             });
           workers.set(result.job.id, worker);
@@ -717,7 +776,9 @@ export class LocalRunnerManager {
   ) {
     let job = initialJob;
     if (job.state === "cancel_requested") {
-      await this.#updateJob(config, job, "cancelled", { safeCode: "cancelled_before_start" }, signal);
+      await this.#updateJob(config, job, "cancelled", {
+        safeCode: job.mutationQuarantinedAt ? "release_quarantined" : "cancelled_before_start",
+      }, signal);
       return;
     }
     const recovering = job.state === "running" || job.state === "blocked";
@@ -790,6 +851,13 @@ export class LocalRunnerManager {
       job = await this.#updateJob(config, job, "starting", {}, signal);
     }
     if (job.state !== "starting" && !recovering) return;
+    const mutationGuardPath = runnerMutationGuardPath(this.#configDirectory, config.projectRef, job.id);
+    if (await runnerMutationIsQuarantined(mutationGuardPath)) {
+      if (!TERMINAL_JOB_STATES.has(job.state)) {
+        await this.#updateJob(config, job, "cancelled", { safeCode: "release_quarantined" }, signal).catch(() => undefined);
+      }
+      return;
+    }
     if (
       await captureExecutableIdentity(config.executablePaths[job.harness]).catch(() => undefined) !==
       config.executableIdentities[job.harness]
@@ -847,30 +915,60 @@ export class LocalRunnerManager {
       deploymentPolicy: config.deploymentPolicy,
       trustedRepositoryRoot: config.repositoryRoot,
       signal: controller.signal,
+      mutationGuardPath,
       log: (chunk) => log.append(chunk),
     }).then(
       (result) => {
         executionFinished = true;
         return result;
       },
-      (): RunnerHarnessResult => {
+      (error): RunnerHarnessResult => {
         executionFinished = true;
+        const quarantineIncomplete = error instanceof CliCoreError && error.code === "runner_quarantine_incomplete";
         return {
           outcome: "failed",
-          safeCode: controller.signal.aborted ? "cancelled" : "harness_failed",
-          safeSummary: controller.signal.aborted
+          safeCode: quarantineIncomplete
+            ? "runner_quarantine_incomplete"
+            : controller.signal.aborted ? "cancelled" : "harness_failed",
+          safeSummary: quarantineIncomplete
+            ? "The managed harness process group did not confirm termination."
+            : controller.signal.aborted
             ? "Local execution was cancelled."
             : "The local harness stopped before completing the job.",
         };
       },
     );
+    const retainIncompleteStop = async (result: RunnerHarnessResult): Promise<boolean> => {
+      if (result.safeCode !== "runner_quarantine_incomplete") return false;
+      this.#incompleteStopJobs.add(current.id);
+      await this.#publishState(config, "error", {
+        lastErrorCode: "runner_quarantine_incomplete",
+      });
+      await new Promise<void>((resolve) => {
+        const aborted = () => resolve();
+        signal?.addEventListener("abort", aborted, { once: true });
+        if (signal?.aborted) {
+          signal.removeEventListener("abort", aborted);
+          resolve();
+        }
+      });
+      return true;
+    };
     try {
       while (true) {
         const settled = await Promise.race([
           execution.then((value) => ({ kind: "result" as const, value })),
-          this.#sleep(15_000, signal).then(() => ({ kind: "tick" as const })),
+          this.#sleep(250, signal).then(() => ({ kind: "tick" as const })),
         ]);
         if (settled.kind === "result") {
+          if (await retainIncompleteStop(settled.value)) return;
+          if (await runnerMutationIsQuarantined(mutationGuardPath)) {
+            const latest = this.#activeJobs.get(current.id)?.job ?? current;
+            if (!TERMINAL_JOB_STATES.has(latest.state)) {
+              await this.#updateJob(config, latest, "cancelled", { safeCode: "release_quarantined" }, signal).catch(() => undefined);
+            }
+            return;
+          }
           const target = current.kind === "work"
             ? await this.#api.getWork({ workItemId: current.workItemId }, { signal })
             : await this.#api.getIntake({ intakeId: current.intakeId! }, { signal });
@@ -925,6 +1023,17 @@ export class LocalRunnerManager {
           if (state === "completed") await workspaceManager.cleanup(workspace);
           return;
         }
+        if (await runnerMutationIsQuarantined(mutationGuardPath)) {
+          controller.abort(new Error("runner job release quarantined"));
+          const stopped = await execution;
+          if (await retainIncompleteStop(stopped)) return;
+          const latest = this.#activeJobs.get(current.id)?.job ?? current;
+          if (!TERMINAL_JOB_STATES.has(latest.state)) {
+            await this.#updateJob(config, latest, "cancelled", { safeCode: "release_quarantined" }, signal).catch(() => undefined);
+          }
+          return;
+        }
+        if (this.#now() - (current.updatedAt ?? 0) < 14_000) continue;
         const polled = await this.#api.runnerWait({
           idempotencyKey: randomUUID(),
           registrationId: config.registrationId,
@@ -938,19 +1047,24 @@ export class LocalRunnerManager {
         }, { signal });
         if (!polled.job || polled.job.id !== current.id) {
           controller.abort(new Error("runner job lease was lost"));
-          await execution.catch(() => undefined);
+          const stopped = await execution;
+          if (await retainIncompleteStop(stopped)) return;
           throw new CliCoreError({ code: "runner_lease_lost", message: "Runner job lease was lost.", exitCode: 6 });
         }
         current = polled.job;
         if (current.state === "cancel_requested") {
           controller.abort(new Error("runner job cancelled"));
-          await execution.catch(() => undefined);
-          await this.#updateJob(config, current, "cancelled", { safeCode: "user_cancelled" }, signal);
+          const stopped = await execution;
+          if (await retainIncompleteStop(stopped)) return;
+          await this.#updateJob(config, current, "cancelled", {
+            safeCode: current.mutationQuarantinedAt ? "release_quarantined" : "user_cancelled",
+          }, signal);
           return;
         }
         if (["cancelled", "failed", "completed", "expired"].includes(current.state)) {
           controller.abort(new Error("runner job is no longer active"));
-          await execution.catch(() => undefined);
+          const stopped = await execution;
+          if (await retainIncompleteStop(stopped)) return;
           return;
         }
         current = await this.#updateJob(config, current, "running", {}, signal);
@@ -992,7 +1106,9 @@ export class LocalRunnerManager {
       }
       job = polled.job;
       if (job.state === "cancel_requested") {
-        return await this.#updateJob(config, job, "cancelled", { safeCode: "user_cancelled" }, signal);
+        return await this.#updateJob(config, job, "cancelled", {
+          safeCode: job.mutationQuarantinedAt ? "release_quarantined" : "user_cancelled",
+        }, signal);
       }
       if (["cancelled", "failed", "completed", "expired"].includes(job.state)) return job;
       await this.#recordJob(config, job);
@@ -1037,6 +1153,7 @@ export class LocalRunnerManager {
   }
 
   #aggregateStatus(): RunnerLocalState["status"] {
+    if (this.#incompleteStopJobs.size > 0) return "error";
     const states = [...this.#activeJobs.values()].map(({ job }) => job.state);
     if (states.length === 0) return "waiting";
     if (states.some((state) => ["delivered", "starting", "running", "cancel_requested"].includes(state))) return "running";
@@ -1073,7 +1190,9 @@ export class LocalRunnerManager {
         version: config.version,
         currentJob: currentJobs.length === 1 ? currentJobs[0] : undefined,
         currentJobs,
-        ...extra,
+        ...(this.#incompleteStopJobs.size > 0
+          ? { ...extra, lastErrorCode: "runner_quarantine_incomplete" }
+          : extra),
         updatedAt: new Date(this.#now()).toISOString(),
       });
     };

@@ -112,3 +112,11 @@ The failures observed during the dongo and wiwi releases were a chain of indepen
 - List filenames or variable names only when that is sufficient. Never echo credential values, authorization codes, signed URLs, or token-bearing configuration.
 - Prefer read-only checks before mutations: runner status, process state, Git status, remote revision, authentication status, and deployment plan.
 - Every user-visible status should say what is happening now, what it is waiting for, whether a process is alive, what happens next, and whether the user must act.
+
+## Attention alone does not quarantine an active release
+
+- Opening owner Attention, killing one observed child, or pausing Work in the UI does not atomically revoke mutation authority from an already-running runner harness. The preserved harness or resumed session can continue with inherited provider credentials unless the exact runner job is quarantined.
+- Quarantine local authority first, identify the exact runner job and registration, persist the server cancellation reason, terminate the managed process tree, and refuse that job's saved session on restart. Resume only through an explicit new queue action with a new exact job identity.
+- Supported release entry points must fail closed and recheck the exact guard immediately before every external mutation. An absent partial identity, malformed or mismatched guard, offline server during quarantine, or stale saved session is a stop condition.
+- A provider request already accepted before quarantine is in flight and cannot be rolled back by a local guard. Inspect provider state and use provider rollback or credential revocation when needed.
+- Be explicit about the boundary: a local runner can control its managed process tree and supported release scripts. It cannot defend against malware or a deliberately detached process already running as the same operating-system user while static provider credentials remain available.

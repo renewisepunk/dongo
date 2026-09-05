@@ -122,6 +122,16 @@ runner never prints the key. A missing, development, local, or mismatched target
 is a hard preflight failure; never let Convex infer a target during a production
 release.
 
+When production release runs under a dongo local-runner job, the release
+environment includes an exact owner-only mutation guard. The coherent deploy
+rechecks it before every child step, including Convex, D1, Workers, web, CLI
+publication, and notice activation. `dongo runner quarantine --job-id ID`
+flips that guard before requesting server cancellation and waits for the
+managed harness to stop. Do not bypass the guard or manually invoke a provider
+command from a quarantined job. A provider request already accepted before the
+guard flipped may still finish; inspect provider state and use the rollback or
+credential-revocation path when needed.
+
 The worktree must be empty. Inspect `apps/web/dist/server/wrangler.json`: it must name `dongo-web-production`, route only `dongo.so` and `www.dongo.so`, and reference only `brainy-camel-172`. The production browser/server bundles must not contain `dev.dongo.so` or `wandering-camel-662`.
 
 Record the current landing deployment immediately before cutover:

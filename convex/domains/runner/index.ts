@@ -65,6 +65,7 @@ const RUNNER_SAFE_CODES = new Set([
   "queue_expired",
   "runner_lease_expired",
   "runner_restarted",
+  "release_quarantined",
   "runner_revoked",
   "user_cancelled",
   "work_completed",
@@ -600,6 +601,7 @@ async function jobDto(
     reservationExpiresAt: job.reservationExpiresAt,
     leaseExpiresAt: job.leaseExpiresAt,
     cancellationRequestedAt: job.cancellationRequestedAt,
+    mutationQuarantinedAt: job.mutationQuarantinedAt,
     terminalAt: job.terminalAt,
     updatedAt: job.updatedAt,
   };
@@ -1634,6 +1636,60 @@ export const cancel = mutation({
       await appendJobEvent(ctx, job, principal.actor._id, state, now, "user_cancelled");
       const updated = await ctx.db.get(job._id);
       if (!updated) fail("internal", "Runner job disappeared during cancellation");
+      return await jobDto(ctx, updated);
+    });
+  },
+});
+
+export const quarantine = internalMutation({
+  args: {
+    authorization: agentContextValidator,
+    registrationId: v.id("runnerRegistrations"),
+    token: v.string(),
+    jobId: v.id("runnerJobs"),
+    idempotencyKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { principal, registration } = await requireRegistration(ctx, {
+      ...args,
+      scope: "dongo:work:write",
+    });
+    const job = await ctx.db.get(args.jobId);
+    if (
+      !job ||
+      job.projectId !== registration.projectId ||
+      (job.registrationId !== registration._id && job.targetRegistrationId !== registration._id)
+    ) fail("not_found", "Runner job not found");
+    const now = Date.now();
+    return await runIdempotent(ctx, {
+      organizationId: registration.organizationId,
+      projectId: registration.projectId,
+      principalKey: principal.principalKey,
+      operation: "runner.quarantine",
+      key: args.idempotencyKey,
+      payload: { jobId: args.jobId },
+      now,
+    }, async () => {
+      if (TERMINAL_STATES.has(job.state)) fail("invalid_transition", "Runner job is already finished");
+      if (job.mutationQuarantinedAt !== undefined || job.state === "cancel_requested") {
+        return await jobDto(ctx, job);
+      }
+      const state: RunnerState = job.state === "queued" ? "cancelled" : "cancel_requested";
+      const revision = job.revision + 1;
+      await ctx.db.patch(job._id, {
+        state,
+        revision,
+        safeCode: "release_quarantined",
+        safeSummary: "Trusted deployment access was quarantined on this computer; explicit requeue is required.",
+        cancellationRequestedAt: now,
+        mutationQuarantinedAt: now,
+        mutationQuarantinedByActorId: principal.actor._id,
+        terminalAt: state === "cancelled" ? now : undefined,
+        updatedAt: now,
+      });
+      await appendJobEvent(ctx, job, principal.actor._id, state, now, "release_quarantined");
+      const updated = await ctx.db.get(job._id);
+      if (!updated) fail("internal", "Runner job disappeared during quarantine");
       return await jobDto(ctx, updated);
     });
   },

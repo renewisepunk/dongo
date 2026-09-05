@@ -348,6 +348,7 @@ export const runnerJobSchema = z.object({
   reservationExpiresAt: timestamp.optional(),
   leaseExpiresAt: timestamp.optional(),
   cancellationRequestedAt: timestamp.optional(),
+  mutationQuarantinedAt: timestamp.optional(),
   terminalAt: timestamp.optional(),
   updatedAt: timestamp,
 }).strict().superRefine((job, context) => {

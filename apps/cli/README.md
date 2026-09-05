@@ -42,7 +42,7 @@ Build and install the self-contained package archive so the command does not dep
 
 ```sh
 npm pack --workspace @wisepunk/dongo
-npm install --global ./wisepunk-dongo-0.2.13.tgz
+npm install --global ./wisepunk-dongo-0.2.14.tgz
 dongo --version
 dongo --help
 ```
@@ -196,6 +196,15 @@ unsafe configuration stops before the agent starts and names the failed
 provider without falling back to a different deployment target. Runner logs
 redact every injected secret. Disable the bridge with
 `dongo runner configure --deployment-access disabled`.
+For an active release job, `dongo runner quarantine --job-id ID` first writes an
+owner-only exact-job guard outside the worktree, requests cancellation from the
+server, and waits for the managed harness to stop. The saved harness session
+cannot resume; continuing requires an explicit new queue action. Supported
+release scripts enforce the same `dongo runner mutation-check --job-id ID`
+semantics before each external mutation. A quarantine cannot undo a provider
+request already in flight, and it does not defend against a deliberately
+detached same-user process; use provider credential revocation for that
+stronger boundary.
 Installation records the exact supported Codex and/or Claude Code executable;
 a queued job cannot replace its path, flags, environment, or instruction. Use
 `dongo runner status` to inspect

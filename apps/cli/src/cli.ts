@@ -48,6 +48,8 @@ export interface CliDependencies {
     | "runnerInstall"
     | "runnerStatus"
     | "runnerApprove"
+    | "runnerQuarantine"
+    | "runnerMutationCheck"
     | "runnerConfigureApproval"
     | "runnerConfigure"
     | "runnerDisable"
@@ -715,8 +717,8 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
       case "runner": {
         const action = requireSubcommand(
           parsed,
-          ["install", "configure", "status", "approve", "disable", "remove", "run"],
-          "Usage: dongo runner install|configure|status|approve|disable|remove|run [options]",
+          ["install", "configure", "status", "approve", "quarantine", "mutation-check", "disable", "remove", "run"],
+          "Usage: dongo runner install|configure|status|approve|quarantine|mutation-check|disable|remove|run [options]",
         );
         command = `runner ${action}`;
         if (action === "install") {
@@ -786,6 +788,12 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           const result = await service.runnerApprove(requiredOption(parsed, "job-id"));
           data = result;
           if (!parsed.json) humanOutput = renderRunnerApproveOutput(result);
+        } else if (action === "quarantine") {
+          data = await service.runnerQuarantine(requiredOption(parsed, "job-id"));
+          if (!parsed.json) humanOutput = "The exact runner job is quarantined. Its managed harness is stopping; explicitly queue a new job to resume.\n";
+        } else if (action === "mutation-check") {
+          data = await service.runnerMutationCheck(requiredOption(parsed, "job-id"));
+          if (!parsed.json) humanOutput = "External mutation is allowed for this exact active runner job.\n";
         } else if (action === "disable") {
           data = await service.runnerDisable();
           if (!parsed.json) humanOutput = renderRunnerDisableOutput();

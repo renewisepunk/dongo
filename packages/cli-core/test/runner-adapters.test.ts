@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -10,14 +10,174 @@ import { DONGO_COMPLETION_INSTRUCTIONS } from "@dongo/mcp/managed-integrations";
 
 import { CliCoreError } from "../src/errors.ts";
 import { MemorySecretStore } from "../src/secret-store.ts";
+import { quarantineRunnerMutation, runnerMutationGuardPath } from "../src/runner-mutation-guard.ts";
 import {
   ClaudeRunnerAdapter,
   CodexRunnerAdapter,
   resolveGitHubCliChildEnvironment,
   resolveValidatedGitCommonDirectory,
+  stopHarnessProcessGroup,
 } from "../src/runner-adapters.ts";
 
 const noCredentialEnvironment = async () => ({});
+
+test("adapter refuses a quarantined exact job before resolving deployment credentials or spawning", async (context) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "dongo-adapter-quarantine-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const guardPath = runnerMutationGuardPath(root, "project-ref", "job-1");
+  await quarantineRunnerMutation({
+    configDirectory: root,
+    projectRef: "project-ref",
+    registrationId: "registration-1",
+    jobId: "job-1",
+  });
+  let credentials = 0;
+  let spawns = 0;
+  const adapter = new CodexRunnerAdapter({
+    store: new MemorySecretStore(),
+    executablePath: "/bin/sh",
+    resolveCredentialEnvironment: async () => { credentials += 1; return { GH_TOKEN: "must-not-resolve" }; },
+    spawnProcess: (() => { spawns += 1; return fakeChild(); }) as never,
+  });
+  await assert.rejects(adapter.execute({
+    repositoryRoot: process.cwd(),
+    registrationId: "registration-1",
+    jobId: "job-1",
+    kind: "work",
+    workIdentifier: "dong088",
+    mutationGuardPath: guardPath,
+    signal: new AbortController().signal,
+    log: async () => undefined,
+  }), /job is quarantined/u);
+  assert.equal(credentials, 0);
+  assert.equal(spawns, 0);
+});
+
+test("both adapters recheck quarantine after credential preflight and immediately before spawn", async (context) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "dongo-adapter-quarantine-race-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  for (const harness of ["codex", "claude"] as const) {
+    const jobId = `job-${harness}`;
+    const guardPath = runnerMutationGuardPath(root, "project-ref", jobId);
+    let spawns = 0;
+    const options = {
+      store: new MemorySecretStore(),
+      executablePath: "/bin/sh",
+      resolveCredentialEnvironment: async () => {
+        await quarantineRunnerMutation({
+          configDirectory: root,
+          projectRef: "project-ref",
+          registrationId: "registration-1",
+          jobId,
+        });
+        return { GH_TOKEN: "must-not-reach-spawn" };
+      },
+      spawnProcess: (() => { spawns += 1; return fakeChild(); }) as never,
+    };
+    const adapter = harness === "codex"
+      ? new CodexRunnerAdapter(options)
+      : new ClaudeRunnerAdapter(options);
+    await assert.rejects(adapter.execute({
+      repositoryRoot: process.cwd(),
+      registrationId: "registration-1",
+      jobId,
+      kind: "work",
+      workIdentifier: "dong088",
+      mutationGuardPath: guardPath,
+      signal: new AbortController().signal,
+      log: async () => undefined,
+    }), /job is quarantined/u);
+    assert.equal(spawns, 0, `${harness} must not spawn after quarantine flips during preflight`);
+  }
+});
+
+test("an abort raised synchronously by spawn is observed and stops the new process", async () => {
+  const controller = new AbortController();
+  let kills = 0;
+  const adapter = new CodexRunnerAdapter({
+    store: new MemorySecretStore(),
+    executablePath: "/bin/sh",
+    resolveCredentialEnvironment: noCredentialEnvironment,
+    spawnProcess: (() => {
+      const child = fakeChild();
+      const kill = child.kill.bind(child);
+      child.kill = (signal) => {
+        kills += 1;
+        return kill(signal);
+      };
+      controller.abort();
+      return child;
+    }) as never,
+  });
+  const result = await adapter.execute({
+    repositoryRoot: process.cwd(),
+    registrationId: "registration-1",
+    jobId: "job-abort-race",
+    kind: "work",
+    workIdentifier: "dong088",
+    signal: controller.signal,
+    log: async () => undefined,
+  });
+  assert.equal(result.outcome, "failed");
+  assert.equal(result.safeCode, "cancelled");
+  assert.equal(kills, 1);
+});
+
+test("process-group confirmation failure propagates when the harness leader exits first", async () => {
+  const controller = new AbortController();
+  const adapter = new CodexRunnerAdapter({
+    store: new MemorySecretStore(),
+    executablePath: "/bin/sh",
+    resolveCredentialEnvironment: noCredentialEnvironment,
+    spawnProcess: (() => {
+      const child = fakeChild();
+      queueMicrotask(() => {
+        controller.abort();
+        child.emit("exit", 0);
+      });
+      return child;
+    }) as never,
+    stopProcessGroup: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      throw new CliCoreError({
+        code: "runner_quarantine_incomplete",
+        message: "The managed harness process group did not confirm termination.",
+        exitCode: 6,
+      });
+    },
+  });
+  await assert.rejects(adapter.execute({
+    repositoryRoot: process.cwd(),
+    registrationId: "registration-1",
+    jobId: "job-leader-exits-first",
+    kind: "work",
+    workIdentifier: "dong088",
+    signal: controller.signal,
+    log: async () => undefined,
+  }), (error: unknown) =>
+    error instanceof CliCoreError && error.code === "runner_quarantine_incomplete");
+});
+
+test("process-tree stop waits past a clean leader exit and kills a surviving descendant", async (context) => {
+  if (process.platform === "win32") return;
+  const child = spawn("/bin/sh", ["-c", "trap 'exit 0' TERM; (trap '' TERM; exec sleep 30) & echo ready; wait"], {
+    detached: true,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  context.after(() => {
+    if (child.pid) {
+      try { process.kill(-child.pid, "SIGKILL"); } catch { /* already stopped */ }
+    }
+  });
+  await new Promise<void>((resolve, reject) => {
+    child.once("error", reject);
+    child.stdout.once("data", () => resolve());
+  });
+  const startedAt = Date.now();
+  await stopHarnessProcessGroup(child, { graceMs: 75, confirmationMs: 1_000, pollMs: 10 });
+  assert.ok(Date.now() - startedAt >= 60, "surviving descendant must keep the process group alive through grace");
+  assert.throws(() => process.kill(-child.pid!, 0), (error: NodeJS.ErrnoException) => error.code === "ESRCH");
+});
 
 test("Codex adapter uses fixed safe arguments and stdin, then resumes only the exact local job session", async () => {
   const calls: Array<{ executable: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv; input: string }> = [];

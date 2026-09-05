@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { CURRENT_AGENT_RELEASE_NOTICE } from "../packages/mcp/src/release-notice.ts";
+import { requireRunnerMutationAllowed } from "./runner-mutation-guard.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const executable = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -10,6 +11,12 @@ const args = JSON.stringify({
   releaseId: CURRENT_AGENT_RELEASE_NOTICE.id,
   releaseSequence: CURRENT_AGENT_RELEASE_NOTICE.sequence,
 });
+try {
+  requireRunnerMutationAllowed(process.env);
+} catch (error) {
+  console.error(error instanceof Error ? error.message : "dongo runner mutation guard failed.");
+  process.exit(6);
+}
 const result = spawnSync(
   executable,
   ["convex", "run", "operators/agentReleaseNotice:activate", args, "--prod"],

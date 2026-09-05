@@ -145,6 +145,35 @@ test("runner waits keep credentials in a bounded POST body", async () => {
   assert.doesNotMatch(request?.url ?? "", /dng_run_/u);
 });
 
+test("runner quarantine targets one exact job without putting its credential in the URL", async () => {
+  let request: Request | undefined;
+  const token = "dng_run_abcdefghijk_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ";
+  const client = new DongoClient({
+    baseUrl: "https://dev.dongo.so/api/agent/v1",
+    tokenProvider,
+    fetch: async (input, init) => {
+      request = new Request(input, init);
+      return Response.json({
+        ok: true,
+        data: {
+          id: "job-1", projectId: "project-1", kind: "work", workItemId: "work-1",
+          workIdentifier: "dong088", harness: "codex", state: "cancel_requested", revision: 4,
+          registrationId: "registration-1", safeCode: "release_quarantined",
+          mutationQuarantinedAt: 20_000, requestedAt: 1, expiresAt: 90_000, updatedAt: 20_000,
+        },
+        requestId: "req_runner_quarantine", apiVersion: "v1",
+      });
+    },
+  });
+  const input = { idempotencyKey: "runner-quarantine-client", registrationId: "registration-1", token, jobId: "job-1" };
+  const result = await client.runnerQuarantineJob(input);
+  assert.equal(result.state, "cancel_requested");
+  assert.equal(result.mutationQuarantinedAt, 20_000);
+  assert.equal(request?.url, "https://dev.dongo.so/api/agent/v1/runner_quarantine_job");
+  assert.deepEqual(JSON.parse((await request?.text()) ?? ""), input);
+  assert.doesNotMatch(request?.url ?? "", /dng_run_/u);
+});
+
 test("read operations retry transient failures", async () => {
   let calls = 0;
   const client = new DongoClient({
