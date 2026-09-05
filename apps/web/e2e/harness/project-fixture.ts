@@ -14,6 +14,7 @@ import type {
   ProjectOverview,
   ProjectSearchPage,
   RunnerJob,
+  RunnerRegistration,
   RunnerSnapshot,
 } from "../../src/lib/project-data";
 import { intakeDisplayLabel } from "../../src/lib/intake-editing";
@@ -185,24 +186,28 @@ const runnerListeners = new Set<(value: RunnerSnapshot) => void>();
 
 function runnerSnapshot(): RunnerSnapshot {
   const now = Date.now();
+  const scenario = fixtureScenario();
+  const runner: RunnerRegistration = {
+    id: "runner-fixture",
+    projectId: currentProject.id,
+    installationId: "installation-fixture",
+    label: "Fixture Mac",
+    platform: "darwin" as const,
+    version: "0.1.0",
+    harnesses: ["codex", "claude"],
+    approvalMode: scenario === "runner-automatic" ? "automatic" as const : "ask" as const,
+    status: "active" as const,
+    lastSeenAt: scenario === "runner-offline" ? now - 8 * 60_000 : now,
+    waitingUntil: scenario === "runner-offline" ? now - 1 : now + 20_000,
+    createdAt: now - 60_000,
+    updatedAt: now,
+  };
   return {
-    registrations: [{
-      id: "runner-fixture",
-      projectId: currentProject.id,
-      installationId: "installation-fixture",
-      label: "Fixture Mac",
-      platform: "darwin",
-      version: "0.1.0",
-      harnesses: ["codex", "claude"],
-      approvalMode: "ask",
-      status: "active",
-      lastSeenAt: now,
-      waitingUntil: now + 20_000,
-      createdAt: now - 60_000,
-      updatedAt: now,
-    }],
+    registrations: scenario === "runner-none" ? [] : [runner],
     jobs: runnerJobs,
-    automaticIntake: { enabled: false, revision: 0 },
+    automaticIntake: scenario === "runner-automatic"
+      ? { enabled: true, revision: 1, registrationId: runner.id, harness: "codex" }
+      : { enabled: false, revision: 0 },
     serverTime: now,
   };
 }

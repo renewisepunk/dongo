@@ -253,7 +253,9 @@ test("a copied marker remains rejected in an independent repository", async (con
 
 test("a changed repository remote invalidates a bound marker", async (context) => {
   const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-service-remote-"));
+  const configDirectory = await mkdtemp(path.join(os.tmpdir(), "dongo-service-remote-config-"));
   context.after(() => rm(repositoryRoot, { force: true, recursive: true }));
+  context.after(() => rm(configDirectory, { force: true, recursive: true }));
   await execFileAsync("git", ["-C", repositoryRoot, "init", "-q"]);
   await execFileAsync("git", ["-C", repositoryRoot, "remote", "add", "origin", "git@github.com:renewisepunk/replacement.git"]);
   const environment = {
@@ -275,21 +277,103 @@ test("a changed repository remote invalidates a bound marker", async (context) =
     connectedAt: "2026-09-04T00:00:00.000Z",
   });
   let requests = 0;
+  const opened: string[] = [];
   const service = new CoreService({
     cwd: repositoryRoot,
-    configDirectory: path.join(repositoryRoot, "..", "config"),
+    configDirectory,
     allowNonProduction: true,
     secretStore: new MemorySecretStore(),
-    fetch: async () => {
+    deviceClock: { now: Date.now, sleep: async () => undefined },
+    browserOpener: { open: async (url) => (opened.push(url), true) },
+    fetch: async (input) => {
       requests += 1;
-      return new Response(null, { status: 500 });
+      const url = String(input);
+      if (url.endsWith("/device/code")) return Response.json({
+        device_code: "device-secret",
+        user_code: "ABCD-EFGH",
+        verification_uri: "http://localhost:8787/device",
+        verification_uri_complete: "http://localhost:8787/device?user_code=ABCD-EFGH",
+        expires_in: 60,
+        interval: 1,
+      });
+      if (url.endsWith("/oauth2/token")) return Response.json({
+        access_token: "access-secret",
+        refresh_token: "refresh-secret",
+        token_type: "Bearer",
+        expires_in: 3600,
+        scope: "dongo:work:read offline_access",
+      });
+      if (url.endsWith("/session_start")) return envelope({
+        ...session,
+        project: { ...session.project, repositoryUrl: "https://github.com/renewisepunk/replacement" },
+      }, "req_remote_reconnect");
+      return new Response(null, { status: 404 });
     },
   });
 
   const result = await service.doctor();
   assert.equal(result.ok, false);
-  assert.match(result.checks.at(-1)?.detail ?? "", /credential binding are inconsistent/u);
+  assert.equal(result.checks.at(-1)?.name, "repository-binding");
+  assert.match(result.checks.at(-1)?.detail ?? "", /replacement.*does not match.*dongo/u);
   assert.equal(requests, 0, "a changed remote must be rejected before credential or network use");
+
+  await service.connect({ origin: "http://localhost:8787" });
+  const approvalUrl = new URL(opened[0] ?? "");
+  assert.equal(approvalUrl.searchParams.has("project_ref"), false, "a stale marker must not preselect its old project");
+  assert.equal(approvalUrl.searchParams.get("repository_url"), "https://github.com/renewisepunk/replacement");
+});
+
+test("connect refuses an approved project bound to a different repository", async (context) => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "dongo-connect-binding-"));
+  const configDirectory = await mkdtemp(path.join(os.tmpdir(), "dongo-connect-binding-config-"));
+  context.after(() => rm(repositoryRoot, { force: true, recursive: true }));
+  context.after(() => rm(configDirectory, { force: true, recursive: true }));
+  await execFileAsync("git", ["-C", repositoryRoot, "init", "-q"]);
+  await execFileAsync("git", ["-C", repositoryRoot, "remote", "add", "origin", "git@github.com:renewisepunk/dongo.git"]);
+  const service = new CoreService({
+    cwd: repositoryRoot,
+    configDirectory,
+    allowNonProduction: true,
+    secretStore: new MemorySecretStore(),
+    deviceClock: { now: Date.now, sleep: async () => undefined },
+    browserOpener: { open: async () => true },
+    fetch: async (input) => {
+      const url = String(input);
+      if (url.endsWith("/device/code")) return Response.json({
+        device_code: "device-secret",
+        user_code: "ABCD-EFGH",
+        verification_uri: "http://localhost:8787/device",
+        verification_uri_complete: "http://localhost:8787/device?user_code=ABCD-EFGH",
+        expires_in: 60,
+        interval: 1,
+      });
+      if (url.endsWith("/oauth2/token")) return Response.json({
+        access_token: "access-secret",
+        refresh_token: "refresh-secret",
+        token_type: "Bearer",
+        expires_in: 3600,
+        scope: "dongo:work:read offline_access",
+      });
+      if (url.endsWith("/session_start")) return envelope({
+        ...session,
+        project: {
+          ...session.project,
+          publicRef: "pub_companion",
+          name: "Companion",
+          repositoryUrl: "https://github.com/renewisepunk/companion",
+        },
+      }, "req_wrong_repository");
+      return new Response(null, { status: 404 });
+    },
+  });
+
+  await assert.rejects(service.connect({ origin: "http://localhost:8787" }), (error: unknown) => {
+    assert.ok(error instanceof CliCoreError);
+    assert.equal(error.code, "repository_binding_mismatch");
+    assert.match(error.message, /No local marker was changed/u);
+    return true;
+  });
+  await assert.rejects(readFile(path.join(repositoryRoot, ".agent-work", "project.json"), "utf8"));
 });
 
 test("concurrent connect calls create one browser authorization and reuse its result", async (context) => {

@@ -68,13 +68,13 @@ export function resolveAgentSelectedProject(input: {
   const requestedRef = input.projectRef?.trim();
   if (requestedRef) {
     const project = input.projects.find((candidate) => candidate.publicRef === requestedRef);
-    if (project) return { project, strategy: "reference" };
+    return project ? { project, strategy: "reference" } : {};
   }
   const requestedRepository = repositoryKey(input.repositoryUrl);
   if (requestedRepository) {
     const matches = input.projects.filter((project) => repositoryKey(project.repositoryUrl) === requestedRepository);
     const project = oneProject(matches);
-    if (project) return { project, strategy: "repository" };
+    return project ? { project, strategy: "repository" } : {};
   }
   const requestedName = input.projectName?.trim().toLowerCase();
   if (requestedName) {
@@ -82,7 +82,7 @@ export function resolveAgentSelectedProject(input: {
       project.name.trim().toLowerCase() === requestedName || project.slug.trim().toLowerCase() === requestedName
     );
     const project = oneProject(matches);
-    if (project) return { project, strategy: "name" };
+    return project ? { project, strategy: "name" } : {};
   }
   const project = oneProject(input.projects);
   return project ? { project, strategy: "only-project" } : {};
@@ -206,6 +206,18 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
         repositoryUrl: projectProposal()?.repositoryUrl,
       }));
   const selectedProject = createMemo(() => projectResolution().project);
+  const signedInIdentity = createMemo(() => {
+    const user = accountUser();
+    if (!user) return "Unknown account";
+    if (user.email && user.name) return `${user.name} · ${user.email}`;
+    return user.email || user.name || "Signed-in account";
+  });
+  const requestedRepository = createMemo(() => projectProposal()?.repositoryUrl);
+  const projectRepositoryConflict = createMemo(() => {
+    const requested = repositoryKey(requestedRepository());
+    const selected = repositoryKey(selectedProject()?.repositoryUrl);
+    return Boolean(requested && selected && requested !== selected);
+  });
   const wantsProjectCreation = createMemo(() =>
     createIntent() || projects().length === 0,
   );
@@ -228,7 +240,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
   );
   const canApprove = createMemo(() => Boolean(
     wantsProjectCreation() ? canCreateProject() : selectedProject(),
-  ));
+  ) && !projectRepositoryConflict());
   const creationTargetHref = (suffix = "") => {
     const project = creationTargetProject();
     return project
@@ -292,7 +304,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
 
   const decide = async (accept: boolean) => {
     if (accept && !canApprove()) {
-      setError("dongo could not resolve exactly one project for this repository. Deny this request and let the agent reconnect with an exact project reference.");
+      setError("This signed-in account cannot approve the exact project and repository requested by the terminal. Deny this request and open the same terminal link in the browser profile that has access.");
       return;
     }
     setState("loading");
@@ -398,6 +410,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
             <div class="authorization-card__code" aria-describedby="device-warning">{formatUserCode(loaded().userCode)}</div>
           </div>
           <div class="consent-summary">
+            <div class="consent-summary__row"><span class="consent-summary__key">signed in</span><span class="consent-summary__value">{signedInIdentity()}</span></div>
             <div class="consent-summary__row"><span class="consent-summary__key">client</span><span class="consent-summary__value">{loaded().clientId === "dongo-cli" ? "dongo CLI · official client" : loaded().clientId}</span></div>
             <div class="consent-summary__row">
               <Show
@@ -412,6 +425,7 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
                 </span>
               </Show>
             </div>
+            <div class="consent-summary__row"><span class="consent-summary__key">repository</span><span class="consent-summary__value mono">{requestedRepository() || selectedProject()?.repositoryUrl || "Not provided"}</span></div>
           </div>
           <div class="field-group">
             <div class="field-label">Requested access</div>
@@ -503,7 +517,14 @@ export default function DeviceAuthorizationRoute(props: DeviceAuthorizationRoute
           </Show>
           <Show when={!wantsProjectCreation() && projects().length > 0 && !selectedProject()}>
             <div class="error" role="alert">
-              dongo could not match this repository to exactly one active project. Deny this request and let the agent reconnect with an exact project reference.
+              <strong>This browser is signed in as {signedInIdentity()}, but that account cannot access the exact project or repository requested by the terminal.</strong>
+              <p>Deny this request and open the same terminal link in the browser profile with access. dongo will not substitute another project.</p>
+            </div>
+          </Show>
+          <Show when={!wantsProjectCreation() && projectRepositoryConflict()}>
+            <div class="error" role="alert">
+              <strong>The requested project is bound to a different repository.</strong>
+              <p>Deny this request and reconnect with the intended project. dongo will not overwrite or switch the repository binding silently.</p>
             </div>
           </Show>
           <Show when={!wantsProjectCreation() && selectedProject()}>

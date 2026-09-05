@@ -42,6 +42,23 @@ test("renders every live work lane without browser errors", async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+test("explains why live Inbox state cannot be picked up by a local runner", async ({ page }) => {
+  const waitingRow = page.locator('[data-nav-kind="intake"][data-nav-id="intake-waiting"]');
+  await expect(waitingRow).toContainText("automatic pickup is off");
+  await waitingRow.click();
+  const detail = workDetail(page, "Investigate the fixture login screen");
+  await expect(detail.getByRole("strong")).toHaveText("automatic pickup is off");
+  await expect(detail.getByText(/web view is live|new Inbox items are not queued automatically/)).toBeVisible();
+  await expect(detail.getByRole("link", { name: "Open Local runner settings" })).toHaveAttribute(
+    "href",
+    "/app/fixture-studio/dongo/settings?tab=Local%20runner",
+  );
+
+  await page.goto("/app/fixture-studio/dongo?scenario=runner-none");
+  await expect(page.locator('[data-nav-kind="intake"][data-nav-id="intake-waiting"]'))
+    .toContainText("no runner connected to this project");
+});
+
 test("keeps Needs You first and carries its live count in the page title", async ({ page }) => {
   const needsYou = page.locator(".work-section--attention");
   const composer = page.getByRole("region", { name: "Add something" });

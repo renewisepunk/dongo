@@ -171,7 +171,7 @@ test("finish help exposes host-verified integration and release preconditions wi
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.2.15\n");
+  assert.equal(human.values().stdout, "dongo 0.2.16\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -179,7 +179,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.2.15" },
+    data: { version: "0.2.16" },
   });
   assert.equal(json.values().stderr, "");
 });

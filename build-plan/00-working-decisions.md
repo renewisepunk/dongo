@@ -48,7 +48,7 @@ Recommended: every CLI or MCP authorization grant is linked to one stable instal
 Recommended:
 
 - `dongo connect` uses the OAuth Device Authorization Grant. Before opening `verification_uri_complete`, the CLI detects the repository and prepares a bounded, non-secret first-project proposal: name, safe repository URL when available, and execution mode. The proposal travels only as visible browser-link parameters; it is never treated as trusted token data.
-- The CLI/agent selects the intended project before consent using, in order, an explicit `--project-ref`, this repository's valid non-secret marker, an exact normalized repository URL match, a unique project name/slug match, or the account's only active project. The browser authenticates the human and shows that fixed project, client, comparison code, scopes, resource, and Approve/Deny controls; it never offers a project picker during CLI approval. If matching is ambiguous, approval fails closed. If the account has no project, one explicit **Create & approve** action creates the personal organization and proposed first project, binds it to the pending device grant, and then approves.
+- The CLI/agent selects the intended project before consent using, in order, an explicit `--project-ref`, this repository's valid non-secret marker, an exact normalized repository URL match, a unique project name/slug match, or—only when the terminal supplied none of those selection signals—the account's only active project. An explicit reference, repository, or name is fail-closed: a browser signed in to another account must never substitute that account's sole project. The browser prominently shows the signed-in identity, organization, fixed project, requested repository, client, comparison code, scopes, and Approve/Deny controls; it never offers a project picker during CLI approval. An inaccessible or conflicting binding disables approval and directs the owner to open the same terminal link in the browser profile with access, without disclosing another tenant's data. If the account has no project, one explicit **Create & approve** action creates the personal organization and proposed first project, binds it to the pending device grant, and then approves.
 - The token issued after approval remains project-bound. dongo does not introduce an account-wide work token or let callers choose `organizationId`, `projectId`, or `actorId`; the browser-backed human identity creates the project and the authorization server binds the resulting stable project reference before token issuance.
 - The CLI infers project context by default and accepts `--project-ref`, `--project-name`, `--repository-url`, and `--execution-mode manual|autonomous` overrides so agents and headless workflows can prepare the exact binding or first-project proposal before the human consent step. No code copy/paste or localhost callback is required.
 - `--agent-host codex` is an explicit combined-approval intent. The device page names both the CLI and Codex, and one Approve action records consent for the fixed `dongo-codex` public native client only after the signed human identity, selected project, and still-pending CLI device request all match. Codex then performs its own authorization-code exchange and secure token storage without another dongo consent page. Existing flows without the flag and every other MCP host retain their normal separate approval.
@@ -269,9 +269,16 @@ job. Downgrading, changing, or revoking the chosen runner disables the project
 opt-in rather than silently moving it to another computer.
 
 Runner jobs are durable, idempotent, revision-aware, leased, cancellable, and
+woken. Codex uses its stable non-interactive JSONL interface and resumes only by
 audited. One job can have one live execution; reconnect and response loss return
 the existing result. Offline or sleeping machines leave jobs queued, and the UI
-must say so. Presence is a bounded server fact, not proof that a process can be
+must say so. Overview and Intake detail derive the current-project reason from
+runner registration, automatic Inbox policy, heartbeat, harness, job state, and
+project capacity. They distinguish no connected runner, pickup disabled,
+offline or stale runner, local approval, incompatible harness, full capacity,
+queued delivery, startup, and active execution instead of collapsing them into
+“waiting for local agent.” Presence is a bounded server fact, not proof that a
+process can be woken. Codex uses its stable non-interactive JSONL interface and resumes only by
 woken. Codex uses its stable non-interactive JSONL interface and resumes only by
 an exact captured session ID. Claude Code uses print-mode streaming JSON and
 resumes only by an exact captured session ID. Missing or incompatible session
