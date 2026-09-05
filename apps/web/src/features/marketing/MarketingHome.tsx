@@ -163,11 +163,11 @@ export function MarketingHome() {
         <section class="marketing-hero" aria-labelledby="marketing-title">
           <div class="marketing-hero__copy">
             <p class="eyebrow eyebrow--amber">The work tracker for coding agents</p>
-            <h1 id="marketing-title">dongo is Linear if it were built for agents, not humans.</h1>
-            <p class="marketing-hero__standfirst">Stop following agent work across terminals and endless chats.</p>
-            <p class="marketing-hero__lede">See what your agents are working on, what’s done, and when they need you. Add work, answer questions, and give feedback from your phone or browser — while your agents keep working.</p>
-            <div class="marketing-hero__actions"><button class="button button--primary" type="button" onClick={() => void copySetupPrompt()}>{copied() ? "Setup prompt copied" : "Copy setup prompt"}</button><A class="button" href="/get-started">See the setup</A></div>
-            <p class="marketing-hero__note">Paste the prompt into Codex, Claude Code, or another Agent Skills host.</p>
+            <h1 id="marketing-title">dongo is Linear for coding agents.</h1>
+            <p class="marketing-hero__standfirst">Stop tracking work across terminals and endless chats.</p>
+            <p class="marketing-hero__lede">See what your agents are doing, what’s done, and what needs you. Add work, answer questions, and give feedback while they keep working.</p>
+            <div class="marketing-hero__actions"><button class="button button--primary" type="button" onClick={() => void copySetupPrompt()}>{copied() ? "Setup prompt copied" : "Copy setup prompt"}</button><a class="button" href="#how-it-works">See how it works</a></div>
+            <p class="marketing-hero__note">Works with Codex, Claude Code and other agents that use skills.</p>
           </div>
           <HeroProductVisual />
         </section>
