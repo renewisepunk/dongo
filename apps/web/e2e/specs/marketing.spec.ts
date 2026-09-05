@@ -7,9 +7,11 @@ test("keeps the marketing homepage public when there is no human session", async
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-human-session-checked");
   await expect(page.locator("html")).not.toHaveAttribute("data-fixture-open-session-checked");
   await expect(page.locator("html")).toHaveAttribute("data-fixture-index-session-checked", "true");
-  await expect(page.getByRole("heading", { name: "dongo is Linear if it were built for agents, not humans." })).toBeVisible();
-  await expect(page.getByText("Stop following agent work across terminals and endless chats.")).toBeVisible();
-  await expect(page.getByText(/See what your agents are working on, what’s done, and when they need you/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "dongo is Linear for coding agents." })).toBeVisible();
+  await expect(page.getByText("Stop tracking work across terminals and endless chats.")).toBeVisible();
+  await expect(page.getByText("See what your agents are doing, what’s done, and what needs you. Add work, answer questions, and give feedback while they keep working.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "See how it works" })).toHaveAttribute("href", "#how-it-works");
+  await expect(page.getByText("Works with Codex, Claude Code and other agents that use skills.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "From one prompt to shipped work." })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in", exact: true }).first()).toHaveAttribute("href", "/login");
   await expect(page.getByRole("link", { name: /Open dongo/ })).toHaveAttribute("href", "/open");
@@ -72,7 +74,7 @@ test("keeps the essential product story readable at a mobile viewport", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "dongo is Linear if it were built for agents, not humans." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "dongo is Linear for coding agents." })).toBeVisible();
   await expect(page.getByRole("figure", { name: /two agents active/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "From one prompt to shipped work." })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Leave the terminals to your agents." })).toBeVisible();
