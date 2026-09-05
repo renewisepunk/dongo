@@ -3,13 +3,15 @@ import { expect, test } from "@playwright/test";
 test("explains dongo as the work tracker built for coding agents", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "dongo is Linear if it were built for agents, not humans." })).toBeVisible();
-  await expect(page.getByText("Stop following agent work across terminals and endless chats.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "dongo is Linear for coding agents." })).toBeVisible();
+  await expect(page.getByText("Stop tracking work across terminals and endless chats.", { exact: true })).toBeVisible();
+  await expect(page.getByText("See what your agents are doing, what’s done, and what needs you. Add work, answer questions, and give feedback while they keep working.", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "From one prompt to shipped work." })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Several agents can move separate issues at once." })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Follow the exact change all the way to production." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy setup prompt" }).first()).toBeVisible();
-  await expect(page.getByText("Paste the prompt into Codex, Claude Code, or another Agent Skills host.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "See how it works" })).toHaveAttribute("href", "#how-it-works");
+  await expect(page.getByText("Works with Codex, Claude Code and other agents that use skills.", { exact: true })).toBeVisible();
 });
 
 test("keeps get started public and preserves routes into help, sign-in, and the app", async ({ page }) => {
