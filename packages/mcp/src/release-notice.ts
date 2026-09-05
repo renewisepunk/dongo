@@ -32,9 +32,9 @@ export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   id: "dongo-cli-0.2.15-shared-resource-leases",
   title: "dongo CLI 0.2.15 is available",
   changes: [
-    "Parallel Runs can now lease only genuinely shared browser, provider, sender, and deployment fixtures without serializing ordinary work.",
-    "FIFO waiting is visible and bounded; duplicate delivery, lease expiry, Run completion, cancellation, and runner recovery release claims safely.",
-    "Use dongo resource acquire and dongo resource release with stable non-sensitive project-scoped keys around exclusive live steps.",
+    "Parallel Runs can now lease shared live-review fixtures without serializing ordinary work.",
+    "FIFO claims are bounded, idempotent, and released on terminal, expiry, cancellation, and runner-recovery paths.",
+    "The CLI adds resource acquire and release; runner agents also publish initial and periodic truthful progress.",
   ],
   hostedMcp: {
     status: "already_current",
