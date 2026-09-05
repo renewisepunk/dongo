@@ -1401,14 +1401,32 @@ test("opens the response surface with R and submits composers with Control Enter
   await expect(firstOption).toBeFocused();
   await firstOption.click();
   const response = dialog.getByPlaceholder("Add anything the agent should know…");
-  await response.fill("Ship the verified candidate.");
+  await response.fill("## Decision\n\nShip the **verified** candidate.");
+  const responsePreview = dialog.getByText("Preview formatted response", { exact: true });
+  await responsePreview.click();
+  await expect(dialog.getByRole("heading", { name: "Decision" })).toBeVisible();
+  await expect(dialog.locator(".markdown-draft-preview strong")).toHaveText("verified");
   await response.press("Control+Enter");
   await expect(page.getByText("Response sent to your agent")).toBeVisible();
 
-  await dialog.getByPlaceholder("Add a comment…").fill("Record this review note.");
-  await dialog.getByPlaceholder("Add a comment…").press("Control+Enter");
+  const comment = dialog.getByPlaceholder("Add a comment…");
+  await expect(dialog.getByText(/Markdown supported/)).toBeVisible();
+  await comment.fill("## Review\n\n- Record this note\n- Keep `npm test` green\n\n<script>window.__dongoXss = true</script>");
+  await dialog.getByText("Preview formatted comment", { exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Review" })).toBeVisible();
+  await expect(dialog.locator(".markdown-draft-preview li")).toHaveText([
+    "Record this note",
+    "Keep npm test green",
+  ]);
+  await expect(dialog.locator(".markdown-draft-preview script")).toHaveCount(0);
+  await expect(dialog.getByText("<script>window.__dongoXss = true</script>", { exact: true })).toBeVisible();
+  await comment.press("Control+Enter");
   await expect(page.getByText("Comment added")).toBeVisible();
-  await expect(dialog.getByText("Record this review note.")).toBeVisible();
+  const persistedComment = dialog.locator(".conversation-entry", { hasText: "Record this note" });
+  await expect(persistedComment.getByRole("heading", { name: "Review" })).toBeVisible();
+  await expect(persistedComment.locator("li")).toHaveCount(2);
+  await expect(persistedComment.locator("script")).toHaveCount(0);
+  expect(await page.evaluate(() => (window as Window & { __dongoXss?: boolean }).__dongoXss)).toBeUndefined();
 });
 
 test("opens the command menu and compact shortcut reference", async ({ page }) => {

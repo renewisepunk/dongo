@@ -60,7 +60,7 @@ const PRESENTATION = {
   update_work: {
     title: "Update work",
     description:
-      "Apply a revision-aware meaningful WorkItem or Run update while the execution claim is valid.",
+      "Apply a revision-aware meaningful WorkItem or Run update while the execution claim is valid. Format a substantial human-facing latestUpdate as concise Markdown; lead with current state and summarize evidence instead of dumping logs.",
   },
   renew_claim: {
     title: "Renew work claim",
@@ -84,17 +84,18 @@ const PRESENTATION = {
   },
   add_comment: {
     title: "Add comment",
-    description: "Add an attributed Markdown comment to a WorkItem.",
+    description:
+      "Add an attributed Markdown comment to a WorkItem. Keep brief notes plain; structure longer comments with short headings and lists, and never use raw HTML or include secrets or temporary URLs.",
   },
   request_attention: {
     title: "Request human attention",
     description:
-      "Request human judgment for the active Work and pause only its active Run. Exact Work revision, Run ownership, and claim protections apply.",
+      "Request human judgment for the active Work and pause only its active Run. Format a substantial body as concise Markdown that leads with the decision or blocker. Exact Work revision, Run ownership, and claim protections apply.",
   },
   request_owner_attention: {
     title: "Request owner attention",
     description:
-      "Ask the authorizing owner a durable project-level or Intake-related question without requiring or pausing a Work Run.",
+      "Ask the authorizing owner a durable project-level or Intake-related question without requiring or pausing a Work Run. Format a substantial body as concise Markdown that leads with the question or blocker.",
   },
   get_attention: {
     title: "Get attention",

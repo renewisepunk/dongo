@@ -39,6 +39,8 @@ test("all host instruction blocks exactly match canonical server instructions", 
   assert.match(DONGO_MCP_INSTRUCTIONS, /inspect existing Intake and Work for relevant or duplicate items/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /attach every repository change to its active Run before editing/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /Record meaningful progress, blockers, Attention requests, and outcomes/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /human-facing dongo comments, Run updates, Attention bodies, and outcomes as concise GitHub-flavored Markdown/u);
+  assert.match(DONGO_MCP_INSTRUCTIONS, /Never dump raw logs, create one giant paragraph, use raw HTML/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /only after the requested implementation and relevant verification are complete/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /follow the complete lifecycle/u);
   assert.match(DONGO_MCP_INSTRUCTIONS, /request clarification, or dismiss it, then refetch and complete triage/u);

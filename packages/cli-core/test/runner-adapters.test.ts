@@ -6,7 +6,10 @@ import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import test from "node:test";
-import { DONGO_COMPLETION_INSTRUCTIONS } from "@dongo/mcp/managed-integrations";
+import {
+  DONGO_COMPLETION_INSTRUCTIONS,
+  DONGO_MARKDOWN_WRITING_INSTRUCTIONS,
+} from "@dongo/mcp/managed-integrations";
 
 import { CliCoreError } from "../src/errors.ts";
 import { MemorySecretStore } from "../src/secret-store.ts";
@@ -246,6 +249,7 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
   ]);
   assert.match(executionCalls[0]?.input ?? "", /exact dongo WorkItem dong027/u);
   assert.ok(executionCalls[0]?.input.includes(DONGO_COMPLETION_INSTRUCTIONS));
+  assert.ok(executionCalls[0]?.input.includes(DONGO_MARKDOWN_WRITING_INSTRUCTIONS));
   assert.match(executionCalls[0]?.input ?? "", /externalSessionId dongo-runner-job-1/u);
   assert.match(executionCalls[0]?.input ?? "", /workspace\.worktreeName as dong027-12345678/u);
   assert.match(executionCalls[0]?.input ?? "", /workspace\.branch as codex\/dongo-runner-dong027-123456789abc/u);
@@ -271,6 +275,7 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
   ]);
   assert.match(executionCalls[1]?.input ?? "", /exact dongo WorkItem dong027/u);
   assert.ok(executionCalls[1]?.input.includes(DONGO_COMPLETION_INSTRUCTIONS));
+  assert.ok(executionCalls[1]?.input.includes(DONGO_MARKDOWN_WRITING_INSTRUCTIONS));
   assert.equal(executionCalls[1]?.cwd, process.cwd());
   assert.equal(executionCalls[1]?.env.GH_TOKEN, "secret-2");
   assert.equal(credentialResolution, 2);

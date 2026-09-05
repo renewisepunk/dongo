@@ -3,7 +3,7 @@ import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show }
 import { Brand } from "../../components/Brand";
 import { AgentIdentity } from "../../components/AgentIdentity";
 import { PageTitle } from "../../components/PageTitle";
-import { MarkdownContent } from "../../components/MarkdownContent";
+import { MarkdownContent, MarkdownDraftPreview } from "../../components/MarkdownContent";
 import { SignOutButton } from "../../components/SignOutButton";
 import {
   CommandMenu,
@@ -2882,6 +2882,7 @@ function OwnerAttentionCard(props: OwnerAttentionCardProps) {
           placeholder="Add anything the agent should know…"
           rows={3}
         />
+        <MarkdownDraftPreview source={response()} label="response" />
         <div class="response-actions">
           <button class="button button--primary" type="button" disabled={pending() || (!choice() && !response().trim())} onClick={() => void respond()}>Respond</button>
           <button class="button button--quiet" type="button" disabled={pending()} onClick={() => void resolve()}>Resolve without response</button>
@@ -3278,6 +3279,7 @@ function WorkDetail(props: WorkDetailProps) {
                   placeholder="Add anything the agent should know…"
                   rows={3}
                 />
+                <MarkdownDraftPreview source={response()} label="response" />
                 <div class="response-actions">
                   <button class="button button--primary" type="button" disabled={pending() || (!choice() && !response().trim())} onClick={() => void respond()}>Respond</button>
                   <button class="button button--quiet" type="button" disabled={pending()} onClick={() => void resolveWithoutResponse()}>Resolve without response</button>
