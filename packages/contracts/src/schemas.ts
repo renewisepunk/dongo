@@ -378,6 +378,20 @@ export const runnerWaitSchema = z.object({
   serverTime: timestamp,
 }).strict();
 
+export const resourceClaimResultSchema = z.object({
+  resourceKey: z.string().regex(/^[a-z0-9](?:[a-z0-9._:/-]{0,118}[a-z0-9])?$/u),
+  resourceLabel: z.string().min(1).max(120),
+  state: z.enum(["waiting", "held", "released"]),
+  queuePosition: z.number().int().positive().optional(),
+  holderWorkIdentifier: z.string().min(1).max(64).optional(),
+  requestedAt: timestamp,
+  acquiredAt: timestamp.optional(),
+  leaseExpiresAt: timestamp.optional(),
+  releasedAt: timestamp.optional(),
+  workRevision: z.number().int().positive(),
+  workClaimExpiresAt: timestamp,
+}).strict();
+
 export const schemaFields = {
   identifier,
   boundedText,

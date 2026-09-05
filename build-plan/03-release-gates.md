@@ -155,6 +155,11 @@
 - A clean runner fills six isolated worktree slots, reports exact per-job
   liveness across restart, refills a released slot, remains compatible with a
   serial client, and never exceeds the smaller host/project safety bound.
+- Two live-review Runs may keep implementing concurrently while a named shared
+  fixture has one holder and FIFO waiters. Duplicate acquire delivery remains
+  one claim; renewal prevents stale takeover; release, Work completion, failure,
+  cancellation, lease expiry, and runner reconciliation hand the fixture to the
+  next eligible waiter without consuming another Run slot or creating Attention.
 - Server-visible events contain bounded, redacted lifecycle state only. Raw
   process output, local paths, session IDs, repository content, environment, and
   credentials remain local.

@@ -160,6 +160,15 @@ resumes only after the response is available.
 Lease loss, cancellation, runner shutdown, or an API failure stops and joins
 the local process before the manager may retry.
 
+Runner-launched Work must publish its first concise dongo update before
+substantive repository work, then update on each meaningful phase or next-step
+change and at least every five minutes during a long bounded check. An unchanged
+update must not be repeated just to reset its age, and progress must never be
+invented. Until the first agent-authored update arrives, Agent Activity shows a
+fixed redacted harness-liveness message backed by the matched runner heartbeat;
+it never uploads or summarizes raw harness output. Once the agent reports
+progress, that authored update and its own timestamp remain authoritative.
+
 ## Approve, disable, and remove
 
 When status shows `awaiting_local_approval`, approve the exact local job:
@@ -228,6 +237,23 @@ delivery is reserved for 60 seconds until acknowledged; running jobs renew a
 90-second lease. Cancellation, registration revocation, and parent installation
 revocation outrank execution. A lost or expired lease requires the local process
 to stop and refetch; it must never continue by guessing.
+
+Before a live step uses a resource that repository instructions identify as
+shared, acquire its stable safe key with `dongo resource acquire`. Proceed only
+when the result is `held`. A `waiting` result is a normal FIFO wait: retain the
+returned Work revision, renew by acquiring again before the lease expires, and
+continue unrelated implementation or tests when possible. Release with
+`dongo resource release` in success and failure cleanup. Run completion,
+cancellation, failure, claim expiry, and runner reconciliation also release the
+claim server-side; the next eligible waiter is promoted automatically. Prefer
+unique worktree-local ports and profiles over leasing whenever they are truly
+isolated. Never put credentials, private conversation IDs, messages, local
+paths, or other sensitive data in resource keys or labels.
+
+When one live step needs multiple shared resources, acquire the stable keys in
+lexical order and release in reverse order. If any acquisition waits or fails,
+release every resource already acquired before retrying. This prevents two Runs
+from holding different fixtures while each waits indefinitely for the other.
 
 When an automatic-mode runner reconnects, the server may requeue the latest
 explicitly authorized Work job once if its only terminal reason is an expired

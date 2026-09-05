@@ -786,6 +786,43 @@ describe("local runner delivery", () => {
       await ctx.db.patch(active.runId as Id<"runs">, { startedAt: running.deliveredAt! });
     });
 
+    const activeWithoutAgentUpdate = await fixture.human.query(
+      api.domains.work.index.concurrencyForHuman,
+      { projectId: fixture.projectId },
+    );
+    expect(activeWithoutAgentUpdate.runs).toContainEqual(expect.objectContaining({
+      id: active.runId,
+      activity: expect.objectContaining({
+        kind: "executing",
+        label: "Codex is working",
+        updatedAt: running.updatedAt,
+      }),
+      latestProgress: "The local Codex harness is active. Detailed progress will appear after its first dongo update.",
+    }));
+
+    const agentUpdateAt = running.updatedAt! - 1;
+    await fixture.root.run(async (ctx) => {
+      await ctx.db.patch(active.runId as Id<"runs">, {
+        summary: "The agent is validating the focused runner tests.",
+        activityKind: "verification",
+        activityLabel: "Focused runner tests",
+        activityUpdatedAt: agentUpdateAt,
+      });
+    });
+    const activeWithAgentUpdate = await fixture.human.query(
+      api.domains.work.index.concurrencyForHuman,
+      { projectId: fixture.projectId },
+    );
+    expect(activeWithAgentUpdate.runs).toContainEqual(expect.objectContaining({
+      id: active.runId,
+      activity: expect.objectContaining({
+        kind: "verification",
+        label: "Focused runner tests",
+        updatedAt: agentUpdateAt,
+      }),
+      latestProgress: "The agent is validating the focused runner tests.",
+    }));
+
     await fixture.root.mutation(internal.domains.runner.index.updateJob, {
       authorization: fixture.authorization,
       registrationId: registration.id,
@@ -1548,6 +1585,19 @@ describe("local runner delivery", () => {
       expectedRevision: readyWork.revision,
       idempotencyKey: "start-work-crash-reconcile",
     });
+    await fixture.root.mutation(internal.domains.resources.index.acquire, {
+      authorization: {
+        ...fixture.authorization,
+        externalSessionId: `dongo-runner-${jobId}`,
+      },
+      workItemId: created.workItemId,
+      runId: active.runId,
+      expectedRevision: active.revision,
+      resourceKey: "browser:runner-crash",
+      resourceLabel: "Runner crash browser",
+      leaseSeconds: 120,
+      idempotencyKey: "acquire-runner-crash-resource",
+    });
     await fixture.root.run(async (ctx) => {
       await ctx.db.patch(active.runId as Id<"runs">, { startedAt: requestedAt + 2_000 });
     });
@@ -1561,6 +1611,14 @@ describe("local runner delivery", () => {
       job: await ctx.db.get(jobId),
       work: await ctx.db.get(created.workItemId as Id<"workItems">),
       run: await ctx.db.get(active.runId as Id<"runs">),
+      resourceClaim: await ctx.db
+        .query("resourceClaims")
+        .withIndex("by_run_resource", (query) =>
+          query
+            .eq("runId", active.runId as Id<"runs">)
+            .eq("resourceKey", "browser:runner-crash"),
+        )
+        .unique(),
     }));
     expect(reconciled.job).toMatchObject({
       state: "failed",
@@ -1571,6 +1629,10 @@ describe("local runner delivery", () => {
     expect(reconciled.run).toMatchObject({
       status: "failed",
       failureCode: "runner_lease_expired",
+    });
+    expect(reconciled.resourceClaim).toMatchObject({
+      status: "released",
+      releaseReason: "run_finished",
     });
 
     const recovered = await fixture.root.mutation(internal.domains.runner.index.reserve, {

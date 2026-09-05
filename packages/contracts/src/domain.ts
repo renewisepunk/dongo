@@ -307,3 +307,17 @@ export type RunnerWait = {
   };
   serverTime: number;
 };
+
+export type ResourceClaimResult = {
+  resourceKey: string;
+  resourceLabel: string;
+  state: "waiting" | "held" | "released";
+  queuePosition?: number;
+  holderWorkIdentifier?: string;
+  requestedAt: number;
+  acquiredAt?: number;
+  leaseExpiresAt?: number;
+  releasedAt?: number;
+  workRevision: number;
+  workClaimExpiresAt: number;
+};

@@ -67,6 +67,16 @@ const PRESENTATION = {
     description:
       "Quietly renew the active execution lease without creating repository export noise.",
   },
+  acquire_resource: {
+    title: "Acquire shared resource",
+    description:
+      "Acquire or renew a bounded FIFO claim on one named project-scoped live-review resource. A waiting result keeps the Work lease healthy and must be retried with the returned Work revision; unrelated work can continue in parallel.",
+  },
+  release_resource: {
+    title: "Release shared resource",
+    description:
+      "Release this active Run's claim on a named shared resource and atomically hand it to the next eligible waiter.",
+  },
   finish_work: {
     title: "Finish work",
     description:

@@ -76,6 +76,8 @@ const updateAwareCommands = new Set([
   "work update",
   "work renew",
   "work finish",
+  "resource acquire",
+  "resource release",
   "comment add",
   "attention request",
   "attention get",
@@ -474,14 +476,14 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
             idempotencyKey: commandMutationKey(),
             intakeId,
             expectedRevision: integerOption(parsed, "revision", 0, true) ?? 0,
-            leaseSeconds: integerOption(parsed, "lease-seconds", 1),
+            leaseSeconds: integerOption(parsed, "lease-seconds", 30),
           }, dependencies.signal);
         } else if (action === "renew") {
           data = await service.execute("renew_intake_claim", {
             idempotencyKey: commandMutationKey(),
             intakeId,
             expectedRevision: integerOption(parsed, "revision", 0, true) ?? 0,
-            leaseSeconds: integerOption(parsed, "lease-seconds", 1),
+            leaseSeconds: integerOption(parsed, "lease-seconds", 30),
           }, dependencies.signal);
         } else {
           const state = requiredOption(parsed, "state");
@@ -526,7 +528,7 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
             workItemId: requiredOption(parsed, "work-id"),
             expectedRevision: integerOption(parsed, "revision", 0, true) ?? 0,
             externalSessionId: option(parsed, "session-id") ?? DongoClient.idempotencyKey(),
-            leaseSeconds: integerOption(parsed, "lease-seconds", 1),
+            leaseSeconds: integerOption(parsed, "lease-seconds", 30),
             workspace: option(parsed, "workspace-kind")
               ? {
                   kind: option(parsed, "workspace-kind") as
@@ -576,7 +578,7 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
             idempotencyKey: commandMutationKey(),
             workItemId: requiredOption(parsed, "work-id"),
             expectedRevision: integerOption(parsed, "revision", 0, true) ?? 0,
-            leaseSeconds: integerOption(parsed, "lease-seconds", 1),
+            leaseSeconds: integerOption(parsed, "lease-seconds", 30),
           }, dependencies.signal);
         } else {
           data = await service.execute("finish_work", {
@@ -587,6 +589,28 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
             artifacts: values(parsed, "artifact").length > 0 ? values(parsed, "artifact").map(artifact) : undefined,
           }, dependencies.signal);
         }
+        break;
+      }
+      case "resource": {
+        const action = requireSubcommand(
+          parsed,
+          ["acquire", "release"],
+          "Usage: dongo resource acquire|release [options]",
+        );
+        command = `resource ${action}`;
+        const base = {
+          idempotencyKey: commandMutationKey(),
+          workItemId: requiredOption(parsed, "work-id"),
+          expectedRevision: integerOption(parsed, "revision", 0, true) ?? 0,
+          resourceKey: requiredOption(parsed, "resource-key"),
+        };
+        data = action === "acquire"
+          ? await service.execute("acquire_resource", {
+              ...base,
+              resourceLabel: option(parsed, "resource-label"),
+              leaseSeconds: integerOption(parsed, "lease-seconds", 30),
+            }, dependencies.signal)
+          : await service.execute("release_resource", base, dependencies.signal);
         break;
       }
       case "comment": {

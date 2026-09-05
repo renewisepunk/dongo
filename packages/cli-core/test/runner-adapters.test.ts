@@ -160,7 +160,7 @@ test("process-group confirmation failure propagates when the harness leader exit
 
 test("process-tree stop waits past a clean leader exit and kills a surviving descendant", async (context) => {
   if (process.platform === "win32") return;
-  const child = spawn("/bin/sh", ["-c", "trap 'exit 0' TERM; (trap '' TERM; exec sleep 30) & echo ready; wait"], {
+  const child = spawn("/bin/sh", ["-c", "trap 'exit 0' TERM; (trap '' TERM; echo ready; exec sleep 30) & wait"], {
     detached: true,
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -249,6 +249,10 @@ test("Codex adapter uses fixed safe arguments and stdin, then resumes only the e
   assert.match(executionCalls[0]?.input ?? "", /externalSessionId dongo-runner-job-1/u);
   assert.match(executionCalls[0]?.input ?? "", /workspace\.worktreeName as dong027-12345678/u);
   assert.match(executionCalls[0]?.input ?? "", /workspace\.branch as codex\/dongo-runner-dong027-123456789abc/u);
+  assert.match(executionCalls[0]?.input ?? "", /before substantive repository work/u);
+  assert.match(executionCalls[0]?.input ?? "", /at least every five minutes/u);
+  assert.match(executionCalls[0]?.input ?? "", /Do not repeat an unchanged update or fabricate progress/u);
+  assert.match(executionCalls[0]?.input ?? "", /stop active progress updates while waiting for owner Attention, a shared resource, or a terminal outcome/u);
   assert.match(executionCalls[0]?.input ?? "", /locally enabled read-only browser self-review/u);
   assert.match(executionCalls[0]?.input ?? "", /does not authorize signing in to another account/u);
   assert.doesNotMatch(executionCalls[0]?.args.join(" ") ?? "", /dong027/u);
@@ -513,6 +517,8 @@ test("Claude Code adapter uses print mode and stdin, then resumes only its exact
   assert.equal(executionCalls[0]?.args.some((value) => value.includes("dangerously")), false);
   assert.match(executionCalls[0]?.input ?? "", /exact dongo WorkItem dong028/u);
   assert.ok(executionCalls[0]?.input.includes(DONGO_COMPLETION_INSTRUCTIONS));
+  assert.match(executionCalls[0]?.input ?? "", /before substantive repository work/u);
+  assert.match(executionCalls[0]?.input ?? "", /at least every five minutes/u);
   assert.doesNotMatch(executionCalls[0]?.args.join(" ") ?? "", /dong028/u);
   assert.equal(executionCalls[0]?.cwd, process.cwd());
   assert.equal(await adapter.canResume(input), true);

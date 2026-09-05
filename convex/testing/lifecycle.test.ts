@@ -66,6 +66,48 @@ describe("agent lifecycle reliability", () => {
     });
   });
 
+  it("routes bounded shared-resource acquire and release through the agent gateway", async () => {
+    const t = convexTest(schema, modules);
+    const context = await seededContext(t, `resource-gateway-${crypto.randomUUID()}`);
+    const work = await successfulData(t, context, "create_work", {
+      title: "Protect a shared live fixture",
+      goal: "Use the browser profile exclusively while other work remains parallel.",
+      idempotencyKey: "create-resource-gateway-work",
+    });
+    const started = await successfulData(t, context, "start_work", {
+      workItemId: work.id,
+      expectedRevision: work.revision,
+      externalSessionId: "resource-gateway-session",
+      idempotencyKey: "start-resource-gateway-work",
+    });
+    const acquired = await successfulData(t, context, "acquire_resource", {
+      workItemId: work.id,
+      expectedRevision: started.revision,
+      resourceKey: "browser:shared-profile",
+      resourceLabel: "Shared browser profile",
+      leaseSeconds: 120,
+      idempotencyKey: "acquire-resource-gateway-work",
+    });
+    expect(acquired).toMatchObject({
+      resourceKey: "browser:shared-profile",
+      resourceLabel: "Shared browser profile",
+      state: "held",
+      workRevision: started.revision + 1,
+    });
+
+    const released = await successfulData(t, context, "release_resource", {
+      workItemId: work.id,
+      expectedRevision: acquired.workRevision,
+      resourceKey: "browser:shared-profile",
+      idempotencyKey: "release-resource-gateway-work",
+    });
+    expect(released).toMatchObject({
+      resourceKey: "browser:shared-profile",
+      state: "released",
+      workRevision: acquired.workRevision + 1,
+    });
+  });
+
   it("delivers idempotent Inbox nudges through a truthful cursor and waiter presence", async () => {
     const t = convexTest(schema, modules);
     const key = `updates-${crypto.randomUUID()}`;

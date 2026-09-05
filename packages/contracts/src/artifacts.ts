@@ -17,6 +17,7 @@ import {
   runnerJobSchema,
   runnerRegistrationSchema,
   runnerWaitSchema,
+  resourceClaimResultSchema,
   runSchema,
   sessionStartSchema,
   syncSnapshotSchema,
@@ -47,6 +48,7 @@ const domainSchemaEntries = [
   ["RunnerRegistration", runnerRegistrationSchema],
   ["RunnerJob", runnerJobSchema],
   ["RunnerWait", runnerWaitSchema],
+  ["ResourceClaimResult", resourceClaimResultSchema],
 ] as const;
 const domainComponentBySchema = new Map<z.ZodType, string>(
   domainSchemaEntries.map(([name, schema]) => [schema, name]),

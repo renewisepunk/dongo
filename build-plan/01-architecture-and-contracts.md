@@ -128,6 +128,9 @@ Freeze typed aggregates for:
   progress, elapsed/lease health, and safe workspace label; this read model is
   subscription-backed and never equates generic CLI activity with an active
   Run;
+- project-scoped shared-resource arbitration with one active holder, FIFO
+  waiters, safe resource labels, bounded renewable leases, and automatic
+  terminal/expiry handoff without exposing local paths or fixture content;
 - search result union;
 - installation/grant metadata and Advanced CI/service one-time secret result;
 - media upload initiation/finalization;

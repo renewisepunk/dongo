@@ -46,6 +46,8 @@ const VALUE_OPTIONS = new Set([
   "project-ref",
   "revision",
   "repository-url",
+  "resource-key",
+  "resource-label",
   "selected-option",
   "session-id",
   "source-intake-id",

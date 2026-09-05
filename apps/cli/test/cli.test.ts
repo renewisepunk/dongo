@@ -171,7 +171,7 @@ test("finish help exposes host-verified integration and release preconditions wi
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.2.14\n");
+  assert.equal(human.values().stdout, "dongo 0.2.15\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -179,7 +179,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.2.14" },
+    data: { version: "0.2.15" },
   });
   assert.equal(json.values().stderr, "");
 });
@@ -199,6 +199,66 @@ test("--json writes exactly one machine-readable result to stdout", async () => 
   });
   assert.equal(values.stderr, "");
   assert.equal(values.stdout.trim().split("\n").length, 1);
+});
+
+test("resource commands preserve stable keys and revision-aware bounded leases", async () => {
+  const calls: Array<{ operation: string; input: unknown }> = [];
+  const service = {
+    ...fakeService,
+    execute: async (operation: string, input: unknown) => {
+      calls.push({ operation, input });
+      return { operation, input };
+    },
+  };
+  const acquire = capture();
+  assert.equal(await runCli([
+    "resource", "acquire",
+    "--work-id", "work-1",
+    "--revision", "4",
+    "--resource-key", "browser:shared-profile",
+    "--resource-label", "Shared browser profile",
+    "--lease-seconds", "120",
+    "--idempotency-key", "acquire-browser",
+    "--json",
+  ], {
+    output: acquire.output,
+    serviceFactory: () => service as never,
+  }), 0);
+  const release = capture();
+  assert.equal(await runCli([
+    "resource", "release",
+    "--work-id", "work-1",
+    "--revision", "5",
+    "--resource-key", "browser:shared-profile",
+    "--idempotency-key", "release-browser",
+    "--json",
+  ], {
+    output: release.output,
+    serviceFactory: () => service as never,
+  }), 0);
+
+  assert.deepEqual(calls, [
+    {
+      operation: "acquire_resource",
+      input: {
+        idempotencyKey: "acquire-browser",
+        workItemId: "work-1",
+        expectedRevision: 4,
+        resourceKey: "browser:shared-profile",
+        resourceLabel: "Shared browser profile",
+        leaseSeconds: 120,
+      },
+    },
+    {
+      operation: "release_resource",
+      input: {
+        idempotencyKey: "release-browser",
+        workItemId: "work-1",
+        expectedRevision: 5,
+        resourceKey: "browser:shared-profile",
+      },
+    },
+  ]);
 });
 
 test("online commands expose a consent-first CLI update advisory to agents", async () => {

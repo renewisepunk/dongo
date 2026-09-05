@@ -25,6 +25,41 @@ describe("operation registry", () => {
     }
   });
 
+  it("publishes bounded project-scoped resource claims for MCP and CLI clients", () => {
+    expect(operationRegistry.acquire_resource).toMatchObject({
+      method: "POST",
+      readOnly: false,
+      idempotent: true,
+      mcpExposed: true,
+    });
+    expect(operationRegistry.release_resource.mcpExposed).toBe(true);
+    expect(operationRegistry.acquire_resource.inputSchema.safeParse({
+      idempotencyKey: "acquire-browser",
+      workItemId: "work-1",
+      expectedRevision: 2,
+      resourceKey: "browser:shared-profile",
+      resourceLabel: "Shared browser profile",
+      leaseSeconds: 120,
+    }).success).toBe(true);
+    expect(operationRegistry.acquire_resource.inputSchema.safeParse({
+      idempotencyKey: "unsafe-key",
+      workItemId: "work-1",
+      expectedRevision: 2,
+      resourceKey: "Secret Browser Key",
+    }).success).toBe(false);
+    expect(operationRegistry.acquire_resource.outputSchema.safeParse({
+      resourceKey: "browser:shared-profile",
+      resourceLabel: "Shared browser profile",
+      state: "waiting",
+      queuePosition: 1,
+      holderWorkIdentifier: "dong082",
+      requestedAt: 1,
+      leaseExpiresAt: 120_001,
+      workRevision: 3,
+      workClaimExpiresAt: 120_001,
+    }).success).toBe(true);
+  });
+
   it("keeps agent identity distinct from connection transport", () => {
     expect(actorSummarySchema.safeParse({
       id: "actor-1",

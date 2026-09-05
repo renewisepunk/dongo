@@ -42,7 +42,7 @@ Build and install the self-contained package archive so the command does not dep
 
 ```sh
 npm pack --workspace @wisepunk/dongo
-npm install --global ./wisepunk-dongo-0.2.14.tgz
+npm install --global ./wisepunk-dongo-0.2.15.tgz
 dongo --version
 dongo --help
 ```
@@ -77,6 +77,7 @@ dongo session-start
 dongo overview
 dongo intake get|claim|renew|complete [options]
 dongo work create|get|start|update|renew|finish [options]
+dongo resource acquire|release [options]
 dongo comment add [options]
 dongo attention request|get|wait|resolve [options]
 dongo updates get|wait [--cursor N] [--timeout-seconds N]

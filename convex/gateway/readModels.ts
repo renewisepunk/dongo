@@ -458,6 +458,8 @@ export const mutationRun = internalQuery({
     operation: v.union(
       v.literal("work.update"),
       v.literal("work.renew_claim"),
+      v.literal("resource.acquire"),
+      v.literal("resource.release"),
       v.literal("work.finish"),
       v.literal("attention.request"),
     ),

@@ -28,13 +28,13 @@ export type AgentReleaseDelivery = Readonly<{
  */
 export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   schemaVersion: 1,
-  sequence: 16,
-  id: "dongo-cli-0.2.14-release-quarantine",
-  title: "dongo CLI 0.2.14 is available",
+  sequence: 18,
+  id: "dongo-cli-0.2.15-resource-leases-runner-progress",
+  title: "dongo CLI 0.2.15 is available",
   changes: [
-    "An exact active runner job can now be quarantined locally and on the server before its managed harness is stopped.",
-    "Quarantined and mismatched saved sessions fail before provider credentials are resolved or a harness is launched.",
-    "Supported dongo release scripts recheck the exact job guard before every external mutation step.",
+    "Parallel Runs can now lease shared live-review fixtures without serializing ordinary work.",
+    "FIFO claims are bounded, idempotent, and released on terminal, expiry, cancellation, and runner-recovery paths.",
+    "The CLI adds resource acquire and release; runner agents also publish initial and periodic truthful progress.",
   ],
   hostedMcp: {
     status: "already_current",
@@ -42,9 +42,9 @@ export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   },
   cli: {
     packageName: "@wisepunk/dongo",
-    version: "0.2.14",
+    version: "0.2.15",
     checkCommand: "dongo --version",
-    installCommand: "npm install --global @wisepunk/dongo@0.2.14",
+    installCommand: "npm install --global @wisepunk/dongo@0.2.15",
     consentRequired: true,
   },
 } satisfies AgentReleaseNotice);
