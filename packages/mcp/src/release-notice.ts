@@ -28,8 +28,8 @@ export type AgentReleaseDelivery = Readonly<{
  */
 export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   schemaVersion: 1,
-  sequence: 17,
-  id: "dongo-cli-0.2.15-shared-resource-leases",
+  sequence: 18,
+  id: "dongo-cli-0.2.15-resource-leases-runner-progress",
   title: "dongo CLI 0.2.15 is available",
   changes: [
     "Parallel Runs can now lease shared live-review fixtures without serializing ordinary work.",
