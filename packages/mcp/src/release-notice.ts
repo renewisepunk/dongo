@@ -28,13 +28,13 @@ export type AgentReleaseDelivery = Readonly<{
  */
 export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   schemaVersion: 1,
-  sequence: 18,
-  id: "dongo-cli-0.2.15-resource-leases-runner-progress",
-  title: "dongo CLI 0.2.15 is available",
+  sequence: 19,
+  id: "dongo-cli-0.2.16-runner-binding-diagnostics",
+  title: "dongo CLI 0.2.16 is available",
   changes: [
-    "Parallel Runs can now lease shared live-review fixtures without serializing ordinary work.",
-    "FIFO claims are bounded, idempotent, and released on terminal, expiry, cancellation, and runner-recovery paths.",
-    "The CLI adds resource acquire and release; runner agents also publish initial and periodic truthful progress.",
+    "Repository markers are now checked against the checkout's actual Git remote before runner or agent operations.",
+    "Reconnect no longer reuses a stale project marker, and an approved project with another repository fails before local credentials or marker state change.",
+    "dongo doctor reports repository-binding mismatches with an explicit project rebind action.",
   ],
   hostedMcp: {
     status: "already_current",
@@ -42,9 +42,9 @@ export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   },
   cli: {
     packageName: "@wisepunk/dongo",
-    version: "0.2.15",
+    version: "0.2.16",
     checkCommand: "dongo --version",
-    installCommand: "npm install --global @wisepunk/dongo@0.2.15",
+    installCommand: "npm install --global @wisepunk/dongo@0.2.16",
     consentRequired: true,
   },
 } satisfies AgentReleaseNotice);
