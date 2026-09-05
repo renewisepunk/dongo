@@ -47,6 +47,7 @@ export type McpOperationName = Exclude<
   | "runner_rotate"
   | "runner_revoke"
   | "runner_wait"
+  | "runner_quarantine_job"
   | "runner_update_job"
 >;
 
@@ -106,6 +107,7 @@ export type OperationMap = {
   runner_rotate: { input: MutationInput & { registrationId: string; token: string; replacementToken: string }; output: RunnerRegistration };
   runner_revoke: { input: MutationInput & { registrationId: string; token: string }; output: RunnerRegistration };
   runner_wait: { input: MutationInput & { registrationId: string; token: string; waitSeconds?: number; platform: "darwin" | "linux"; version: string; harnesses: Array<"codex" | "claude">; approvalMode: "ask" | "automatic"; activeJobIds?: string[]; hostCapacity?: number; inspectJobId?: string }; output: RunnerWait };
+  runner_quarantine_job: { input: MutationInput & { registrationId: string; token: string; jobId: string }; output: RunnerJob };
   runner_update_job: { input: MutationInput & { registrationId: string; token: string; jobId: string; expectedRevision: number; state: RunnerJob["state"]; leaseSeconds?: number; safeCode?: string; safeMessage?: string; safeSummary?: string; sessionReferencePresent?: boolean }; output: RunnerJob };
 };
 
@@ -397,6 +399,15 @@ export const operationRegistry = {
         });
       }
     }), runnerWaitSchema, false, false,
+  ),
+  runner_quarantine_job: spec(
+    "runner_quarantine_job", "POST", write, false, true,
+    z.object({
+      ...mutationFields,
+      registrationId: identifier,
+      token: runnerToken,
+      jobId: identifier,
+    }).strict(), runnerJobSchema, false, false,
   ),
   runner_update_job: spec(
     "runner_update_job", "POST", write, false, true,

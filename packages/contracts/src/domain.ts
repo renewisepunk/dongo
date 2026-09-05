@@ -292,6 +292,7 @@ export type RunnerJob = {
   reservationExpiresAt?: number;
   leaseExpiresAt?: number;
   cancellationRequestedAt?: number;
+  mutationQuarantinedAt?: number;
   terminalAt?: number;
   updatedAt: number;
 };

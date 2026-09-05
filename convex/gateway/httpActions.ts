@@ -829,6 +829,14 @@ async function dispatchAgentOperation(
         serverTime: Date.now(),
       };
     }
+    case "runner_quarantine_job":
+      return await ctx.runMutation(internal.domains.runner.index.quarantine, {
+        authorization: baseAuthorization,
+        registrationId: stringField(input, "registrationId") as Id<"runnerRegistrations">,
+        token: stringField(input, "token"),
+        jobId: stringField(input, "jobId") as Id<"runnerJobs">,
+        idempotencyKey: stringField(input, "idempotencyKey"),
+      });
     case "runner_update_job": {
       const jobId = stringField(input, "jobId") as Id<"runnerJobs">;
       await ctx.runMutation(internal.domains.runner.index.updateJob, {

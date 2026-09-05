@@ -184,6 +184,13 @@ queued|delivered|awaiting_local_approval -> expired
   Attention inside the Work or Intake lifecycle uses normal dongo Attention;
   the exact local harness session resumes only after that Attention is resolved.
 - Cancellation is cooperative first and forceful after a bounded grace period.
+- Release quarantine is an exact-job, local-first cancellation boundary. The
+  owner-only guard is written outside the worktree before the server job is
+  marked `cancel_requested`; the runner then terminates that managed harness
+  and refuses to resume its saved session. A new job is required to continue.
+  dongo's supported development and production release entry points recheck
+  the guard immediately before each external mutation and fail closed if the
+  guard is missing, malformed, mismatched, or quarantined.
 - Terminal states are immutable to clients. The sole server-owned exception is
   one same-job recovery from `failed` to `queued` after an exact
   `runner_lease_expired` result, once an upgraded automatic dispatcher no
@@ -217,6 +224,14 @@ runner cannot reserve it. Offline delivery remains durable and never implies
 that dongo can wake a sleeping or powered-off computer. Revocation, a reported
 approval-mode downgrade, or loss of the selected harness disables the policy
 and cancels or requests cancellation of that registration's outstanding jobs.
+
+Release quarantine governs the managed runner process tree and dongo's
+supported release entry points. It prevents a new supported mutation after the
+quarantine command confirms the exact harness stopped. It cannot roll back a
+provider request that crossed its mutation boundary before quarantine, and it
+is not a security boundary against malware or an intentionally detached process
+already executing as the same operating-system user. Provider-side rollback or
+credential revocation remains the recovery path for that stronger threat.
 
 Each wait updates bounded presence: registration ID, runner version, operating
 system, supported harnesses, approval modes, and safe health codes. It never

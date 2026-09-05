@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { requireReleaseConvexTarget } from "./release-convex-target.mjs";
+import { requireRunnerMutationAllowed } from "./runner-mutation-guard.mjs";
 
 const root = process.cwd();
 const executable = (name) => process.platform === "win32" ? `${name}.cmd` : name;
@@ -13,7 +14,8 @@ const steps = [
   ["MCP Worker", executable("npx"), ["wrangler", "deploy", "--config", "apps/mcp/wrangler.jsonc"]],
   ["attachment Worker", executable("npx"), ["wrangler", "deploy", "--config", "apps/files/wrangler.jsonc"]],
   ["notification Worker", executable("npx"), ["wrangler", "deploy", "--config", "apps/notifications/wrangler.jsonc"]],
-  ["web Worker", executable("npm"), ["run", "deploy", "--workspace", "@dongo/web"]],
+  ["web build", executable("npm"), ["run", "build", "--workspace", "@dongo/web"]],
+  ["web Worker", executable("npx"), ["wrangler", "deploy", "--config", "apps/web/dist/server/wrangler.json"]],
 ];
 
 if (!existsSync(resolve(root, "package.json")) || !existsSync(resolve(root, "convex/schema.ts"))) {
@@ -38,6 +40,12 @@ if (process.argv.includes("--plan")) {
 }
 
 for (const [label, command, args] of steps) {
+  try {
+    requireRunnerMutationAllowed(releaseTarget.environment);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "dongo runner mutation guard failed.");
+    process.exit(6);
+  }
   console.log(`\n==> Deploying ${label} to development`);
   const result = spawnSync(command, args, {
     cwd: root,

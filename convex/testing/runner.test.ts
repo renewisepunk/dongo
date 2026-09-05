@@ -179,6 +179,62 @@ describe("local runner delivery", () => {
     expect(cancelled).toMatchObject({ state: "cancelled", safeCode: "user_cancelled" });
   });
 
+  it("quarantines only the exact assigned active job and preserves an auditable terminal reason", async () => {
+    const fixture = await runnerFixture();
+    const token = runnerToken("q", "j");
+    const registration = await register(fixture, token, "Quarantine Mac", "automatic");
+    const work = await fixture.human.mutation(api.domains.work.index.createForHuman, {
+      projectId: fixture.projectId,
+      title: "Quarantine this release",
+      kind: "task",
+      idempotencyKey: "runner-quarantine-work",
+    });
+    const queued = await fixture.human.mutation(api.domains.runner.index.enqueue, {
+      projectId: fixture.projectId,
+      workItemId: work.workItemId,
+      harness: "codex",
+      idempotencyKey: "runner-quarantine-enqueue",
+    });
+    const delivery = await fixture.root.mutation(internal.domains.runner.index.reserve, {
+      ...waitArgs(fixture.authorization, registration.id, token, "automatic"),
+      activeJobIds: [],
+      hostCapacity: 6,
+    });
+    expect(delivery.job?.id).toBe(queued.id);
+
+    const quarantined = await fixture.root.mutation(internal.domains.runner.index.quarantine, {
+      authorization: fixture.authorization,
+      registrationId: registration.id,
+      token,
+      jobId: queued.id,
+      idempotencyKey: "runner-quarantine-exact",
+    });
+    expect(quarantined).toMatchObject({
+      id: queued.id,
+      state: "cancel_requested",
+      safeCode: "release_quarantined",
+      mutationQuarantinedAt: expect.any(Number),
+    });
+    const replay = await fixture.root.mutation(internal.domains.runner.index.quarantine, {
+      authorization: fixture.authorization,
+      registrationId: registration.id,
+      token,
+      jobId: queued.id,
+      idempotencyKey: "runner-quarantine-exact",
+    });
+    expect(replay).toEqual(quarantined);
+
+    const otherToken = runnerToken("o", "r");
+    const other = await register(fixture, otherToken, "Other Mac", "automatic");
+    await expect(fixture.root.mutation(internal.domains.runner.index.quarantine, {
+      authorization: fixture.authorization,
+      registrationId: other.id,
+      token: otherToken,
+      jobId: queued.id,
+      idempotencyKey: "runner-quarantine-wrong-registration",
+    })).rejects.toThrow(/not found/u);
+  });
+
   it("dispatches parallel jobs to one runner up to the project cap while legacy waits stay serial", async () => {
     const fixture = await runnerFixture();
     await fixture.root.run(async (ctx) => {

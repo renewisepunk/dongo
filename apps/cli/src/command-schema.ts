@@ -249,6 +249,8 @@ export const COMMAND_SCHEMAS: Record<string, CommandSchema> = {
   },
   "runner status": { command: "runner status", summary: "Show local runner health without exposing credentials.", usage: "dongo runner status", options: [] },
   "runner approve": { command: "runner approve", summary: "Approve one waiting job on this computer.", usage: "dongo runner approve --job-id ID", options: [{ name: "job-id", description: "Waiting runner job ID.", required: true }] },
+  "runner quarantine": { command: "runner quarantine", summary: "Atomically block new mutations and stop one exact active runner job.", usage: "dongo runner quarantine --job-id ID", options: [{ name: "job-id", description: "Exact active runner job ID.", required: true }] },
+  "runner mutation-check": { command: "runner mutation-check", summary: "Fail closed unless mutation remains allowed for this exact managed job.", usage: "dongo runner mutation-check --job-id ID", options: [{ name: "job-id", description: "Exact active runner job ID.", required: true }] },
   "runner disable": { command: "runner disable", summary: "Stop automatic login startup but retain the revocable registration.", usage: "dongo runner disable", options: [] },
   "runner remove": { command: "runner remove", summary: "Revoke and remove the local runner.", usage: "dongo runner remove", options: [] },
   "runner run": { command: "runner run", summary: "Run the local worker in the foreground (normally managed at login).", usage: "dongo runner run --project-ref REF", options: [{ name: "project-ref", description: "Exact locally configured project reference.", required: true }] },

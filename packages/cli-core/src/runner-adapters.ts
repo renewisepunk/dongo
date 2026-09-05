@@ -6,6 +6,7 @@ import path from "node:path";
 import type { RunnerHarness, RunnerJobKind } from "@dongo/contracts";
 import { DONGO_COMPLETION_INSTRUCTIONS } from "@dongo/mcp/managed-integrations";
 import { CliCoreError } from "./errors.ts";
+import { assertRunnerMutationAllowed } from "./runner-mutation-guard.ts";
 import { sanitizedChildEnvironment } from "./process-environment.ts";
 import {
   redactRunnerSecrets,
@@ -22,6 +23,7 @@ import type {
 } from "./runner.ts";
 
 const PROCESS_STOP_GRACE_MS = 5_000;
+const PROCESS_GROUP_CONFIRM_MS = 1_000;
 const VERSION_CHECK_TIMEOUT_MS = 5_000;
 const MAX_PROBE_OUTPUT_BYTES = 64 * 1_024;
 const MAX_EVENT_LINE_BYTES = 128 * 1_024;
@@ -76,6 +78,7 @@ interface AdapterInput {
   deploymentPolicy?: RunnerDeploymentPolicy;
   trustedRepositoryRoot?: string;
   signal: AbortSignal;
+  mutationGuardPath?: string;
   log: (chunk: string) => Promise<void>;
 }
 
@@ -97,6 +100,7 @@ export interface CodexRunnerAdapterOptions {
   spawnProcess?: SpawnHarness;
   resolveCredentialEnvironment?: ResolveCredentialEnvironment;
   resolveDeploymentEnvironment?: ResolveDeploymentEnvironment;
+  stopProcessGroup?: (child: ChildProcessWithoutNullStreams) => Promise<void>;
 }
 
 export type ClaudeRunnerAdapterOptions = CodexRunnerAdapterOptions;
@@ -109,6 +113,7 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
   readonly #spawn: SpawnHarness;
   readonly #resolveCredentialEnvironment: ResolveCredentialEnvironment;
   readonly #resolveDeploymentEnvironment: ResolveDeploymentEnvironment;
+  readonly #stopProcessGroup: (child: ChildProcessWithoutNullStreams) => Promise<void>;
 
   constructor(options: CodexRunnerAdapterOptions) {
     this.#store = options.store;
@@ -118,6 +123,7 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
       spawn(executable, args, spawnOptions));
     this.#resolveCredentialEnvironment = options.resolveCredentialEnvironment ?? resolveGitHubCliChildEnvironment;
     this.#resolveDeploymentEnvironment = options.resolveDeploymentEnvironment ?? resolveRunnerDeploymentEnvironment;
+    this.#stopProcessGroup = options.stopProcessGroup ?? stopHarnessProcessGroup;
   }
 
   async validate(): Promise<string> {
@@ -148,6 +154,7 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
 
   async execute(input: AdapterInput): Promise<RunnerHarnessResult> {
     assertRunnerTarget(input);
+    if (input.mutationGuardPath) await assertRunnerMutationAllowed(input.mutationGuardPath);
     const executable = await resolveExecutable("codex", this.#executablePath, this.#environmentPath);
     const gitCommonDirectory = await resolveValidatedGitCommonDirectory({
       trustedRepositoryRoot: input.trustedRepositoryRoot ?? input.repositoryRoot,
@@ -176,7 +183,14 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
         return deploymentFailure(error);
       }
     }
-    const childEnvironment = { ...credentialEnvironment, ...deployment.environment };
+    const childEnvironment = {
+      ...credentialEnvironment,
+      ...deployment.environment,
+      ...(input.mutationGuardPath ? {
+        DONGO_RUNNER_JOB_ID: input.jobId,
+        DONGO_RUNNER_MUTATION_GUARD_FILE: input.mutationGuardPath,
+      } : {}),
+    };
     const secretValues = childSecretValues(childEnvironment, deployment.secretValues);
     const args = existing
       ? ["exec", "resume", "--json", existing.sessionId, "-"]
@@ -187,6 +201,7 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
     let sessionReferencePresent = Boolean(existing);
     let result: Awaited<ReturnType<typeof runHarnessProcess>>;
     try {
+      if (input.mutationGuardPath) await assertRunnerMutationAllowed(input.mutationGuardPath);
       result = await runHarnessProcess({
         executable,
         args,
@@ -198,6 +213,7 @@ export class CodexRunnerAdapter implements RunnerHarnessAdapter {
         signal: input.signal,
         log: input.log,
         spawnProcess: this.#spawn,
+        stopProcessGroup: this.#stopProcessGroup,
         onJsonEvent: async (event) => {
           if (event.type !== "thread.started" || typeof event.thread_id !== "string" || !SESSION_ID.test(event.thread_id)) return;
           sessionReferencePresent = true;
@@ -241,6 +257,7 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
   readonly #spawn: SpawnHarness;
   readonly #resolveCredentialEnvironment: ResolveCredentialEnvironment;
   readonly #resolveDeploymentEnvironment: ResolveDeploymentEnvironment;
+  readonly #stopProcessGroup: (child: ChildProcessWithoutNullStreams) => Promise<void>;
 
   constructor(options: ClaudeRunnerAdapterOptions) {
     this.#store = options.store;
@@ -250,6 +267,7 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
       spawn(executable, args, spawnOptions));
     this.#resolveCredentialEnvironment = options.resolveCredentialEnvironment ?? resolveGitHubCliChildEnvironment;
     this.#resolveDeploymentEnvironment = options.resolveDeploymentEnvironment ?? resolveRunnerDeploymentEnvironment;
+    this.#stopProcessGroup = options.stopProcessGroup ?? stopHarnessProcessGroup;
   }
 
   async validate(): Promise<string> {
@@ -280,6 +298,7 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
 
   async execute(input: AdapterInput): Promise<RunnerHarnessResult> {
     assertRunnerTarget(input);
+    if (input.mutationGuardPath) await assertRunnerMutationAllowed(input.mutationGuardPath);
     const executable = await resolveExecutable("claude", this.#executablePath, this.#environmentPath);
     const gitCommonDirectory = await resolveValidatedGitCommonDirectory({
       trustedRepositoryRoot: input.trustedRepositoryRoot ?? input.repositoryRoot,
@@ -307,7 +326,14 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
         return deploymentFailure(error);
       }
     }
-    const childEnvironment = { ...credentialEnvironment, ...deployment.environment };
+    const childEnvironment = {
+      ...credentialEnvironment,
+      ...deployment.environment,
+      ...(input.mutationGuardPath ? {
+        DONGO_RUNNER_JOB_ID: input.jobId,
+        DONGO_RUNNER_MUTATION_GUARD_FILE: input.mutationGuardPath,
+      } : {}),
+    };
     const secretValues = childSecretValues(childEnvironment, deployment.secretValues);
     const args = [
       "-p",
@@ -320,6 +346,7 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
     let sessionReferencePresent = Boolean(existing);
     let result: Awaited<ReturnType<typeof runHarnessProcess>>;
     try {
+      if (input.mutationGuardPath) await assertRunnerMutationAllowed(input.mutationGuardPath);
       result = await runHarnessProcess({
         executable,
         args,
@@ -331,6 +358,7 @@ export class ClaudeRunnerAdapter implements RunnerHarnessAdapter {
         signal: input.signal,
         log: input.log,
         spawnProcess: this.#spawn,
+        stopProcessGroup: this.#stopProcessGroup,
         onJsonEvent: async (event) => {
           const sessionId = event.session_id;
           const isSessionEvent = event.type === "result" ||
@@ -790,6 +818,7 @@ async function runHarnessProcess(options: {
   signal: AbortSignal;
   log: (chunk: string) => Promise<void>;
   spawnProcess: SpawnHarness;
+  stopProcessGroup?: (child: HarnessChild) => Promise<void>;
   onJsonEvent?: (event: Record<string, unknown>) => Promise<void>;
 }): Promise<{ exitCode: number | null; cancelled: boolean }> {
   if (options.signal.aborted) return { exitCode: null, cancelled: true };
@@ -809,6 +838,24 @@ async function runHarnessProcess(options: {
   } catch {
     return { exitCode: null, cancelled: false };
   }
+  let cancelled = false;
+  let stopPromise: Promise<void> | undefined;
+  let stopError: unknown;
+  let rejectStopFailure!: (error: unknown) => void;
+  const stopFailure = new Promise<never>((_resolve, reject) => {
+    rejectStopFailure = reject;
+  });
+  const stop = () => {
+    cancelled = true;
+    if (!stopPromise) {
+      stopPromise = (options.stopProcessGroup ?? stopHarnessProcessGroup)(child).catch((error) => {
+        stopError = error;
+        rejectStopFailure(error);
+      });
+    }
+  };
+  options.signal.addEventListener("abort", stop, { once: true });
+  if (options.signal.aborted) stop();
   child.stdin.on("error", () => {
     // A harness may exit before consuming all input. Its exit status remains authoritative.
   });
@@ -845,25 +892,68 @@ async function runHarnessProcess(options: {
     }
   });
   child.stderr.on("data", (value: Buffer | string) => queueLog(stderrRedactor.push(value.toString())));
-  let cancelled = false;
-  let forceTimer: NodeJS.Timeout | undefined;
-  const stop = () => {
-    cancelled = true;
-    signalChild(child, "SIGTERM");
-    forceTimer = setTimeout(() => signalChild(child, "SIGKILL"), PROCESS_STOP_GRACE_MS);
-    forceTimer.unref();
-  };
-  options.signal.addEventListener("abort", stop, { once: true });
-  const exitCode = await new Promise<number | null>((resolve) => {
-    child.once("error", () => resolve(null));
-    child.once("exit", (code) => resolve(code));
-  });
-  options.signal.removeEventListener("abort", stop);
-  if (forceTimer) clearTimeout(forceTimer);
+  let exitCode: number | null;
+  try {
+    exitCode = await Promise.race([
+      new Promise<number | null>((resolve) => {
+        child.once("error", () => resolve(null));
+        child.once("exit", (code) => resolve(code));
+      }),
+      stopFailure,
+    ]);
+  } finally {
+    options.signal.removeEventListener("abort", stop);
+    await stopPromise;
+    if (stopError) throw stopError;
+  }
   queueLog(stdoutRedactor.flush());
   queueLog(stderrRedactor.flush());
   await writeChain;
   return { exitCode, cancelled };
+}
+
+export async function stopHarnessProcessGroup(
+  child: HarnessChild,
+  timing: { graceMs?: number; confirmationMs?: number; pollMs?: number } = {},
+): Promise<void> {
+  const graceMs = timing.graceMs ?? PROCESS_STOP_GRACE_MS;
+  const confirmationMs = timing.confirmationMs ?? PROCESS_GROUP_CONFIRM_MS;
+  const pollMs = timing.pollMs ?? 25;
+  signalChild(child, "SIGTERM");
+  if (process.platform === "win32" || !child.pid) return;
+  const deadline = Date.now() + graceMs;
+  while (Date.now() < deadline) {
+    if (!processGroupExists(child.pid)) return;
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  signalProcessGroup(child.pid, "SIGKILL");
+  const confirmationDeadline = Date.now() + confirmationMs;
+  while (Date.now() < confirmationDeadline) {
+    if (!processGroupExists(child.pid)) return;
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  throw new CliCoreError({
+    code: "runner_quarantine_incomplete",
+    message: "The managed harness process group did not confirm termination.",
+    exitCode: 6,
+  });
+}
+
+function processGroupExists(pid: number): boolean {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    // Absence is confirmed by processGroupExists.
+  }
 }
 
 function createStreamingSecretRedactor(secretValues: string[]): {
@@ -927,7 +1017,7 @@ function childSecretValues(environment: NodeJS.ProcessEnv, deploymentValues: str
 
 function signalChild(child: HarnessChild, signal: NodeJS.Signals): void {
   try {
-    if (process.platform !== "win32" && child.pid) process.kill(-child.pid, signal);
+    if (process.platform !== "win32" && child.pid) signalProcessGroup(child.pid, signal);
     else child.kill(signal);
   } catch {
     // The process may already have exited.

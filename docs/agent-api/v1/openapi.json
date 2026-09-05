@@ -1303,6 +1303,59 @@
         }
       }
     },
+    "/api/agent/v1/runner_quarantine_job": {
+      "post": {
+        "operationId": "runner_quarantine_job",
+        "summary": "dongo runner quarantine job",
+        "security": [
+          {
+            "bearerAuth": [
+              "dongo:work:write"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful dongo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerQuarantineJobSuccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "dongo operation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-dongo-scopes": [
+          "dongo:work:write"
+        ],
+        "x-dongo-read-only": false,
+        "x-dongo-idempotent": true,
+        "x-dongo-destructive": false,
+        "x-dongo-open-world": false,
+        "x-dongo-mcp-exposed": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunnerQuarantineJobInput"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/v1/runner_update_job": {
       "post": {
         "operationId": "runner_update_job",
@@ -2849,6 +2902,11 @@
             "maximum": 9007199254740991
           },
           "cancellationRequestedAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "mutationQuarantinedAt": {
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
@@ -4470,6 +4528,63 @@
           },
           "data": {
             "$ref": "#/components/schemas/RunnerWait"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "apiVersion": {
+            "const": "v1"
+          }
+        }
+      },
+      "RunnerQuarantineJobInput": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256
+          },
+          "registrationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^dng_run_[A-Za-z0-9_-]{11}_[A-Za-z0-9_-]{43}$"
+          },
+          "jobId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "registrationId",
+          "token",
+          "jobId"
+        ],
+        "additionalProperties": false
+      },
+      "RunnerQuarantineJobSuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data",
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunnerJob"
           },
           "requestId": {
             "type": "string",

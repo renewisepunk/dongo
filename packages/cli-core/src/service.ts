@@ -538,6 +538,14 @@ export class CoreService {
     return await (await this.#runnerManager()).approve(jobId);
   }
 
+  async runnerQuarantine(jobId: string) {
+    return await (await this.#runnerManager()).quarantine(jobId);
+  }
+
+  async runnerMutationCheck(jobId: string) {
+    return await (await this.#runnerManager()).assertMutationAllowed(jobId);
+  }
+
   async runnerConfigureApproval(approvalMode: RunnerApprovalMode) {
     return await (await this.#runnerManager()).configureApproval(approvalMode);
   }

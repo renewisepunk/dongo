@@ -4,6 +4,7 @@ import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync } 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { requireRunnerMutationAllowed } from "./runner-mutation-guard.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageManifestPath = join(repositoryRoot, "apps", "cli", "package.json");
@@ -271,6 +272,7 @@ async function main() {
     if (release.action === "publish" && mode !== "--plan") requirePublishAuthorization();
     if (mode === "--publish" && release.action === "publish") {
       const expectedIntegrity = archiveIntegrity(release.localArchive);
+      requireRunnerMutationAllowed(process.env);
       runPublicNpm([
         "publish",
         release.localArchive,

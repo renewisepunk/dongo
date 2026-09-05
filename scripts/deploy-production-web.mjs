@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { requireRunnerMutationAllowed } from "./runner-mutation-guard.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const executable = (name) => process.platform === "win32" ? `${name}.cmd` : name;
@@ -35,6 +36,12 @@ if (process.argv.includes("--plan")) {
 }
 
 for (const [label, command, args, environment] of steps) {
+  try {
+    requireRunnerMutationAllowed(environment);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "dongo runner mutation guard failed.");
+    process.exit(6);
+  }
   console.log(`\n==> ${label}`);
   const result = spawnSync(command, args, {
     cwd: root,

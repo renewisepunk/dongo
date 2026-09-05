@@ -78,6 +78,8 @@ const fakeService = {
   runnerInstall: async (options: unknown) => ({ installed: true, options }),
   runnerStatus: async () => ({ installed: true, enabled: true }),
   runnerApprove: async (jobId: string) => ({ approved: true, jobId }),
+  runnerQuarantine: async (jobId: string) => ({ quarantined: true, stopped: true, jobId }),
+  runnerMutationCheck: async (jobId: string) => ({ allowed: true, jobId }),
   runnerConfigure: async (options: unknown) => ({ changed: true, options }),
   runnerDisable: async () => ({ disabled: true }),
   runnerRemove: async () => ({ removed: true }),
@@ -169,7 +171,7 @@ test("finish help exposes host-verified integration and release preconditions wi
 test("--version reports the package version in human and JSON modes", async () => {
   const human = capture();
   assert.equal(await runCli(["--version"], { output: human.output }), 0);
-  assert.equal(human.values().stdout, "dongo 0.2.13\n");
+  assert.equal(human.values().stdout, "dongo 0.2.14\n");
   assert.equal(human.values().stderr, "");
 
   const json = capture();
@@ -177,7 +179,7 @@ test("--version reports the package version in human and JSON modes", async () =
   assert.deepEqual(JSON.parse(json.values().stdout), {
     ok: true,
     command: "version",
-    data: { version: "0.2.13" },
+    data: { version: "0.2.14" },
   });
   assert.equal(json.values().stderr, "");
 });
@@ -965,6 +967,8 @@ test("runner commands explain outcomes without dumping implementation details", 
       workIdentifier: "dong062",
       intakeId: undefined,
     }),
+    runnerQuarantine: async (jobId: string) => ({ quarantined: true, stopped: true, jobId }),
+    runnerMutationCheck: async (jobId: string) => ({ allowed: true, jobId }),
     runnerConfigure: async ({ approvalMode, browserReviewMode, maxConcurrentJobs }: { approvalMode?: "ask" | "automatic"; browserReviewMode?: "disabled" | "read_only"; maxConcurrentJobs?: number }) => ({
       changed: true,
       approvalMode: approvalMode ?? "ask",
@@ -1024,6 +1028,20 @@ test("runner commands explain outcomes without dumping implementation details", 
   assert.match(status.values().stdout, /System Settings → General → Login Items & Extensions/u);
   assert.doesNotMatch(status.values().stdout, /registration_internal|project_internal|\/Users\/|2026-09-03/u);
   assert.match(status.values().stdout, /New Inbox items are not routed here automatically/u);
+
+  const quarantine = capture();
+  assert.equal(await runCli(["runner", "quarantine", "--job-id", "job_actionable"], {
+    output: quarantine.output,
+    serviceFactory: () => service as never,
+  }), 0);
+  assert.match(quarantine.values().stdout, /exact runner job is quarantined/u);
+
+  const mutationCheck = capture();
+  assert.equal(await runCli(["runner", "mutation-check", "--job-id", "job_actionable"], {
+    output: mutationCheck.output,
+    serviceFactory: () => service as never,
+  }), 0);
+  assert.match(mutationCheck.values().stdout, /External mutation is allowed/u);
 
   const configure = capture();
   assert.equal(await runCli(["runner", "configure", "--approval", "automatic"], {

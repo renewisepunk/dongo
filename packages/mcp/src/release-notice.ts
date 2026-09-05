@@ -28,15 +28,13 @@ export type AgentReleaseDelivery = Readonly<{
  */
 export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   schemaVersion: 1,
-  sequence: 15,
-  id: "dongo-cli-0.2.13-runner-recovery",
-  title: "dongo CLI 0.2.13 is available",
+  sequence: 16,
+  id: "dongo-cli-0.2.14-release-quarantine",
+  title: "dongo CLI 0.2.14 is available",
   changes: [
-    "Runners now execute and refill up to six isolated jobs with serial-client compatibility and one-attempt lease recovery.",
-    "Exact job-session matching prevents old terminal jobs from tearing down newer Runs.",
-    "Codex worktrees can fetch, commit, and push through one validated Git metadata directory.",
-    "Login services restart after clean exits and disarm safely on removal or terminal authorization loss.",
-    "Deploys now fail before mutation unless the exact Convex target is selected.",
+    "An exact active runner job can now be quarantined locally and on the server before its managed harness is stopped.",
+    "Quarantined and mismatched saved sessions fail before provider credentials are resolved or a harness is launched.",
+    "Supported dongo release scripts recheck the exact job guard before every external mutation step.",
   ],
   hostedMcp: {
     status: "already_current",
@@ -44,9 +42,9 @@ export const CURRENT_AGENT_RELEASE_NOTICE = Object.freeze({
   },
   cli: {
     packageName: "@wisepunk/dongo",
-    version: "0.2.13",
+    version: "0.2.14",
     checkCommand: "dongo --version",
-    installCommand: "npm install --global @wisepunk/dongo@0.2.13",
+    installCommand: "npm install --global @wisepunk/dongo@0.2.14",
     consentRequired: true,
   },
 } satisfies AgentReleaseNotice);
