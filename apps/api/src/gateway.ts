@@ -405,13 +405,15 @@ export function createDongoApiGateway(
         : operationTimeoutMs;
       const controller = new AbortController();
       let timedOut = false;
+      const operationStartedAt = Date.now();
       const relayAbort = (): void => controller.abort(request.signal.reason);
       if (request.signal.aborted) relayAbort();
       else request.signal.addEventListener("abort", relayAbort, { once: true });
-      const timeout = setTimeout(() => {
+      const abortForTimeout = (): void => {
         timedOut = true;
         controller.abort(new Error("API operation timed out"));
-      }, effectiveOperationTimeoutMs);
+      };
+      let timeout = setTimeout(abortForTimeout, effectiveOperationTimeoutMs);
       try {
         const token = bearerToken(request);
         const principal = await options.tokenVerifier.verifyAccessToken(
@@ -462,6 +464,25 @@ export function createDongoApiGateway(
           operation,
           maxBodyBytes,
         );
+        if (operation === "runner_wait") {
+          const runnerWaitSeconds = Math.max(
+            0,
+            Math.min(20, Number(input.waitSeconds ?? 0) || 0),
+          );
+          const runnerWaitTimeoutMs = runnerWaitSeconds > 0
+            ? Math.max(
+                operationTimeoutMs,
+                runnerWaitSeconds * 1_000 + 10_000,
+              )
+            : operationTimeoutMs;
+          if (runnerWaitTimeoutMs > effectiveOperationTimeoutMs) {
+            clearTimeout(timeout);
+            timeout = setTimeout(
+              abortForTimeout,
+              Math.max(0, runnerWaitTimeoutMs - (Date.now() - operationStartedAt)),
+            );
+          }
+        }
         enforceIdempotency(request, operation, input);
         const result = await options.operationExecutor.execute(operation, input, {
           principal,

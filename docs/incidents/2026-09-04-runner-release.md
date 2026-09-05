@@ -454,10 +454,12 @@ then return to `recovering` when that request reached the same bound.
 
 **Mechanism.** The CLI requests `runner_wait` with `waitSeconds=20`. The Convex
 gateway may legitimately keep that operation open for the full 20 seconds while
-checking for a refill job. `ApiConvexOperationExecutor` used its generic
-15-second upstream timeout for `runner_wait`; it extended the timeout only for
-`get_updates`. A healthy wait with no job therefore could not complete through
-the API and was translated to a retryable 503.
+checking for a refill job. Both `ApiConvexOperationExecutor` and the outer API
+gateway used their generic timeout for `runner_wait`; they extended the timeout
+only for `get_updates`. The first correction extended only the executor. In the
+live acceptance run, the outer gateway still aborted the request first, relayed
+that cancellation into the executor, and surfaced `request_cancelled`. A
+healthy wait with no job therefore still could not complete through the API.
 
 **Why detection failed.** Contract and runner tests covered the 20-second
 advertised bound, and API tests covered signed forwarding, but no test composed
@@ -467,10 +469,12 @@ transaction contention until the full call chain was inspected. Production
 Convex history for the affected window showed no failed, retried, or optimistic-
 concurrency executions.
 
-**Correction.** Treat `runner_wait` as a bounded long-poll operation in the API
-executor. Its upstream budget is the greater of the ordinary timeout and the
-requested wait plus a five-second completion margin, matching `get_updates`.
-Exact-job zero-second polls retain the ordinary timeout.
+**Correction.** Treat `runner_wait` as a bounded long-poll operation at every
+API layer. The executor's upstream budget is the greater of the ordinary
+timeout and the requested wait plus a five-second completion margin. After the
+authenticated request body is validated, the outer gateway applies its larger
+ten-second completion margin without moving validation ahead of authentication.
+Exact-job zero-second polls retain the ordinary timeout at both layers.
 
 **Invariant.** Every public long-poll duration must fit inside every downstream
 timeout on its path, with bounded completion margin. A successful empty wait is

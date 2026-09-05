@@ -627,6 +627,106 @@ describe("CLI REST gateway", () => {
     expect(executor.calls).toHaveLength(1);
   });
 
+  it("keeps the public gateway open for a bounded runner long poll", async () => {
+    let abortedBeforeResponse = false;
+    const worker = createDongoApiGateway({
+      resource: RESOURCE,
+      allowedHostnames: ["dev.dongo.so"],
+      tokenVerifier: new FakeVerifier(principal()),
+      operationExecutor: {
+        async execute(_operation, _input, context) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          abortedBeforeResponse = context.signal.aborted;
+          return {
+            ok: true as const,
+            data: { accepted: true },
+            requestId: "runner-wait-request",
+          };
+        },
+      },
+      rateLimiter: allowedRateLimiter(),
+      operationTimeoutMs: 20,
+    });
+    const input = {
+      idempotencyKey: "runner-wait-long-poll",
+      registrationId: "registration-1",
+      token: `dng_run_${"a".repeat(11)}_${"b".repeat(43)}`,
+      waitSeconds: 20,
+      platform: "darwin",
+      version: "0.2.13",
+      harnesses: ["codex"],
+      approvalMode: "automatic",
+      activeJobIds: [],
+    };
+    const response = await worker.fetch(new Request(
+      "https://dev.dongo.so/api/agent/v1/runner_wait",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer opaque-access-token",
+          "content-type": "application/json",
+          "idempotency-key": input.idempotencyKey,
+        },
+        body: JSON.stringify(input),
+      },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(abortedBeforeResponse).toBe(false);
+  });
+
+  it("keeps zero-second runner polls on the ordinary public timeout", async () => {
+    const worker = createDongoApiGateway({
+      resource: RESOURCE,
+      allowedHostnames: ["dev.dongo.so"],
+      tokenVerifier: new FakeVerifier(principal()),
+      operationExecutor: {
+        async execute(_operation, _input, context) {
+          if (context.signal.aborted) throw context.signal.reason;
+          await new Promise<void>((_resolve, reject) => {
+            context.signal.addEventListener(
+              "abort",
+              () => reject(context.signal.reason),
+              { once: true },
+            );
+          });
+          throw new Error("unreachable");
+        },
+      },
+      rateLimiter: allowedRateLimiter(),
+      operationTimeoutMs: 20,
+    });
+    const input = {
+      idempotencyKey: "runner-wait-exact-poll",
+      registrationId: "registration-1",
+      token: `dng_run_${"a".repeat(11)}_${"b".repeat(43)}`,
+      waitSeconds: 0,
+      platform: "darwin",
+      version: "0.2.13",
+      harnesses: ["codex"],
+      approvalMode: "automatic",
+      activeJobIds: [],
+    };
+    const response = await worker.fetch(new Request(
+      "https://dev.dongo.so/api/agent/v1/runner_wait",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer opaque-access-token",
+          "content-type": "application/json",
+          "idempotency-key": input.idempotencyKey,
+        },
+        body: JSON.stringify(input),
+      },
+    ));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "temporarily_unavailable", retryable: true },
+    });
+  });
+
   it("preserves enriched Intake fields in the existing API response", async () => {
     const intake = {
       id: "intake-1",
