@@ -53,7 +53,7 @@ export function GetStartedGuide() {
         lede="Use your agent’s normal skill installer to add both dongo skills from the public repository. This is the only setup step you need to perform before asking the agent to help."
       >
         <GuideCode label="tell your agent">{SKILL_PROMPT}</GuideCode>
-        <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">What happens next</div><div><h3>Your agent checks before it changes anything.</h3><p>It first verifies the installed CLI, local authorization, repository binding, and host connection. It installs, connects, or opens browser approval only for a missing or invalid phase, then reports exactly what it proved.</p></div></aside>
+        <aside class="guide-callout guide-callout--green"><div class="guide-callout__label">What happens next</div><div><h3>Your agent checks before it changes anything.</h3><p>It first verifies the installed CLI, local authorization, repository binding, and host connection. An absent CLI is installed and a current CLI is left alone. If the installed version is older than the current release, the agent explains the version gap and asks before upgrading. It connects or opens browser approval only for a missing or invalid phase, then reports exactly what it proved.</p></div></aside>
       </GuideSection>
 
       <GuideSection

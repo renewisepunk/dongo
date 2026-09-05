@@ -180,7 +180,9 @@ const deviceDependencies = {
     const code = new URLSearchParams(window.location.search).get("user_code")?.replace(/-/g, "");
     return code === "NOSSN000"
       ? null
-      : { user: { id: "user-fixture", name: "Fixture Owner", email: "fixture@example.test" } };
+      : code === "ALTACCT1"
+        ? { user: { id: "user-alternate", name: "Alternate Owner", email: "alternate@example.test" } }
+        : { user: { id: "user-fixture", name: "Fixture Owner", email: "fixture@example.test" } };
   },
   async bridgeAuthorizationSession(returnTo: string) {
     document.documentElement.dataset.fixtureDeviceBridge = returnTo;
@@ -198,7 +200,7 @@ const deviceDependencies = {
   },
   async listAuthorizableProjects() {
     const code = new URLSearchParams(window.location.search).get("user_code")?.replace(/-/g, "");
-    if (code === "NOPROJ00") return [];
+    if (code === "NOPROJ00" || code === "ALTACCT1") return [];
     return [
       {
         publicRef: "fixture-project",
@@ -220,7 +222,7 @@ const deviceDependencies = {
   },
   async getProjectCreationContext() {
     const code = new URLSearchParams(window.location.search).get("user_code")?.replace(/-/g, "");
-    if (code === "NOPROJ00") return { organizations: [], projects: [] };
+    if (code === "NOPROJ00" || code === "ALTACCT1") return { organizations: [], projects: [] };
     const freeLimit = code === "LIMIT001";
     const freeOverride = code === "OVRD0001";
     return {
