@@ -216,26 +216,28 @@ export class CoreService {
     const markerMatchesRepository = !existingMarker?.repositoryUrl
       || !repositoryUrl
       || markerRepositoryUrl === repositoryUrl;
-    const markerCanBeReused = Boolean(markerMatchesEnvironment && markerMatchesRepository);
-    const matchingProfiles = markerCanBeReused
-      ? await this.#matchingCredentialProfiles(repositoryRoot, existingMarker, profiles)
+    const reusableMarker = existingMarker && markerMatchesEnvironment && markerMatchesRepository
+      ? existingMarker
+      : undefined;
+    const matchingProfiles = reusableMarker
+      ? await this.#matchingCredentialProfiles(repositoryRoot, reusableMarker, profiles)
       : [];
-    const profile = markerCanBeReused
-      ? matchingProfiles[0] ?? existingMarker.credentialProfile
+    const profile = reusableMarker
+      ? matchingProfiles[0] ?? reusableMarker.credentialProfile
       : profiles.preferred;
     const projectRef = options.createProject
       ? undefined
-      : requestedProjectRef || (markerCanBeReused ? existingMarker.publicProjectRef : undefined);
+      : requestedProjectRef || reusableMarker?.publicProjectRef;
     const store = this.#secretStore();
     if (
-      markerCanBeReused
+      reusableMarker
       && !options.createProject
-      && (!requestedProjectRef || requestedProjectRef === existingMarker.publicProjectRef)
+      && (!requestedProjectRef || requestedProjectRef === reusableMarker.publicProjectRef)
     ) {
       for (const candidate of matchingProfiles) {
         const existing = await this.#reuseExistingConnection(
           repositoryRoot,
-          { ...existingMarker, credentialProfile: candidate },
+          { ...reusableMarker, credentialProfile: candidate },
           environment,
           repositoryUrl,
           store,
